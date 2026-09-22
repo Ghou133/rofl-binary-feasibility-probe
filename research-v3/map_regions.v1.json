@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "region_set": "summoners-rift-conservative-v1",
+  "map_name": "SUMMONERS_RIFT",
+  "coordinate_axes": {
+    "x": "WardSpawn object +0x18",
+    "y": "WardSpawn object +0x20",
+    "height": "WardSpawn object +0x1c"
+  },
+  "status": "APPROXIMATE_EDITABLE",
+  "disclaimer": "These broad polygons are deliberately conservative research labels, not an authoritative Riot map geometry. Raw WardSpawn coordinates remain the analytical fact and are never transformed or replaced by these labels.",
+  "assignment": {
+    "boundary_policy": "inclusive",
+    "overlap_policy": "lowest priority number, then region id",
+    "outside_region": "unassigned"
+  },
+  "regions": [
+    {
+      "id": "bot_lane_brush_1",
+      "label": "Bot lane brush 1",
+      "priority": 5,
+      "polygon": [[11900, 900], [13200, 900], [13200, 1850], [11900, 1850]],
+      "bounds": {"x_min": 11900, "x_max": 13200, "y_min": 900, "y_max": 1850}
+    },
+    {
+      "id": "bot_lane_brush_2",
+      "label": "Bot lane brush 2",
+      "priority": 5,
+      "polygon": [[13200, 1800], [14350, 1800], [14350, 3300], [13200, 3300]],
+      "bounds": {"x_min": 13200, "x_max": 14350, "y_min": 1800, "y_max": 3300}
+    },
+    {
+      "id": "bot_lane_brush_3",
+      "label": "Bot lane brush 3",
+      "priority": 5,
+      "polygon": [[13900, 3300], [14900, 3300], [14900, 5000], [13900, 5000]],
+      "bounds": {"x_min": 13900, "x_max": 14900, "y_min": 3300, "y_max": 5000}
+    },
+    {
+      "id": "bot_tri_brush_blue",
+      "label": "Bot tri-brush (blue-side access)",
+      "priority": 5,
+      "polygon": [[9400, 2300], [10800, 2300], [10800, 3700], [9400, 3700]],
+      "bounds": {"x_min": 9400, "x_max": 10800, "y_min": 2300, "y_max": 3700}
+    },
+    {
+      "id": "bot_tri_brush_red",
+      "label": "Bot tri-brush (red-side access)",
+      "priority": 5,
+      "polygon": [[12400, 5200], [13800, 5200], [13800, 6800], [12400, 6800]],
+      "bounds": {"x_min": 12400, "x_max": 13800, "y_min": 5200, "y_max": 6800}
+    },
+    {
+      "id": "pixel_brush_blue",
+      "label": "Pixel brush (blue-side river)",
+      "priority": 6,
+      "polygon": [[5700, 7600], [6900, 7600], [6900, 8750], [5700, 8750]],
+      "bounds": {"x_min": 5700, "x_max": 6900, "y_min": 7600, "y_max": 8750}
+    },
+    {
+      "id": "pixel_brush_red",
+      "label": "Pixel brush (red-side river)",
+      "priority": 6,
+      "polygon": [[8050, 6100], [9250, 6100], [9250, 7300], [8050, 7300]],
+      "bounds": {"x_min": 8050, "x_max": 9250, "y_min": 6100, "y_max": 7300}
+    },
+    {
+      "id": "dragon_entrance_blue",
+      "label": "Dragon entrance (blue-side jungle)",
+      "priority": 8,
+      "polygon": [[7900, 3700], [9400, 3700], [9400, 5500], [7900, 5500]],
+      "bounds": {"x_min": 7900, "x_max": 9400, "y_min": 3700, "y_max": 5500}
+    },
+    {
+      "id": "dragon_entrance_red",
+      "label": "Dragon entrance (red-side jungle)",
+      "priority": 8,
+      "polygon": [[10300, 5000], [11900, 5000], [11900, 6700], [10300, 6700]],
+      "bounds": {"x_min": 10300, "x_max": 11900, "y_min": 5000, "y_max": 6700}
+    },
+    {
+      "id": "baron_entrance_blue",
+      "label": "Baron entrance (blue-side jungle)",
+      "priority": 8,
+      "polygon": [[3000, 8200], [4500, 8200], [4500, 9900], [3000, 9900]],
+      "bounds": {"x_min": 3000, "x_max": 4500, "y_min": 8200, "y_max": 9900}
+    },
+    {
+      "id": "baron_entrance_red",
+      "label": "Baron entrance (red-side jungle)",
+      "priority": 8,
+      "polygon": [[5000, 10400], [6700, 10400], [6700, 12000], [5000, 12000]],
+      "bounds": {"x_min": 5000, "x_max": 6700, "y_min": 10400, "y_max": 12000}
+    },
+    {
+      "id": "bot_river",
+      "label": "Bot river",
+      "priority": 12,
+      "polygon": [[7300, 3900], [10100, 3900], [11800, 6500], [9100, 7000], [7000, 5400]],
+      "bounds": {"x_min": 7000, "x_max": 11800, "y_min": 3900, "y_max": 7000}
+    },
+    {
+      "id": "mid_river",
+      "label": "Mid river",
+      "priority": 12,
+      "polygon": [[5600, 5900], [7600, 5400], [9400, 7200], [8500, 9000], [6500, 8300]],
+      "bounds": {"x_min": 5600, "x_max": 9400, "y_min": 5400, "y_max": 9000}
+    },
+    {
+      "id": "top_river",
+      "label": "Top river",
+      "priority": 12,
+      "polygon": [[3300, 7600], [5500, 7700], [7600, 9800], [6200, 11300], [4100, 10000]],
+      "bounds": {"x_min": 3300, "x_max": 7600, "y_min": 7600, "y_max": 11300}
+    },
+    {
+      "id": "raptor_entrance_blue",
+      "label": "Raptor entrance (blue-side)",
+      "priority": 15,
+      "polygon": [[5900, 4500], [7400, 4500], [7400, 6100], [5900, 6100]],
+      "bounds": {"x_min": 5900, "x_max": 7400, "y_min": 4500, "y_max": 6100}
+    },
+    {
+      "id": "raptor_entrance_red",
+      "label": "Raptor entrance (red-side)",
+      "priority": 15,
+      "polygon": [[7600, 9000], [9200, 9000], [9200, 10600], [7600, 10600]],
+      "bounds": {"x_min": 7600, "x_max": 9200, "y_min": 9000, "y_max": 10600}
+    },
+    {
+      "id": "krug_entrance_blue",
+      "label": "Krug entrance (blue-side)",
+      "priority": 15,
+      "polygon": [[7300, 2200], [9000, 2200], [9000, 3800], [7300, 3800]],
+      "bounds": {"x_min": 7300, "x_max": 9000, "y_min": 2200, "y_max": 3800}
+    },
+    {
+      "id": "krug_entrance_red",
+      "label": "Krug entrance (red-side)",
+      "priority": 15,
+      "polygon": [[10300, 11100], [12100, 11100], [12100, 12900], [10300, 12900]],
+      "bounds": {"x_min": 10300, "x_max": 12100, "y_min": 11100, "y_max": 12900}
+    },
+    {
+      "id": "baron_pit",
+      "label": "Baron pit",
+      "priority": 10,
+      "polygon": [[4100, 9850], [5000, 9850], [5000, 10800], [4100, 10800]],
+      "bounds": {"x_min": 4100, "x_max": 5000, "y_min": 9850, "y_max": 10800}
+    },
+    {
+      "id": "dragon_pit",
+      "label": "Dragon pit",
+      "priority": 10,
+      "polygon": [[9400, 4200], [10400, 4200], [10400, 5200], [9400, 5200]],
+      "bounds": {"x_min": 9400, "x_max": 10400, "y_min": 4200, "y_max": 5200}
+    },
+    {
+      "id": "blue_base",
+      "label": "Blue base",
+      "priority": 20,
+      "polygon": [[0, 0], [4200, 0], [4200, 4200], [0, 4200]],
+      "bounds": {"x_min": 0, "x_max": 4200, "y_min": 0, "y_max": 4200}
+    },
+    {
+      "id": "red_base",
+      "label": "Red base",
+      "priority": 20,
+      "polygon": [[10800, 10800], [15000, 10800], [15000, 15000], [10800, 15000]],
+      "bounds": {"x_min": 10800, "x_max": 15000, "y_min": 10800, "y_max": 15000}
+    },
+    {
+      "id": "top_lane",
+      "label": "Top lane",
+      "priority": 30,
+      "polygon": [[1800, 8000], [3500, 11200], [8500, 15000], [11000, 15000], [6400, 10600], [3000, 7600]],
+      "bounds": {"x_min": 1800, "x_max": 11000, "y_min": 7600, "y_max": 15000}
+    },
+    {
+      "id": "mid_lane",
+      "label": "Mid lane",
+      "priority": 30,
+      "polygon": [[2500, 1500], [3800, 1500], [12800, 11600], [11600, 12900]],
+      "bounds": {"x_min": 2500, "x_max": 12800, "y_min": 1500, "y_max": 12900}
+    },
+    {
+      "id": "bot_lane",
+      "label": "Bot lane",
+      "priority": 30,
+      "polygon": [[7500, 2000], [10500, 4500], [15000, 9500], [15000, 11500], [11200, 8000], [7200, 4700]],
+      "bounds": {"x_min": 7200, "x_max": 15000, "y_min": 2000, "y_max": 11500}
+    },
+    {
+      "id": "river",
+      "label": "River",
+      "priority": 40,
+      "polygon": [[3000, 6500], [5000, 8000], [7000, 9500], [9000, 10500], [11200, 11300], [12500, 10000], [10400, 8200], [8600, 7200], [6500, 5700], [4500, 4800]],
+      "bounds": {"x_min": 3000, "x_max": 12500, "y_min": 4800, "y_max": 11300}
+    },
+    {
+      "id": "blue_jungle",
+      "label": "Blue-side jungle",
+      "priority": 50,
+      "polygon": [[2200, 3500], [6200, 4000], [7600, 7000], [5200, 9000], [2500, 7600]],
+      "bounds": {"x_min": 2200, "x_max": 7600, "y_min": 3500, "y_max": 9000}
+    },
+    {
+      "id": "red_jungle",
+      "label": "Red-side jungle",
+      "priority": 50,
+      "polygon": [[7400, 6500], [10200, 6000], [12800, 8200], [11600, 11800], [8000, 10800]],
+      "bounds": {"x_min": 7400, "x_max": 12800, "y_min": 6000, "y_max": 11800}
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+# Core V3/V4 database runtime.
+duckdb==1.5.5
+
+# Exact packet emulation for the patch-pinned semantic decoder.
+unicorn==2.1.4
+
+# Optional reverse-engineering utilities under scripts/.
+capstone==5.0.7
+pefile==2024.8.26

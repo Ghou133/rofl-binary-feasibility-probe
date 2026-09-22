@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "status_scope": "HISTORICAL_ATTESTED_SUMMARY_NOT_A_FRESH_RAW_REDECODE",
+  "patch": "16.15.801.3452",
+  "corpus": {
+    "v3_replays": 10,
+    "v4_profiles": 14,
+    "on_event_packets": 103249,
+    "on_event_fully_consumed": 103249,
+    "shield_absorption_packets": 2,
+    "shield_absorption_fully_consumed": 2,
+    "blind_statistical_holdout": false
+  },
+  "protection": {
+    "direct_reported_heal_rows": 81652,
+    "canonical_heal_groups": 77415,
+    "canonical_shield_generated_rows": 5080,
+    "duplicate_shield_grant_rows": 4752,
+    "direct_target_total_absorption_rows": 2,
+    "absorption_amounts": [30.030563354492188, 375.13690185546875],
+    "adc_deaths": 120,
+    "adc_deaths_with_positive_reported_protection_context": 40
+  },
+  "portable_boundary": "The handoff excludes DuckDB, raw replays, the runtime image and full decoded corpora. It can verify source, unit fixtures and bounded summaries, but not rerun the all-replay backfill."
+}

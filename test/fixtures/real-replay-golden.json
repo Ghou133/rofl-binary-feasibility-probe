@@ -1,0 +1,26 @@
+{
+  "relative_path": "replay/HN1-11154791609.rofl",
+  "file_size": 15161592,
+  "sha256": "b911ddc894b50569eb6664518e4862f90740e0f84eb127ecfe2f3f6712be5233",
+  "version": "16.15.801.3452",
+  "metadata_length": 121334,
+  "chunk_count": 95,
+  "stream_counts": {
+    "start_keyframe": 1,
+    "start_sentinel": 1,
+    "keyframe": 31,
+    "game_chunk": 62
+  },
+  "block_count": 1623502,
+  "first_block": {
+    "chunk_index": 0,
+    "chunk_id": 1,
+    "stream": "start_keyframe",
+    "block_offset": 0,
+    "payload_offset": 15,
+    "packet_id": 326,
+    "timestamp_ms": 0,
+    "payload_length": 12367,
+    "payload_sha256": "2e2a998d27aeaeab31b9ceefb4596b8bf71e1904abb5fd7f26323178bbe8f9dc"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "status_scope": "HISTORICAL_ATTESTED_SUMMARY_NOT_A_FRESH_RAW_REDECODE",
+  "patch": "16.15.801.3452",
+  "ward_spawn": {
+    "packet_id": 851,
+    "packet_type": "0x0353",
+    "selected_packets": 17406,
+    "accepted_packets": 17406,
+    "verified_direct_spawns": 1357,
+    "yellow_cast_spawn_matches": 464,
+    "unmatched_yellow_casts": 0,
+    "lifecycle_matches": 637
+  },
+  "hero_path": {
+    "packet_id": 721,
+    "packet_type": "0x02d1",
+    "full_packet_count": 374368,
+    "path_records": 1385189,
+    "hero_path_events": 459906,
+    "one_second_positions": 159765,
+    "calibration_matches": 27452,
+    "calibration_error_p50": 1.98,
+    "calibration_error_p95": 80.60
+  },
+  "holdout": {
+    "status": "NO_V2_BLIND_HOLDOUT",
+    "meaning": "All available patch-exact replays had already been processed; V2 had no untouched blind holdout."
+  },
+  "portable_boundary": "The handoff contains bounded summaries, profiles, source and tests. It excludes raw replays, the runtime image and exhaustive decoder JSONL, so it cannot freshly reproduce these counts."
+}

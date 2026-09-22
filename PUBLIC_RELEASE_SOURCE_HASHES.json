@@ -1,0 +1,78 @@
+{
+  "schema": "PUBLIC_RELEASE_SOURCE_HASH_BRIDGE_V1",
+  "reason": "Frozen research manifests keep their original script and test identities; this file separately pins the public path-cleaned copies without rewriting historical evidence.",
+  "files": {
+    "scripts/audit_next_priority_wave_v2.js": {
+      "original_sha256": "4a7ad9865fc1550ed8fb5c9e67115fac2f6198a9fb6b66f1a0f563c1b3393b9f",
+      "original_bytes": 18429,
+      "public_sha256": "bdb56e441f73668fbe453cc418e33fa3960700e68a894f6ec4492f177a6fb5d2",
+      "public_bytes": 18429
+    },
+    "scripts/audit_residual_p2_wave_v2.js": {
+      "original_sha256": "b743e9b593676e5b16d972f2565828b4bde982d3a22805604a0e3673fd9d0d43",
+      "original_bytes": 28693,
+      "public_sha256": "a67a8a9e7029a9c2bc3f65ae6e5ef8b1f3fe4a23adcfdcab04366e8bb6f430f4",
+      "public_bytes": 28693
+    },
+    "scripts/audit_residual_p3_wave_v2.js": {
+      "original_sha256": "de54bd790729bb0398bfd7171dfdecd464c78fe134a75be6725f265dd89ed97e",
+      "original_bytes": 30760,
+      "public_sha256": "f62af99c269291e4a088a6a7b1ea2ceeb0dcab2247e7276fe71285cf8c1bd128",
+      "public_bytes": 30760
+    },
+    "scripts/audit_residual_p4_wave_v2.js": {
+      "original_sha256": "d52a51961ce48bf068ee5b8c2cec89e7571a6d7e14caf577f58a0e1ca3cb550a",
+      "original_bytes": 38017,
+      "public_sha256": "000cd43638daeee776c971e413a86fc013bf483f2c70441387a3322b0312151f",
+      "public_bytes": 38017
+    },
+    "scripts/audit_residual_p5_wave_v2.js": {
+      "original_sha256": "4f83c326dbd91a4710665bd1273ced63eae02277039f01649402c6a96cd54ac8",
+      "original_bytes": 31600,
+      "public_sha256": "ddc2a87cd5beafd0da060f3e6894f3be17eb5969c816a18d070df67b127218da",
+      "public_bytes": 31600
+    },
+    "scripts/audit_residual_p6_wave_v2.js": {
+      "original_sha256": "3274aafa657aeb173b8fbc3cf674d9ee56d27f0084713510ce8b0fae8e909b22",
+      "original_bytes": 36921,
+      "public_sha256": "9b685be58d3ab6e650f02cdde6da70ce55745152d2312180e1c0bae8b8e746f7",
+      "public_bytes": 36921
+    },
+    "scripts/audit_residual_p7_wave_v2.js": {
+      "original_sha256": "cd12b4413e7ed6ffefeea61a250664de86cf16951d82b767b17281bf6ee198f5",
+      "original_bytes": 43132,
+      "public_sha256": "62748e096fdb08c6a3042b4425388fc8e30760a93a3526b5bf5ca8422ffc47f0",
+      "public_bytes": 43131
+    },
+    "scripts/audit_unknown_p1_wave_v2.js": {
+      "original_sha256": "4232df09b836fb3ce3e9d44908e17552979080932d9fd196051c5502bdceb171",
+      "original_bytes": 17982,
+      "public_sha256": "6a207911489c73c4bb7fc6fa5cddf54de76379b36f3b69cf0344037c88cd385f",
+      "public_bytes": 17982
+    },
+    "test/residual_p3_wave_v2.test.js": {
+      "original_sha256": "769715b6acd15f58c3b0f95e55af4687aa244ba43ca6e192e821c29eacc5217c",
+      "original_bytes": 7111,
+      "public_sha256": "7227f03e668e6a141b0c7376fef54349c2b19c2e3476cf069e38cb874f047256",
+      "public_bytes": 7124
+    },
+    "test/residual_p6_wave_v2.test.js": {
+      "original_sha256": "a2fe7528f3ab70367ed84e0ee17900d620dfb1240ef0de78e28088393988f6fc",
+      "original_bytes": 7511,
+      "public_sha256": "d1364140eb5086e6f60a70ee8d1be1e4fa53e2b7cdb491032c60740e98d2dd8e",
+      "public_bytes": 7525
+    },
+    "test/residual_p7_wave_v2.test.js": {
+      "original_sha256": "5eb868ec040ef9b5a4685d0766908e84055c95e70715e005ec34bb1221478975",
+      "original_bytes": 10772,
+      "public_sha256": "638f65278acd4a9d82205d960cd7682a2189780a5caedf9abb5c105c1aa57b85",
+      "public_bytes": 10786
+    },
+    "test/unknown_p1_wave_v2.test.js": {
+      "original_sha256": "440a3659428f09b09ffca322fce19478fc7d8e0378b23757f3d4f58aaf6f7453",
+      "original_bytes": 9340,
+      "public_sha256": "e95b5f2b346839e06f5c787fe1e69ab5be8c16e4a41c8c340290d4c75f69f316",
+      "public_bytes": 9354
+    }
+  }
+}

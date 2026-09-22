@@ -1,0 +1,35 @@
+# Generated analysis and research outputs
+artifacts/
+research-v3/output/
+dist/
+evidence/
+work/
+node_modules/
+.env
+.env.*
+
+# Raw or derived binary data: keep outside source control and handoff packages
+replay/
+*.rofl
+*.duckdb
+*.duckdb.wal
+*.bin
+*.memory.bin
+*.parquet
+*.zip
+*.exe
+*.dll
+*.wad
+
+# Local evidence, caches and tools
+.omo/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
