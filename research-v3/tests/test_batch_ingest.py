@@ -104,6 +104,8 @@ class BatchIngestTests(unittest.TestCase):
     def test_unsupported_patch_is_recorded_without_decode(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            canonical_manifest = root / "canonical_manifest.json"
+            self._write_json(canonical_manifest, {"replays": []})
             replay = root / "HN1-999.rofl"
             replay.write_bytes(b"unsupported")
             db = root / "research.duckdb"
@@ -113,7 +115,8 @@ class BatchIngestTests(unittest.TestCase):
             }]
             with mock.patch.object(batch_ingest, "inventory_replays", return_value=fake_inventory):
                 result = batch_ingest.ingest_replay_directory(
-                    root, db_path=db, output_root=root / "batch"
+                    root, db_path=db, canonical_manifest=canonical_manifest,
+                    output_root=root / "batch"
                 )
             self.assertEqual(result["status"], "COMPLETED_WITH_REJECTIONS")
             store = ReplayStore(db)
@@ -124,6 +127,8 @@ class BatchIngestTests(unittest.TestCase):
     def test_same_sha_in_one_batch_is_ingested_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            canonical_manifest = root / "canonical_manifest.json"
+            self._write_json(canonical_manifest, {"replays": []})
             first = root / "HN1-100.rofl"
             second = root / "HN1-101.rofl"
             first.write_bytes(b"same replay")
@@ -138,7 +143,8 @@ class BatchIngestTests(unittest.TestCase):
             ]
             with mock.patch.object(batch_ingest, "inventory_replays", return_value=fake_inventory):
                 result = batch_ingest.ingest_replay_directory(
-                    root, db_path=db, output_root=root / "batch"
+                    root, db_path=db, canonical_manifest=canonical_manifest,
+                    output_root=root / "batch"
                 )
             self.assertEqual(result["discovered"], 2)
             self.assertEqual(result["unique_by_sha"], 1)

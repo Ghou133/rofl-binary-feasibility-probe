@@ -3,6 +3,7 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import duckdb
@@ -214,6 +215,11 @@ class VerifyV3Tests(unittest.TestCase):
 
     def test_adc_context_join_uses_composite_id_and_validates_checkpoint_semantics(self):
         with tempfile.TemporaryDirectory() as tmp:
+            manifest_dir = Path(tmp) / "artifacts"
+            manifest_dir.mkdir()
+            (manifest_dir / "replay_manifest.json").write_text(
+                json.dumps({"replays": []}), encoding="utf-8"
+            )
             db = Path(tmp) / "adc-fixture.duckdb"
             replay_sha = "a" * 64
             context_id = f"{replay_sha}:10000:9"
@@ -268,7 +274,8 @@ class VerifyV3Tests(unittest.TestCase):
                     VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, 'MISSING', false, 2000)
                 """, rows)
 
-            result = verify_v3.verify(db)
+            with mock.patch.object(verify_v3, "ROOT", Path(tmp)):
+                result = verify_v3.verify(db)
 
             self.assertTrue(result["checks"]["adc_exactly_four_checkpoints_per_death"]["pass"])
             self.assertFalse(result["checks"]["adc_checkpoint_names_and_times"]["pass"])
@@ -277,6 +284,11 @@ class VerifyV3Tests(unittest.TestCase):
     def test_default_sibling_publication_manifest_rejects_stale_database(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            manifest_dir = root / "artifacts"
+            manifest_dir.mkdir()
+            (manifest_dir / "replay_manifest.json").write_text(
+                json.dumps({"replays": []}), encoding="utf-8"
+            )
             db = root / "research.duckdb"
             ReplayStore(db).init()
             with duckdb.connect(str(db)) as con:
@@ -302,7 +314,8 @@ class VerifyV3Tests(unittest.TestCase):
                 con.execute("INSERT INTO probe VALUES (2)")
                 con.execute("CHECKPOINT")
 
-            result = verify_v3.verify(db)
+            with mock.patch.object(verify_v3, "ROOT", root):
+                result = verify_v3.verify(db)
 
             self.assertEqual(result["checks"]["publication_database_sha256"]["pass"], False)
             self.assertEqual(result["checks"]["status_database_sha256"]["pass"], False)
