@@ -11,11 +11,12 @@
 | `npm run test:v3` | 38 项：37 pass、1 skip | 既有冻结 V3 publication fixture 缺席；不是受保护 Jungle Objective Holdout |
 | `npm run test:v4` | 17/17 pass | 合成/单元级验证，未重跑 14 场 backfill |
 | 路径清理聚焦测试 | 15 项：13 pass、2 skip | route-pair、oracle/quantization 相关；两项跳过需要私有受控 Replay |
-| `npm run package:handoff` | PASS | 429 条目、428 个 payload 文件，大小 1,831,262 字节；禁用内容扫描与 fresh extraction 均通过，未做原始 Replay 重解码 |
+| `npm run package:handoff` | PASS | 禁用内容扫描与 fresh extraction 均通过；未做原始 Replay 重解码。最终条目数、大小与 SHA 以 `dist/` 中本次重新生成的 sidecar 为准 |
+| 414 文件的干净 Git 克隆 | PASS | 无 `artifacts/`、`replay/`、`evidence/`；`test:portable` 25/25、V3 37 pass/1 skip、V4 17/17。未在克隆中声称运行全量 exact-build 测试 |
 
 公开前移除了源码中的本机用户路径。四组历史研究 manifest 曾绑定原始脚本/测试哈希；原 manifest 保持原样，本地原文件和 SHA 保存在未公开的 `artifacts/public_release_preimages_20260923/`。`PUBLIC_RELEASE_SOURCE_HASHES.json` 独立绑定旧/公开源码身份，测试同时验证原 manifest 身份和公开副本身份。这不构成历史研究重跑。
 
-公开 Git 不包含 `artifacts/`、`replay/`、`evidence/`、`research-v3/output/`、`dist/`。干净克隆可运行 portable 与 V3/V4 单元套件；全量 exact-build 回归需另行提供合法取得、SHA 匹配的输入。公开文件清单与干净克隆验证以本次 Git 提交后的记录为准。
+公开 Git 不包含 `artifacts/`、`replay/`、`evidence/`、`research-v3/output/`、`dist/`。第一次干净克隆的 V3 有 4 项因测试隐式读取本机 `artifacts/replay_manifest.json` 而报错；失败日志保留在本机。随后这 4 项改为在测试临时目录使用合成 manifest，第二次干净克隆的 V3 如上通过。全量 exact-build 回归仍需另行提供合法取得、SHA 匹配的输入。
 
 本文件区分三件事：当前 exact-build 机器证明、仅检查的历史证明、因私有输入缺失而未执行的重建。
 当前语义基线日期为 2026-08-21；最终交接 ZIP 的哈希以 `dist/` 中的 sidecar 为准。
