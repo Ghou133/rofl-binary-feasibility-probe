@@ -1,12 +1,36 @@
 # Project instructions
 
-The parser owns replay protocol semantics only. It must not claim or implement map truth, behavior inference, offline corpus collection, Akari runtime acquisition/cache/state, or UI. Consumers must use published interfaces; do not copy decoder logic across boundaries.
+The parser owns replay protocol semantics only. Do not add map truth, behavior
+inference, offline corpus collection, live acquisition/cache/state or UI. Consumers
+use published interfaces; do not copy decoder logic across ownership boundaries.
 
-## V2 Governance
+## Current state and ordinary maintenance
 
-V2 at `..\LOL_RESEARCH_SYSTEM_GOVERNANCE_V2` is the source of truth. Never execute V1 or treat archived decisions as a current task.
+Protocol development is `SOURCE_FROZEN_DURING_MIGRATION`; the semantic baseline is
+2026-08-21. This is not a second active protocol implementation. Read
+`PROJECT_CHARTER.md`, `project_contract.json`, `docs/PUBLIC_DEVELOPMENT.md`, then
+only the source and tests needed for the current task.
 
-- For ordinary explanation, documentation, or a local fix within the existing contract, read the relevant local files and verify the affected behavior directly. Do not load the full governance history or create a gate record for every task.
-- Before changing architecture, ownership, a cross-project interface, a published capability, or an asset's status, read local `PROJECT_CHARTER.md` and `project_contract.json`, then the relevant parts of `SYSTEM_NORTH_STAR.md`, `SYSTEM_PROJECT_MAP.md`, `SYSTEM_DECISION_LOG.md`, `CAPABILITY_REGISTRY.md`, and `EVIDENCE_SOURCE_REGISTRY.md` under the shared V2 directory. Read only the local evidence needed for that change.
-- For those boundary changes, record the actual decision using the shared `ARCHITECTURE_GATE_TEMPLATE.md`; proceed with the affected change only on `ARCHITECTURE_GATE = PASS`. A fail blocks that change, not independent work already within the contract. Existing user authorization does not need a second approval.
-- Preserve provenance, original evidence, frozen/incomplete state, published contracts, and explicit user suspensions. Instruction cleanup does not itself authorize research-asset deletion or product work.
+Documentation, packaging, parser safety and fixes within the existing contract
+can be reviewed using this repository alone. No private sibling directory or
+historical architecture gate is a prerequisite to ordinary maintenance. Existing
+user authorization does not need a second approval.
+
+Run focused tests. Report actual passes, failures, skips, missing inputs and
+untested platforms separately. `npm test` is the public suite; `npm run test:all`
+and CLI `validate` retain the full Node suite, including private-input tests.
+Never hide a failed check or turn a missing fixture into an ordinary pass.
+
+## Evidence and boundary changes
+
+Preserve exact-build gates, published interfaces, original provenance, failed and
+negative evidence, frozen/incomplete states and explicit user suspensions.
+Unavailable is not zero. Maintenance does not authorize new semantic fields,
+research-asset deletion, holdout access, or product work.
+
+Cross-project architecture, ownership, a published capability, or a research
+asset's status still requires the maintainer's V2 governance context and a recorded
+`ARCHITECTURE_GATE = PASS`. The private integration and required documents are
+listed in `docs/PUBLIC_DEVELOPMENT.md`. If absent, stop that boundary change, not
+independent maintenance already within scope. Never fabricate gate results, run
+V1 governance, or treat archived decisions as current tasks.

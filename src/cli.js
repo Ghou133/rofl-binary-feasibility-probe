@@ -3,6 +3,7 @@
 const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { rawAnchorChainStatus, renderAcceptanceReport } = require('./cli_report');
 
 const {
   TOOL_VERSION,
@@ -63,13 +64,17 @@ Usage:
   node src/cli.js validate [file.rofl|directory ...] [--out-dir artifacts]
   node src/cli.js ward-events <rows.json|rows.jsonl|file.rofl> [--out-dir artifacts]
 
+Runtime: Node >=22.15.0 with native Zstd.
+Semantic CLI scope: exact 16.15.801.3452 only. The separate 16.16 public API
+is not dispatched by this legacy CLI; see docs/PUBLIC_DEVELOPMENT.md.
+
 Options:
   --out-dir <path>              Independent output directory (default: artifacts)
-  --timeline-limit <number>     Maximum packet timeline sample rows (default: 250)
-  --sample-stride <number>      Add one raw packet every N blocks (default: 10000)
+  --timeline-limit <number>     First N packet timeline rows (default: 250)
+  --sample-stride <number>      Deprecated compatibility option; prefix samples are unchanged
   --include-private-metadata     Include Riot ID/PUUID fields in roster output
   --strict                       Stop at the first framing error
-  --decoder-image <path>        Exact 16.15 runtime image (default: bundled probe image)
+  --decoder-image <path>        Exact 16.15 runtime image (external input; not bundled)
   --python <command>            Python command with Unicorn installed (default: python)
   --details-dir <path>          Validation-only directory for same-game Details matching
   --ward-spawns <jsonl>         Verified current-build WardSpawn decoder rows
@@ -391,7 +396,6 @@ function parseOne(filePath, options) {
       : null;
     const analysis = analyzeReplay(replay, {
       timelineLimit: options.timelineLimit,
-      sampleStride: options.sampleStride,
       includePrivateMetadata: options.includePrivateMetadata,
       strict: options.strict,
     });
@@ -458,8 +462,11 @@ function parseOne(filePath, options) {
       analysis.decoder = {
         profile: semantic.profile,
         status: semantic.status,
-        note: semantic.note
-          ?? 'Patch-matched HeroDeath, UnitApplyDamage, CastSpell, Buff, and Protection OnEvent profiles executed.',
+        note: semantic.status === 'UNSUPPORTED_REPLAY_VERSION'
+          ? `Legacy CLI semantics support only 16.15.801.3452; received ${replay.header.version}. `
+            + 'The separate 16.16 public API is not dispatched by this command. See docs/PUBLIC_DEVELOPMENT.md.'
+          : semantic.note
+            ?? 'Patch-matched HeroDeath, UnitApplyDamage, CastSpell, Buff, and Protection OnEvent profiles executed.',
       };
       analysis.semantic = {
         status: semantic.status,
@@ -555,7 +562,6 @@ function readWardRowsFromReplay(filePath, options = {}) {
   const base = analyzeReplay(replay, {
     includePrivateMetadata: false,
     timelineLimit: 1,
-    sampleStride: 1,
     strict: options.strict,
   });
   let outputs;
@@ -970,53 +976,7 @@ function buildAcceptanceSummary(results, beforeHashes, afterHashes, testSummary,
 }
 
 function buildAcceptanceReport(summary, results, artifactRoot) {
-  const lines = [
-    '# ROFL Analyzer Acceptance Report',
-    '',
-    `- Status: **${summary.status}**`,
-    `- Milestone: **${summary.milestone}**`,
-    `- Real Replay files: ${summary.replay_files_tested.length}`,
-    `- Replay versions: ${summary.replay_versions.join(', ') || 'none'}`,
-    `- Total parsed blocks: ${summary.packet_count}`,
-    `- Block framing errors: ${summary.real_replay_validation.block_framing_errors}`,
-    `- Tests: ${summary.tests_total === null ? 'NOT RUN' : `${summary.tests_passed}/${summary.tests_total} passed; ${summary.tests_failed} failed`}`,
-    `- Parquet output: **${summary.parquet_output_status}** (JSON/JSONL/CSV are emitted)`,
-    `- Upstream data unchanged: **${summary.upstream_unchanged ? 'YES' : 'NO'}**`,
-    '',
-    '## Verified Replay Semantics',
-    '',
-    `- Hero Death events: ${summary.death_event_count} (VERIFIED_DIRECT).`,
-    `- Damage events: ${summary.damage_event_count} with Replay timestamp, source, target, and amount (VERIFIED_DIRECT).`,
-    `- CastSpell events: ${summary.spell_event_count} with caster, spell key, targets, and dictionary-derived slot/name where available.`,
-    `- Buff Add/Remove/UpdateCount events: ${summary.buff_event_count} (VERIFIED_DIRECT core fields plus lifecycle derivations).`,
-    `- Ward events: ${summary.ward_direct_spawn_event_count}/${summary.ward_event_count} use independently decoded entity spawn coordinates (VERIFIED_DIRECT).`,
-    `- Ward cast-to-spawn matches: ${summary.ward_cast_spawn_match_count}; corpse-derived lifecycle rows: ${summary.ward_lifecycle_count}.`,
-    `- Hero positions: ${summary.position_event_count} one-second rows derived from verified current-build PathPacket waypoints.`,
-    '- Champion entity mapping uses the exact-build network-ID range and rejects non-champion entities.',
-    '- ADC death records contain Replay-only damage sequences, attacker totals, combat duration, support casts, and support-to-ADC Buff adds.',
-    '- Decode does not read Match Details; Details remain validation-only.',
-    '- Every semantic row retains Replay SHA-256, chunk, decompressed offset, packet ID, payload length, and payload SHA-256.',
-    '',
-    '## Remaining Limits',
-    '',
-    '- Per-hit physical/magic/true type and basic-attack attribution are unavailable from the verified Damage fields.',
-    summary.position_event_count > 0
-      ? '- Position/movement is available; support distance and nearby-unit metrics are not yet derived from it and remain `NULL`.'
-      : '- Position/movement is unavailable, so support distance and nearby-unit counts remain `NULL`.',
-    '- Shield generated/application amount and direct reported heal amount are Replay-observed. Shield remaining/absorbed/unused and heal raw/effective/overheal remain unavailable.',
-    '- Buff names are emitted as verified hashes unless a separately pinned dictionary can resolve them.',
-    '',
-    '## Independent Review',
-    '',
-    `- Per-Replay evidence is under ${path.resolve(artifactRoot, 'replays')}.`,
-    '- Select a row from `damage_events.jsonl`, `death_events.jsonl`, `spell_events.jsonl`, `buff_events.jsonl`, `shield_events.jsonl`, or `heal_events.jsonl` and follow `raw_packet_ref` into the source Replay.',
-    '- Recompute the Replay and payload SHA-256 values before checking semantic fields.',
-    `- Re-run \`${TEST_COMMAND}\` and the validation command recorded in \`reviewer_manifest.json\` from the repository root.`,
-    '',
-    'The report itself is not evidence. Re-run the commands in `reviewer_manifest.json` and inspect the raw Replay bytes independently.',
-    '',
-  ];
-  return lines.join('\n');
+  return renderAcceptanceReport(summary, results, artifactRoot, TEST_COMMAND);
 }
 
 function buildReviewerManifest(summary, rootDir, results, args) {
@@ -1057,7 +1017,7 @@ function buildReviewerManifest(summary, rootDir, results, args) {
     format_documentation: path.resolve(REPOSITORY_ROOT, 'docs', 'ROFL_FORMAT.md'),
     protocol_report: path.resolve(REPOSITORY_ROOT, 'docs', 'PROTECTION_V4_COMPLETION_REPORT.md'),
     test_command: TEST_COMMAND,
-    npm_test_command: 'npm test',
+    npm_test_command: 'npm run test:all',
     replay_command: replayCommand,
     validation_command: validationCommand,
     raw_anchor_command: `node scripts/verify_raw_anchor.js ${quoteCommandArg(path.resolve(absoluteRoot, 'raw_packet_anchors.json'))} 0 --output-root ${quoteCommandArg(absoluteRoot)}`,
@@ -1080,12 +1040,7 @@ function buildReviewerManifest(summary, rootDir, results, args) {
       'Open the matching semantic JSONL row and verify its raw_packet_ref and payload_sha256.',
       'Follow source Replay bytes → chunk → decompressed block → exact-build decoder → semantic event → ADC output.',
     ],
-    raw_anchor_chain_status: {
-      raw_packet: 'VERIFIED',
-      decoded_event: 'VERIFIED_DIRECT',
-      entity_attribution: 'VERIFIED_DERIVED',
-      final_semantic_output: 'VERIFIED_DERIVED',
-    },
+    raw_anchor_chain_status: rawAnchorChainStatus(summary),
     details_comparison: {
       status: 'VALIDATION_ONLY',
       validation_csv: path.resolve(absoluteRoot, 'replay_vs_details_validation.csv'),

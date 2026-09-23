@@ -246,7 +246,12 @@ function decompressChunk(buffer, chunk) {
   }
   let output;
   try {
-    output = zlib.zstdDecompressSync(buffer.subarray(chunk.body_offset, chunk.body_end));
+    // Bound actual output during decompression, not only the declared length.
+    // Node requires a positive limit; a declared-empty frame gets a one-byte
+    // budget and must still pass the exact-length check below.
+    output = zlib.zstdDecompressSync(buffer.subarray(chunk.body_offset, chunk.body_end), {
+      maxOutputLength: Math.max(1, chunk.uncompressed_length),
+    });
   } catch (error) {
     fail('ZSTD_DECOMPRESSION_ERROR', `Zstandard decompression failed for chunk ${chunk.chunk_id}`, {
       chunkId: chunk.chunk_id,

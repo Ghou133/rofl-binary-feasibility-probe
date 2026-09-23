@@ -93,19 +93,21 @@ function sampleRecord(replay, chunk, block, kind, hexPrefixBytes) {
 function analyzeReplay(replay, options = {}) {
   const started = process.hrtime.bigint();
   const timelineLimit = options.timelineLimit ?? DEFAULT_TIMELINE_LIMIT;
+  if (!Number.isSafeInteger(timelineLimit) || timelineLimit < 0) {
+    throw new RangeError('timelineLimit must be a non-negative safe integer');
+  }
   const hexPrefixBytes = options.hexPrefixBytes ?? DEFAULT_HEX_PREFIX_BYTES;
-  const sampleStride = options.sampleStride ?? 10000;
   const packetStats = new Map();
   const timeline = [];
   const anchors = [];
   const chunkStats = new Map();
   let packetCount = 0;
-  let decodedPacketCount = 0;
+  const decodedPacketCount = 0;
   let unknownPacketCount = 0;
   let largestBlock = null;
   let lastBlock = null;
   let firstNonZero = null;
-  let firstByStream = new Set();
+  const firstByStream = new Set();
 
   const walk = walkBlocks(replay, (block, chunk) => {
     packetCount += 1;
@@ -155,8 +157,9 @@ function analyzeReplay(replay, options = {}) {
       : Math.max(chunkEntry.max_timestamp_ms, block.timestamp_ms);
     chunkStats.set(chunk.index, chunkEntry);
 
-    const shouldSample = timeline.length < timelineLimit || packetCount % sampleStride === 0;
-    if (shouldSample) {
+    // Preserve the frozen prefix-only output contract. The legacy sampleStride
+    // option never affected returned rows after the old final slice.
+    if (timeline.length < timelineLimit) {
       timeline.push(sampleRecord(replay, chunk, block, 'timeline_sample', hexPrefixBytes));
     }
     if (!firstByStream.has(chunk.stream)) {
@@ -170,7 +173,9 @@ function analyzeReplay(replay, options = {}) {
     if (largestBlock === null || block.payload_length > largestBlock.packet_length) {
       largestBlock = sampleRecord(replay, chunk, block, 'largest_raw_payload', hexPrefixBytes);
     }
-    lastBlock = sampleRecord(replay, chunk, block, 'last_raw_block', hexPrefixBytes);
+    // Only the most recent block is retained; do not hash every discarded
+    // last-block candidate or retain buffers from all decompressed chunks.
+    lastBlock = { chunk, block };
   }, {
     includeStreams: options.includeStreams || [1, 2, 3],
     strict: Boolean(options.strict),
@@ -192,7 +197,12 @@ function analyzeReplay(replay, options = {}) {
     if (entry) entry.block_errors += 1;
   }
   if (largestBlock) anchors.push(largestBlock);
-  if (lastBlock) anchors.push(lastBlock);
+  if (lastBlock) {
+    anchors.push(sampleRecord(
+      replay, lastBlock.chunk, lastBlock.block, 'last_raw_block', hexPrefixBytes,
+    ));
+    lastBlock = null;
+  }
 
   const packetTypeInventory = [...packetStats.values()]
     .map((entry) => ({
@@ -238,7 +248,7 @@ function analyzeReplay(replay, options = {}) {
     unknown_packet_count: unknownPacketCount,
     block_errors: walk.errors,
     packet_type_inventory: packetTypeInventory,
-    packet_timeline_sample: timeline.slice(0, timelineLimit),
+    packet_timeline_sample: timeline,
     raw_anchors: dedupeAnchors(anchors),
     chunk_inventory: [...chunkStats.values()].sort((a, b) => a.index - b.index),
     events: emptyEventSet(),

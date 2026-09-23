@@ -20,7 +20,7 @@
     "audit:route-0064": "node scripts/audit_route_0064_support_quest.js",
     "audit:route-02d4": "node scripts/audit_route_02d4_auxiliary_batch.js",
     "audit:gameplay-route-tail": "node scripts/audit_gameplay_route_tail.js",
-    "test": "node --test test/*.test.js",
+    "test": "npm run test:public",
     "test:oracle-guided-p0": "node --test test/oracle_guided_p0_recovery.test.js",
     "test:quantization-aware-p0": "node --test test/quantization_aware_p0_recovery.test.js",
     "test:quantization-runtime-combat": "node --test test/quantization_runtime_combat_reconstruction.test.js",
@@ -90,16 +90,20 @@
     "validate-ward-v2": "node scripts/validate_ward_v2.js",
     "validate-ward-spawn-current": "node scripts/validate_ward_spawn_16_15.js",
     "research-v3": "node scripts/rofl-research.js",
-    "test-v3": "python -m unittest discover -s research-v3/tests -v",
+    "test-v3": "npm run test:v3",
     "publish-v3": "node scripts/rofl-research.js publish",
     "verify-v3": "python -B research-v3/verify_v3.py",
     "verify-v4": "python -B research-v4/verify_v4.py --db research-v3/output/replay_research.duckdb",
-    "package:handoff": "python -B scripts/package_handoff.py",
+    "package:handoff": "python -B scripts/package_handoff.py --with-evidence",
     "verify:handoff": "python -B scripts/package_handoff.py --validate dist/rofl-analyzer-ai-handoff.zip",
-    "clean:legacy:dry-run": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/cleanup_legacy_files.ps1",
-    "clean:legacy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/cleanup_legacy_files.ps1 -Apply"
+    "test:all": "node --test test/*.test.js",
+    "test:maintenance": "node --test test/parser_safety.test.js test/analysis_sampling.test.js test/cli_report.test.js test/cli_maintenance.test.js && python -B -m unittest discover -s test/public -v",
+    "test:public": "npm run test:portable && npm run test:maintenance",
+    "test:entity-item": "python -B -m unittest discover -s tests -v",
+    "package:source": "python -B scripts/package_handoff.py",
+    "verify:source": "python -B scripts/package_handoff.py --validate dist/rofl-analyzer-source.zip"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.15.0"
   }
 }

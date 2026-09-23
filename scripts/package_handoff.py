@@ -1,4 +1,4 @@
-"""Build and validate the portable source-and-evidence AI handoff archive."""
+"""Build a public source archive, or explicitly include allowlisted local evidence."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import argparse
 import hashlib
 import json
 import re
-import shutil
 import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -14,19 +13,21 @@ from typing import Iterable
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = ROOT / "dist" / "rofl-analyzer-ai-handoff.zip"
+DEFAULT_OUTPUT = ROOT / "dist" / "rofl-analyzer-source.zip"
+DEFAULT_EVIDENCE_OUTPUT = ROOT / "dist" / "rofl-analyzer-ai-handoff.zip"
 MAX_ARCHIVE_BYTES = 25 * 1024 * 1024
+MAX_UNPACKED_BYTES = 128 * 1024 * 1024
 FIXED_TIMESTAMP = (2026, 8, 12, 0, 0, 0)
 
 SOURCE_ROOTS = (
-    "src", "scripts", "test", "docs", "handoff-evidence", "research-v3", "research-v4",
+    "src", "scripts", "test", "tests", "examples", "docs",
+    "handoff-evidence", "research-v3", "research-v4",
 )
 ROOT_FILES = (
     ".gitignore",
     "AGENTS.md",
     "AI_HANDOFF.md",
     "ARCHITECTURE.md",
-    "CLEANUP_REPORT.md",
     "LICENSE",
     "PROJECT_CHARTER.md",
     "PUBLIC_RELEASE_SOURCE_HASHES.json",
@@ -75,6 +76,8 @@ EXCLUDED_PREFIXES = (
     "dist/",
     "replay/",
     "research-v3/output/",
+    "research-v4/output/",
+    "evidence/",
 )
 EXCLUDED_SUFFIXES = (
     ".bin",
@@ -84,8 +87,14 @@ EXCLUDED_SUFFIXES = (
     ".pyc",
     ".rofl",
     ".zip",
+    ".parquet",
+    ".exe",
+    ".dll",
+    ".wad",
+    ".log",
+    ".tmp",
 )
-EXCLUDED_COMPONENTS = {"__pycache__", ".pytest_cache"}
+EXCLUDED_COMPONENTS = {"__pycache__", ".pytest_cache", "node_modules", ".git"}
 DELIBERATE_EXCLUSIONS = [
     "replay/ and every .rofl input",
     "research-v3/output/ and every DuckDB/Parquet publication",
@@ -93,11 +102,12 @@ DELIBERATE_EXCLUSIONS = [
     "full decoder JSONL, raw packet corpora, stage/extract directories and old archives",
     "Match Details, oracle payloads, Riot IDs, PUUIDs and player-identifying metadata",
     "local .git and .omo review history",
+    "play-rofl.ps1/cmd: optional local-client launchers, not part of the parser handoff",
 ]
 
 TEXT_EXTENSIONS = {
     ".bat", ".cmd", ".csv", ".gitignore", ".js", ".json", ".jsonl",
-    ".md", ".ps1", ".py", ".sql", ".txt",
+    ".md", ".ps1", ".py", ".sql", ".txt", ".yml", ".yaml",
 }
 FORBIDDEN_PATTERNS = (
     ("absolute Windows user path", re.compile(rb"[A-Za-z]:[/\\]Users[/\\]", re.I)),
@@ -122,7 +132,10 @@ def sha256_file(path: Path) -> str:
 
 def safe_name(name: str) -> str:
     pure = PurePosixPath(name)
-    if pure.is_absolute() or ".." in pure.parts or "\\" in name:
+    if (not name or name == "." or pure.as_posix() != name or pure.is_absolute()
+            or ".." in pure.parts or "\\" in name or ":" in name
+            or any(ord(char) < 32 for char in name)
+            or any(part.endswith((" ", ".")) for part in pure.parts)):
         raise RuntimeError(f"unsafe archive name: {name!r}")
     return pure.as_posix()
 
@@ -133,12 +146,13 @@ def is_excluded(relative: str) -> bool:
     return (
         any(relative == prefix.rstrip("/") or relative.startswith(prefix)
             for prefix in EXCLUDED_PREFIXES)
-        or any(part in EXCLUDED_COMPONENTS for part in pure.parts)
+        or any(part in EXCLUDED_COMPONENTS or part == ".env" or part.startswith(".env.")
+               for part in pure.parts)
         or any(relative.lower().endswith(suffix) for suffix in EXCLUDED_SUFFIXES)
     )
 
 
-def iter_sources() -> Iterable[Path]:
+def iter_sources(*, with_evidence: bool = False) -> Iterable[Path]:
     selected: dict[str, Path] = {}
     for root_file in ROOT_FILES:
         path = ROOT / root_file
@@ -146,7 +160,9 @@ def iter_sources() -> Iterable[Path]:
             raise FileNotFoundError(path)
         selected[root_file] = path
 
-    for directory_name in SOURCE_ROOTS:
+    # CI files are optional in historical snapshots, but included when present.
+    source_roots = (*SOURCE_ROOTS, *((".github",) if (ROOT / ".github").is_dir() else ()))
+    for directory_name in source_roots:
         directory = ROOT / directory_name
         if not directory.is_dir():
             raise FileNotFoundError(directory)
@@ -158,7 +174,12 @@ def iter_sources() -> Iterable[Path]:
                 continue
             selected[relative] = path
 
-    for relative in EVIDENCE_FILES:
+    if with_evidence:
+        missing = [relative for relative in EVIDENCE_FILES if not (ROOT / relative).is_file()]
+        if missing:
+            raise FileNotFoundError("source-and-evidence package requires local inputs: "
+                                    + ", ".join(missing))
+    for relative in EVIDENCE_FILES if with_evidence else ():
         path = ROOT / Path(*PurePosixPath(relative).parts)
         if not path.is_file():
             raise FileNotFoundError(path)
@@ -166,6 +187,13 @@ def iter_sources() -> Iterable[Path]:
 
     for relative, path in sorted(selected.items()):
         safe_name(relative)
+        # Do not publish bytes reached through symlinks, even within a source root.
+        relative_parts = Path(relative).parts
+        if any(ROOT.joinpath(*relative_parts[:index]).is_symlink()
+               for index in range(1, len(relative_parts) + 1)):
+            raise RuntimeError(f"symlink in package source: {relative}")
+        if ROOT.resolve() not in path.resolve().parents:
+            raise RuntimeError(f"source outside repository: {relative}")
         yield path
 
 
@@ -184,11 +212,13 @@ def scan_text_payload(relative: str, data: bytes) -> None:
             raise RuntimeError(f"forbidden {label} in portable payload: {relative}")
 
 
-def build_manifest(files: dict[str, dict[str, object]]) -> dict[str, object]:
+def build_manifest(
+    files: dict[str, dict[str, object]], *, with_evidence: bool = False,
+) -> dict[str, object]:
     return {
         "schema_version": 1,
         "package": "rofl-analyzer-ai-handoff",
-        "verification_mode": "SOURCE_AND_BOUNDED_EVIDENCE",
+        "verification_mode": "SOURCE_AND_BOUNDED_EVIDENCE" if with_evidence else "SOURCE_ONLY",
         "raw_redecode_performed": False,
         "closed_payload": True,
         "file_count": len(files),
@@ -200,10 +230,10 @@ def build_manifest(files: dict[str, dict[str, object]]) -> dict[str, object]:
     }
 
 
-def write_archive(output: Path) -> dict[str, object]:
+def write_archive(output: Path, *, with_evidence: bool = False) -> dict[str, object]:
     source_rows = []
     files: dict[str, dict[str, object]] = {}
-    for path in iter_sources():
+    for path in iter_sources(with_evidence=with_evidence):
         relative = archive_name(path)
         data = path.read_bytes()
         scan_text_payload(relative, data)
@@ -211,10 +241,13 @@ def write_archive(output: Path) -> dict[str, object]:
         source_rows.append((relative, data))
 
     manifest_bytes = (
-        json.dumps(build_manifest(files), indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+        json.dumps(build_manifest(files, with_evidence=with_evidence),
+                   indent=2, sort_keys=True, ensure_ascii=False) + "\n"
     ).encode("utf-8")
     source_rows.append(("package_manifest.json", manifest_bytes))
 
+    if sum(len(data) for _, data in source_rows) > MAX_UNPACKED_BYTES:
+        raise RuntimeError("unpacked payload exceeds portable size limit")
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(output.suffix + ".tmp")
     if temporary.exists():
@@ -232,6 +265,8 @@ def write_archive(output: Path) -> dict[str, object]:
                 archive.writestr(info, data, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
         if temporary.stat().st_size > MAX_ARCHIVE_BYTES:
             raise RuntimeError(f"archive exceeds {MAX_ARCHIVE_BYTES} bytes")
+        # Validate before replacing a previously valid archive.
+        validate_archive(temporary)
         temporary.replace(output)
     finally:
         if temporary.exists():
@@ -259,23 +294,33 @@ def validate_archive(archive_path: Path) -> dict[str, object]:
         raise RuntimeError("archive exceeds portable size limit")
     with zipfile.ZipFile(archive_path, "r") as archive:
         infos = archive.infolist()
+        if sum(info.file_size for info in infos) > MAX_UNPACKED_BYTES:
+            raise RuntimeError("unpacked payload exceeds portable size limit")
+        if any(((info.external_attr >> 16) & 0o170000) == 0o120000 for info in infos):
+            raise RuntimeError("archive contains a symlink")
         names = [safe_name(info.filename) for info in infos]
         if len(names) != len(set(names)) or any(info.is_dir() for info in infos):
             raise RuntimeError("archive has duplicate names or directory entries")
         if "package_manifest.json" not in names:
             raise RuntimeError("archive has no package_manifest.json")
         manifest = json.loads(archive.read("package_manifest.json").decode("utf-8"))
-        if manifest.get("verification_mode") != "SOURCE_AND_BOUNDED_EVIDENCE":
+        mode = manifest.get("verification_mode")
+        if mode not in ("SOURCE_ONLY", "SOURCE_AND_BOUNDED_EVIDENCE"):
             raise RuntimeError("unexpected verification mode")
         files = manifest.get("files")
         if not isinstance(files, dict) or manifest.get("file_count") != len(files):
             raise RuntimeError("invalid closed manifest")
+        if manifest.get("raw_redecode_performed") is not False or manifest.get("closed_payload") is not True:
+            raise RuntimeError("invalid validation scope")
+        if mode == "SOURCE_AND_BOUNDED_EVIDENCE" and not EVIDENCE_FILE_SET.issubset(files):
+            raise RuntimeError("bounded evidence package is missing required evidence")
         expected_names = sorted([*files, "package_manifest.json"])
         if sorted(names) != expected_names:
             raise RuntimeError("archive entries do not match the closed manifest")
         for relative, expected in files.items():
             safe_name(relative)
-            if is_excluded(relative) and relative not in EVIDENCE_FILE_SET:
+            evidence_allowed = mode == "SOURCE_AND_BOUNDED_EVIDENCE" and relative in EVIDENCE_FILE_SET
+            if is_excluded(relative) and not evidence_allowed:
                 raise RuntimeError(f"excluded path in archive: {relative}")
             data = archive.read(relative)
             scan_text_payload(relative, data)
@@ -315,10 +360,18 @@ def validate_archive(archive_path: Path) -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--with-evidence", action="store_true",
+                        help="require all allowlisted local artifacts; never implied by source mode")
     parser.add_argument("--validate", type=Path)
     args = parser.parse_args()
-    result = validate_archive(args.validate.resolve()) if args.validate else write_archive(args.output.resolve())
+    if args.validate:
+        if args.with_evidence or args.output:
+            parser.error("--validate cannot be combined with --with-evidence or --output")
+        result = validate_archive(args.validate.resolve())
+    else:
+        output = args.output or (DEFAULT_EVIDENCE_OUTPUT if args.with_evidence else DEFAULT_OUTPUT)
+        result = write_archive(output.resolve(), with_evidence=args.with_evidence)
     print(json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False))
     return 0
 

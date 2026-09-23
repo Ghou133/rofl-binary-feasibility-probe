@@ -2,7 +2,17 @@
 
 ## PROJECT ID
 
-`ROFL_PARSER` (`rofl-binary-feasibility-probe`) is the parser project. V2 context-load order is: canonical system documents in `..\LOL_RESEARCH_SYSTEM_GOVERNANCE_V2`; this charter and `project_contract.json`; the relevant canonical Capability and Evidence Source Registry entries; then only the local evidence needed for the assigned capability. It must print `PROJECT_CONTEXT_LOADED = YES`, emit the completed Architecture Gate result, and must never run V1.
+`ROFL_PARSER` (`rofl-binary-feasibility-probe`) owns replay protocol semantics.
+The public repository is `SOURCE_FROZEN_DURING_MIGRATION`, with a semantic baseline
+of 2026-08-21. Authorized maintenance does not reopen protocol research, promote
+fields, delete research assets, or create a second active protocol authority.
+
+For ordinary documentation, testing and fixes within the existing contract, read
+`AGENTS.md`, this charter, `project_contract.json`, and the relevant local source.
+No private sibling repository is required for that work. Cross-project ownership,
+architecture, published capabilities and research-asset changes still require the
+maintainer's V2 governance review described in `docs/PUBLIC_DEVELOPMENT.md`.
+Do not treat archived stage reports as new tasks or run V1 governance.
 
 ## WHY THIS PROJECT EXISTS
 

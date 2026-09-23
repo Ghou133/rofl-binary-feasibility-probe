@@ -3,6 +3,9 @@
   "schema_version": "LOL_RESEARCH_PROJECT_CONTRACT_V2",
   "project_id": "ROFL_PARSER",
   "governance_root": "..\\LOL_RESEARCH_SYSTEM_GOVERNANCE_V2",
+  "governance_scope": "MAINTAINER_CROSS_PROJECT_BOUNDARY_CHANGES_ONLY",
+  "semantic_baseline_date": "2026-08-21",
+  "maintenance_does_not_promote_semantics": true,
   "north_star_role": ".rofl -> version-specific protocol decode -> reliable semantic truth",
   "responsibilities": ["packet reverse engineering", "replay container and packet decoding", "payload layout", "semantic event extraction", "exact-build version binding", "evidence grades", "semantic API", "parser capability manifests"],
   "non_goals": ["map truth", "game-behavior inference", "offline corpus collection", "Akari runtime or UI"],
@@ -13,9 +16,9 @@
   "forbidden_dependencies": ["map-truth ownership", "behavior-inference ownership", "Akari current-match runtime state", "private decoder imports by consumers"],
   "frozen_assets": ["published parser interfaces", "exact-build decoder mappings", "validated protocol fixtures and evidence must not be silently reinterpreted"],
   "incomplete_research": ["16.16 complete CastSpell, Buff, protection, and combat-state coverage", "exact growth formulas and structured item/rune/buff mechanics", "current Armor/MR and HP, reductions, attacker penetration, mitigation order, damage stage, shield lifecycle, effective heal, and overheal", "Sweeper held UNVERIFIED and activation UNAVAILABLE", "ordinary-monster/camp clear unavailable and candidate scoreboard/item fields remain field-gated"],
-  "current_stage": "ACTIVE_PROTOCOL_SEMANTICS_RESEARCH",
-  "project_stage": "ACTIVE",
-  "context_load_order": ["..\\LOL_RESEARCH_SYSTEM_GOVERNANCE_V2\\SYSTEM_NORTH_STAR.md", "..\\LOL_RESEARCH_SYSTEM_GOVERNANCE_V2\\SYSTEM_PROJECT_MAP.md", "..\\LOL_RESEARCH_SYSTEM_GOVERNANCE_V2\\SYSTEM_DECISION_LOG.md", "PROJECT_CHARTER.md", "project_contract.json", "..\\LOL_RESEARCH_SYSTEM_GOVERNANCE_V2\\CAPABILITY_REGISTRY.md", "..\\LOL_RESEARCH_SYSTEM_GOVERNANCE_V2\\EVIDENCE_SOURCE_REGISTRY.md", "relevant local evidence only"],
-  "boundary_rules": ["emit PROJECT_CONTEXT_LOADED = YES before substantive work", "pass the V2 architecture gate before implementation or research", "never run V1", "own protocol semantics but not map truth, behavior, collection, runtime, or UI", "consume and publish only explicit contracts", "new-build migration is AUTO_FIRST and MANUAL_LAST", "manual validation is forbidden by default and may target only an automatically unresolved capability", "a passing capability is never manually revalidated because another capability failed"],
+  "current_stage": "SOURCE_FROZEN_DURING_MIGRATION",
+  "project_stage": "FROZEN",
+  "context_load_order": ["AGENTS.md", "PROJECT_CHARTER.md", "project_contract.json", "docs/PUBLIC_DEVELOPMENT.md", "relevant local source and evidence only"],
+  "boundary_rules": ["ordinary maintenance within the existing contract uses local documentation and focused regression", "cross-project architecture, ownership, published capability or research-asset changes require maintainer V2 review and ARCHITECTURE_GATE = PASS", "protocol development remains frozen during migration", "never run V1", "own protocol semantics but not map truth, behavior, collection, runtime, or UI", "consume and publish only explicit contracts", "new-build migration is AUTO_FIRST and MANUAL_LAST", "manual validation is forbidden by default and may target only an automatically unresolved capability", "a passing capability is never manually revalidated because another capability failed"],
   "boundary_rule_ids": ["PARSER_NO_AKARI_UI_PROFILE"]
 }
