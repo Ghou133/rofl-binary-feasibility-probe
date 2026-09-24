@@ -1627,9 +1627,10 @@ function capabilityQuery(replay, options = {}) {
       const applicable = status !== 'UNSUPPORTED' && status !== 'UNVERIFIED';
       const perCapabilityInputsAssessed = applicable
         && profile.game_version === '16.19.820.7193';
-      const needs1619InventoryImage = capability === 'hero_inventory_mapview'
+      const needs1619RuntimeImage = capability === 'hero_inventory_mapview'
         || capability === 'hero_inventory_set_item'
-        || capability === 'hero_inventory_broadcast';
+        || capability === 'hero_inventory_broadcast'
+        || capability === 'npc_buff_remove_packet';
       const tailStat = perCapabilityInputsAssessed
         ? capability === 'hero_minions_killed_snapshot'
           ? assessHeroMinionsKilledSnapshotTail(replay)
@@ -1671,7 +1672,7 @@ function capabilityQuery(replay, options = {}) {
           error: assessment.status === 'PASS' ? null : assessment.error,
         }));
       const inputs = perCapabilityInputsAssessed
-        ? needs1619InventoryImage
+        ? needs1619RuntimeImage
           ? [dependencies[0], options.runtimeImage
             ? fileInputDependency('exact_runtime_image', options.runtimeImage)
             : { name: 'exact_runtime_image', status: 'MISSING', path: null }]
@@ -1772,13 +1773,15 @@ function capabilityQuery(replay, options = {}) {
           'HN keyframe 0x0276 f32 offset 0x21c and observed sequences');
       }
       if (profile.game_version === '16.19.820.7193'
-          && needs1619InventoryImage) {
+          && needs1619RuntimeImage) {
         validationPending.push('exact runtime image SHA-256 and decoder execution',
           capability === 'hero_inventory_mapview'
             ? 'HN 0x0420 MapView route, full packet consumption, and slot record provenance'
             : capability === 'hero_inventory_set_item'
               ? 'HN 0x03b7 SetItem route, full packet consumption, and slot/item field provenance'
-              : 'HN 0x03ef Broadcast route, full packet consumption, and record provenance');
+              : capability === 'hero_inventory_broadcast'
+                ? 'HN 0x03ef Broadcast route, full packet consumption, and record provenance'
+                : 'HN 0x043c BuffRemove2 route, full packet consumption, and raw field provenance');
       }
       const gameLength = replay.tail?.metadata?.gameLength;
       const conditionalInputs = ['hero_death_timer', 'hero_respawn'].includes(capability)
@@ -1798,7 +1801,7 @@ function capabilityQuery(replay, options = {}) {
         required_inputs: inputs,
         runtime_image_requirement: applicable
           ? perCapabilityInputsAssessed
-            ? needs1619InventoryImage ? 'EXACT_IMAGE_REQUIRED' : 'NOT_REQUIRED'
+            ? needs1619RuntimeImage ? 'EXACT_IMAGE_REQUIRED' : 'NOT_REQUIRED'
             : 'NOT_ASSESSED_PER_CAPABILITY'
           : null,
         missing_inputs: perCapabilityInputsAssessed
@@ -1834,6 +1837,7 @@ function capabilityQuery(replay, options = {}) {
             hero_inventory_mapview: 'hero_inventory_mapview_candidates',
             hero_inventory_set_item: 'hero_inventory_set_item_candidates',
             hero_inventory_broadcast: 'hero_inventory_broadcast_candidates',
+            npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
           })[capability] ?? null
           : null,
       });

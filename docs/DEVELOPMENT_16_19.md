@@ -277,6 +277,20 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   `artifacts/16_19_development/broadcast_identity_probe/`. This one-Replay
   evidence does not establish confirmed packet ownership, transactions, or
   continuous inventory state.
+- **Done:** `npc_buff_remove_packet` is wired as an unpublished exact-image
+  candidate for HN game-stream `0x043c` BuffRemove2 packets. The exact callback,
+  constructor and deserializer route was identified in the pinned image. A
+  bounded probe fully consumed all 11,950 observed HN packets. Its decoded
+  object contains a float at `0x10`, a byte used as a BuffManager slot index
+  at `0x14`, and a u32 passed to a lookup at `0x18`. The float is zero in
+  11,942 packets; the other eight track Replay time within 1 ms. Truncated
+  payloads failed, and an appended byte and foreign route failed the
+  full-consumption check. Local probe evidence is under
+  `artifacts/16_19_development/cast_buff_probe/`. The real HN CLI emitted
+  11,950/11,950 candidates from 2,035,757 framed Replay blocks with zero
+  errors and `MATCHED_USED` image status; local output is under
+  `artifacts/16_19_development/buff_remove_hn_cli_smoke/`. Owner, buff identity
+  and successful removal are not established.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
   HN Replays to test level, HeroStats and inventory candidates. The HN
   Broadcast participant mapping still needs an independent Replay, and

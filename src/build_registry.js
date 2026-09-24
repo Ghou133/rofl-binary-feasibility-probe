@@ -7,6 +7,7 @@ const oldDecoder = require('./decoders/rofl_16_15_801_3452');
 const newDecoder = require('./decoders/rofl_16_16_805_0442');
 const decoder1619 = require('./decoders/rofl_16_19_820_7193');
 const heroStatsCandidate1619 = require('./decoders/rofl_16_19_hero_stats_candidate');
+const buffRemoveCandidate1619 = require('./decoders/rofl_16_19_buff_remove_candidate');
 const { SWEEPER_CAPABILITY_CONTRACT_ID } = require('./sweeper_capability');
 const { PATH_PACKET_PROFILE: OLD_PATH_PROFILE } = require('./path_pipeline_v2');
 const { WARD_SPAWN_PROFILE: OLD_WARD_PROFILE } = require('./ward_pipeline_v2');
@@ -249,6 +250,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_inventory_mapview: 0x0420,
       hero_inventory_set_item: 0x03b7,
       hero_inventory_broadcast: 0x03ef,
+      npc_buff_remove_packet: 0x043c,
     },
     decoder_profile: {
       hero_death: {
@@ -292,6 +294,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_inventory_mapview: decoder1619.HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE,
       hero_inventory_set_item: decoder1619.HERO_INVENTORY_SET_ITEM_CANDIDATE_PROFILE,
       hero_inventory_broadcast: decoder1619.HERO_INVENTORY_BROADCAST_CANDIDATE_PROFILE,
+      npc_buff_remove_packet: buffRemoveCandidate1619.NPC_BUFF_REMOVE_PACKET_CANDIDATE_PROFILE,
     },
     field_semantics: {
       hero_death: 'CANDIDATE_EXACT_BUILD_ROUTE_FINGERPRINT',
@@ -315,6 +318,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_inventory_mapview: 'CANDIDATE_EXACT_RUNTIME_MAPVIEW_PACKET_SLOT_RECORDS',
       hero_inventory_set_item: 'CANDIDATE_EXACT_RUNTIME_SET_ITEM_PACKET_FIELDS',
       hero_inventory_broadcast: 'CANDIDATE_EXACT_RUNTIME_BROADCAST_SLOT_RECORDS',
+      npc_buff_remove_packet: 'CANDIDATE_EXACT_RUNTIME_BUFF_REMOVE2_PACKET_FIELDS',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, route-profile bounded',
@@ -338,6 +342,7 @@ const BUILD_PROFILES = deepFreeze({
       inventory_mapview_candidate: '0x0420 observed HN packet slot/item-ID records; no continuous inventory state or purchase event',
       inventory_set_item_candidate: '0x03b7 observed HN packet slot/item-ID fields; no item transaction or general participant mapping',
       inventory_broadcast_candidate: '0x03ef exact HN runtime vector and record fields; bounded one-Replay raw-param-to-participant candidate, without transaction inference',
+      buff_remove2_candidate: '0x043c exact HN runtime decoded f32/u8/u32 packet fields; no buff owner, type, or successful removal inference',
     },
     verified_capabilities: [],
     candidate_capabilities: [
@@ -359,6 +364,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_inventory_mapview',
       'hero_inventory_set_item',
       'hero_inventory_broadcast',
+      'npc_buff_remove_packet',
     ],
     unsupported_capabilities: [],
     validation_artifacts: [],

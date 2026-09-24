@@ -17,6 +17,8 @@ const {
   decodeHeroInventorySetItemCandidates,
   decodeHeroInventoryBroadcastCandidates,
 } = require('./decoders/rofl_16_19_820_7193');
+const { decodeNpcBuffRemovePacketCandidates } =
+  require('./decoders/rofl_16_19_buff_remove_candidate');
 const {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   decodeHeroStatsSnapshotCandidateSet,
@@ -1791,6 +1793,7 @@ function decode1619(replay, profile, options = {}) {
     hero_inventory_mapview: decodeHeroInventoryMapViewCandidates,
     hero_inventory_set_item: decodeHeroInventorySetItemCandidates,
     hero_inventory_broadcast: decodeHeroInventoryBroadcastCandidates,
+    npc_buff_remove_packet: decodeNpcBuffRemovePacketCandidates,
     hero_minions_killed_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_jungle_minions_killed_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_experience_snapshot: decodeHeroStatsSnapshotCandidateSet,
@@ -1814,6 +1817,7 @@ function decode1619(replay, profile, options = {}) {
     hero_inventory_mapview: 'hero_inventory_mapview_candidates',
     hero_inventory_set_item: 'hero_inventory_set_item_candidates',
     hero_inventory_broadcast: 'hero_inventory_broadcast_candidates',
+    npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
     hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
     hero_jungle_minions_killed_snapshot: 'hero_jungle_minions_killed_snapshot_candidates',
     hero_experience_snapshot: 'hero_experience_snapshot_candidates',
@@ -1859,7 +1863,8 @@ function decode1619(replay, profile, options = {}) {
         outcome = heroStatsOutcomes[capability];
       } else if (capability === 'hero_inventory_mapview'
           || capability === 'hero_inventory_set_item'
-          || capability === 'hero_inventory_broadcast') {
+          || capability === 'hero_inventory_broadcast'
+          || capability === 'npc_buff_remove_packet') {
         outcome = decoders[capability](replay, collected, options);
       } else {
         outcome = decoders[capability](replay, collected);
@@ -2026,6 +2031,10 @@ function getHeroInventorySetItemCandidates(decoded) {
 
 function getHeroInventoryBroadcastCandidates(decoded) {
   return decoded?.events?.hero_inventory_broadcast_candidates ?? null;
+}
+
+function getNpcBuffRemovePacketCandidates(decoded) {
+  return decoded?.events?.npc_buff_remove_packet_candidates ?? null;
 }
 
 function getHeroMinionsKilledSnapshotCandidates(decoded) {
@@ -2198,6 +2207,7 @@ module.exports = {
   getHeroInventoryMapViewCandidates,
   getHeroInventorySetItemCandidates,
   getHeroInventoryBroadcastCandidates,
+  getNpcBuffRemovePacketCandidates,
   getHeroMinionsKilledSnapshotCandidates,
   getHeroJungleMinionsKilledSnapshotCandidates,
   getHeroExperienceSnapshotCandidates,
