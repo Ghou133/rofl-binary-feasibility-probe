@@ -95,7 +95,7 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   kill tail leaves the killer participant `null` without suppressing the
   independently validated victim candidate. The two nonhero source IDs stay
   unmapped. There is no confirmed callback field name for `+0x50` or assist
-  list; assists remain unknown. The 11-Replay CLI batch yielded 655 decoded
+  list; this death route alone did not identify assists. The 11-Replay CLI batch yielded 655 decoded
   sources, 653 killer-participant candidates, 2 nonhero raw sources, and
   11/11 `CANDIDATE` with zero errors. Reproducible static/runtime checks and
   batch provenance remain under ignored
@@ -240,6 +240,31 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   Reproducible exploratory checks and per-Replay CLI provenance remain under
   ignored `artifacts/16_19_development/kr_821_float_probe/` and
   `artifacts/16_19_development/kr_821_float_stats_11/`.
+- **821 individual assist candidate:** Among 2,476 observed game-stream
+  `0x040a` packets of length 44, 2,194 at the 655 validated death cores form
+  1,097 exact two-shape pairs (identical bytes 5..42 and the same low-byte
+  participant). The other 282 carry only the first shape and are excluded.
+  Paired participants are on the 0x0438 killer side, excluding killer and
+  victim; per-player pair totals match all 110 `ASSISTS` Replay tails.
+  Pair counts match all 3,160 adjacent keyframe assist-snapshot increments;
+  counts after the last keyframe match all 110 remaining tail gaps. The exact
+  821 native deserializer fully consumed 2,476/2,476 observed 44-byte packets;
+  truncate and append controls failed. The CLI/API output remains
+  `CANDIDATE`, and nonhero-source deaths retain unknown assist lists. It does
+  not promote a packet-specific callback field name. Reproducible evidence is
+  ignored under `artifacts/16_19_development/assist_821_probe/`.
+- **821 inventory MapView packet candidate:** Exact-image factory ID `0x018d`
+  constructs a 0x30-byte object and native deserializer at RVA `0x1041220`.
+  It fully consumed 671/671 observed game packets and produced 5,327 ordered
+  slot/item records. All 671 truncations failed and all 671 appended-byte
+  controls left trailing input. The per-packet record decoder uses the pinned
+  821 lookup table; the 109/110 latest canonical participant packets are
+  observations, not a continuous inventory state. The 64 additional packets,
+  including two `0x400001b2/b5` raw-param variants, remain separate and unpaired.
+  The CLI/API route requires the exact local image and emits packet records
+  only; no purchase, sale, item-use, or final-state inference follows.
+  Reproducible native and Replay checks are ignored under
+  `artifacts/16_19_development/inventory_018d_821/`.
 - **Earlier 821 gold raw-window negative lead:** Before the exact 821 byte
   transform and reversed blob were applied, direct raw integer/float windows
   did not yield a defensible `GOLD_EARNED` or `GOLD_SPENT` value. Survivors
@@ -248,14 +273,41 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   negative evidence for direct raw windows, and is superseded by the bounded
   transformed `f32` snapshot candidates above. It did not identify an income
   or transaction event.
-- **821 champion-damage negative lead:** No raw `f32`/`u32` window or bounded
-  byte transform passed numeric, monotone, and tail checks for
-  `TOTAL_DAMAGE_DEALT_TO_CHAMPIONS`. Byte 779 has an ordered high-byte signal:
+- **Earlier 821 champion-damage raw-window negative lead:** The direct raw
+  `f32`/`u32` windows and the earlier bounded byte search did not pass numeric,
+  monotone, and tail checks for `TOTAL_DAMAGE_DEALT_TO_CHAMPIONS`. Byte 779
+  had an ordered high-byte signal:
   a three-code mapping from the first two Replays matches 87/90 held-out
   final tail exponent bytes, against 52–65/90 rotated-participant controls.
   The six mismatches are one exponent behind the final tail, consistent with
-  a last-keyframe lag. Lower bytes and the inverse numeric transform remain
-  unknown, so 776–779 stays raw structural evidence, not a damage total.
+  a last-keyframe lag. Lower bytes and the inverse numeric transform were
+  unknown in that search; 776–779 remains raw structural evidence for that
+  historical route, not a damage total. The later exact native-vector float
+  candidates below use different offsets and do not retroactively validate
+  the failed direct raw search.
+- **821 native-vector damage float candidates:** The byte-transformed and
+  reversed `0x0089` vector has `f32LE` candidates at `0x1e0` for
+  `TOTAL_DAMAGE_DEALT_TO_CHAMPIONS`, `0x1d0` for `TOTAL_DAMAGE_DEALT`, `0x1f0`
+  for `TOTAL_DAMAGE_TAKEN`, `0x200` for
+  `TOTAL_DAMAGE_TAKEN_FROM_CHAMPIONS`, and `0x208` for
+  `TOTAL_DAMAGE_SELF_MITIGATED`. Across 11 KR Replays and 110 participant
+  sequences, each starts at zero, is finite, nonnegative, monotone, and
+  bounded by its corresponding numeric Replay tail. Final floored snapshots
+  equal those tails for 53, 40, 44, 55, and 45 participants respectively;
+  every remaining gap is retained. Among 315 aligned float offsets screened,
+  each selected offset ranked first by final-tail absolute error after the
+  plausibility controls. All nine participant rotations yielded zero exact
+  final matches for each field. Three CLI/API abilities expose the five
+  cumulative `CANDIDATE` values; they imply no individual damage, target,
+  source, or mitigation event. Reproducible controls and direct 11-Replay
+  decoder smoke are ignored under
+  `artifacts/16_19_development/damage_float_821/`.
+  A combined five-capability CLI batch for assist, inventory, and these three
+  damage snapshots returned 11/11 `CANDIDATE` with zero framing or capability
+  errors: 655 death-linked assist rows with 1,097 pairs, 671 inventory packets
+  with 5,327 records, and 3,270 rows for each damage ability. Input hashes
+  and individual outcomes are ignored under
+  `artifacts/16_19_development/kr_821_assist_inventory_damage_11/`.
 - **821 completed dead-time raw state:** Keyframe payload bytes 675–678 changed
   on exactly the 591/3,160 adjacent participant-frame transitions where
   cumulative completed death-to-return time advanced, and stayed fixed on
@@ -781,8 +833,8 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   `artifacts/16_19_development/buff_link_probe_second/`.
   In the third Replay all 3,030 distinct Remove keys appear in Add rows, while
   3,023 appear in game-stream Adds; row identity remains unresolved.
-- **Next:** Seek independent assist/other combat-field evidence; continue bounded
-  KR route research.
+- **Next:** Continue bounded KR route research beyond the assist and damage
+  candidates above; test additional independent combat-field anchors.
   Further independent HN Replays
   can test HeroStats and inventory candidates. The HN
   Broadcast participant mapping remains candidate-only after three Replays, and

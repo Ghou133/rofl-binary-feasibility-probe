@@ -11,7 +11,9 @@ const CAPABILITIES = new Set([
   'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
   'hero_experience_snapshot', 'hero_vision_score_snapshot',
   'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
-  'hero_level_state', 'hero_respawn',
+  'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
+  'hero_damage_self_mitigated_snapshot',
+  'hero_level_state', 'hero_respawn', 'hero_assist', 'hero_inventory_packet',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
 const RESPAWN_ROUTES = new Set([0x0048, 0x018d]);
@@ -53,6 +55,8 @@ function create821ScanCollector(replay, selectedCapabilities) {
     hero_death: [],
     hero_death_timer: [],
     hero_respawn: [],
+    hero_assist: [],
+    hero_inventory_packet: [],
     hero_deaths_snapshot: heroStatsRows,
     hero_champion_kills_snapshot: heroStatsRows,
     hero_assists_snapshot: heroStatsRows,
@@ -63,6 +67,9 @@ function create821ScanCollector(replay, selectedCapabilities) {
     hero_vision_score_snapshot: heroStatsRows,
     hero_gold_earned_snapshot: heroStatsRows,
     hero_gold_spent_snapshot: heroStatsRows,
+    hero_damage_totals_snapshot: heroStatsRows,
+    hero_damage_taken_from_champions_snapshot: heroStatsRows,
+    hero_damage_self_mitigated_snapshot: heroStatsRows,
     hero_level_state: [],
   };
   const selectsHeroStats = selected.has('hero_deaths_snapshot')
@@ -74,11 +81,14 @@ function create821ScanCollector(replay, selectedCapabilities) {
     || selected.has('hero_experience_snapshot')
     || selected.has('hero_vision_score_snapshot')
     || selected.has('hero_gold_earned_snapshot')
-    || selected.has('hero_gold_spent_snapshot');
+    || selected.has('hero_gold_spent_snapshot')
+    || selected.has('hero_damage_totals_snapshot')
+    || selected.has('hero_damage_taken_from_champions_snapshot')
+    || selected.has('hero_damage_self_mitigated_snapshot');
   // A return candidate is only meaningful after validating its death cores.
   // Keep those route packets in the same walk even for respawn-only requests.
   const selectsDeathRoutes = selected.has('hero_death') || selected.has('hero_death_timer')
-    || selected.has('hero_respawn');
+    || selected.has('hero_respawn') || selected.has('hero_assist');
   let blockCount = 0;
   let keyframeBlockCount = 0;
   let finished = false;
@@ -96,6 +106,14 @@ function create821ScanCollector(replay, selectedCapabilities) {
       if (selected.has('hero_respawn') && chunk.stream_tag === 1
           && RESPAWN_ROUTES.has(block.packet_id)) {
         rows.hero_respawn.push(copyRow(block, chunk));
+      }
+      if (selected.has('hero_assist') && chunk.stream_tag === 1
+          && block.packet_id === 0x040a && block.payload_length === 44) {
+        rows.hero_assist.push(copyRow(block, chunk));
+      }
+      if (selected.has('hero_inventory_packet') && chunk.stream_tag === 1
+          && block.packet_id === 0x018d) {
+        rows.hero_inventory_packet.push(copyRow(block, chunk));
       }
       if (selectsHeroStats && (chunk.stream_tag === 2 || chunk.stream_tag === 3)
           && block.packet_id === 0x0089) {
@@ -163,7 +181,8 @@ function rowsFor821Capability(replay, token, capability) {
   if (bound.error) return { error: bound.error };
   const selected = bound.selected.has(capability)
     || (capability === 'hero_death'
-      && (bound.selected.has('hero_respawn') || bound.selected.has('hero_death_timer')));
+      && (bound.selected.has('hero_respawn') || bound.selected.has('hero_death_timer')
+        || bound.selected.has('hero_assist')));
   if (!selected) {
     return { error: `${capability} was not selected by this 821 route scan` };
   }
@@ -179,6 +198,9 @@ function rowsFor821Capability(replay, token, capability) {
       || capability === 'hero_vision_score_snapshot'
       || capability === 'hero_gold_earned_snapshot'
       || capability === 'hero_gold_spent_snapshot'
+      || capability === 'hero_damage_totals_snapshot'
+      || capability === 'hero_damage_taken_from_champions_snapshot'
+      || capability === 'hero_damage_self_mitigated_snapshot'
       ? bound.keyframeBlockCount : bound.blockCount,
   };
 }

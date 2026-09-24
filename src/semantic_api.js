@@ -38,6 +38,12 @@ const {
 } = require('./decoders/rofl_16_19_821_aux_counts_candidate');
 const { decodeHeroFloatSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_float_stats_candidate');
+const { decodeHeroAssistCandidates821 } =
+  require('./decoders/rofl_16_19_821_assist_candidate');
+const { decodeHeroInventoryPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_inventory_packet_candidate');
+const { decodeHeroDamageSnapshotCandidates821 } =
+  require('./decoders/rofl_16_19_821_damage_float_candidate');
 const { collect821Routes } = require('./decoders/rofl_16_19_821_scan');
 const { decodeNpcBuffRemovePacketCandidates } =
   require('./decoders/rofl_16_19_buff_remove_candidate');
@@ -2011,6 +2017,7 @@ function decode1619821(replay, profile, options = {}) {
   const capabilities = [...new Set(requested)];
   const decoders = {
     hero_death: decodeHeroDeathCandidates821,
+    hero_assist: decodeHeroAssistCandidates821,
     hero_death_timer: decodeHeroDeathTimerCandidates821,
     hero_respawn: decodeHeroRespawnCandidates821,
     hero_deaths_snapshot: decodeHeroDeathsSnapshotCandidates821,
@@ -2028,10 +2035,25 @@ function decode1619821(replay, profile, options = {}) {
       decodeHeroFloatSnapshotCandidates821(input, 'hero_gold_earned_snapshot', collected),
     hero_gold_spent_snapshot: (input, collected) =>
       decodeHeroFloatSnapshotCandidates821(input, 'hero_gold_spent_snapshot', collected),
+    hero_damage_totals_snapshot: (input, collected) =>
+      decodeHeroDamageSnapshotCandidates821(input, 'hero_damage_totals_snapshot', collected),
+    hero_damage_taken_from_champions_snapshot: (input, collected) =>
+      decodeHeroDamageSnapshotCandidates821(input,
+        'hero_damage_taken_from_champions_snapshot', collected),
+    hero_damage_self_mitigated_snapshot: (input, collected) =>
+      decodeHeroDamageSnapshotCandidates821(input,
+        'hero_damage_self_mitigated_snapshot', collected),
     hero_level_state: decodeHeroLevelCandidates821,
+    hero_inventory_packet: (input, collected) =>
+      decodeHeroInventoryPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
+    hero_assist: 'hero_assist_candidates',
     hero_death_timer: 'hero_death_timer_candidates',
     hero_respawn: 'hero_respawn_candidates',
     hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
@@ -2045,17 +2067,26 @@ function decode1619821(replay, profile, options = {}) {
     hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
     hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
     hero_gold_spent_snapshot: 'hero_gold_spent_snapshot_candidates',
+    hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
+    hero_damage_taken_from_champions_snapshot:
+      'hero_damage_taken_from_champions_snapshot_candidates',
+    hero_damage_self_mitigated_snapshot:
+      'hero_damage_self_mitigated_snapshot_candidates',
     hero_level_state: 'hero_level_state_candidates',
+    hero_inventory_packet: 'hero_inventory_packet_candidates',
   };
   const capabilityResults = {};
   const events = {};
   const sharedScanCapabilities = new Set([
-    'hero_death', 'hero_death_timer', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+    'hero_death', 'hero_assist', 'hero_death_timer', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
     'hero_assists_snapshot', 'hero_level_state', 'hero_respawn',
     'hero_missions_minions_killed_snapshot',
     'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
     'hero_experience_snapshot', 'hero_vision_score_snapshot',
     'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
+    'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
+    'hero_damage_self_mitigated_snapshot',
+    'hero_inventory_packet',
   ]);
   const supported = capabilities.filter((capability) => sharedScanCapabilities.has(capability));
   let candidate821Scan = options.candidate821Scan ?? null;
@@ -2084,9 +2115,15 @@ function decode1619821(replay, profile, options = {}) {
       }
     }
     const { events: candidateEvents, ...result } = outcome;
-    result.runtime_image_status = options.runtimeImagePath
-      ? 'PROVIDED_NOT_USED' : result.runtime_image_status ?? 'NOT_REQUIRED';
-    result.runtime_image_used = false;
+    if (capability === 'hero_inventory_packet') {
+      result.runtime_image_status ??= options.runtimeImagePath
+        ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
+      result.runtime_image_used ??= false;
+    } else {
+      result.runtime_image_status = options.runtimeImagePath
+        ? 'PROVIDED_NOT_USED' : result.runtime_image_status ?? 'NOT_REQUIRED';
+      result.runtime_image_used = false;
+    }
     capabilityResults[capability] = result;
     if (result.status === 'CANDIDATE') {
       events[outputKeys[capability]] = candidateEvents;
@@ -2104,8 +2141,9 @@ function decode1619821(replay, profile, options = {}) {
     events: usable.length > 0 ? events : null,
     capability_results: capabilityResults,
     decoded_packet_count: usable.reduce((sum, result) => sum + result.input_count, 0),
-    runtime_image_used: false,
-    runtime_image_sha256: null,
+    runtime_image_used: results.some((result) => result.runtime_image_used === true),
+    runtime_image_sha256: results.find((result) => result.runtime_image_used === true)
+      ?.runtime_image_sha256 ?? null,
     sweeper_capability: createSweeperCapabilityExport(profile.game_version),
   };
 }

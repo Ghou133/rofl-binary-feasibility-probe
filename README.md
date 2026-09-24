@@ -16,7 +16,8 @@
 | `capabilities` | 从回放容器读取完整 build，查询已登记能力、入口及尾部字段输入预检 | 不解压 packet、不运行语义解码；候选能力仍需逐回放校验 |
 | `decode` / `analyze` / `batch` / `validate` | `16.15.801.3452` 旧版整合管线；16.19 精确 build 的指定能力实验入口 | 16.19 必须显式传 `--events`；16.16 语义 API 尚未由主 CLI 分发；`validate` 还会运行完整 Node 套件 |
 | `16.19.820.7193 --events hero_death` | HN/KR 结构指纹与回放尾部死亡总数同时匹配时，输出候选受害者和回放时间 | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；无杀手、助攻或重生推断，其他完整 build 不复用 |
-| `16.19.821.7343 --events hero_death` | KR `0x0259/0x0438/0x031b` 同刻路由与十名参与者回放尾部死亡数均匹配时，输出候选受害者和时间；精确 821 运行时变换还从 `0x0438` 解出来源 ID | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；653 个英雄来源 ID 的计数与 110 人的击杀结算一致时才输出 `killer_participant_id_candidate`，2 个非英雄来源只保留原 ID。孤立 `0x0259` 不输出；助攻及确认的死亡语义仍未知 |
+| `16.19.821.7343 --events hero_death` | KR `0x0259/0x0438/0x031b` 同刻路由与十名参与者回放尾部死亡数均匹配时，输出候选受害者和时间；精确 821 运行时变换还从 `0x0438` 解出来源 ID | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；653 个英雄来源 ID 的计数与 110 人的击杀结算一致时才输出 `killer_participant_id_candidate`，2 个非英雄来源只保留原 ID。孤立 `0x0259` 不输出；单次助攻候选在独立入口，确认的死亡语义仍未知 |
+| `16.19.821.7343 --events hero_assist` | 在已校验的死亡核心旁配对两种同参与者、同时间的 `0x040a/44` 包，并与十人 `ASSISTS` 结算核对，输出每次死亡的候选助攻参与者列表 | 仅写入 `hero_assist_candidates`，状态为 `CANDIDATE`；两个非英雄来源的列表保持未知；不把孤立或单一形状 `0x040a` 解释为助攻，也不声称已确定回调字段名称 |
 | `16.19.821.7343 --events hero_respawn` | KR `0x0048` 经精确 821 运行时确认为 `PKT_HeroReincarnateAlive_s` 路由；解出两项浮点值和一项可选浮点值，并与候选死亡核心、结算 `TOTAL_TIME_SPENT_DEAD` 对照 | 仅写入 `hero_respawn_candidates`，状态为 `CANDIDATE`；浮点值的游戏含义和回调的具体状态效果未确定。同刻 `0x018d` 实为库存 MapView 结构指纹；保留时间差、未返回的末次死亡与额外库存包，不以计时值预测返回 |
 | `16.19.821.7343 --events hero_death_timer` | KR `0x0259` 五字节载荷经精确 821 镜像反序列化与浮点变换，655 个已匹配死亡核心输出候选计时秒数；两包孤立 `0x0259` 排除 | 仅写入 `hero_death_timer_candidates`，状态为 `CANDIDATE`；607 次观察到的返回中有两次显著早于计时值，故不将计时值当作返回预测；48 个末次未返回计时越过回放结束 |
 | `16.19.821.7343 --events hero_deaths_snapshot` | KR `0x0089` 关键帧字节 1182 与精确 821 镜像中的计数字节变换相符，输出候选累计死亡次数快照 | 仅写入 `hero_deaths_snapshot_candidates`；末帧与结算可差 1 并保留差值；不是逐次死亡事件。精确镜像已验证完整载荷和字节向量，字段语义仍为候选 |
@@ -29,7 +30,11 @@
 | `16.19.821.7343 --events hero_vision_score_snapshot` | 同一向量 `0x1b0` 浮点候选视野分；11 份回放的 110 人均从零开始并不超过各自结算值 | 仅写入 `hero_vision_score_snapshot_candidates`；不推导守卫、探测或视野行为 |
 | `16.19.821.7343 --events hero_gold_earned_snapshot` | 同一向量 `0x38` 浮点候选已赚金币；110 人首帧均为 500，序列单调且在 `GOLD_EARNED` 结算内 | 仅写入 `hero_gold_earned_snapshot_candidates`；末帧均落后于结算并保留差额，不推导收入事件 |
 | `16.19.821.7343 --events hero_gold_spent_snapshot` | 同一向量 `0x34` 浮点候选已花金币；末帧 92/110 人与 `GOLD_SPENT` 结算相等 | 仅写入 `hero_gold_spent_snapshot_candidates`；保留一次观察到的下降，不推导购买、退款或出售 |
+| `16.19.821.7343 --events hero_damage_totals_snapshot` | 同一原生向量 `0x1e0/0x1d0/0x1f0` 的候选对英雄伤害、总伤害和承伤累计浮点快照 | 仅写入 `hero_damage_totals_snapshot_candidates`；逐项保留结算尾差，不推导单次伤害、来源或目标 |
+| `16.19.821.7343 --events hero_damage_taken_from_champions_snapshot` | 同一原生向量 `0x200` 的候选对英雄承伤累计浮点快照 | 仅写入 `hero_damage_taken_from_champions_snapshot_candidates`；不推导逐次伤害或来源 |
+| `16.19.821.7343 --events hero_damage_self_mitigated_snapshot` | 同一原生向量 `0x208` 的候选自我减伤累计浮点快照 | 仅写入 `hero_damage_self_mitigated_snapshot_candidates`；不推导减伤行为或来源 |
 | `16.19.821.7343 --events hero_level_state` | KR `0x0197` 精确 821 运行时解码器及查表变换输出观察到的候选等级值，覆盖等级 1–20 | 仅写入 `hero_level_state_candidates`；覆盖 1,613 个选定英雄包的 76 种载荷形状经完整消费验证，重复观测与一个中间等级缺口保留；参与者映射仍是候选，不补造升级事件 |
+| `16.19.821.7343 --events hero_inventory_packet --runtime-image PATH` | 精确 821 镜像原生反序列化 KR `0x018d` MapView，逐包输出候选槽位与物品 ID 记录 | 仅写入 `hero_inventory_packet_candidates`；不推断购买、出售或持续库存状态；额外原始参数变体不映射参与者，镜像按完整 SHA-256 校验 |
 | `16.19.820.7193 --events hero_death_timer` | HN 路由的计时 float、同刻 Hero_Die 和后续复活时间相互校验时，输出候选计时秒数 | 仅写入 `hero_death_timer_candidates`；该 profile 仅用于 820 HN 路由，821 KR 使用独立精确版本的候选 profile；不产生确认的死亡或重生事件 |
 | `16.19.820.7193 --events hero_respawn` | 将 HN 已观察且与计时包唯一配对的 `0x0357` 包输出为候选复活时点 | 仅写入 `hero_respawn_candidates`；依赖完整的 HN 计时候选校验，不补造回放结束后的复活 |
 | `16.19.820.7193 --events hero_level_state` | HN `0x02b3` 包中观察到的候选英雄等级值及原始包来源 | 仅写入 `hero_level_state_candidates`；同等级的独立包保留为重复观测，不补造升级事件；KR 路由未适配 |
@@ -128,7 +133,7 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events hero_death --out-dir "work\16-19-821-death-candidate"
 ```
 
-821 的候选死亡记录保留原始包来源及未配对路由的负例计数。该 build 的运行时镜像已从真实回放进程捕获；当前死亡包的计时浮点和 Hero_Die 来源 ID 均有独立候选解码，助攻归属仍未知。可追加 `hero_respawn,hero_death_timer,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_assists_snapshot,hero_missions_minions_killed_snapshot,hero_ward_stats_snapshot,hero_missions_cannon_minions_killed_snapshot,hero_experience_snapshot,hero_vision_score_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_level_state` 到 `--events`；计数、浮点、计时和等级使用已固定的精确镜像变换，CLI 运行时无需再次提供镜像。各能力独立报告状态；载荷形状超出已验证范围、解码值违反参与者结算上界等情况仍会保留其他已通过能力的候选输出，并明确标出失败项。11 份现有 KR 回放中的等级 20 和高击杀/助攻编码均已被相应变换覆盖。计时值不用于预测返回时点。
+821 的候选死亡记录保留原始包来源及未配对路由的负例计数。该 build 的运行时镜像已从真实回放进程捕获；当前死亡包的计时浮点和 Hero_Die 来源 ID 均有独立候选解码，单次助攻候选在 `hero_assist` 入口。可追加 `hero_assist,hero_respawn,hero_death_timer,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_assists_snapshot,hero_missions_minions_killed_snapshot,hero_ward_stats_snapshot,hero_missions_cannon_minions_killed_snapshot,hero_experience_snapshot,hero_vision_score_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_damage_totals_snapshot,hero_damage_taken_from_champions_snapshot,hero_damage_self_mitigated_snapshot,hero_level_state` 到 `--events`；计数、浮点、计时和等级使用已固定的精确镜像变换，CLI 运行时无需再次提供镜像。库存 `hero_inventory_packet` 需要 `--runtime-image` 指向同一完整 build 的镜像。各能力独立报告状态；载荷形状超出已验证范围、解码值违反参与者结算上界等情况仍会保留其他已通过能力的候选输出，并明确标出失败项。11 份现有 KR 回放中的等级 20 和高击杀/助攻编码均已被相应变换覆盖。计时值不用于预测返回时点。
 
 对 HN 路由的同一完整 build，可单独选择计时候选，或用
 `--events hero_death,hero_death_timer` 一起运行。计时输出包含原始包引用、

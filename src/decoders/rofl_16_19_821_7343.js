@@ -35,7 +35,7 @@ const HERO_DEATH_CANDIDATE_PROFILE_821 = Object.freeze({
     'Victim participant mapping is supported by final NUM_DEATHS counts, not an 821 runtime deserializer.',
     'The observed upper 0x100 raw-param bit and all 0x0259 payload fields remain unclassified.',
     'The 0x0438 source ID is runtime decoded; killer participant remains a candidate only after ten CHAMPIONS_KILLED tails align.',
-    'Nonhero source IDs remain unmapped; assists, damage, and complete combat semantics are unknown.',
+    'Nonhero source IDs remain unmapped; this death route does not establish assist attribution, damage events, or complete combat semantics. Separate assist and damage candidates have independent gates.',
     'Core 0x0259/0x0438/0x031b must join uniquely; isolated 0x0259 is excluded and reported.',
     'Optional 0x03d4 was absent at one matched core in each of two observed Replays; omissions are reported.',
     'An unmatched paired or long route, ambiguous join, unexpected 0x03d4, or tail mismatch fails closed.',

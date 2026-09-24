@@ -15,6 +15,7 @@ const { assessHeroDeathTail821 } = require('./decoders/rofl_16_19_821_7343');
 const { assessHeroRespawnDeadTimeTail821 } =
   require('./decoders/rofl_16_19_821_respawn_candidate');
 const {
+  assessHeroStatsTail821,
   assessHeroDeathsSnapshotTail821,
   assessHeroChampionKillsSnapshotTail821,
   assessHeroAssistsSnapshotTail821,
@@ -27,6 +28,8 @@ const { assessHeroWardStatsTail821, assessHeroMissionsCannonMinionsTail821 } =
   require('./decoders/rofl_16_19_821_aux_counts_candidate');
 const { assessHeroFloatSnapshotTail821 } =
   require('./decoders/rofl_16_19_821_float_stats_candidate');
+const { PROFILES: DAMAGE_PROFILES_821 } =
+  require('./decoders/rofl_16_19_821_damage_float_candidate');
 const { analyzeReplayWith821Routes } = require('./decoders/rofl_16_19_821_scan');
 const {
   assessHeroMinionsKilledSnapshotTail,
@@ -552,13 +555,15 @@ function parseOne1619(replay, options, started) {
   const is821 = replay.header.version === '16.19.821.7343';
   const selected821 = is821 && options.semantic !== false && Array.isArray(options.events)
     ? [...new Set(options.events.filter((name) => [
-      'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
+      'hero_death', 'hero_assist', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
-      'hero_level_state',
+      'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
+      'hero_damage_self_mitigated_snapshot',
+      'hero_level_state', 'hero_inventory_packet',
     ].includes(name)))] : [];
   const selectsBuffAdd = options.semantic !== false
     && Array.isArray(options.events) && options.events.includes('npc_buff_add_packet');
@@ -1747,6 +1752,8 @@ function capabilityQuery(replay, options = {}) {
       const needs1619RuntimeImage = capability === 'hero_inventory_mapview'
         || capability === 'hero_inventory_set_item'
         || capability === 'hero_inventory_broadcast'
+        || (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_inventory_packet')
         || capability === 'npc_buff_remove_packet'
         || capability === 'npc_buff_add_packet';
       const tailStat = perCapabilityInputsAssessed
@@ -1762,6 +1769,21 @@ function capabilityQuery(replay, options = {}) {
                 error: deadTime.error ?? deadTime.missing_input ?? null },
             ] };
           })()
+        : profile.game_version === '16.19.821.7343'
+          && capability === 'hero_assist'
+          ? { required_fields: [
+            ['NUM_DEATHS', assessHeroDeathTail821(replay)],
+            ['CHAMPIONS_KILLED', assessHeroChampionKillsSnapshotTail821(replay)],
+            ['ASSISTS', assessHeroAssistsSnapshotTail821(replay)],
+          ].map(([field, assessment]) => ({ field, status: assessment.status,
+            error: assessment.error ?? assessment.missing_input ?? null })) }
+        : profile.game_version === '16.19.821.7343'
+          && Object.hasOwn(DAMAGE_PROFILES_821, capability)
+          ? { required_fields: DAMAGE_PROFILES_821[capability].fields.map((field) => {
+            const assessment = assessHeroStatsTail821(replay, field.replay_tail_field);
+            return { field: field.replay_tail_field, status: assessment.status,
+              error: assessment.error ?? assessment.missing_input ?? null };
+          }) }
         : profile.game_version === '16.19.821.7343'
           && capability === 'hero_level_state'
           ? (() => {
@@ -1883,6 +1905,12 @@ function capabilityQuery(replay, options = {}) {
           '0x0438 source ID runtime wire decode and optional CHAMPIONS_KILLED tail alignment for killer participant');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_assist') {
+        validationPending.push('KR death core and 0x0438 killer-tail alignment',
+          'paired 0x040a/44 shapes with matching payload bytes and participant',
+          'ten-participant ASSISTS tail equality and killer/victim exclusion');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_death_timer') {
         validationPending.push('KR matched 0x0259 death core and exact 821 five-byte runtime float transform',
           'ten-participant NUM_DEATHS equality; isolated timer packets remain excluded',
@@ -1931,9 +1959,19 @@ function capabilityQuery(replay, options = {}) {
           'ten numeric Replay tails, first-value scope, and per-participant snapshots');
       }
       if (profile.game_version === '16.19.821.7343'
+          && Object.hasOwn(DAMAGE_PROFILES_821, capability)) {
+        validationPending.push('KR keyframe 0x0089 native vector and reversed-byte f32 transform',
+          'selected numeric damage Replay tails, zero starts, monotone snapshots and retained final gaps');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_level_state') {
         validationPending.push('exact 821 LevelUp route, observed payload shapes, and pinned runtime byte transform',
           'ten-participant LEVEL sequence and tail equality; out-of-range values fail closed');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_inventory_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x018d MapView packet consumption',
+          'per-packet slot/item record transform and raw-param provenance; no transaction or inventory-state inference');
       }
       if (profile.game_version === '16.19.820.7193'
           && (capability === 'hero_death_timer' || capability === 'hero_respawn')) {
@@ -2101,6 +2139,7 @@ function capabilityQuery(replay, options = {}) {
         validation_pending: validationPending,
         output: profile.game_version === '16.19.821.7343'
           ? ({ hero_death: 'hero_death_candidates',
+            hero_assist: 'hero_assist_candidates',
             hero_death_timer: 'hero_death_timer_candidates',
             hero_respawn: 'hero_respawn_candidates',
             hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
@@ -2115,7 +2154,13 @@ function capabilityQuery(replay, options = {}) {
             hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
             hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
             hero_gold_spent_snapshot: 'hero_gold_spent_snapshot_candidates',
-            hero_level_state: 'hero_level_state_candidates' })[capability] ?? null
+            hero_level_state: 'hero_level_state_candidates',
+            hero_inventory_packet: 'hero_inventory_packet_candidates',
+            hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
+            hero_damage_taken_from_champions_snapshot:
+              'hero_damage_taken_from_champions_snapshot_candidates',
+            hero_damage_self_mitigated_snapshot:
+              'hero_damage_self_mitigated_snapshot_candidates' })[capability] ?? null
           : profile.game_version === '16.19.820.7193'
           ? ({
             hero_death: 'hero_death_candidates',

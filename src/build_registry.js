@@ -17,6 +17,12 @@ const auxiliaryCountsCandidate1619821 =
   require('./decoders/rofl_16_19_821_aux_counts_candidate');
 const floatStatsCandidate1619821 =
   require('./decoders/rofl_16_19_821_float_stats_candidate');
+const assistCandidate1619821 =
+  require('./decoders/rofl_16_19_821_assist_candidate');
+const inventoryPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_inventory_packet_candidate');
+const damageFloatCandidate1619821 =
+  require('./decoders/rofl_16_19_821_damage_float_candidate');
 const heroStatsCandidate1619 = require('./decoders/rofl_16_19_hero_stats_candidate');
 const buffRemoveCandidate1619 = require('./decoders/rofl_16_19_buff_remove_candidate');
 const buffAddCandidate1619 = require('./decoders/rofl_16_19_buff_add_candidate');
@@ -445,11 +451,12 @@ const BUILD_PROFILES = deepFreeze({
       status: 'FORMAT_VERIFIED_LOCAL_REPLAYS',
     },
     runtime_profile: {
-      status: 'CAPTURED_STATIC_ROUTE_LEVEL_COUNT_AND_TIMER_RESEARCH',
+      status: 'CAPTURED_EXACT_IMAGE_NATIVE_ROUTE_KEYFRAME_AND_INVENTORY_RESEARCH',
       image_sha256: levelCandidate1619821.RUNTIME_IMAGE_SHA256,
     },
     packet_routes: {
       hero_death: 0x0259,
+      hero_assist: 0x040a,
       hero_death_timer: 0x0259,
       hero_respawn: 0x0048,
       hero_deaths_snapshot: 0x0089,
@@ -462,10 +469,15 @@ const BUILD_PROFILES = deepFreeze({
       hero_vision_score_snapshot: 0x0089,
       hero_gold_earned_snapshot: 0x0089,
       hero_gold_spent_snapshot: 0x0089,
+      hero_damage_totals_snapshot: 0x0089,
+      hero_damage_taken_from_champions_snapshot: 0x0089,
+      hero_damage_self_mitigated_snapshot: 0x0089,
       hero_level_state: 0x0197,
+      hero_inventory_packet: 0x018d,
     },
     decoder_profile: {
       hero_death: decoder1619821.HERO_DEATH_CANDIDATE_PROFILE_821,
+      hero_assist: assistCandidate1619821.HERO_ASSIST_CANDIDATE_PROFILE_821,
       hero_death_timer: deathTimerCandidate1619821.HERO_DEATH_TIMER_CANDIDATE_PROFILE_821,
       hero_respawn: respawnCandidate1619821.HERO_RESPAWN_CANDIDATE_PROFILE_821,
       hero_deaths_snapshot:
@@ -484,10 +496,19 @@ const BUILD_PROFILES = deepFreeze({
       hero_vision_score_snapshot: floatStatsCandidate1619821.PROFILES.hero_vision_score_snapshot,
       hero_gold_earned_snapshot: floatStatsCandidate1619821.PROFILES.hero_gold_earned_snapshot,
       hero_gold_spent_snapshot: floatStatsCandidate1619821.PROFILES.hero_gold_spent_snapshot,
+      hero_damage_totals_snapshot:
+        damageFloatCandidate1619821.PROFILES.hero_damage_totals_snapshot,
+      hero_damage_taken_from_champions_snapshot:
+        damageFloatCandidate1619821.PROFILES.hero_damage_taken_from_champions_snapshot,
+      hero_damage_self_mitigated_snapshot:
+        damageFloatCandidate1619821.PROFILES.hero_damage_self_mitigated_snapshot,
       hero_level_state: levelCandidate1619821.HERO_LEVEL_CANDIDATE_PROFILE_821,
+      hero_inventory_packet:
+        inventoryPacketCandidate1619821.HERO_INVENTORY_PACKET_CANDIDATE_PROFILE_821,
     },
     evidence_grades: {
       hero_death: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_AND_RUNTIME_DIE_SOURCE',
+      hero_assist: 'CANDIDATE_821_PAIRED_ROUTE_DEATH_KILLER_AND_ASSISTS_TAIL',
       hero_death_timer: 'CANDIDATE_821_RUNTIME_FLOAT_AND_DEATH_ROUTE_CORRELATION',
       hero_respawn: 'CANDIDATE_821_RUNTIME_RETURN_FIELDS_AND_DEAD_TIME_CORRELATION',
       hero_deaths_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_KEYFRAME_TAIL_CORRELATION',
@@ -502,10 +523,17 @@ const BUILD_PROFILES = deepFreeze({
       hero_vision_score_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_VISION_TAIL',
       hero_gold_earned_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_EARNED_TAIL',
       hero_gold_spent_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_SPENT_TAIL',
+      hero_damage_totals_snapshot: 'CANDIDATE_821_NATIVE_F32_DAMAGE_TOTALS_TAILS',
+      hero_damage_taken_from_champions_snapshot:
+        'CANDIDATE_821_NATIVE_F32_DAMAGE_TAKEN_FROM_CHAMPIONS_TAIL',
+      hero_damage_self_mitigated_snapshot:
+        'CANDIDATE_821_NATIVE_F32_SELF_MITIGATED_TAIL',
       hero_level_state: 'CANDIDATE_821_RUNTIME_LEVEL_BYTE_AND_REPLAY_TAIL',
+      hero_inventory_packet: 'CANDIDATE_821_NATIVE_MAPVIEW_SLOT_ITEM_RECORDS',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, 821 route-profile bounded',
+      assisting_participant_ids_candidate: 'paired 0x040a/44 shapes at a validated death core and all ten ASSISTS tails; per-death attribution candidate only',
       die_source_network_id_candidate: 'exact 821 0x0438 terminal two-byte source field, 655/655 runtime match; killer participant requires all ten CHAMPIONS_KILLED tails',
       death_timer_seconds_candidate: 'exact 821 0x0259 deserializer f32; matched death core only, not a respawn prediction',
       observed_return_time: 'exact 821 0x0048 ReincarnateAlive route/f32 decode paired with death core and dead-time tail; co-timed 0x018d is inventory MapView fingerprint only',
@@ -523,17 +551,22 @@ const BUILD_PROFILES = deepFreeze({
         'exact 821 native 0x0089 carrier and vector byte at raw offset 450; Missions_CannonMinionsKilled semantic label candidate only',
       keyframe_float_snapshots:
         'exact 821 native 0x0089 carrier and reversed vector at offsets 0x28/0x1b0/0x38/0x34; EXP/VISION_SCORE/GOLD_EARNED/GOLD_SPENT semantic labels candidate only',
+      keyframe_damage_float_snapshots:
+        'exact 821 native 0x0089 carrier and reversed vector at offsets 0x1d0/0x1e0/0x1f0/0x200/0x208; five damage-tail labels candidate only',
       level_state: 'exact 821 PKT_NPC_LevelUp_s route and +0x11 byte transform; participant alignment and event interpretation candidate only',
+      inventory_packet: 'exact 821 native 0x018d MapView record vector and slot/item transforms; raw-param participant mapping candidate and no inventory-state or transaction inference',
     },
     verified_capabilities: [],
     candidate_capabilities: [
-      'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
+      'hero_death', 'hero_assist', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
-      'hero_level_state',
+      'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
+      'hero_damage_self_mitigated_snapshot',
+      'hero_level_state', 'hero_inventory_packet',
     ],
     unsupported_capabilities: [],
     validation_artifacts: [],
