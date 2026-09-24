@@ -1799,6 +1799,7 @@ function decode1619(replay, profile, options = {}) {
     hero_assists_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_kill_stats_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_ward_stats_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_damage_totals_snapshot: decodeHeroStatsSnapshotCandidateSet,
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -1817,6 +1818,7 @@ function decode1619(replay, profile, options = {}) {
     hero_assists_snapshot: 'hero_assists_snapshot_candidates',
     hero_kill_stats_snapshot: 'hero_kill_stats_snapshot_candidates',
     hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
+    hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
   };
   const gameRouteCapabilities = new Set([
     'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
@@ -2052,6 +2054,10 @@ function getHeroWardStatsSnapshotCandidates(decoded) {
   return decoded?.events?.hero_ward_stats_snapshot_candidates ?? null;
 }
 
+function getHeroDamageTotalsSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_damage_totals_snapshot_candidates ?? null;
+}
+
 function getHeroStates(decoded) {
   return decoded?.events?.hero_state_events ?? decoded?.events?.state_update_events ?? [];
 }
@@ -2175,6 +2181,7 @@ module.exports = {
   getHeroAssistsSnapshotCandidates,
   getHeroKillStatsSnapshotCandidates,
   getHeroWardStatsSnapshotCandidates,
+  getHeroDamageTotalsSnapshotCandidates,
   getHeroPaths,
   getHeroRespawns,
   getHeroStates,

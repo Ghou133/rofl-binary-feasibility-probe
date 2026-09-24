@@ -23,6 +23,7 @@
 | `16.19.820.7193 --events hero_jungle_minions_killed_snapshot` | 同一 HN keyframe 中 `0x40/0x44/0x48` 的原始浮点值及向下取整后的中立野怪总数、己方野区和敌方野区候选快照 | 仅写入 `hero_jungle_minions_killed_snapshot_candidates`；一场回放的尾部相关性，不推导逐次清野事件 |
 | `16.19.820.7193 --events hero_kill_stats_snapshot` | 同一 HN keyframe 中已观察到的最大连杀、连杀次数、最大多杀及双杀至四杀计数候选快照 | 仅写入 `hero_kill_stats_snapshot_candidates`；六项尾部相关性来自一场回放，不推导击杀事件或时间 |
 | `16.19.820.7193 --events hero_ward_stats_snapshot` | 同一 HN keyframe 中已观察到的插眼、拆眼与探测守卫计数候选快照 | 仅写入 `hero_ward_stats_snapshot_candidates`；不推导守卫生成、位置、生命周期或拆除事件 |
+| `16.19.820.7193 --events hero_damage_totals_snapshot` | 同一 HN keyframe 中三处浮点值及其向下取整值，对应英雄伤害、总伤害与承伤的候选累计快照 | 仅写入 `hero_damage_totals_snapshot_candidates`；一场回放的尾部相关性，不推导逐次伤害、目标、来源或减伤 |
 | `16.19.820.7193 --events hero_experience_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x28` 浮点候选经验值 | 仅写入 `hero_experience_snapshot_candidates`；小数及尾部差额保留，不推导升级或经验获取时点；KR 的 HN profile 不可用 |
 | `16.19.820.7193 --events hero_gold_earned_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x38` 浮点候选已赚金币值 | 仅写入 `hero_gold_earned_snapshot_candidates`；一场 HN 回放的字段相关性，不推导金币收入事件；KR 的 HN profile 不可用 |
 | `16.19.820.7193 --events hero_gold_spent_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x34` 候选已花金币值 | 仅写入 `hero_gold_spent_snapshot_candidates`；保留数值下降，不推导退款、出售或购买；KR 的 HN profile 不可用 |
@@ -120,12 +121,12 @@ node src/cli.js batch "D:\Replays\HN-example.rofl" "D:\Replays\KR-example.rofl" 
 
 ```powershell
 node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
-  --events hero_minions_killed_snapshot,hero_jungle_minions_killed_snapshot,hero_experience_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_champion_kills_snapshot,hero_deaths_snapshot,hero_assists_snapshot,hero_kill_stats_snapshot,hero_ward_stats_snapshot `
+  --events hero_minions_killed_snapshot,hero_jungle_minions_killed_snapshot,hero_experience_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_champion_kills_snapshot,hero_deaths_snapshot,hero_assists_snapshot,hero_kill_stats_snapshot,hero_ward_stats_snapshot,hero_damage_totals_snapshot `
   --out-dir "work\16-19-hero-stats-snapshots"
 ```
 
 输出包含每名英雄的候选快照值与原始包引用，并在逐能力结果中列出最后快照到回放尾部的差额。
-它不推导两次 keyframe 之间的补刀、经验、金币变动或英雄击杀时间，也不发布为确认事件。
+它不推导两次 keyframe 之间的补刀、经验、金币、伤害变动或英雄击杀时间，也不发布为确认事件。
 
 读取 HN `0x0420` MapView 与 `0x03b7` SetItem 包内已观察到的候选槽位和物品键，需提供精确版本的外部运行时镜像：
 

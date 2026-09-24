@@ -20,6 +20,7 @@ const {
   assessHeroAssistsSnapshotTail,
   assessHeroKillStatsSnapshotTail,
   assessHeroWardStatsSnapshotTail,
+  assessHeroDamageTotalsSnapshotTail,
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   analyzeReplayWithHeroStats,
 } = require('./decoders/rofl_16_19_hero_stats_candidate');
@@ -1646,6 +1647,8 @@ function capabilityQuery(replay, options = {}) {
                       ? assessHeroKillStatsSnapshotTail(replay)
                     : capability === 'hero_ward_stats_snapshot'
                       ? assessHeroWardStatsSnapshotTail(replay)
+                    : capability === 'hero_damage_totals_snapshot'
+                      ? assessHeroDamageTotalsSnapshotTail(replay)
                   : candidateTailStatAssessment(replay, capability)
         : null;
       const tailStatInput = (tailStat?.required_fields ?? (tailStat ? [tailStat] : []))
@@ -1739,6 +1742,11 @@ function capabilityQuery(replay, options = {}) {
           'HN keyframe 0x0276 offsets 0x1a4 through 0x1ac and observed sequences');
       }
       if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_damage_totals_snapshot') {
+        validationPending.push('ten-participant TOTAL_DAMAGE_DEALT_TO_CHAMPIONS, TOTAL_DAMAGE_DEALT, and TOTAL_DAMAGE_TAKEN tail values',
+          'HN keyframe 0x0276 f32 offsets 0x1e0/0x1d0/0x1f0 and observed sequences');
+      }
+      if (profile.game_version === '16.19.820.7193'
           && needs1619InventoryImage) {
         validationPending.push('exact runtime image SHA-256 and decoder execution',
           capability === 'hero_inventory_mapview'
@@ -1792,6 +1800,7 @@ function capabilityQuery(replay, options = {}) {
             hero_assists_snapshot: 'hero_assists_snapshot_candidates',
             hero_kill_stats_snapshot: 'hero_kill_stats_snapshot_candidates',
             hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
+            hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
             hero_inventory_mapview: 'hero_inventory_mapview_candidates',
             hero_inventory_set_item: 'hero_inventory_set_item_candidates',
           })[capability] ?? null

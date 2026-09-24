@@ -186,6 +186,22 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   This is one-Replay field correlation, not a ward spawn, position, lifecycle
   or removal event. Local-only probe output and script are retained under
   `artifacts/16_19_development/ward_stats_hn_probe/` and are not packaged.
+- **Done:** `hero_damage_totals_snapshot` emits the observed HN HeroStats
+  f32 values at decoded offsets `0x1e0` (candidate damage to champions),
+  `0x1d0` (candidate total damage dealt), and `0x1f0` (candidate damage taken),
+  with their derived floors and per-participant Replay-tail gaps. Across 35
+  keyframes and 350 participant snapshots, all three start at zero, never
+  decline, and their floors remain below their respective Replay tails. Their
+  last floors match the tails for 7/10, 5/10, and 4/10 participants; the
+  remaining differences after the last keyframe are retained. Each full
+  sequence is unique among 315 aligned f32 offsets in this one HN Replay;
+  participant-shift controls produce no final-tail matches. The CLI emitted
+  350 candidate damage snapshots and 350 ward snapshots from the pinned HN
+  Replay with 2,035,757 blocks and zero framing errors. Local-only scan and
+  smoke outputs are under `artifacts/16_19_development/scoreboard_leads_probe/`
+  and `artifacts/16_19_development/damage_totals_hn_cli_smoke/`. These
+  correlations do not establish individual damage events, source, target,
+  mitigation, or an exact published field meaning.
 - **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
   runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
   observed slot/item-definition-key records as candidates. All 94 game packets
@@ -221,8 +237,15 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   link and independent position anchors; no old profile is reused.
 - **Ward negative control:** Old 16.16 WardSpawn opcode `0x049a` is not an HN
   16.19 factory case and has no packets in this Replay. The HN `0x0400` case
-  has 6,627 packets and a distinct runtime deserializer, but no observed link
-  to ward identity, owner or coordinates; no ward candidate is emitted.
+  has 6,627 packets and a distinct exact-image runtime deserializer. Its
+  object contains a dynamic byte field and two three-float regions, but no
+  observed receive or independent link to ward identity, owner or coordinates;
+  no ward candidate is emitted. Of 6,627 packets, 3,478 are game packets and
+  3,149 are keyframe packets; no game raw param equals a HeroStats hero param.
+  An interval with zero ward-count increments still has 104 game `0x0400`
+  packets, and count correlations resemble other frequent routes. Bounded
+  runtime and Replay-side evidence is retained under
+  `artifacts/16_19_development/ward_route_0400_probe/`.
 - **CLI batch:** A two-Replay HN/KR run with death, respawn and level selection
   yielded HN `CANDIDATE`, KR `PARTIAL`, and aggregate `PARTIAL`, retaining the
   KR death candidate while reporting the HN-only capabilities unavailable.
