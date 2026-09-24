@@ -110,6 +110,7 @@ Options:
   --decoder-image <path>        Exact 16.15 runtime image (external input; not bundled)
   --runtime-image <path>        Exact external image for 16.16 or 16.19 inventory candidates
   --events <name[,name...]>     Select 16.19 semantic capabilities to decode
+  --event-jsonl-only            Store 16.19 event rows only in JSONL (decode/batch with --events)
   --json                        Emit only machine-readable JSON (capabilities)
   --python <command>            Python command with Unicorn installed (default: python)
   --details-dir <path>          Validation-only directory for same-game Details matching
@@ -149,6 +150,7 @@ function parseArgs(argv) {
     decoderImage: DEFAULT_DECODER_IMAGE,
     runtimeImage: null,
     events: null,
+    eventJsonlOnly: false,
     python: null,
     wardSpawns: null,
     wardLifecycles: null,
@@ -186,6 +188,10 @@ function parseArgs(argv) {
     }
     if (token === '--strict') {
       options.strict = true;
+      continue;
+    }
+    if (token === '--event-jsonl-only') {
+      options.eventJsonlOnly = true;
       continue;
     }
     if (command === 'ward-events' && token === '--ally') {
@@ -258,6 +264,9 @@ function parseArgs(argv) {
   }
   if (options.detailsDir && command !== 'validate') {
     throw new Error('--details-dir is only valid with validate; decode commands never read Match Details');
+  }
+  if (options.eventJsonlOnly && (!['decode', 'batch'].includes(command) || !options.events)) {
+    throw new Error('--event-jsonl-only requires decode or batch with --events');
   }
   if (command === 'ward-events') {
     positionals.push(...options.inputs);
@@ -604,6 +613,11 @@ function parseOne(filePath, options) {
   const started = process.hrtime.bigint();
   try {
     const replay = parseReplayFile(filePath);
+    if (options.eventJsonlOnly && replay.header.patch !== '16.19') {
+      const error = new Error('--event-jsonl-only supports only 16.19 Replays');
+      error.code = 'UNSUPPORTED_OUTPUT_MODE';
+      throw error;
+    }
     if (replay.header.patch === '16.19') {
       return parseOne1619(replay, options, started);
     }
@@ -926,10 +940,18 @@ function replayDirectoryNames(analyses) {
   return names;
 }
 
-function writePerReplayArtifacts(analysis, rootDir, replayDirName) {
+function writePerReplayArtifacts(analysis, rootDir, replayDirName, options = {}) {
   const replayDir = path.join(rootDir, 'replays', replayDirName);
   ensureDir(replayDir);
-  writeJson(path.join(replayDir, 'replay_analysis.json'), analysis);
+  const eventJsonlOnly = options.eventJsonlOnly === true && analysis.patch === '16.19';
+  const replayAnalysis = eventJsonlOnly ? {
+    ...analysis,
+    events: null,
+    event_storage: 'JSONL_ONLY',
+    event_jsonl_files: Object.fromEntries(Object.keys(analysis.events)
+      .map((name) => [name, `${name}.jsonl`])),
+  } : analysis;
+  writeJson(path.join(replayDir, 'replay_analysis.json'), replayAnalysis);
   writeJson(path.join(replayDir, 'rofl_inventory.json'), inventoryFromAnalysis(analysis));
   writeCsv(path.join(replayDir, 'packet_type_inventory.csv'), analysis.packet_type_inventory, [
     'packet_id',
@@ -953,7 +975,7 @@ function writePerReplayArtifacts(analysis, rootDir, replayDirName) {
       ...analysis.semantic,
     });
   }
-  writeJson(path.join(replayDir, 'events.json'), analysis.events);
+  if (!eventJsonlOnly) writeJson(path.join(replayDir, 'events.json'), analysis.events);
   for (const [name, rows] of Object.entries(analysis.events)) {
     writeJsonl(path.join(replayDir, `${name}.jsonl`), rows);
   }
@@ -1154,7 +1176,8 @@ function buildAcceptanceSummary(results, beforeHashes, afterHashes, testSummary,
     && !testRunFailed
     && upstream.unchanged;
   let status = successful.length === 0
-    ? 'NEED_USER_FILE'
+    ? failed.some((result) => result.error.code === 'UNSUPPORTED_OUTPUT_MODE')
+      ? 'UNSUPPORTED_OUTPUT_MODE' : 'NEED_USER_FILE'
     : validationClean && allSemanticReady && allV2Ready
       ? 'RESEARCH_READY_V2_COMPLETE'
       : validationClean && allSemanticReady
@@ -1323,7 +1346,7 @@ function buildAcceptanceReport(summary, results, artifactRoot) {
   return renderAcceptanceReport(summary, results, artifactRoot, TEST_COMMAND);
 }
 
-function buildReviewerManifest(summary, rootDir, results, args) {
+function buildReviewerManifest(summary, rootDir, results, args, options = {}) {
   const absoluteRoot = path.resolve(rootDir);
   const successful = results.filter((result) => result.ok);
   const first1619 = successful.find((result) => result.analysis.patch === '16.19')?.analysis;
@@ -1335,8 +1358,9 @@ function buildReviewerManifest(summary, rootDir, results, args) {
     ? ` --events ${quoteCommandArg(selected1619.join(','))}` : '';
   const runtimeArg = first1619?.semantic?.runtime_image_requested
     ? ` --runtime-image ${quoteCommandArg(first1619.semantic.runtime_image_requested)}` : '';
+  const eventOutputArg = first1619 && options.eventJsonlOnly ? ' --event-jsonl-only' : '';
   const replayCommand = reviewReplay ? first1619
-    ? `node src/cli.js ${selected1619.length > 0 ? 'decode' : 'inspect'} ${quoteCommandArg(reviewReplay)}${selectedArg}${runtimeArg} --out-dir ${quoteCommandArg(reviewerRerunRoot)}`
+    ? `node src/cli.js ${selected1619.length > 0 ? 'decode' : 'inspect'} ${quoteCommandArg(reviewReplay)}${selectedArg}${runtimeArg}${eventOutputArg} --out-dir ${quoteCommandArg(reviewerRerunRoot)}`
     : `node src/cli.js analyze ${quoteCommandArg(reviewReplay)} --out-dir ${quoteCommandArg(reviewerRerunRoot)}`
     : null;
   const validationInputs = [...new Set(results.map((result) => result.ok ? result.analysis.source_path : result.source_path))];
@@ -1416,13 +1440,13 @@ function buildReviewerManifest(summary, rootDir, results, args) {
   };
 }
 
-async function writeRunArtifacts(results, rootDir, beforeHashes, afterHashes, args, testSummary = null, detailsDir = null) {
+async function writeRunArtifacts(results, rootDir, beforeHashes, afterHashes, args, testSummary = null, detailsDir = null, options = {}) {
   ensureDir(rootDir);
   const successful = results.filter((result) => result.ok);
   const replayDirNames = replayDirectoryNames(successful.map((result) => result.analysis));
   for (const [index, result] of successful.entries()) {
     result.analysis.artifact_directory = path.posix.join('replays', replayDirNames[index]);
-    writePerReplayArtifacts(result.analysis, rootDir, replayDirNames[index]);
+    writePerReplayArtifacts(result.analysis, rootDir, replayDirNames[index], options);
   }
 
   const inventories = successful.map((result) => inventoryFromAnalysis(result.analysis));
@@ -1460,7 +1484,7 @@ async function writeRunArtifacts(results, rootDir, beforeHashes, afterHashes, ar
   summary.output_root = path.resolve(rootDir);
   writeJson(path.join(rootDir, 'acceptance_summary.json'), summary);
   fs.writeFileSync(path.join(rootDir, 'ACCEPTANCE_REPORT.md'), `${buildAcceptanceReport(summary, results, rootDir)}\n`, 'utf8');
-  const reviewerManifest = buildReviewerManifest(summary, rootDir, results, args);
+  const reviewerManifest = buildReviewerManifest(summary, rootDir, results, args, options);
   writeJson(path.join(rootDir, 'reviewer_manifest.json'), reviewerManifest);
   const outputHashExclusions = ['manifest.json', 'single-run', 'post-fix-single'];
   const hashes = await outputHashes(rootDir, { exclude: outputHashExclusions });
@@ -1491,6 +1515,8 @@ async function writeRunArtifacts(results, rootDir, beforeHashes, afterHashes, ar
       decoder_status: result.analysis.decoder.status,
       requested_capabilities: result.analysis.semantic?.requested_capabilities ?? null,
       artifact_directory: result.analysis.artifact_directory ?? null,
+      ...(options.eventJsonlOnly && result.analysis.patch === '16.19'
+        ? { event_storage: 'JSONL_ONLY' } : {}),
     })),
     decoder_profiles: successful.map((result) => ({
       replay_version: result.analysis.replay_version,
@@ -1939,6 +1965,7 @@ async function main(argv = process.argv.slice(2)) {
     argv,
     testSummary,
     validationDetailsDir,
+    parsed.options,
   );
   for (const result of results) {
     if (result.ok) {

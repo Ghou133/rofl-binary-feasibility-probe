@@ -285,6 +285,103 @@ test('16.19 candidate decode preserves experimental events and exact capability 
     /CANDIDATE marks experimental output/);
 });
 
+test('16.19 event JSONL only mode preserves rows and status without duplicate event arrays', async (t) => {
+  const rows = Array.from({ length: 12 }, (_, index) => ({
+    timestamp_ms: index * 1000,
+    confidence: 'CANDIDATE',
+    raw_packet_ref: { packet_id: 0x03ed, payload_sha256: 'a'.repeat(64) },
+  }));
+  const cli = loadCli(null, () => ({
+    status: 'EXPERIMENTAL_CANDIDATE',
+    events: { npc_buff_add_packet_candidates: rows },
+    capability_results: {
+      npc_buff_add_packet: { status: 'CANDIDATE', input_count: rows.length,
+        event_count: rows.length },
+    },
+  }));
+  const input = fixture(t, '16.19.820.7193');
+  const root = path.dirname(input);
+  const full = path.join(root, 'full');
+  const compact = path.join(root, 'compact');
+  const args = ['decode', input, '--events', 'npc_buff_add_packet'];
+  assert.equal(await cli.main([...args, '--out-dir', full]), 0);
+  assert.equal(await cli.main([...args, '--event-jsonl-only', '--out-dir', compact]), 0);
+
+  const fullSummary = JSON.parse(fs.readFileSync(path.join(full, 'acceptance_summary.json')));
+  const compactSummary = JSON.parse(fs.readFileSync(path.join(compact, 'acceptance_summary.json')));
+  assert.equal(fullSummary.status, compactSummary.status);
+  assert.deepEqual(fullSummary.capability_runs[0].capability_results,
+    compactSummary.capability_runs[0].capability_results);
+  const fullReplay = path.join(full, fullSummary.replay_artifacts[0].artifact_directory);
+  const compactReplay = path.join(compact, compactSummary.replay_artifacts[0].artifact_directory);
+  const name = 'npc_buff_add_packet_candidates';
+  const fullAnalysis = JSON.parse(fs.readFileSync(path.join(fullReplay, 'replay_analysis.json')));
+  const compactAnalysis = JSON.parse(fs.readFileSync(path.join(compactReplay, 'replay_analysis.json')));
+  assert.deepEqual(fullAnalysis.events[name], rows);
+  assert.equal(Object.hasOwn(fullAnalysis, 'event_storage'), false);
+  assert.equal(compactAnalysis.events, null);
+  assert.equal(compactAnalysis.event_storage, 'JSONL_ONLY');
+  assert.deepEqual(compactAnalysis.event_jsonl_files, { [name]: `${name}.jsonl` });
+  assert.deepEqual(compactAnalysis.event_counts, { [name]: rows.length });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(fullReplay, 'events.json'))),
+    { [name]: rows });
+  assert.equal(fs.existsSync(path.join(compactReplay, 'events.json')), false);
+  assert.equal(fs.readFileSync(path.join(fullReplay, `${name}.jsonl`), 'utf8'),
+    fs.readFileSync(path.join(compactReplay, `${name}.jsonl`), 'utf8'));
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(fullReplay, 'semantic_run.json'))),
+    JSON.parse(fs.readFileSync(path.join(compactReplay, 'semantic_run.json'))));
+  const compactManifest = JSON.parse(fs.readFileSync(path.join(compact, 'manifest.json')));
+  const relative = compactSummary.replay_artifacts[0].artifact_directory;
+  assert.equal(compactManifest.replay_inputs[0].event_storage, 'JSONL_ONLY');
+  assert.equal(Object.hasOwn(compactManifest.output_hashes_excluding_manifest,
+    `${relative}/events.json`), false);
+  assert.match(compactManifest.output_hashes_excluding_manifest[`${relative}/${name}.jsonl`],
+    /^[a-f0-9]{64}$/);
+  const reviewer = JSON.parse(fs.readFileSync(path.join(compact, 'reviewer_manifest.json')));
+  assert.match(reviewer.replay_command, / --event-jsonl-only /);
+});
+
+test('event JSONL only mode rejects invalid scope and preserves missing-input evidence', async (t) => {
+  const cli = loadCli(null, () => ({
+    status: 'BLOCKED',
+    events: null,
+    capability_results: {
+      hero_path: { status: 'MISSING_INPUT', input_count: null, event_count: null,
+        missing_input: 'exact runtime image' },
+    },
+  }));
+  const input = fixture(t, '16.19.820.7193');
+  assert.throws(() => cli.parseArgs(['inspect', input, '--events', 'hero_path',
+    '--event-jsonl-only']), /requires decode or batch/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--event-jsonl-only']),
+    /requires decode or batch with --events/);
+
+  const output = path.join(path.dirname(input), 'missing-compact');
+  assert.equal(await cli.main(['decode', input, '--events', 'hero_path',
+    '--event-jsonl-only', '--out-dir', output]), 2);
+  const summary = JSON.parse(fs.readFileSync(path.join(output, 'acceptance_summary.json')));
+  assert.equal(summary.status, 'MISSING_INPUT');
+  assert.equal(summary.capability_runs[0].capability_results.hero_path.event_count, null);
+  const replayDir = path.join(output, summary.replay_artifacts[0].artifact_directory);
+  const analysis = JSON.parse(fs.readFileSync(path.join(replayDir, 'replay_analysis.json')));
+  assert.equal(analysis.events, null);
+  assert.deepEqual(analysis.event_counts, {});
+  assert.deepEqual(analysis.event_jsonl_files, {});
+  assert.equal(fs.existsSync(path.join(replayDir, 'events.json')), false);
+  const semantic = JSON.parse(fs.readFileSync(path.join(replayDir, 'semantic_run.json')));
+  assert.equal(semantic.capability_results.hero_path.status, 'MISSING_INPUT');
+  assert.equal(semantic.capability_results.hero_path.event_count, null);
+
+  const legacy = fixture(t, '16.15.801.3452');
+  const legacyOutput = path.join(path.dirname(legacy), 'legacy-compact');
+  assert.equal(await cli.main(['decode', legacy, '--events', 'hero_path',
+    '--event-jsonl-only', '--out-dir', legacyOutput]), 2);
+  const legacySummary = JSON.parse(fs.readFileSync(
+    path.join(legacyOutput, 'acceptance_summary.json')));
+  assert.equal(legacySummary.status, 'UNSUPPORTED_OUTPUT_MODE');
+  assert.equal(legacySummary.errors[0].code, 'UNSUPPORTED_OUTPUT_MODE');
+});
+
 test('16.19 zero-event PASS remains distinct from missing input and partial failure', (t) => {
   const input = fixture(t, '16.19.820.7193');
   const passed = loadCli(null, () => ({

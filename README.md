@@ -157,6 +157,8 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 
 大量 Buff 包的 JSONL 逐行保留候选状态和原始包来源；共用的字段置信度与限制说明写在同目录的 `semantic_run.json` 对应能力结果中。
 
+16.19 `decode` 或 `batch` 使用 `--events` 时，可额外指定 `--event-jsonl-only` 减少大量事件的重复输出。此模式仍写入每项事件的完整 JSONL、`semantic_run.json` 和各报告；`replay_analysis.json` 中的 `events` 为 `null`，同时记录 `event_storage: "JSONL_ONLY"`、`event_jsonl_files` 相对路径与 `event_counts`，不生成重复的 `events.json`。输出 manifest 只散列实际生成的文件。默认模式保持原有三份事件输出；此选项不适用于 `inspect`、旧版回放或未指定 `--events` 的调用。
+
 执行 **16.15.801.3452** 的旧版整合语义分析：
 
 ```powershell
