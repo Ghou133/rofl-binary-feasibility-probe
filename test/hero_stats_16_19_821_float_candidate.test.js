@@ -7,7 +7,8 @@ const { replayFromChunks } = require('./helpers/synthetic_replay');
 const { decodeRuntimeCountByte } =
   require('../src/decoders/rofl_16_19_821_runtime_bytes');
 const {
-  PROFILES, assessHeroFloatSnapshotTail821, decodeHeroFloatSnapshotCandidates821,
+  PROFILES, assessHeroFloatSnapshotTail821, assessHeroJungleMinionsTail821,
+  decodeHeroFloatSnapshotCandidates821,
 } = require('../src/decoders/rofl_16_19_821_float_stats_candidate');
 
 const BUILD = '16.19.821.7343';
@@ -28,6 +29,7 @@ function packet(participant, values, timeMs, change = null) {
   for (const [name, offset] of [
     ['minions', 0x3c], ['exp', 0x28], ['vision', 0x1b0],
     ['earned', 0x38], ['spent', 0x34],
+    ['jungle', 0x40], ['ownJungle', 0x44], ['enemyJungle', 0x48],
   ]) writeFloat(payload, offset, values[name]);
   if (change) change(payload);
   const header = Buffer.alloc(15);
@@ -39,16 +41,23 @@ function packet(participant, values, timeMs, change = null) {
 }
 
 function fixture({ version = BUILD, tailVision = 4, tailMinions = 15,
-  change = null, spentDecrease = false, minionsDecrease = false } = {}) {
-  const chunks = Array.from({ length: spentDecrease || minionsDecrease ? 3 : 2 }, (_, frame) => ({
+  tailJungle = 8, tailOwnJungle = 6, tailEnemyJungle = 2,
+  change = null, spentDecrease = false, minionsDecrease = false,
+  jungleDecrease = false } = {}) {
+  const chunks = Array.from({ length:
+    spentDecrease || minionsDecrease || jungleDecrease ? 3 : 2 }, (_, frame) => ({
     stream: 2,
     body: Buffer.concat(Array.from({ length: 10 }, (_, index) => {
       const first = index === 0;
       const values = frame === 0 || !first
-        ? { minions: 0, exp: 0, vision: 0, earned: 500, spent: 0 }
+        ? { minions: 0, exp: 0, vision: 0, earned: 500, spent: 0,
+          jungle: 0, ownJungle: 0, enemyJungle: 0 }
         : { minions: minionsDecrease && frame === 2 ? 10 : 12,
           exp: 100.5, vision: 3.75, earned: 600.5,
-          spent: spentDecrease && frame === 2 ? 100 : 150 };
+          spent: spentDecrease && frame === 2 ? 100 : 150,
+          jungle: jungleDecrease && frame === 2 ? 4.75 : 5.75,
+          ownJungle: jungleDecrease && frame === 2 ? 3.5 : 4.5,
+          enemyJungle: 1.25 };
       return packet(index + 1, values, frame * 1000,
         frame === 1 && first ? change : null);
     })),
@@ -56,6 +65,11 @@ function fixture({ version = BUILD, tailVision = 4, tailMinions = 15,
   const replay = replayFromChunks(chunks, version);
   replay.tail.stats = Array.from({ length: 10 }, (_, index) => ({
     MINIONS_KILLED: index === 0 ? String(tailMinions) : '0',
+    NEUTRAL_MINIONS_KILLED: index === 0 ? String(tailJungle) : '0',
+    NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE: index === 0
+      ? String(tailOwnJungle) : '0',
+    NEUTRAL_MINIONS_KILLED_ENEMY_JUNGLE: index === 0
+      ? String(tailEnemyJungle) : '0',
     Missions_MinionsKilled: index === 0 ? '2' : '0',
     EXP: index === 0 ? '101' : '0',
     VISION_SCORE: index === 0 ? String(tailVision) : '0',
@@ -69,6 +83,8 @@ test('821 float snapshot candidates expose exact decoded numbers and tails', () 
   const replay = fixture();
   const expected = [
     ['hero_minions_killed_snapshot', 'minions_killed_raw_f32_candidate', 12],
+    ['hero_jungle_minions_killed_snapshot',
+      'jungle_minions_killed_raw_f32_candidate', 5.75],
     ['hero_experience_snapshot', 'experience_raw_f32_candidate', 100.5],
     ['hero_vision_score_snapshot', 'vision_score_raw_f32_candidate', 3.75],
     ['hero_gold_earned_snapshot', 'gold_earned_raw_f32_candidate', 600.5],
@@ -86,6 +102,81 @@ test('821 float snapshot candidates expose exact decoded numbers and tails', () 
     assert.equal(output.runtime_image_used, false);
     assert.ok(output.total_unobserved_tail_gap >= 0);
   }
+});
+
+test('821 jungle candidate keeps three tail fields and fractional snapshots distinct', () => {
+  const replay = fixture();
+  const assessed = assessHeroJungleMinionsTail821(replay);
+  assert.equal(assessed.status, 'PASS');
+  assert.deepEqual(assessed.required_fields.map((row) => row.field), [
+    'NEUTRAL_MINIONS_KILLED',
+    'NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE',
+    'NEUTRAL_MINIONS_KILLED_ENEMY_JUNGLE',
+  ]);
+  assert.deepEqual(PROFILES.hero_jungle_minions_killed_snapshot.replay_tail_fields, [
+    'NEUTRAL_MINIONS_KILLED',
+    'NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE',
+    'NEUTRAL_MINIONS_KILLED_ENEMY_JUNGLE',
+  ]);
+  const output = decodeHeroFloatSnapshotCandidates821(replay,
+    'hero_jungle_minions_killed_snapshot');
+  assert.equal(output.status, 'CANDIDATE');
+  assert.equal(output.input_packet_id, 0x0089);
+  assert.equal(output.event_count, 20);
+  assert.equal(output.events[10].jungle_minions_killed_raw_f32_candidate, 5.75);
+  assert.equal(output.events[10].jungle_minions_killed_floor_candidate, 5);
+  assert.equal(output.events[10].your_jungle_minions_killed_raw_f32_candidate, 4.5);
+  assert.equal(output.events[10].your_jungle_minions_killed_floor_candidate, 4);
+  assert.equal(output.events[10].enemy_jungle_minions_killed_raw_f32_candidate, 1.25);
+  assert.equal(output.events[10].enemy_jungle_minions_killed_floor_candidate, 1);
+  assert.equal(output.events[10].raw_packet_ref.replay_sha256, replay.source_sha256);
+  assert.equal(Object.keys(output.events[10].raw_payload_field_bytes_hex).length, 3);
+  assert.equal(output.tail_gaps[0].final_neutral_minions_killed_tail, 8);
+  assert.equal(output.tail_gaps[0].unobserved_tail_gap, 3);
+  assert.equal(output.tail_gaps[0].unobserved_your_jungle_tail_gap, 2);
+  assert.equal(output.tail_gaps[0].unobserved_enemy_jungle_tail_gap, 1);
+  assert.equal(output.total_unobserved_tail_gap, 3);
+  assert.equal(output.total_unobserved_your_jungle_tail_gap, 2);
+  assert.equal(output.total_unobserved_enemy_jungle_tail_gap, 1);
+});
+
+test('821 jungle candidate fails closed for each missing tail and malformed field', () => {
+  assert.equal(decodeHeroFloatSnapshotCandidates821(fixture({
+    version: '16.19.820.7193',
+  }), 'hero_jungle_minions_killed_snapshot').status, 'UNSUPPORTED');
+  for (const field of PROFILES.hero_jungle_minions_killed_snapshot.replay_tail_fields) {
+    const missing = fixture();
+    delete missing.tail.stats[0][field];
+    const output = decodeHeroFloatSnapshotCandidates821(missing,
+      'hero_jungle_minions_killed_snapshot');
+    assert.equal(output.status, 'MISSING_INPUT');
+    assert.match(output.error, new RegExp(field));
+    const assessed = assessHeroJungleMinionsTail821(missing);
+    assert.equal(assessed.required_fields.length, 3);
+    assert.deepEqual(assessed.required_fields.map((row) => row.status),
+      assessed.required_fields.map((row) => row.field === field
+        ? 'MISSING_INPUT' : 'PASS'));
+  }
+  for (const [tailOption, field] of [
+    ['tailJungle', 'NEUTRAL_MINIONS_KILLED'],
+    ['tailOwnJungle', 'NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE'],
+    ['tailEnemyJungle', 'NEUTRAL_MINIONS_KILLED_ENEMY_JUNGLE'],
+  ]) {
+    const output = decodeHeroFloatSnapshotCandidates821(
+      fixture({ [tailOption]: 0 }), 'hero_jungle_minions_killed_snapshot');
+    assert.equal(output.status, 'DECODE_FAILED');
+    assert.match(output.error, new RegExp(`exceeds Replay tail ${field}`));
+  }
+  const nonFinite = decodeHeroFloatSnapshotCandidates821(fixture({
+    change(payload) { writeFloat(payload, 0x48, Number.NaN); },
+  }), 'hero_jungle_minions_killed_snapshot');
+  assert.equal(nonFinite.status, 'DECODE_FAILED');
+  assert.match(nonFinite.error, /NEUTRAL_MINIONS_KILLED_ENEMY_JUNGLE f32 is not finite/);
+  const decrease = decodeHeroFloatSnapshotCandidates821(fixture({
+    jungleDecrease: true,
+  }), 'hero_jungle_minions_killed_snapshot');
+  assert.equal(decrease.status, 'DECODE_FAILED');
+  assert.match(decrease.error, /decreasing NEUTRAL_MINIONS_KILLED f32/);
 });
 
 test('821 standard minion snapshot remains distinct from mission count and retains tail gap', () => {

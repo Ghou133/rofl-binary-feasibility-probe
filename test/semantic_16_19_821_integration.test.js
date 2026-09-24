@@ -53,6 +53,9 @@ function keyframeDeathsPacket(participantId, count, timeMs,
   write821Float(payload, 0x38, count === 0 ? 500 : 600.5);
   write821Float(payload, 0x34, count === 0 ? 0 : 150);
   write821Float(payload, 0x3c, count);
+  write821Float(payload, 0x40, count === 0 ? 0 : 2.75);
+  write821Float(payload, 0x44, count === 0 ? 0 : 1.5);
+  write821Float(payload, 0x48, count === 0 ? 0 : 1.25);
   const header = Buffer.alloc(15);
   header.writeFloatLE(timeMs / 1000, 1);
   header.writeUInt32LE(payload.length, 5);
@@ -98,6 +101,9 @@ function replay({ unknownLevel = false, runtimeLevel20 = false, observedReturn =
     ASSISTS: index === 0 ? aboveTailAssist || runtimeHighCounts ? '28' : '1' : '0',
     Missions_MinionsKilled: index === 0 ? '1' : '0',
     MINIONS_KILLED: index === 0 ? '2' : '1',
+    NEUTRAL_MINIONS_KILLED: index === 0 ? '3' : '0',
+    NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE: index === 0 ? '2' : '0',
+    NEUTRAL_MINIONS_KILLED_ENEMY_JUNGLE: index === 0 ? '2' : '0',
     WARD_PLACED_DETECTOR: index === 0 ? '1' : '0',
     WARD_KILLED: index === 0 ? '1' : '0',
     WARD_PLACED: index === 0 ? '1' : '0',
@@ -126,6 +132,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.equal(resolveCapability(BUILD, 'hero_missions_cannon_minions_killed_snapshot').status,
     'CANDIDATE');
   for (const capability of ['hero_minions_killed_snapshot',
+    'hero_jungle_minions_killed_snapshot',
     'hero_experience_snapshot', 'hero_vision_score_snapshot',
     'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot']) {
     assert.equal(resolveCapability(BUILD, capability).status, 'CANDIDATE');
@@ -141,7 +148,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
-      'hero_minions_killed_snapshot',
+      'hero_minions_killed_snapshot', 'hero_jungle_minions_killed_snapshot',
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
@@ -209,6 +216,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'hero_missions_cannon_minions_killed_snapshot_candidates');
   assert.deepEqual(queried.hero_missions_cannon_minions_killed_snapshot.missing_inputs, []);
   for (const capability of ['hero_minions_killed_snapshot',
+    'hero_jungle_minions_killed_snapshot',
     'hero_experience_snapshot', 'hero_vision_score_snapshot',
     'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot']) {
     assert.equal(queried[capability].output, `${capability}_candidates`);
@@ -252,6 +260,11 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     .map((row) => [row.capability, row]));
   assert.deepEqual(afterStandardMinionsMissing.hero_minions_killed_snapshot.missing_inputs,
     ['replay_tail_MINIONS_KILLED']);
+  input.tail.stats[0].NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE = null;
+  const afterJungleMissing = Object.fromEntries(capabilityQuery(input).capabilities
+    .map((row) => [row.capability, row]));
+  assert.deepEqual(afterJungleMissing.hero_jungle_minions_killed_snapshot.missing_inputs,
+    ['replay_tail_NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE']);
   input.tail.stats[0].WARD_KILLED = null;
   input.tail.stats[0].Missions_CannonMinionsKilled = null;
   const afterAuxMissing = Object.fromEntries(capabilityQuery(input).capabilities
@@ -320,7 +333,7 @@ test('821 API dispatch emits separate candidate records and no confirmed deaths'
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
-      'hero_minions_killed_snapshot',
+      'hero_minions_killed_snapshot', 'hero_jungle_minions_killed_snapshot',
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_level_state'],
@@ -351,6 +364,10 @@ test('821 API dispatch emits separate candidate records and no confirmed deaths'
     .minions_killed_raw_f32_candidate, 1);
   assert.equal(combined.capability_results.hero_minions_killed_snapshot.tail_gaps[0]
     .unobserved_tail_gap, 1);
+  assert.equal(combined.events.hero_jungle_minions_killed_snapshot_candidates[10]
+    .jungle_minions_killed_raw_f32_candidate, 2.75);
+  assert.equal(combined.capability_results.hero_jungle_minions_killed_snapshot.tail_gaps[0]
+    .unobserved_your_jungle_tail_gap, 1);
   assert.equal(combined.events.hero_experience_snapshot_candidates[10]
     .experience_raw_f32_candidate, 100.5);
   assert.equal(combined.events.hero_vision_score_snapshot_candidates[10]
@@ -483,6 +500,7 @@ test('821 CLI dispatch reads a replay file and labels selected output candidate'
     semantic: true, events: ['hero_death', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_minions_killed_snapshot',
+      'hero_jungle_minions_killed_snapshot',
       'hero_level_state'],
     strict: true, timelineLimit: 0,
   });
@@ -495,6 +513,7 @@ test('821 CLI dispatch reads a replay file and labels selected output candidate'
   assert.equal(result.analysis.event_counts.hero_champion_kills_snapshot_candidates, 20);
   assert.equal(result.analysis.event_counts.hero_assists_snapshot_candidates, 20);
   assert.equal(result.analysis.event_counts.hero_minions_killed_snapshot_candidates, 20);
+  assert.equal(result.analysis.event_counts.hero_jungle_minions_killed_snapshot_candidates, 20);
   assert.equal(result.analysis.event_counts.hero_level_state_candidates, 10);
   assert.equal(result.analysis.decoded_packet_count, 31);
   assert.equal(result.analysis.unknown_packet_count, 3);

@@ -43,11 +43,36 @@ function profile(capability, suffix, blobOffset, tailField, valueKey, floorKey,
   });
 }
 
+const JUNGLE_FIELDS = Object.freeze([
+  Object.freeze({ blob_f32le_offset_candidate: 0x40,
+    replay_tail_field: 'NEUTRAL_MINIONS_KILLED',
+    value_key: 'jungle_minions_killed_raw_f32_candidate',
+    floor_key: 'jungle_minions_killed_floor_candidate' }),
+  Object.freeze({ blob_f32le_offset_candidate: 0x44,
+    replay_tail_field: 'NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE',
+    value_key: 'your_jungle_minions_killed_raw_f32_candidate',
+    floor_key: 'your_jungle_minions_killed_floor_candidate' }),
+  Object.freeze({ blob_f32le_offset_candidate: 0x48,
+    replay_tail_field: 'NEUTRAL_MINIONS_KILLED_ENEMY_JUNGLE',
+    value_key: 'enemy_jungle_minions_killed_raw_f32_candidate',
+    floor_key: 'enemy_jungle_minions_killed_floor_candidate' }),
+]);
+
 const PROFILES = Object.freeze({
   hero_minions_killed_snapshot: profile('hero_minions_killed_snapshot', 'minions-killed',
     0x3c, 'MINIONS_KILLED', 'minions_killed_raw_f32_candidate',
     'minions_killed_floor_candidate', 0, false, 73,
     'All 3270 observed f32 values are integral; this standard MINIONS_KILLED candidate is distinct from the Missions_MinionsKilled count at 0x378 and does not identify individual last hits.', true),
+  hero_jungle_minions_killed_snapshot: Object.freeze({
+    ...profile('hero_jungle_minions_killed_snapshot', 'jungle-minions-killed',
+      0x40, 'NEUTRAL_MINIONS_KILLED',
+      'jungle_minions_killed_raw_f32_candidate',
+      'jungle_minions_killed_floor_candidate', 0, false, 102,
+      'Three distinct Replay-tail candidates at f32LE offsets 0x40/0x44/0x48 correlate with total, own-jungle, and enemy-jungle neutral minions; fractional f32 values are retained and only their floors are compared with integer tails.'),
+    fields: JUNGLE_FIELDS,
+    replay_tail_fields: Object.freeze(JUNGLE_FIELDS.map((field) => field.replay_tail_field)),
+    evidence_scope: '11 KR exact-build Replays, 327 keyframes, 3270 hero packets; all 110 participant sequences per field start at zero, are monotone and tail-bound; final floor matches are 102/110 total, 103/110 own jungle, 108/110 enemy jungle',
+  }),
   hero_experience_snapshot: profile('hero_experience_snapshot', 'experience',
     0x28, 'EXP', 'experience_raw_f32_candidate', 'experience_floor_candidate',
     0, false, 52, 'EXP is a candidate cumulative value; no experience source or level threshold is inferred.'),
@@ -69,7 +94,18 @@ function assessHeroFloatSnapshotTail821(replay, capability) {
   const selected = PROFILES[capability];
   if (!selected) return { status: 'UNSUPPORTED',
     error: `unknown 821 float snapshot capability: ${capability}` };
-  return assessHeroStatsTail821(replay, selected.replay_tail_field);
+  if (!selected.fields) return assessHeroStatsTail821(replay, selected.replay_tail_field);
+  const assessments = selected.fields.map((field) =>
+    assessHeroStatsTail821(replay, field.replay_tail_field));
+  const failure = assessments.find((row) => row.status !== 'PASS');
+  if (failure) return { ...failure, required_fields: assessments };
+  return { ...assessments[0], required_fields: assessments,
+    values_by_tail: Object.fromEntries(assessments.map((row) =>
+      [row.field, row.values])) };
+}
+
+function assessHeroJungleMinionsTail821(replay) {
+  return assessHeroFloatSnapshotTail821(replay, 'hero_jungle_minions_killed_snapshot');
 }
 
 function decodeHeroFloatSnapshotCandidates821(replay, capability, precollected = null) {
@@ -102,7 +138,10 @@ function decodeHeroFloatSnapshotCandidates821(replay, capability, precollected =
     return fail(collected.status, collected.error, collected.details);
   }
   const { frames, scan } = collected;
-  const previous = Array(10).fill(null);
+  const fields = selected.fields ?? [selected];
+  const previousByField = Object.fromEntries(fields.map((field) =>
+    [field.value_key, Array(10).fill(null)]));
+  const previous = previousByField[selected.value_key];
   const previousTime = Array(10).fill(null);
   const previousRef = Array(10).fill(null);
   const descents = [];
@@ -111,35 +150,51 @@ function decodeHeroFloatSnapshotCandidates821(replay, capability, precollected =
     for (const row of frame) {
       const { block, participantId, ref } = row;
       const index = participantId - 1;
-      const rawOffsets = Array.from({ length: 4 }, (_, i) =>
-        1262 - selected.blob_f32le_offset_candidate - i);
-      const decoded = Buffer.from(rawOffsets.map((offset) =>
-        decodeRuntimeCountByte(block.payload[offset])));
-      const value = decoded.readFloatLE(0);
-      const floor = Math.floor(value);
       const mismatch = (error) => fail('DECODE_FAILED', error, {
         ...scan, first_unmatched_packet_ref: ref,
       });
-      if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(floor)) {
-        return mismatch(`${selected.replay_tail_field} f32 is not finite, nonnegative, and safely bounded`);
+      const values = {};
+      const rawFieldBytes = {};
+      const valueConfidence = {};
+      let decreasedSincePrevious = false;
+      for (const field of fields) {
+        const rawOffsets = Array.from({ length: 4 }, (_, i) =>
+          1262 - field.blob_f32le_offset_candidate - i);
+        const decoded = Buffer.from(rawOffsets.map((offset) =>
+          decodeRuntimeCountByte(block.payload[offset])));
+        const value = decoded.readFloatLE(0);
+        const floor = Math.floor(value);
+        const prior = previousByField[field.value_key][index];
+        const tailValues = assessed.values_by_tail?.[field.replay_tail_field]
+          ?? assessed.values;
+        if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(floor)) {
+          return mismatch(`${field.replay_tail_field} f32 is not finite, nonnegative, and safely bounded`);
+        }
+        if (selected.require_integer && !Number.isInteger(value)) {
+          return mismatch(`${field.replay_tail_field} f32 is not integral in the observed profile`);
+        }
+        if (prior === null && value !== selected.first_value) {
+          return mismatch(`participant ${participantId} first ${field.replay_tail_field} f32 differs from observed profile`);
+        }
+        const decreased = prior !== null && value < prior;
+        if (decreased && !selected.allow_decrease) {
+          return mismatch(`participant ${participantId} has decreasing ${field.replay_tail_field} f32`);
+        }
+        if (floor > tailValues[index]) {
+          return mismatch(`participant ${participantId} exceeds Replay tail ${field.replay_tail_field}`);
+        }
+        if (decreased) descents.push({ participant_id_candidate: participantId,
+          replay_time_ms: block.timestamp_ms, previous_f32: prior,
+          observed_f32: value, raw_packet_ref: ref });
+        decreasedSincePrevious ||= decreased;
+        previousByField[field.value_key][index] = value;
+        values[field.value_key] = value;
+        values[field.floor_key] = floor;
+        valueConfidence[field.value_key] = EVIDENCE_STATUS;
+        valueConfidence[field.floor_key] = EVIDENCE_STATUS;
+        rawFieldBytes[field.replay_tail_field] = Buffer.from(rawOffsets.slice().reverse()
+          .map((offset) => block.payload[offset])).toString('hex');
       }
-      if (selected.require_integer && !Number.isInteger(value)) {
-        return mismatch(`${selected.replay_tail_field} f32 is not integral in the observed profile`);
-      }
-      if (previous[index] === null && value !== selected.first_value) {
-        return mismatch(`participant ${participantId} first ${selected.replay_tail_field} f32 differs from observed profile`);
-      }
-      const decreased = previous[index] !== null && value < previous[index];
-      if (decreased && !selected.allow_decrease) {
-        return mismatch(`participant ${participantId} has decreasing ${selected.replay_tail_field} f32`);
-      }
-      if (floor > assessed.values[index]) {
-        return mismatch(`participant ${participantId} exceeds Replay tail ${selected.replay_tail_field}`);
-      }
-      if (decreased) descents.push({ participant_id_candidate: participantId,
-        replay_time_ms: block.timestamp_ms, previous_f32: previous[index],
-        observed_f32: value, raw_packet_ref: ref });
-      previous[index] = value;
       previousTime[index] = block.timestamp_ms;
       previousRef[index] = ref;
       events.push({
@@ -151,11 +206,10 @@ function decodeHeroFloatSnapshotCandidates821(replay, capability, precollected =
         replay_time_ms: block.timestamp_ms,
         hero_raw_param: row.rawParam,
         participant_id_candidate: participantId,
-        raw_payload_field_bytes_hex: Buffer.from(rawOffsets.slice().reverse()
-          .map((offset) => block.payload[offset])).toString('hex'),
-        [selected.value_key]: value,
-        [selected.floor_key]: floor,
-        decreased_since_previous_snapshot: decreased,
+        raw_payload_field_bytes_hex: selected.fields ? rawFieldBytes
+          : rawFieldBytes[selected.replay_tail_field],
+        ...values,
+        decreased_since_previous_snapshot: decreasedSincePrevious,
         observation_kind: 'KEYFRAME_SNAPSHOT',
         confidence: 'CANDIDATE',
         semantic_status: EVIDENCE_STATUS,
@@ -164,8 +218,7 @@ function decodeHeroFloatSnapshotCandidates821(replay, capability, precollected =
           hero_raw_param: 'VERIFIED_DIRECT',
           participant_id_candidate: 'CANDIDATE_KR_821_RAW_PARAM_TAIL_ALIGNMENT',
           raw_payload_field_bytes_hex: 'VERIFIED_DIRECT',
-          [selected.value_key]: EVIDENCE_STATUS,
-          [selected.floor_key]: EVIDENCE_STATUS,
+          ...valueConfidence,
           decreased_since_previous_snapshot: EVIDENCE_STATUS,
         },
         raw_packet_ref: ref,
@@ -190,6 +243,21 @@ function decodeHeroFloatSnapshotCandidates821(replay, capability, precollected =
       : gameLengthMs - previousTime[index],
     last_raw_packet_ref: previousRef[index],
   }));
+  if (selected.fields) {
+    for (const gap of tailGaps) {
+      const index = gap.participant_id_candidate - 1;
+      gap.final_neutral_minions_killed_tail = gap.final_replay_tail;
+      for (const field of selected.fields.slice(1)) {
+        const finalValue = assessed.values_by_tail[field.replay_tail_field][index];
+        const lastValue = previousByField[field.value_key][index];
+        const prefix = field === selected.fields[1] ? 'your_jungle' : 'enemy_jungle';
+        gap[`last_snapshot_${field.value_key}`] = lastValue;
+        gap[`last_snapshot_${field.floor_key}`] = Math.floor(lastValue);
+        gap[`final_${field.replay_tail_field.toLowerCase()}_tail`] = finalValue;
+        gap[`unobserved_${prefix}_tail_gap`] = finalValue - Math.floor(lastValue);
+      }
+    }
+  }
   return {
     ...base, status: 'CANDIDATE', evidence_status: EVIDENCE_STATUS, ...scan,
     event_count: events.length,
@@ -198,6 +266,15 @@ function decodeHeroFloatSnapshotCandidates821(replay, capability, precollected =
     descent_observations: descents,
     final_replay_tails: assessed.values,
     observed_final_raw_f32: previous,
+    ...(selected.fields ? {
+      final_replay_tails_by_field: assessed.values_by_tail,
+      observed_final_raw_f32_by_field: Object.fromEntries(selected.fields.map((field) =>
+        [field.replay_tail_field, previousByField[field.value_key]])),
+      total_unobserved_your_jungle_tail_gap: tailGaps.reduce((sum, row) =>
+        sum + row.unobserved_your_jungle_tail_gap, 0),
+      total_unobserved_enemy_jungle_tail_gap: tailGaps.reduce((sum, row) =>
+        sum + row.unobserved_enemy_jungle_tail_gap, 0),
+    } : {}),
     tail_gaps: tailGaps,
     total_unobserved_tail_gap: tailGaps.reduce((sum, row) =>
       sum + row.unobserved_tail_gap, 0),
@@ -207,6 +284,9 @@ function decodeHeroFloatSnapshotCandidates821(replay, capability, precollected =
 
 module.exports = {
   PROFILES,
+  HERO_JUNGLE_MINIONS_KILLED_SNAPSHOT_821_CANDIDATE_PROFILE:
+    PROFILES.hero_jungle_minions_killed_snapshot,
   assessHeroFloatSnapshotTail821,
+  assessHeroJungleMinionsTail821,
   decodeHeroFloatSnapshotCandidates821,
 };

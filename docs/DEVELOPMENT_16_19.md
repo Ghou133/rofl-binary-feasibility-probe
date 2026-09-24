@@ -321,6 +321,18 @@ Current progress (older notes below retain their original research context):
   11-Replay CLI batch returned 11/11 `CANDIDATE`, 3,270 events for each,
   zero errors and zero framing errors. Reproducible ignored evidence is under
   `artifacts/16_19_development/minions821_tail_field/`.
+- **821 three neutral-minion keyframe candidates:** Independent exact-821
+  transformed-vector scans identify f32LE offsets `0x40/0x44/0x48` against
+  `NEUTRAL_MINIONS_KILLED`, `NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE`, and
+  `NEUTRAL_MINIONS_KILLED_ENEMY_JUNGLE`. All three have 110/110 finite,
+  zero-start, monotone, tail-bounded participant series across 3,270 packets.
+  Last floored snapshots equal 102/110, 103/110, and 108/110 numeric tails;
+  aggregate retained gaps are 31, 27, and 2. Fractional raw f32 values are
+  preserved. The selected CLI/API capability emits only `CANDIDATE`
+  snapshots; it does not infer individual kills, monster identity, or location.
+  The exact-build 11-Replay CLI batch returned 11/11 `CANDIDATE`, 3,270
+  records, and zero framing errors. Scans, controls, and local output remain
+  ignored under `artifacts/16_19_development/jungle821_field/`.
 - **821 keyframe carrier structure:** A separate strict scan of those 327
   keyframes found 3,270/3,270 hero-family payloads with fixed `67 00 de`
   prefix and length 1,263. With the exact 821 constructor at RVA `0xeadf40`,

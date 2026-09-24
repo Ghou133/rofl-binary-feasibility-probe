@@ -27,6 +27,7 @@
 | `16.19.821.7343 --events hero_ward_stats_snapshot` | KR `0x0089` 关键帧字节 834/838/842 经精确 821 计数字节变换得到探测守卫、拆眼和插眼累计候选值；11 份回放共 3,270 个快照 | 仅写入 `hero_ward_stats_snapshot_candidates`，状态为 `CANDIDATE`；三项结算尾部差值保留，不推导守卫事件或位置；字段语义仍为候选 |
 | `16.19.821.7343 --events hero_missions_cannon_minions_killed_snapshot` | 同一关键帧字节 450 经精确 821 变换得到 `Missions_CannonMinionsKilled` 累计候选值；11 份回放共 3,270 个快照 | 仅写入 `hero_missions_cannon_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；不标为普通补刀或逐次炮车击杀；保留结算差值，字段语义仍为候选 |
 | `16.19.821.7343 --events hero_minions_killed_snapshot` | 精确 821 原生 `0x0089` 向量偏移 `0x3c` 的 `f32LE` 候选累计标准补刀数；11 份回放共 3,270 个快照，末帧 73/110 人与 `MINIONS_KILLED` 结算相等 | 仅写入 `hero_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；与偏移 `0x378` 的 `Missions_MinionsKilled` 区分，保留尾部差值，不推导逐次补刀或目标 |
+| `16.19.821.7343 --events hero_jungle_minions_killed_snapshot` | 精确 821 原生 `0x0089` 向量偏移 `0x40/0x44/0x48` 的三项野怪计数候选浮点快照；11 份回放共 3,270 条 | 仅写入 `hero_jungle_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；保留原始小数、取整值及三项结算尾差，不推断逐次击杀、野怪类型或位置 |
 | `16.19.821.7343 --events hero_experience_snapshot` | `0x0089` 关键帧反向字节向量的 `0x28` 浮点候选经验值；11 份回放共 3,270 个快照 | 仅写入 `hero_experience_snapshot_candidates`；保留与 `EXP` 结算的尾部差值，不推导升级阈值或经验来源 |
 | `16.19.821.7343 --events hero_vision_score_snapshot` | 同一向量 `0x1b0` 浮点候选视野分；11 份回放的 110 人均从零开始并不超过各自结算值 | 仅写入 `hero_vision_score_snapshot_candidates`；不推导守卫、探测或视野行为 |
 | `16.19.821.7343 --events hero_gold_earned_snapshot` | 同一向量 `0x38` 浮点候选已赚金币；110 人首帧均为 500，序列单调且在 `GOLD_EARNED` 结算内 | 仅写入 `hero_gold_earned_snapshot_candidates`；末帧均落后于结算并保留差额，不推导收入事件 |

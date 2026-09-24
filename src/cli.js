@@ -26,7 +26,7 @@ const { assessHeroLevelTail821 } =
   require('./decoders/rofl_16_19_821_level_candidate');
 const { assessHeroWardStatsTail821, assessHeroMissionsCannonMinionsTail821 } =
   require('./decoders/rofl_16_19_821_aux_counts_candidate');
-const { assessHeroFloatSnapshotTail821 } =
+const { assessHeroFloatSnapshotTail821, assessHeroJungleMinionsTail821 } =
   require('./decoders/rofl_16_19_821_float_stats_candidate');
 const { PROFILES: DAMAGE_PROFILES_821 } =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
@@ -583,7 +583,7 @@ function parseOne1619(replay, options, started) {
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
-      'hero_minions_killed_snapshot',
+      'hero_minions_killed_snapshot', 'hero_jungle_minions_killed_snapshot',
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
@@ -1853,6 +1853,9 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_missions_cannon_minions_killed_snapshot'
           ? assessHeroMissionsCannonMinionsTail821(replay)
         : profile.game_version === '16.19.821.7343'
+          && capability === 'hero_jungle_minions_killed_snapshot'
+          ? assessHeroJungleMinionsTail821(replay)
+        : profile.game_version === '16.19.821.7343'
           && ['hero_minions_killed_snapshot', 'hero_experience_snapshot', 'hero_vision_score_snapshot',
             'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot'].includes(capability)
           ? assessHeroFloatSnapshotTail821(replay, capability)
@@ -2000,6 +2003,11 @@ function capabilityQuery(replay, options = {}) {
             'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot'].includes(capability)) {
         validationPending.push('KR keyframe 0x0089 structure and pinned 821 reversed-byte f32 transform',
           'ten numeric Replay tails, first-value scope, and per-participant snapshots');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_jungle_minions_killed_snapshot') {
+        validationPending.push('KR keyframe 0x0089 structure and pinned 821 reversed-byte f32 transform',
+          'three distinct numeric neutral-minion tails, first-value scope, and per-participant snapshots');
       }
       if (profile.game_version === '16.19.821.7343'
           && Object.hasOwn(DAMAGE_PROFILES_821, capability)) {
@@ -2214,6 +2222,8 @@ function capabilityQuery(replay, options = {}) {
             hero_missions_cannon_minions_killed_snapshot:
               'hero_missions_cannon_minions_killed_snapshot_candidates',
             hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
+            hero_jungle_minions_killed_snapshot:
+              'hero_jungle_minions_killed_snapshot_candidates',
             hero_experience_snapshot: 'hero_experience_snapshot_candidates',
             hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
             hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',

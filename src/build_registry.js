@@ -478,6 +478,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_ward_stats_snapshot: 0x0089,
       hero_missions_cannon_minions_killed_snapshot: 0x0089,
       hero_minions_killed_snapshot: 0x0089,
+      hero_jungle_minions_killed_snapshot: 0x0089,
       hero_experience_snapshot: 0x0089,
       hero_vision_score_snapshot: 0x0089,
       hero_gold_earned_snapshot: 0x0089,
@@ -516,6 +517,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_missions_cannon_minions_killed_snapshot:
         auxiliaryCountsCandidate1619821.HERO_MISSIONS_CANNON_MINIONS_KILLED_SNAPSHOT_821_CANDIDATE_PROFILE,
       hero_minions_killed_snapshot: floatStatsCandidate1619821.PROFILES.hero_minions_killed_snapshot,
+      hero_jungle_minions_killed_snapshot:
+        floatStatsCandidate1619821.PROFILES.hero_jungle_minions_killed_snapshot,
       hero_experience_snapshot: floatStatsCandidate1619821.PROFILES.hero_experience_snapshot,
       hero_vision_score_snapshot: floatStatsCandidate1619821.PROFILES.hero_vision_score_snapshot,
       hero_gold_earned_snapshot: floatStatsCandidate1619821.PROFILES.hero_gold_earned_snapshot,
@@ -563,6 +566,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_missions_cannon_minions_killed_snapshot:
         'CANDIDATE_821_RUNTIME_CANNON_COUNT_BYTE_AND_MISSIONS_TAIL',
       hero_minions_killed_snapshot: 'CANDIDATE_821_NATIVE_F32_STANDARD_MINIONS_KILLED_TAIL',
+      hero_jungle_minions_killed_snapshot:
+        'CANDIDATE_821_NATIVE_F32_NEUTRAL_MINIONS_THREE_TAILS',
       hero_experience_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_EXP_TAIL',
       hero_vision_score_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_VISION_TAIL',
       hero_gold_earned_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_EARNED_TAIL',
@@ -606,6 +611,8 @@ const BUILD_PROFILES = deepFreeze({
         'exact 821 native 0x0089 carrier and vector byte at raw offset 450; Missions_CannonMinionsKilled semantic label candidate only',
       keyframe_minions_killed_snapshot:
         'exact 821 native 0x0089 vector f32LE at offset 0x3c; standard MINIONS_KILLED tail correlation only, distinct from Missions_MinionsKilled at 0x378',
+      keyframe_jungle_minions_killed_snapshot:
+        'exact 821 native 0x0089 vector f32LE at offsets 0x40/0x44/0x48; three neutral-minion Replay-tail correlations only, with raw fractional values and retained floor gaps',
       keyframe_float_snapshots:
         'exact 821 native 0x0089 carrier and reversed vector at offsets 0x28/0x1b0/0x38/0x34; EXP/VISION_SCORE/GOLD_EARNED/GOLD_SPENT semantic labels candidate only',
       keyframe_damage_float_snapshots:
@@ -625,6 +632,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
       'hero_minions_killed_snapshot',
+      'hero_jungle_minions_killed_snapshot',
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
