@@ -40,6 +40,11 @@ const FIELDS = Object.freeze({
   damage_self_mitigated: field('TOTAL_DAMAGE_SELF_MITIGATED', 0x208,
     'damage_self_mitigated_raw_f32_candidate',
     'damage_self_mitigated_floor_candidate', 45),
+  building_or_turret_damage: field('TOTAL_DAMAGE_DEALT_TO_BUILDINGS', 0x210,
+    'building_or_turret_damage_raw_f32_candidate',
+    'building_or_turret_damage_floor_candidate', 82),
+  objective_damage: field('TOTAL_DAMAGE_DEALT_TO_OBJECTIVES', 0x218,
+    'objective_damage_raw_f32_candidate', 'objective_damage_floor_candidate', 82),
 });
 
 function profile(capability, slug, fields) {
@@ -70,6 +75,18 @@ const PROFILES = Object.freeze({
   hero_damage_self_mitigated_snapshot: profile(
     'hero_damage_self_mitigated_snapshot', 'hero-damage-self-mitigated',
     [FIELDS.damage_self_mitigated]),
+  hero_structure_objective_damage_snapshot: Object.freeze({
+    ...profile('hero_structure_objective_damage_snapshot',
+      'hero-structure-objective-damage',
+      [FIELDS.building_or_turret_damage, FIELDS.objective_damage]),
+    mirror_blob_f32le_offset_candidate: 0x214,
+    mirror_replay_tail_field: 'TOTAL_DAMAGE_DEALT_TO_TURRETS',
+    evidence_scope: '11 exact-build KR Replays, 327 keyframes and 3270 hero packets; 110 zero-start, finite, monotone, tail-bounded participant sequences; final floors match 82/110 building and 82/110 objective tails. Vector 0x210 and 0x214 mirror in all observed packets; BUILDINGS and TURRETS tails coincide for all 110 participants.',
+    known_limits: Object.freeze([...COMMON_LIMITS,
+      'The two mirrored structure offsets and equal BUILDINGS/TURRETS tails do not distinguish building damage from turret damage. This capability requires their equality and keeps the field label ambiguous.',
+      'The objective total is a snapshot; it does not identify the target objective or a single attack.',
+    ]),
+  }),
 });
 
 function assessHeroDamageSnapshotTail821(replay, capability) {
@@ -81,6 +98,16 @@ function assessHeroDamageSnapshotTail821(replay, capability) {
     const assessed = assessHeroStatsTail821(replay, selectedField.replay_tail_field);
     if (assessed.status !== 'PASS') return assessed;
     values_by_tail_field[selectedField.replay_tail_field] = assessed.values;
+  }
+  if (selected.mirror_replay_tail_field) {
+    const assessed = assessHeroStatsTail821(replay, selected.mirror_replay_tail_field);
+    if (assessed.status !== 'PASS') return assessed;
+    const primary = values_by_tail_field[selected.fields[0].replay_tail_field];
+    if (assessed.values.some((value, index) => value !== primary[index])) {
+      return { status: 'UNSUPPORTED',
+        error: 'Replay tail BUILDINGS and TURRETS differ; the observed 821 mirror cannot distinguish them' };
+    }
+    values_by_tail_field[selected.mirror_replay_tail_field] = assessed.values;
   }
   return { status: 'PASS', values_by_tail_field };
 }
@@ -184,6 +211,21 @@ function decodeHeroDamageSnapshotCandidates821(replay, capability, precollected 
         event[selectedField.floor_key] = floor;
         event.field_confidence[selectedField.value_key] = EVIDENCE_STATUS;
         event.field_confidence[selectedField.floor_key] = EVIDENCE_STATUS;
+      }
+      if (selected.mirror_blob_f32le_offset_candidate !== undefined) {
+        const mirrored = decodeField(block.payload, {
+          blob_f32le_offset_candidate: selected.mirror_blob_f32le_offset_candidate,
+        });
+        const primary = event[FIELDS.building_or_turret_damage.value_key];
+        if (!Number.isFinite(mirrored.value) || mirrored.value !== primary) {
+          return fail('DECODE_FAILED', '0x210/0x214 structure f32 mirror differs', {
+            ...scan, first_unmatched_packet_ref: ref,
+          });
+        }
+        event.raw_payload_field_bytes_hex.MIRROR_0x214 = mirrored.raw_hex;
+        event.structure_damage_mirror_raw_f32_candidate = mirrored.value;
+        event.field_confidence.structure_damage_mirror_raw_f32_candidate =
+          EVIDENCE_STATUS;
       }
       previousTimes[index] = block.timestamp_ms;
       previousRefs[index] = ref;

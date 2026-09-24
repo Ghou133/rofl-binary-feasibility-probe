@@ -143,6 +143,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
       'hero_damage_self_mitigated_snapshot',
+      'hero_structure_objective_damage_snapshot',
       'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
       'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
       'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
@@ -158,6 +159,12 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'hero_total_heal_snapshot_candidates');
   assert.equal(queried.hero_crowd_control_time_snapshot.output,
     'hero_crowd_control_time_snapshot_candidates');
+  assert.equal(queried.hero_structure_objective_damage_snapshot.output,
+    'hero_structure_objective_damage_snapshot_candidates');
+  assert.deepEqual(queried.hero_structure_objective_damage_snapshot.missing_inputs,
+    ['replay_tail_TOTAL_DAMAGE_DEALT_TO_BUILDINGS',
+      'replay_tail_TOTAL_DAMAGE_DEALT_TO_OBJECTIVES',
+      'replay_tail_TOTAL_DAMAGE_DEALT_TO_TURRETS']);
   assert.equal(queried.hero_death.output, 'hero_death_candidates');
   assert.deepEqual(queried.hero_death.missing_inputs, []);
   assert.equal(queried.hero_death_timer.runtime_image_requirement, 'NOT_REQUIRED');

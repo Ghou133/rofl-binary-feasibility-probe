@@ -572,6 +572,7 @@ function parseOne1619(replay, options, started) {
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
       'hero_damage_self_mitigated_snapshot',
+      'hero_structure_objective_damage_snapshot',
       'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
       'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
       'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
@@ -1791,9 +1792,13 @@ function capabilityQuery(replay, options = {}) {
             error: assessment.error ?? assessment.missing_input ?? null })) }
         : profile.game_version === '16.19.821.7343'
           && Object.hasOwn(DAMAGE_PROFILES_821, capability)
-          ? { required_fields: DAMAGE_PROFILES_821[capability].fields.map((field) => {
-            const assessment = assessHeroStatsTail821(replay, field.replay_tail_field);
-            return { field: field.replay_tail_field, status: assessment.status,
+          ? { required_fields: [
+            ...DAMAGE_PROFILES_821[capability].fields.map((field) => field.replay_tail_field),
+            ...(DAMAGE_PROFILES_821[capability].mirror_replay_tail_field
+              ? [DAMAGE_PROFILES_821[capability].mirror_replay_tail_field] : []),
+          ].map((field) => {
+            const assessment = assessHeroStatsTail821(replay, field);
+            return { field, status: assessment.status,
               error: assessment.error ?? assessment.missing_input ?? null };
           }) }
         : profile.game_version === '16.19.821.7343'
@@ -2186,6 +2191,8 @@ function capabilityQuery(replay, options = {}) {
               'hero_damage_taken_from_champions_snapshot_candidates',
             hero_damage_self_mitigated_snapshot:
               'hero_damage_self_mitigated_snapshot_candidates',
+            hero_structure_objective_damage_snapshot:
+              'hero_structure_objective_damage_snapshot_candidates',
             hero_longest_living_time_snapshot:
               'hero_longest_living_time_snapshot_candidates',
             hero_total_time_spent_dead_snapshot:
