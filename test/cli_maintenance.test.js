@@ -137,6 +137,44 @@ test('capabilities reports only the 16.19 candidate without packet decoding or a
   assert.equal(fs.existsSync(fakeRuntime), false);
 });
 
+test('inventory MapView capability preflight requires an explicit image but no tail stats', (t) => {
+  const cli = loadCli();
+  // This body is not valid packet framing; capabilities must leave it unread.
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.820.7193');
+  replay.tail.stats = null;
+  delete replay.tail.metadata.statsJson;
+  const rowFor = (query) => query.capabilities.find((item) =>
+    item.capability === 'hero_inventory_mapview');
+
+  const absent = cli.capabilityQuery(replay);
+  const missing = rowFor(absent);
+  assert.equal(absent.packet_framing_inspected, false);
+  assert.equal(absent.semantic_decode_performed, false);
+  assert.equal(missing.status, 'CANDIDATE');
+  assert.equal(missing.published, false);
+  assert.equal(missing.output, 'hero_inventory_mapview_candidates');
+  assert.equal(missing.runtime_image_requirement, 'EXACT_IMAGE_REQUIRED');
+  assert.deepEqual(missing.required_inputs.map((input) => input.name),
+    ['replay', 'exact_runtime_image']);
+  assert.deepEqual(missing.missing_inputs, ['exact_runtime_image']);
+  assert.ok(missing.validation_pending.includes('exact runtime image SHA-256 and decoder execution'));
+  assert.deepEqual(absent.capabilities.find((item) => item.capability === 'hero_death').missing_inputs,
+    ['replay_tail_statsJson']);
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-mapview-preflight-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const image = path.join(root, 'unverified-image.bin');
+  fs.writeFileSync(image, Buffer.from([1, 2, 3]));
+  const present = cli.capabilityQuery(replay, { runtimeImage: image });
+  const available = rowFor(present);
+  assert.equal(available.required_inputs[1].status, 'PRESENT_UNVERIFIED');
+  assert.deepEqual(available.missing_inputs, []);
+  assert.deepEqual(available.invalid_inputs, []);
+  assert.equal(present.runtime_image_used, false);
+  assert.equal(present.packet_framing_inspected, false);
+  assert.equal(present.semantic_decode_performed, false);
+});
+
 test('capabilities exposes missing Replay tail stats without treating it as zero events', (t) => {
   const cli = loadCli();
   const input = fixture(t, '16.19.820.7193');

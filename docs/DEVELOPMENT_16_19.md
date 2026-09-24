@@ -147,9 +147,22 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   criteria of at least eight exact final matches and total gap at most two.
   There is no independent assist-event anchor, so this field is a
   weaker one-Replay correlation and yields no assist event, time or attribution.
+- **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
+  runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
+  observed slot/item-definition-key records as candidates. All 94 game packets
+  in the HN Replay returned success with full payload consumption, yielding
+  732 records. The last MapView packets for three participants are within
+  3.4–7.4 seconds of game end and their 21 slots 0–6 match Replay-tail
+  `ITEM0`–`ITEM6` exactly. This remains one-Replay evidence; a changed valid
+  raw param can decode the same payload, so participant mapping stays a
+  candidate bound to the original packet ref. A truncated payload fails; KR
+  has no HN `0x0420` game route. No full inventory state or item transaction
+  is inferred. Missing or wrong images affect only this selected capability.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
-  HN Replays to test level and HeroStats CS/EXP/gold/kills candidates. Movement-route
-  research remains blocked on an exact registration-to-position-field link.
+  HN Replays to test level, HeroStats and MapView item candidates. The HN
+  Broadcast `0x03ef` vector reaches ten records but its record parser still
+  depends on runtime TLS state; `0x03b7` SetItem remains a separate unclassified
+  delta lead. Movement-route research still needs a position-field link.
 - **Path negative control:** The exact HN image identifies `0x03ee` as
   DirectInputMovementDriverServerTurnData (84 HN packets in one short interval),
   `0x0160` as SetMovementDriver (4), `0x04dd` as AddFollowTargetPosition (0),
@@ -158,6 +171,10 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   opcode `0x00f6` has a 16.19 factory object size `0x18`, not the old `0x2c`
   layout. A path candidate still needs an exact observed receive/field-write
   link and independent position anchors; no old profile is reused.
+- **Ward negative control:** Old 16.16 WardSpawn opcode `0x049a` is not an HN
+  16.19 factory case and has no packets in this Replay. The HN `0x0400` case
+  has 6,627 packets and a distinct runtime deserializer, but no observed link
+  to ward identity, owner or coordinates; no ward candidate is emitted.
 - **CLI batch:** A two-Replay HN/KR run with death, respawn and level selection
   yielded HN `CANDIDATE`, KR `PARTIAL`, and aggregate `PARTIAL`, retaining the
   KR death candidate while reporting the HN-only capabilities unavailable.

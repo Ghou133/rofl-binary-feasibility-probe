@@ -1,10 +1,14 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const childProcess = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const { isDeepStrictEqual } = require('node:util');
 
 const { analyzeReplay } = require('../analysis');
 const { deathEvent } = require('../events');
-const { walkBlocks } = require('../rofl');
+const { parseReplayBuffer, walkBlocks } = require('../rofl');
 const { analyzeReplayWithHeroStats } = require('./rofl_16_19_hero_stats_candidate');
 
 const REPLAY_VERSION = '16.19.820.7193';
@@ -99,6 +103,26 @@ const HERO_LEVEL_STATE_CANDIDATE_PROFILE = Object.freeze({
     'Only levels present in HN route 0x02b3 are emitted; missing updates are not reconstructed.',
     'Participant mapping and level meaning remain candidate semantics from one Replay.',
     'No experience, level-before, or complete level timeline is inferred.',
+  ]),
+});
+
+const HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-inventory-mapview-runtime-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_inventory_mapview',
+  status: 'CANDIDATE',
+  enabled: true,
+  stream_tag: 1,
+  replay_block_packet_id: 0x0420,
+  packet_name: 'PKT_S2C_SetInventory_MapView_s',
+  evidence_runtime_image_sha256: '7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f780af11ed6df76d',
+  runtime_image_required: true,
+  evidence_scope: 'exact HN runtime constructor/deserializer and 94 fully consumed packets in one HN Replay',
+  known_limits: Object.freeze([
+    'Only observed MapView records are emitted; no unseen slot contents are reconstructed.',
+    'Slot, item-definition key, and hero participant mapping remain candidates from one HN Replay.',
+    'No purchase, sale, swap, replacement, or complete inventory lifecycle is inferred.',
+    'The exact captured runtime image and Python Unicorn are required for decoding.',
   ]),
 });
 
@@ -209,6 +233,7 @@ const CANDIDATE_ROUTE_PACKET_IDS = new Set([
   ]),
   HERO_DEATH_TIMER_CANDIDATE_PROFILE.reincarnate_alive_packet_id,
   HERO_LEVEL_STATE_CANDIDATE_PROFILE.replay_block_packet_id,
+  HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE.replay_block_packet_id,
 ]);
 
 function emptyCandidateRoutes() {
@@ -229,7 +254,33 @@ function retainCandidateRoute(routes, block, chunk) {
   });
 }
 
+function candidateReplaySourceError(replay) {
+  if (!Buffer.isBuffer(replay?.buffer)) return 'Replay source buffer is unavailable';
+  let parsed;
+  try {
+    // Reuse the container parser for byte and chunk-layout checks. A Replay
+    // object exposes writable bytes and metadata, so its parse-time digest
+    // alone does not authenticate a later route scan.
+    parsed = parseReplayBuffer(replay.buffer, replay.source_path);
+  } catch (error) {
+    return `Replay source no longer parses: ${error.message}`;
+  }
+  if (parsed.source_sha256 !== replay.source_sha256
+      || parsed.file_size !== replay.file_size) {
+    return 'Replay source bytes differ from their parse-time identity';
+  }
+  if (!isDeepStrictEqual(parsed.header, replay.header)
+      || !isDeepStrictEqual(parsed.chunks, replay.chunks)) {
+    return 'Replay header or chunk layout differs from its source bytes';
+  }
+  return null;
+}
+
 function collectCandidateRoutes(replay) {
+  const sourceError = candidateReplaySourceError(replay);
+  if (sourceError) {
+    return bindRouteScan({ routes: null, walk: null, error: sourceError }, replay);
+  }
   const routes = emptyCandidateRoutes();
   try {
     const walk = walkBlocks(replay, (block, chunk) => {
@@ -255,7 +306,10 @@ function createCandidateRouteScanCollector(replay) {
     finish() {
       if (finished) throw new Error('candidate route scan collector is already finished');
       finished = true;
-      return bindRouteScan({ routes, walk: { block_count: gameBlockCount }, error: null }, replay);
+      const sourceError = candidateReplaySourceError(replay);
+      return bindRouteScan({ routes: sourceError ? null : routes,
+        walk: sourceError ? null : { block_count: gameBlockCount },
+        error: sourceError }, replay);
     },
   });
 }
@@ -955,12 +1009,231 @@ function decodeHeroLevelStateCandidates(replay, collected = null) {
   };
 }
 
+function decodeHeroInventoryMapViewCandidates(replay, collected = null, options = {}) {
+  const profile = HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE;
+  const base = { profile_id: profile.id, input_packet_id: profile.replay_block_packet_id };
+  if (replay?.header?.version !== REPLAY_VERSION) {
+    return { ...base, status: 'UNSUPPORTED', input_count: null, event_count: null,
+      events: null, error: `inventory MapView candidate supports only ${REPLAY_VERSION}` };
+  }
+  const scan = candidateRoutesForReplay(replay, collected);
+  if (scan.error) {
+    return { ...base, status: 'DECODE_FAILED', input_count: null, event_count: null,
+      events: null, error: `Replay framing or route source failed: ${scan.error}` };
+  }
+  const rows = scan.routes.get(profile.replay_block_packet_id);
+  const inputCount = rows.length;
+  const fail = (status, error, extra = {}) => ({
+    ...base, status, input_count: inputCount, event_count: null, events: null,
+    scanned_block_count: scan.walk.block_count, error, ...extra,
+  });
+  if (inputCount === 0) {
+    return fail('PROFILE_UNAVAILABLE', 'HN game-stream inventory MapView route 0x0420 is absent', {
+      input_count: null, observed_raw_route_count: 0,
+      runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
+    });
+  }
+  const isHeroParam = (row) => row.block.param >= 0x400000ae
+    && row.block.param <= 0x400000b7;
+  const heroParamCount = rows.filter(isHeroParam).length;
+  if (heroParamCount !== inputCount) {
+    return fail(heroParamCount === 0 ? 'PROFILE_UNAVAILABLE' : 'DECODE_FAILED',
+      '0x0420 raw params do not consistently match the observed HN hero range',
+      { ...(heroParamCount === 0 ? { input_count: null } : {}),
+        observed_raw_route_count: inputCount, matching_hero_param_count: heroParamCount,
+        runtime_image_status: 'NOT_CHECKED', runtime_image_used: false });
+  }
+  const imagePath = options.runtimeImagePath;
+  if (typeof imagePath !== 'string' || !imagePath.trim()) {
+    return fail('MISSING_INPUT', 'exact 16.19 HN runtime image is required', {
+      missing_input: 'runtime_image', runtime_image_status: 'MISSING',
+      runtime_image_used: false,
+    });
+  }
+  const resolvedImage = path.resolve(imagePath);
+  try {
+    if (!fs.statSync(resolvedImage).isFile()) {
+      return fail('MISSING_INPUT', 'runtime image path is not a file', {
+        missing_input: 'runtime_image', runtime_image_status: 'MISSING',
+        runtime_image_used: false,
+      });
+    }
+  } catch (error) {
+    return fail('MISSING_INPUT', `runtime image cannot be read: ${error.message}`, {
+      missing_input: 'runtime_image', runtime_image_status: 'MISSING',
+      runtime_image_used: false,
+    });
+  }
+  if (inputCount > 256 || rows.some((row) => row.block.payload_length > 4096)) {
+    return fail('UNSUPPORTED', 'inventory MapView runtime batch exceeds its packet or byte limit', {
+      runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
+    });
+  }
+  const python = options.pythonExecutable || process.env.PYTHON || 'python';
+  const script = path.resolve(__dirname, '..', '..', 'scripts',
+    'decode_mapview_inventory_16_19.py');
+  const request = {
+    replay_version: REPLAY_VERSION,
+    packets: rows.map(({ block }) => ({
+      raw_param: block.param >>> 0,
+      payload_hex: block.payload.toString('hex'),
+    })),
+  };
+  const serializedRequest = JSON.stringify(request);
+  if (Buffer.byteLength(serializedRequest, 'utf8') > 2_000_000) {
+    return fail('UNSUPPORTED', 'inventory MapView runtime input exceeds its byte limit', {
+      runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
+    });
+  }
+  const run = childProcess.spawnSync(python, ['-B', script, '--image', resolvedImage], {
+    input: serializedRequest, encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024, timeout: 60000,
+  });
+  if (run.error || run.status !== 0) {
+    const detail = String(run.error?.message || run.stderr || run.stdout
+      || `Python exited ${run.status}`).trim();
+    const missingPython = run.error?.code === 'ENOENT'
+      || /ModuleNotFoundError: No module named ['"]unicorn['"]|requires the installed unicorn dependency/.test(detail);
+    const imageMismatch = /image SHA-256|image hash/i.test(detail);
+    return fail(missingPython ? 'MISSING_INPUT' : 'DECODE_FAILED',
+      `exact runtime MapView decoder failed: ${detail}`, {
+        ...(missingPython ? { missing_input: 'python_unicorn' } : {}),
+        runtime_image_status: imageMismatch ? 'HASH_MISMATCH' : 'NOT_CHECKED',
+        runtime_image_used: false,
+      });
+  }
+  let decoded;
+  try {
+    decoded = JSON.parse(run.stdout);
+  } catch (error) {
+    return fail('DECODE_FAILED', `runtime MapView output is not JSON: ${error.message}`, {
+      runtime_image_status: 'EXECUTION_FAILED', runtime_image_used: false,
+    });
+  }
+  if (decoded?.status !== 'PASS'
+      || decoded.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || !Array.isArray(decoded.results) || decoded.results.length !== inputCount) {
+    return fail('DECODE_FAILED', 'runtime MapView output identity or packet count differs', {
+      runtime_image_status: 'EXECUTION_FAILED', runtime_image_used: false,
+    });
+  }
+  const packetRefs = rows.map((row) => packetRef(replay, row.block, row.chunk));
+  const runtimePacketFailures = [];
+  for (let packetIndex = 0; packetIndex < inputCount; packetIndex += 1) {
+    const source = rows[packetIndex];
+    const result = decoded.results[packetIndex];
+    const rawRef = packetRefs[packetIndex];
+    if (result?.input_index !== packetIndex
+        || result.raw_payload_sha256 !== rawRef.raw_payload_sha256
+        || result.raw_param !== (source.block.param >>> 0)) {
+      return fail('DECODE_FAILED', `runtime MapView output does not match packet ${packetIndex}`, {
+        runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+        runtime_image_sha256: decoded.runtime_image_sha256,
+        first_failed_packet_ref: rawRef,
+      });
+    }
+    if (result.status !== 'DECODED'
+        || result.deserialize_return_al !== 1
+        || result.bytes_consumed !== source.block.payload_length
+        || !Array.isArray(result.records)
+        || !Number.isSafeInteger(result.record_count) || result.record_count < 0
+        || result.record_count !== result.records.length
+        || result.record_count > 10) {
+      runtimePacketFailures.push({
+        packet_index: packetIndex, raw_packet_ref: rawRef,
+        runtime_status: result.status ?? null,
+        deserialize_return_al: result.deserialize_return_al ?? null,
+        bytes_consumed: result.bytes_consumed ?? null,
+        record_count: result.record_count ?? null,
+        error: String(result.error ?? 'invalid result').slice(0, 500),
+      });
+    }
+  }
+  if (runtimePacketFailures.length > 0) {
+    return fail('DECODE_FAILED', `${runtimePacketFailures.length} runtime MapView packets did not fully decode`, {
+      runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+      runtime_image_sha256: decoded.runtime_image_sha256,
+      first_failed_packet_ref: runtimePacketFailures[0].raw_packet_ref,
+      failed_packet_count: runtimePacketFailures.length,
+      failed_packet_results: runtimePacketFailures,
+    });
+  }
+  const events = [];
+  for (let packetIndex = 0; packetIndex < inputCount; packetIndex += 1) {
+    const source = rows[packetIndex];
+    const result = decoded.results[packetIndex];
+    const rawRef = packetRefs[packetIndex];
+    const slots = new Set();
+    for (let recordIndex = 0; recordIndex < result.records.length; recordIndex += 1) {
+      const record = result.records[recordIndex];
+      if (record?.record_index !== recordIndex
+          || !Number.isSafeInteger(record.slot) || record.slot < 0 || record.slot > 9
+          || slots.has(record.slot)
+          || !Number.isSafeInteger(record.item_id) || record.item_id < 1
+          || record.item_id > 0xffffffff
+          || !Number.isSafeInteger(record.flag) || record.flag < 0 || record.flag > 255
+          || !/^[0-9a-f]{2}$/.test(record.raw_slot_byte_hex)
+          || !/^[0-9a-f]{8}$/.test(record.raw_item_id_bytes_hex)) {
+        return fail('DECODE_FAILED', `runtime MapView packet ${packetIndex} has an invalid slot record`, {
+          runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+          runtime_image_sha256: decoded.runtime_image_sha256,
+          first_failed_packet_ref: rawRef,
+        });
+      }
+      slots.add(record.slot);
+      events.push({
+        event_type: 'HERO_INVENTORY_MAPVIEW_RECORD_CANDIDATE',
+        game_version: REPLAY_VERSION,
+        patch: '16.19',
+        build_profile: profile.id,
+        replay_sha256: replay.source_sha256 ?? null,
+        replay_time_ms: source.block.timestamp_ms,
+        hero_raw_param: source.block.param >>> 0,
+        participant_id_candidate: participantIdFromDeathParam(source.block.param),
+        packet_record_index: recordIndex,
+        packet_record_count: result.record_count,
+        slot_candidate: record.slot,
+        item_id_candidate: record.item_id,
+        emulated_flag_code: record.flag,
+        emulated_object_slot_byte_hex: record.raw_slot_byte_hex,
+        emulated_object_item_id_bytes_hex: record.raw_item_id_bytes_hex,
+        confidence: 'CANDIDATE',
+        semantic_status: 'CANDIDATE_EXACT_RUNTIME_MAPVIEW_ONE_REPLAY',
+        field_confidence: {
+          replay_time_ms: 'VERIFIED_DIRECT',
+          hero_raw_param: 'VERIFIED_DIRECT',
+          participant_id_candidate: 'CANDIDATE',
+          slot_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD',
+          item_id_candidate: 'CANDIDATE_EXACT_RUNTIME_ITEM_DEFINITION_KEY',
+          emulated_flag_code: 'UNCLASSIFIED_RUNTIME_FIELD',
+        },
+        raw_packet_ref: rawRef,
+        known_limits: [...profile.known_limits],
+      });
+    }
+  }
+  return {
+    ...base,
+    status: 'CANDIDATE',
+    evidence_status: 'CANDIDATE_EXACT_RUNTIME_MAPVIEW_ONE_REPLAY',
+    input_count: inputCount,
+    event_count: events.length,
+    decoded_record_count: events.length,
+    scanned_block_count: scan.walk.block_count,
+    runtime_image_status: 'MATCHED_USED',
+    runtime_image_used: true,
+    runtime_image_sha256: decoded.runtime_image_sha256,
+    events,
+  };
+}
+
 module.exports = {
   REPLAY_VERSION,
   HERO_DEATH_CANDIDATE_PROFILES,
   HERO_DEATH_TIMER_CANDIDATE_PROFILE,
   HERO_RESPAWN_CANDIDATE_PROFILE,
   HERO_LEVEL_STATE_CANDIDATE_PROFILE,
+  HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE,
   analyzeReplayWithCandidateRoutes,
   collectCandidateRoutes,
   decodeHeroDeathCandidates,
@@ -968,6 +1241,7 @@ module.exports = {
   decodeHeroRespawnCandidates,
   decodeHeroDeathTimerPayload,
   decodeHeroLevelStateCandidates,
+  decodeHeroInventoryMapViewCandidates,
   decodeHeroLevelPayload,
   candidateTailStatAssessment,
   participantIdFromDeathParam,

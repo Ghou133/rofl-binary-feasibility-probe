@@ -13,6 +13,7 @@ const {
   decodeHeroDeathTimerCandidates,
   decodeHeroRespawnCandidates,
   decodeHeroLevelStateCandidates,
+  decodeHeroInventoryMapViewCandidates,
 } = require('./decoders/rofl_16_19_820_7193');
 const {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
@@ -1785,6 +1786,7 @@ function decode1619(replay, profile, options = {}) {
     hero_death_timer: decodeHeroDeathTimerCandidates,
     hero_respawn: decodeHeroRespawnCandidates,
     hero_level_state: decodeHeroLevelStateCandidates,
+    hero_inventory_mapview: decodeHeroInventoryMapViewCandidates,
     hero_minions_killed_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_experience_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_gold_earned_snapshot: decodeHeroStatsSnapshotCandidateSet,
@@ -1798,6 +1800,7 @@ function decode1619(replay, profile, options = {}) {
     hero_death_timer: 'hero_death_timer_candidates',
     hero_respawn: 'hero_respawn_candidates',
     hero_level_state: 'hero_level_state_candidates',
+    hero_inventory_mapview: 'hero_inventory_mapview_candidates',
     hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
     hero_experience_snapshot: 'hero_experience_snapshot_candidates',
     hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
@@ -1808,6 +1811,7 @@ function decode1619(replay, profile, options = {}) {
   };
   const gameRouteCapabilities = new Set([
     'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
+    'hero_inventory_mapview',
   ]);
   const heroStatsCapabilities = new Set(HERO_STATS_SNAPSHOT_CAPABILITIES);
   const collected = capabilities.some((capability) => gameRouteCapabilities.has(capability))
@@ -1823,23 +1827,29 @@ function decode1619(replay, profile, options = {}) {
       continue;
     }
     let outcome;
-    if (capability === 'hero_death_timer' || capability === 'hero_respawn') {
-      timerOutcome ??= decodeHeroDeathTimerCandidates(replay, collected);
-      outcome = capability === 'hero_respawn'
-        ? decodeHeroRespawnCandidates(replay, collected, timerOutcome) : timerOutcome;
-    } else if (heroStatsCapabilities.has(capability)) {
-      heroStatsOutcomes ??= decodeHeroStatsSnapshotCandidateSet(replay,
-        capabilities.filter((name) => heroStatsCapabilities.has(name)),
-        options.heroStatsScan);
-      outcome = heroStatsOutcomes[capability];
-    } else {
-      outcome = decoders[capability](replay, collected);
+    try {
+      if (capability === 'hero_death_timer' || capability === 'hero_respawn') {
+        timerOutcome ??= decodeHeroDeathTimerCandidates(replay, collected);
+        outcome = capability === 'hero_respawn'
+          ? decodeHeroRespawnCandidates(replay, collected, timerOutcome) : timerOutcome;
+      } else if (heroStatsCapabilities.has(capability)) {
+        heroStatsOutcomes ??= decodeHeroStatsSnapshotCandidateSet(replay,
+          capabilities.filter((name) => heroStatsCapabilities.has(name)),
+          options.heroStatsScan);
+        outcome = heroStatsOutcomes[capability];
+      } else if (capability === 'hero_inventory_mapview') {
+        outcome = decodeHeroInventoryMapViewCandidates(replay, collected, options);
+      } else {
+        outcome = decoders[capability](replay, collected);
+      }
+    } catch (error) {
+      outcome = { status: 'DECODE_FAILED', input_count: null, event_count: null,
+        events: null, error: error.message || String(error) };
     }
     const { events: candidateEvents, ...result } = outcome;
-    result.runtime_image_status = options.runtimeImagePath
-      ? 'PROVIDED_NOT_USED'
-      : 'NOT_REQUIRED';
-    result.runtime_image_used = false;
+    result.runtime_image_status ??= options.runtimeImagePath
+      ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
+    result.runtime_image_used ??= false;
     capabilityResults[capability] = result;
     if (result.status === 'CANDIDATE') {
       events[outputKeys[capability]] = candidateEvents;
@@ -1865,7 +1875,9 @@ function decode1619(replay, profile, options = {}) {
     capability_results: capabilityResults,
     decoded_packet_count: [...uniqueDecodedInputCounts.values()]
       .reduce((sum, count) => sum + count, 0),
-    runtime_image_used: false,
+    runtime_image_used: results.some((result) => result.runtime_image_used === true),
+    runtime_image_sha256: results.find((result) => result.runtime_image_used === true)
+      ?.runtime_image_sha256 ?? null,
     sweeper_capability: createSweeperCapabilityExport(profile.game_version),
   };
 }
@@ -1980,6 +1992,10 @@ function getHeroRespawnCandidates(decoded) {
 
 function getHeroLevelStateCandidates(decoded) {
   return decoded?.events?.hero_level_state_candidates ?? null;
+}
+
+function getHeroInventoryMapViewCandidates(decoded) {
+  return decoded?.events?.hero_inventory_mapview_candidates ?? null;
 }
 
 function getHeroMinionsKilledSnapshotCandidates(decoded) {
@@ -2121,6 +2137,7 @@ module.exports = {
   getHeroDeathTimerCandidates,
   getHeroRespawnCandidates,
   getHeroLevelStateCandidates,
+  getHeroInventoryMapViewCandidates,
   getHeroMinionsKilledSnapshotCandidates,
   getHeroExperienceSnapshotCandidates,
   getHeroGoldEarnedSnapshotCandidates,
