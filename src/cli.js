@@ -6,6 +6,9 @@ const path = require('node:path');
 const { rawAnchorChainStatus, renderAcceptanceReport } = require('./cli_report');
 const { resolveBuildProfile } = require('./build_registry');
 const { candidateTailStatAssessment } = require('./decoders/rofl_16_19_820_7193');
+const {
+  assessHeroMinionsKilledSnapshotTail,
+} = require('./decoders/rofl_16_19_hero_stats_candidate');
 
 const {
   TOOL_VERSION,
@@ -1591,7 +1594,10 @@ function capabilityQuery(replay, options = {}) {
       const perCapabilityInputsAssessed = applicable
         && profile.game_version === '16.19.820.7193';
       const tailStat = perCapabilityInputsAssessed
-        ? candidateTailStatAssessment(replay, capability) : null;
+        ? capability === 'hero_minions_killed_snapshot'
+          ? assessHeroMinionsKilledSnapshotTail(replay)
+          : candidateTailStatAssessment(replay, capability)
+        : null;
       const tailStatInput = tailStat ? [{
         name: `replay_tail_${tailStat.field}`,
         status: !Array.isArray(replay.tail?.stats) ? 'NOT_ASSESSED'
@@ -1626,6 +1632,11 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_level_state') {
         validationPending.push('ten-participant LEVEL presence and value range',
           'HN level route, payload, and observed sequence against final LEVEL');
+      }
+      if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_minions_killed_snapshot') {
+        validationPending.push('ten-participant MINIONS_KILLED tail values',
+          'HN keyframe 0x0276 route, field transform, and per-participant sequences');
       }
       const gameLength = replay.tail?.metadata?.gameLength;
       const conditionalInputs = ['hero_death_timer', 'hero_respawn'].includes(capability)
@@ -1662,6 +1673,7 @@ function capabilityQuery(replay, options = {}) {
             hero_death_timer: 'hero_death_timer_candidates',
             hero_respawn: 'hero_respawn_candidates',
             hero_level_state: 'hero_level_state_candidates',
+            hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
           })[capability] ?? null
           : null,
       });

@@ -6,6 +6,7 @@ const path = require('node:path');
 const oldDecoder = require('./decoders/rofl_16_15_801_3452');
 const newDecoder = require('./decoders/rofl_16_16_805_0442');
 const decoder1619 = require('./decoders/rofl_16_19_820_7193');
+const heroStatsCandidate1619 = require('./decoders/rofl_16_19_hero_stats_candidate');
 const { SWEEPER_CAPABILITY_CONTRACT_ID } = require('./sweeper_capability');
 const { PATH_PACKET_PROFILE: OLD_PATH_PROFILE } = require('./path_pipeline_v2');
 const { WARD_SPAWN_PROFILE: OLD_WARD_PROFILE } = require('./ward_pipeline_v2');
@@ -231,6 +232,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_death_timer: 0x02d6,
       hero_respawn: 0x0357,
       hero_level_state: 0x02b3,
+      hero_minions_killed_snapshot: 0x0276,
     },
     decoder_profile: {
       hero_death: {
@@ -243,21 +245,28 @@ const BUILD_PROFILES = deepFreeze({
       hero_death_timer: decoder1619.HERO_DEATH_TIMER_CANDIDATE_PROFILE,
       hero_respawn: decoder1619.HERO_RESPAWN_CANDIDATE_PROFILE,
       hero_level_state: decoder1619.HERO_LEVEL_STATE_CANDIDATE_PROFILE,
+      hero_minions_killed_snapshot:
+        heroStatsCandidate1619.HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
     },
     field_semantics: {
       hero_death: 'CANDIDATE_EXACT_BUILD_ROUTE_FINGERPRINT',
       hero_death_timer: 'CANDIDATE_EXACT_RUNTIME_FLOAT_AND_REPLAY_TIMING',
       hero_respawn: 'CANDIDATE_EXACT_RUNTIME_ROUTE_AND_TIMER_MATCH',
       hero_level_state: 'CANDIDATE_EXACT_RUNTIME_FIELD_WITH_SEQUENCE_GAPS',
+      hero_minions_killed_snapshot: 'CANDIDATE_KEYFRAME_MINIONS_KILLED_FIELD',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, route-profile bounded',
       death_timer_seconds_candidate: '0x02d6 decoded float; HN route profile only',
       respawn_time_candidate: 'observed 0x0357 time matched to HN death timer; HN route profile only',
       level_after_candidate: '0x02b3 decoded object field; HN route profile only',
+      minions_killed_candidate: '0x0276 keyframe HeroStats f32 field; HN route profile only',
     },
     verified_capabilities: [],
-    candidate_capabilities: ['hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state'],
+    candidate_capabilities: [
+      'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
+      'hero_minions_killed_snapshot',
+    ],
     unsupported_capabilities: [],
     validation_artifacts: [],
     regression_fixture_set: null,

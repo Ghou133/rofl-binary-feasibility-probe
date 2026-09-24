@@ -34,6 +34,17 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   have six missing update values in total, recorded as gaps rather than
   reconstructed events. KR has no corresponding `0x02b3` route in the two
   checked replays and reports `PROFILE_UNAVAILABLE`.
+- **Done:** The exact HN runtime registers `PKT_S2C_HeroStats_s` at `0x0276`.
+  Its keyframe payload inverse uses the captured image's 256-byte table
+  (table SHA-256 `328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b`).
+  `--events hero_minions_killed_snapshot` emits 350 candidate keyframe values,
+  35 per hero, from one HN Replay. The offset `0x3c` f32 values are integral,
+  nonnegative and monotonic; the last values are within 0–6 of each matching
+  Replay-tail `MINIONS_KILLED`. The ten tail gaps total 12 and remain
+  unobserved over the final 36,824 ms. This does not supply continuous CS events.
+  The tail `NEUTRAL_MINIONS_KILLED` is a negative control and does not fit the
+  field; a separate decoded kills field agrees with nine last snapshots and
+  has one late tail increment.
 - **Current:** Candidate participant identity, timer and respawn meaning are bounded to
   one HN Replay; KR uses different death/timer route IDs and reports
   `PROFILE_UNAVAILABLE` for the HN timer profile. Eleven raw KR `0x0357`
@@ -50,8 +61,12 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   14/58 paired cases there and 22/46 in the second; all covered timing
   residuals are at most 35 ms. The other codewords are unaccounted for, so
   neither a general KR timer transform nor route `0x0048` identity is claimed.
-- **Next:** Seek a matching KR runtime to resolve its timer field, or independent
-  HN Replays to test the candidate level field and participant mapping.
+- **HeroStats KR control:** One KR Replay has 19,698 keyframe `0x0276` packets
+  of lengths 2–16 bytes and zero HN 1263-byte fingerprints. The HN HeroStats
+  candidate reports `PROFILE_UNAVAILABLE`; these raw KR packets are unclassified.
+- **Next:** Seek a matching KR runtime to resolve its timer field, and independent
+  HN Replays to test level and HeroStats candidate fields. Movement-route
+  research remains blocked on an exact registration-to-position-field link.
 - **CLI batch:** A two-Replay HN/KR run with death, respawn and level selection
   yielded HN `CANDIDATE`, KR `PARTIAL`, and aggregate `PARTIAL`, retaining the
   KR death candidate while reporting the HN-only capabilities unavailable.
