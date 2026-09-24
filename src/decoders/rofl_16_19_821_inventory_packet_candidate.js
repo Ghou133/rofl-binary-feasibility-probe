@@ -39,6 +39,7 @@ const HERO_INVENTORY_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
   evidence_scope: 'exact KR runtime constructor/deserializer: 671 fully consumed packets and 5327 records across 11 exact-build Replays; exact-image callback clears client slots 0–9 before applying packet records; final ITEM0–ITEM6 tails support candidate field labels',
   known_limits: Object.freeze([
     'Each event is one observed packet. The exact-image callback resets slots 0–9 before applying its records; inventory between observed packets is unavailable.',
+    'A null packet slot candidate means the slot had no record after the callback reset; it is not an observed later client state.',
     'Slot and item-definition key are exact-runtime decoded candidates, not published semantic fields.',
     'Participant mapping applies only to the ten canonical raw params and remains candidate-only.',
     'Observed raw-param variants 0x400001b2 and 0x400001b5 retain unavailable participant identity; their extra 0x100 bit has no assigned meaning.',
@@ -258,6 +259,18 @@ function decodeHeroInventoryPacketCandidates821(replay, {
       });
     }
     decodedRecordCount += records.length;
+    const packetSlotSnapshot = Array.from({ length: 10 }, (_, slot) => ({
+      slot_candidate: slot,
+      item_id_candidate: null,
+      value_basis: 'CALLBACK_RESET_WITH_NO_PACKET_RECORD',
+    }));
+    for (const record of records) {
+      packetSlotSnapshot[record.slot_candidate] = {
+        slot_candidate: record.slot_candidate,
+        item_id_candidate: record.item_id_candidate,
+        value_basis: 'DECODED_PACKET_RECORD',
+      };
+    }
     const participant = canonicalParticipant(block.param >>> 0);
     if (participant === null) variantRefs.push(rawRef);
     events.push({
@@ -272,6 +285,7 @@ function decodeHeroInventoryPacketCandidates821(replay, {
       snapshot_application: SNAPSHOT_APPLICATION,
       record_count: records.length,
       records_candidate: records,
+      packet_slot_snapshot_candidate: packetSlotSnapshot,
       confidence: 'CANDIDATE',
       semantic_status: 'CANDIDATE_EXACT_RUNTIME_MAPVIEW_PACKET_FIELDS',
       field_confidence: {
@@ -279,6 +293,7 @@ function decodeHeroInventoryPacketCandidates821(replay, {
         hero_raw_param: 'VERIFIED_DIRECT',
         participant_id_candidate: participant === null ? 'UNAVAILABLE' : 'CANDIDATE',
         snapshot_application: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_APPLICATION',
+        packet_slot_snapshot_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_APPLICATION_AND_RECORD_FIELDS',
         slot_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD',
         item_id_candidate: 'CANDIDATE_EXACT_RUNTIME_ITEM_DEFINITION_KEY',
       },

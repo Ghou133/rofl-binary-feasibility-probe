@@ -63,7 +63,7 @@ function nativeResult(request, recordsByPacket) {
 function record(index, slot, itemId) {
   return {
     record_index: index, slot, item_id: itemId,
-    raw_slot_byte_hex: slot === 0 ? 'c1' : '15',
+    raw_slot_byte_hex: ['c1', '15', '9f', '2e', 'f6', '6b', 'db', '68', '46'][slot] ?? '00',
     raw_item_id_bytes_hex: 'f248eaea',
   };
 }
@@ -87,7 +87,7 @@ test('821 MapView emits packet-bound candidates and leaves observed raw-param va
     return {
       status: 0, stderr: '', stdout: JSON.stringify(nativeResult(request, [
         [record(0, 0, 1001), record(1, 1, 2031)],
-        [record(0, 0, 1001), record(1, 1, 2031)],
+        [record(0, 0, 1001), record(1, 2, 2055)],
       ])),
     };
   });
@@ -110,6 +110,21 @@ test('821 MapView emits packet-bound candidates and leaves observed raw-param va
     'CANDIDATE_EXACT_RUNTIME_CALLBACK_APPLICATION');
   assert.equal(profile.evidence_callback_body_rva, '0x354c60');
   assert.equal(result.events[0].records_candidate[1].item_id_candidate, 2031);
+  assert.equal(result.events[0].packet_slot_snapshot_candidate.length, 10);
+  assert.deepEqual(result.events[0].packet_slot_snapshot_candidate.slice(0, 3), [
+    { slot_candidate: 0, item_id_candidate: 1001, value_basis: 'DECODED_PACKET_RECORD' },
+    { slot_candidate: 1, item_id_candidate: 2031, value_basis: 'DECODED_PACKET_RECORD' },
+    { slot_candidate: 2, item_id_candidate: null,
+      value_basis: 'CALLBACK_RESET_WITH_NO_PACKET_RECORD' },
+  ]);
+  assert.deepEqual(result.events[1].packet_slot_snapshot_candidate[1], {
+    slot_candidate: 1, item_id_candidate: null,
+    value_basis: 'CALLBACK_RESET_WITH_NO_PACKET_RECORD',
+  });
+  assert.equal(result.events[1].packet_slot_snapshot_candidate[2].item_id_candidate, 2055);
+  assert.equal(result.events[1].packet_slot_snapshot_candidate[9].item_id_candidate, null);
+  assert.equal(result.events[0].field_confidence.packet_slot_snapshot_candidate,
+    'CANDIDATE_EXACT_RUNTIME_CALLBACK_APPLICATION_AND_RECORD_FIELDS');
   assert.equal(result.events[0].raw_packet_ref.replay_sha256, replay.source_sha256);
   assert.equal(result.events[1].raw_packet_ref.raw_param, 0x400001b2);
   assert.equal(result.unmapped_raw_param_count, 1);
@@ -219,6 +234,22 @@ test('821 MapView rejects repeated native slots without partial events', (t) => 
     stderr: '',
     stdout: JSON.stringify(nativeResult(JSON.parse(options.input), [
       [record(0, 0, 1001), record(1, 0, 2031)],
+    ])),
+  }));
+  const result = decode(replayWithPackets([[0x018d, 0x400000ae]]),
+    { runtimeImagePath: image });
+  assert.equal(result.status, 'DECODE_FAILED');
+  assert.equal(result.event_count, null);
+  assert.equal(result.events, null);
+});
+
+test('821 MapView rejects a record in reset-only slot 9 without partial snapshots', (t) => {
+  const image = fakeImage(t);
+  t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => ({
+    status: 0,
+    stderr: '',
+    stdout: JSON.stringify(nativeResult(JSON.parse(options.input), [
+      [record(0, 0, 1001), record(1, 9, 2031)],
     ])),
   }));
   const result = decode(replayWithPackets([[0x018d, 0x400000ae]]),

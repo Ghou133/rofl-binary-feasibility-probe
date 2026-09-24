@@ -642,7 +642,7 @@ const BUILD_PROFILES = deepFreeze({
       keyframe_time_heal_epic_cc_snapshots:
         'exact 821 native 0x0089 carrier and reversed vector at offsets 0x244/0x248/0x234/0x23c/0x21c/0x230; Replay-tail labels candidate only',
       level_state: 'exact 821 PKT_NPC_LevelUp_s route and +0x11 byte transform; participant alignment and event interpretation candidate only',
-      inventory_packet: 'exact 821 native 0x018d MapView record vector and slot/item transforms; exact-image callback resets slots 0–9 then applies records; raw-param participant mapping candidate, with no between-packet state or transaction inference',
+      inventory_packet: 'exact 821 native 0x018d MapView record vector and slot/item transforms; exact-image callback resets slots 0–9 then applies records to a packet-local candidate slot snapshot; raw-param participant mapping candidate, with no between-packet state or transaction inference',
       cast_spell_ans_packet: 'exact 821 native 0x01da packet constructor/deserializer and callback transforms for opaque object offsets 0x148/0x14c; no successful-cast, owner, target, spell or slot inference',
       npc_buff_remove_packet: 'exact 821 native 0x047c BuffRemove2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14/0x18; no owner, buff identity, target or lifecycle inference',
       npc_buff_add_packet: 'exact 821 native 0x00ae BuffAdd2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14; no owner, buff identity, target or lifecycle inference',

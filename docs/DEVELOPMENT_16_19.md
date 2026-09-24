@@ -4,6 +4,15 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `hero_inventory_packet` now emits a packet-local
+  candidate snapshot for slots 0–9 alongside its original decoded records.
+  The exact-image callback clears those slots and applies each packet's
+  records; absent records yield `null` with explicit reset provenance. All
+  671 packets and 5,327 records from 11 Replays retained exact native decode.
+  All 6,710 slot entries follow the record/reset rule; 146 adjacent
+  same-participant packet pairs demonstrate that absent slots are not carried
+  forward. Near-end slots 0–6 matched Replay tails in 345/364 comparisons;
+  19 gaps remain. This is not a between-packet inventory or transaction.
 - **Completed:** KR 821 `set_movement_driver_packet` is wired as an
   unpublished selected CLI/API candidate for exact-image route `0x0335`.
   Native decoding fully consumed all 131 packets in nine of 11 Replays; the
