@@ -58,6 +58,9 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   candidates together traverses keyframe chunks once while keeping separate
   field validation and per-capability results. A synthetic traversal-count
   test and HN/KR combined runs cover the shared path.
+- **Public test entry:** `npm run test:16-19` runs the portable 16.19 candidate
+  decoder and CLI/API tests; `npm test` now includes it after maintenance.
+  Real HN/KR Replay smoke remains separate evidence.
 - **Done:** The same HN HeroStats blob has an unpublished
   `hero_gold_earned_snapshot` candidate at f32LE offset `0x38`. In one HN
   Replay, all 350 values are finite, nonnegative and per-hero monotonic; all

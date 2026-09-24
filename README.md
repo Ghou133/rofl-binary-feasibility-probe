@@ -152,7 +152,8 @@ node src/cli.js ward-events "D:\Data\ward_events.jsonl" `
 
 | 命令 | 范围 / 输入 |
 | --- | --- |
-| `npm test` / `npm run test:public` | 原 portable 测试，加本次解析器、采样、报告和 Python 打包测试；不需要私有回放 |
+| `npm test` / `npm run test:public` | portable、维护及 16.19 合成解码/CLI 测试；不需要私有回放 |
+| `npm run test:16-19` | 当前 16.19 候选解码、独立能力和 CLI/API 合成测试；不等于真实回放验证 |
 | `npm run test:maintenance` | 本次新增定点维护测试；Node + Python 标准库 |
 | `npm run test:all` | 原完整 Node 套件；部分测试需要未公开的精确输入和本地证据 |
 | `npm run test:v3` / `npm run test:v4` | 数据库层单元测试，需安装对应 Python 依赖 |

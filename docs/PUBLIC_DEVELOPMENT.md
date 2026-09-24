@@ -22,8 +22,10 @@ runtime image/profile、返回字段和证据等级以该模块与 `src/capabili
 
 ## 测试分层
 
-公开日常入口为 `npm test` / `npm run test:public`：执行原 portable 套件，
-然后执行本次定点维护测试。维护套件只需 Node >=22.15.0（带原生 Zstd）及
+公开日常入口为 `npm test` / `npm run test:public`：执行原 portable 套件、
+定点维护测试和当前 16.19 合成解码/CLI 测试，不要求私有回放或镜像。
+`npm run test:16-19` 可单独运行当前 build 的候选能力测试；这些合成测试
+不是原始回放解码证明。维护套件只需 Node >=22.15.0（带原生 Zstd）及
 Python >=3.10 标准库。`npm run test:maintenance` 可单独运行。
 
 原 `npm test` 的完整 Node 范围保留为 `npm run test:all`。CLI `validate`
