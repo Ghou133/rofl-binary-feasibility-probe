@@ -1809,6 +1809,7 @@ function decode1619(replay, profile, options = {}) {
     hero_kill_stats_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_ward_stats_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_damage_totals_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_damage_taken_from_champions_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_total_heal_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_vision_score_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_epic_monster_damage_snapshot: decodeHeroStatsSnapshotCandidateSet,
@@ -1836,6 +1837,8 @@ function decode1619(replay, profile, options = {}) {
     hero_kill_stats_snapshot: 'hero_kill_stats_snapshot_candidates',
     hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
     hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
+    hero_damage_taken_from_champions_snapshot:
+      'hero_damage_taken_from_champions_snapshot_candidates',
     hero_total_heal_snapshot: 'hero_total_heal_snapshot_candidates',
     hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
     hero_epic_monster_damage_snapshot: 'hero_epic_monster_damage_snapshot_candidates',
@@ -2114,6 +2117,10 @@ function getHeroDamageTotalsSnapshotCandidates(decoded) {
   return decoded?.events?.hero_damage_totals_snapshot_candidates ?? null;
 }
 
+function getHeroDamageTakenFromChampionsSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_damage_taken_from_champions_snapshot_candidates ?? null;
+}
+
 function getHeroTotalHealSnapshotCandidates(decoded) {
   return decoded?.events?.hero_total_heal_snapshot_candidates ?? null;
 }
@@ -2261,6 +2268,7 @@ module.exports = {
   getHeroKillStatsSnapshotCandidates,
   getHeroWardStatsSnapshotCandidates,
   getHeroDamageTotalsSnapshotCandidates,
+  getHeroDamageTakenFromChampionsSnapshotCandidates,
   getHeroTotalHealSnapshotCandidates,
   getHeroVisionScoreSnapshotCandidates,
   getHeroEpicMonsterDamageSnapshotCandidates,

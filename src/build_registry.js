@@ -245,6 +245,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_kill_stats_snapshot: 0x0276,
       hero_ward_stats_snapshot: 0x0276,
       hero_damage_totals_snapshot: 0x0276,
+      hero_damage_taken_from_champions_snapshot: 0x0276,
       hero_total_heal_snapshot: 0x0276,
       hero_vision_score_snapshot: 0x0276,
       hero_epic_monster_damage_snapshot: 0x0276,
@@ -289,6 +290,8 @@ const BUILD_PROFILES = deepFreeze({
         heroStatsCandidate1619.HERO_WARD_STATS_SNAPSHOT_CANDIDATE_PROFILE,
       hero_damage_totals_snapshot:
         heroStatsCandidate1619.HERO_DAMAGE_TOTALS_SNAPSHOT_CANDIDATE_PROFILE,
+      hero_damage_taken_from_champions_snapshot:
+        heroStatsCandidate1619.HERO_DAMAGE_TAKEN_FROM_CHAMPIONS_SNAPSHOT_CANDIDATE_PROFILE,
       hero_total_heal_snapshot:
         heroStatsCandidate1619.HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE,
       hero_vision_score_snapshot:
@@ -321,6 +324,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_kill_stats_snapshot: 'CANDIDATE_KEYFRAME_KILL_STAT_TAIL_CORRELATIONS',
       hero_ward_stats_snapshot: 'CANDIDATE_KEYFRAME_WARD_STAT_TAIL_CORRELATIONS',
       hero_damage_totals_snapshot: 'CANDIDATE_KEYFRAME_THREE_DAMAGE_TAIL_CORRELATIONS',
+      hero_damage_taken_from_champions_snapshot:
+        'CANDIDATE_KEYFRAME_DAMAGE_TAKEN_FROM_CHAMPIONS_TAIL_CORRELATION',
       hero_total_heal_snapshot: 'CANDIDATE_KEYFRAME_TOTAL_HEAL_TAIL_CORRELATION',
       hero_vision_score_snapshot: 'CANDIDATE_KEYFRAME_VISION_SCORE_TAIL_CORRELATION',
       hero_epic_monster_damage_snapshot: 'CANDIDATE_KEYFRAME_EPIC_MONSTER_DAMAGE_TAIL_CORRELATION',
@@ -348,6 +353,7 @@ const BUILD_PROFILES = deepFreeze({
       kill_stats_candidate: '0x0276 keyframe HeroStats u32 offsets 0x58-0x6c; six Replay-tail correlations in one HN Replay',
       ward_stats_candidate: '0x0276 keyframe HeroStats u32 offsets 0x1a4-0x1ac; three Replay-tail correlations in one HN Replay',
       damage_totals_candidate: '0x0276 keyframe HeroStats f32 offsets 0x1d0/0x1e0/0x1f0; floors correlate with three damage Replay tails in one HN Replay',
+      damage_taken_from_champions_candidate: '0x0276 keyframe HeroStats f32 offset 0x200; floors correlate with TOTAL_DAMAGE_TAKEN_FROM_CHAMPIONS tails in two HN Replays; no individual damage event',
       total_heal_candidate: '0x0276 keyframe HeroStats u32 offset 0x234; observed values correlate with TOTAL_HEAL tail in one HN Replay',
       vision_score_candidate: '0x0276 keyframe HeroStats f32 offset 0x1b0; floors correlate with VISION_SCORE tail in one HN Replay',
       epic_monster_damage_candidate: '0x0276 keyframe HeroStats f32 offset 0x21c; floors correlate with TOTAL_DAMAGE_DEALT_TO_EPIC_MONSTERS tail in one HN Replay',
@@ -373,6 +379,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_kill_stats_snapshot',
       'hero_ward_stats_snapshot',
       'hero_damage_totals_snapshot',
+      'hero_damage_taken_from_champions_snapshot',
       'hero_total_heal_snapshot',
       'hero_vision_score_snapshot',
       'hero_epic_monster_damage_snapshot',
