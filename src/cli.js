@@ -16,6 +16,7 @@ const { assessHeroDeathsSnapshotTail821 } =
   require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const { assessHeroLevelTail821 } =
   require('./decoders/rofl_16_19_821_level_candidate');
+const { analyzeReplayWith821Routes } = require('./decoders/rofl_16_19_821_scan');
 const {
   assessHeroMinionsKilledSnapshotTail,
   assessHeroJungleMinionsKilledSnapshotTail,
@@ -537,6 +538,11 @@ function summarizeCapabilityResults(requested, decoded) {
 
 function parseOne1619(replay, options, started) {
   const is820 = replay.header.version === '16.19.820.7193';
+  const is821 = replay.header.version === '16.19.821.7343';
+  const selected821 = is821 && options.semantic !== false && Array.isArray(options.events)
+    ? [...new Set(options.events.filter((name) => [
+      'hero_death', 'hero_deaths_snapshot', 'hero_level_state',
+    ].includes(name)))] : [];
   const selectsBuffAdd = options.semantic !== false
     && Array.isArray(options.events) && options.events.includes('npc_buff_add_packet');
   const selectsBuffRemove = options.semantic !== false
@@ -555,12 +561,14 @@ function parseOne1619(replay, options, started) {
     includePrivateMetadata: options.includePrivateMetadata,
     strict: options.strict,
   };
-  const { analysis, heroStatsScan, candidateRouteScan } = is820 && selectsGameRoutes
+  const { analysis, heroStatsScan, candidateRouteScan, candidate821Scan } = is820 && selectsGameRoutes
     ? analyzeReplayWithCandidateRoutes(replay, analysisOptions, selectsHeroStats,
       { includeBuffAdd: selectsBuffAdd, includeBuffRemove: selectsBuffRemove })
     : selectsHeroStats ? analyzeReplayWithHeroStats(replay, analysisOptions)
+      : selected821.length > 0
+        ? analyzeReplayWith821Routes(replay, analysisOptions, selected821)
       : { analysis: analyzeReplay(replay, analysisOptions), heroStatsScan: null,
-        candidateRouteScan: null };
+        candidateRouteScan: null, candidate821Scan: null };
   // The raw analyzer initializes legacy event arrays. For a 16.19 run, only
   // arrays returned by an executed exact-build decoder may appear here.
   analysis.events = {};
@@ -612,6 +620,7 @@ function parseOne1619(replay, options, started) {
           capabilities: requested,
           heroStatsScan: heroStatsScan ?? undefined,
           candidateRouteScan: candidateRouteScan ?? undefined,
+          candidate821Scan: candidate821Scan ?? undefined,
           runtimeImagePath: options.runtimeImage ?? undefined,
           pythonExecutable: options.python ?? undefined,
         });

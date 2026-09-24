@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { deathEvent } = require('../events');
 const { walkBlocks } = require('../rofl');
 const { replaySourceError } = require('./replay_source_integrity');
+const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
 
 const REPLAY_VERSION_821 = '16.19.821.7343';
 
@@ -93,7 +94,7 @@ function packetRef(replay, source, role) {
   };
 }
 
-function decodeHeroDeathCandidates821(replay) {
+function decodeHeroDeathCandidates821(replay, precollected = null) {
   const profile = HERO_DEATH_CANDIDATE_PROFILE_821;
   const base = {
     profile_id: profile.id,
@@ -106,7 +107,7 @@ function decodeHeroDeathCandidates821(replay) {
     return { ...base, status: 'UNSUPPORTED', event_count: null, input_count: null,
       events: null, error: `hero_death candidate supports only ${REPLAY_VERSION_821}` };
   }
-  const sourceError = replaySourceError(replay);
+  const sourceError = precollected === null ? replaySourceError(replay) : null;
   if (sourceError) {
     return { ...base, status: 'DECODE_FAILED', event_count: null, input_count: null,
       events: null, error: `Replay source integrity failed: ${sourceError}` };
@@ -114,16 +115,26 @@ function decodeHeroDeathCandidates821(replay) {
 
   const routes = new Map(ROUTE_IDS.map((id) => [id, []]));
   let walked;
-  try {
-    // Decode every block stream strictly; retain only game-stream evidence.
-    walked = walkBlocks(replay, (block, chunk) => {
-      if (chunk.stream_tag === profile.stream_tag && routes.has(block.packet_id)) {
-        routes.get(block.packet_id).push({ block, chunk });
-      }
-    }, { strict: true });
-  } catch (error) {
-    return { ...base, status: 'DECODE_FAILED', event_count: null, input_count: null,
-      events: null, error: `Replay framing failed: ${error.message}` };
+  if (precollected !== null) {
+    const scan = rowsFor821Capability(replay, precollected, 'hero_death');
+    if (scan.error) {
+      return { ...base, status: 'DECODE_FAILED', event_count: null, input_count: null,
+        events: null, error: scan.error };
+    }
+    for (const row of scan.rows) routes.get(row.block.packet_id).push(row);
+    walked = { block_count: scan.scanned_block_count };
+  } else {
+    try {
+      // Decode every block stream strictly; retain only game-stream evidence.
+      walked = walkBlocks(replay, (block, chunk) => {
+        if (chunk.stream_tag === profile.stream_tag && routes.has(block.packet_id)) {
+          routes.get(block.packet_id).push({ block, chunk });
+        }
+      }, { strict: true });
+    } catch (error) {
+      return { ...base, status: 'DECODE_FAILED', event_count: null, input_count: null,
+        events: null, error: `Replay framing failed: ${error.message}` };
+    }
   }
 
   const [primary, paired, longCorroboration, shortCorroboration] =

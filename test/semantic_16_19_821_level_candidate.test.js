@@ -55,6 +55,9 @@ test('821 level tail assessment and profile require the exact build and ten vali
   assert.equal(assessHeroLevelTail821(replay).status, 'UNSUPPORTED');
   replay.tail.stats = [];
   assert.equal(assessHeroLevelTail821(replay).status, 'UNSUPPORTED');
+  assert.equal(assessHeroLevelTail821(replayWithObservedRoute({
+    version: '16.19.820.7193',
+  })).status, 'UNSUPPORTED');
   assert.equal(decodeHeroLevelCandidates821(replayWithObservedRoute({ version: '16.19.820.7193' })).status,
     'UNSUPPORTED');
 });

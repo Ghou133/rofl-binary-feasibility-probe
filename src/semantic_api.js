@@ -23,6 +23,7 @@ const { decodeHeroDeathsSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const { decodeHeroLevelCandidates821 } =
   require('./decoders/rofl_16_19_821_level_candidate');
+const { collect821Routes } = require('./decoders/rofl_16_19_821_scan');
 const { decodeNpcBuffRemovePacketCandidates } =
   require('./decoders/rofl_16_19_buff_remove_candidate');
 const { decodeNpcBuffAddPacketCandidates } =
@@ -2005,6 +2006,18 @@ function decode1619821(replay, profile, options = {}) {
   };
   const capabilityResults = {};
   const events = {};
+  const supported = capabilities.filter((capability) => Object.hasOwn(decoders, capability));
+  let candidate821Scan = options.candidate821Scan ?? null;
+  if (candidate821Scan === null && supported.length > 1) {
+    try {
+      candidate821Scan = collect821Routes(replay, supported);
+    } catch {
+      // Keep the original independent error boundary when one stream fails:
+      // a sound keyframe scan can still return snapshots after a game-stream
+      // framing failure. Each decoder's strict walk reports its own outcome.
+      candidate821Scan = null;
+    }
+  }
   for (const capability of capabilities) {
     let outcome;
     if (!decoders[capability]) {
@@ -2012,7 +2025,7 @@ function decode1619821(replay, profile, options = {}) {
         error: `16.19.821.7343 has no decoder for ${capability}`, events: null };
     } else {
       try {
-        outcome = decoders[capability](replay);
+        outcome = decoders[capability](replay, candidate821Scan);
       } catch (error) {
         outcome = { status: 'DECODE_FAILED', input_count: null, event_count: null,
           error: error.message || String(error), events: null };

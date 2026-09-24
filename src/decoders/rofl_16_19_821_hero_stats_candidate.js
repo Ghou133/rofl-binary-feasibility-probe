@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 
 const { walkBlocks } = require('../rofl');
 const { replaySourceError } = require('./replay_source_integrity');
+const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
 
 const REPLAY_VERSION = '16.19.821.7343';
 const PACKET_ID = 0x0089;
@@ -99,7 +100,7 @@ function packetRef(replay, block, chunk) {
   };
 }
 
-function decodeHeroDeathsSnapshotCandidates821(replay) {
+function decodeHeroDeathsSnapshotCandidates821(replay, precollected = null) {
   const profile = HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE;
   const base = { profile_id: profile.id, input_packet_id: PACKET_ID };
   const fail = (status, error, details = {}) => ({
@@ -108,11 +109,13 @@ function decodeHeroDeathsSnapshotCandidates821(replay) {
   if (replay?.header?.version !== REPLAY_VERSION) {
     return fail('UNSUPPORTED', `hero_deaths_snapshot candidate supports only ${REPLAY_VERSION}`);
   }
-  let sourceError;
-  try {
-    sourceError = replaySourceError(replay);
-  } catch (error) {
-    sourceError = error.message;
+  let sourceError = null;
+  if (precollected === null) {
+    try {
+      sourceError = replaySourceError(replay);
+    } catch (error) {
+      sourceError = error.message;
+    }
   }
   if (sourceError) return fail('DECODE_FAILED', `Replay source failed: ${sourceError}`);
 
@@ -123,14 +126,24 @@ function decodeHeroDeathsSnapshotCandidates821(replay) {
   const byChunk = new Map(keyframeChunks.map((chunk) => [chunk.index, []]));
   const startKeyframeRows = [];
   let walk;
-  try {
-    walk = walkBlocks(replay, (block, chunk) => {
-      if (block.packet_id !== PACKET_ID) return;
+  if (precollected !== null) {
+    const scan = rowsFor821Capability(replay, precollected, 'hero_deaths_snapshot');
+    if (scan.error) return fail('DECODE_FAILED', scan.error);
+    for (const { block, chunk } of scan.rows) {
       if (chunk.stream_tag === 2) byChunk.get(chunk.index).push({ block, chunk });
       else startKeyframeRows.push({ block, chunk });
-    }, { includeStreams: [2, 3], strict: true });
-  } catch (error) {
-    return fail('DECODE_FAILED', `Replay keyframe framing failed: ${error.message}`);
+    }
+    walk = { block_count: scan.scanned_block_count };
+  } else {
+    try {
+      walk = walkBlocks(replay, (block, chunk) => {
+        if (block.packet_id !== PACKET_ID) return;
+        if (chunk.stream_tag === 2) byChunk.get(chunk.index).push({ block, chunk });
+        else startKeyframeRows.push({ block, chunk });
+      }, { includeStreams: [2, 3], strict: true });
+    } catch (error) {
+      return fail('DECODE_FAILED', `Replay keyframe framing failed: ${error.message}`);
+    }
   }
   const inputCount = [...byChunk.values()].reduce((count, rows) => count + rows.length, 0);
   const scan = { input_count: inputCount, scanned_block_count: walk.block_count,

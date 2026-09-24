@@ -29,6 +29,14 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   retaining the raw ref without candidate level rows. A single adjacent
   `0x400002ae` level-10 lead remains excluded. Repeats and gaps are reported;
   neither a complete upgrade timeline nor an exact runtime transform is claimed.
+- **821 scan reuse:** Selected 821 CLI capabilities now retain only their
+  required route packets during the container analyzer's single full block
+  walk. Standalone combined API calls share one strict walk. On the same
+  11-Replay three-capability CLI batch, observed wall time fell from about
+  6.9 s to 3.8 s; all 32 candidate JSONL files were byte-identical, with
+  10 `CANDIDATE` and one `PARTIAL` Replay in both runs. Source-bound scan
+  tokens reject another Replay or changed bytes; the API retains independent
+  per-stream failures if a shared strict walk cannot complete.
 
 - **Done:** The HN `16.19.820.7193` replay's 107 chunks and 2,035,757 blocks
   pass strict container/framing inspection with zero errors. The main CLI/API now
