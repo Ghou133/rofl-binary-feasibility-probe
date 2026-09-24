@@ -23,6 +23,16 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   `NUM_DEATHS`/`LEVEL` fields without decompressing packet chunks or using a runtime
   image. It labels 16.19 `hero_death` and `hero_death_timer` as unpublished
   `CANDIDATE` and leaves route and death-count validation pending until decode.
+- **Artifact event query:** `node src/cli.js query-events <replay-artifact-directory>
+  --event <exact-event-key> [--from-ms n] [--to-ms n] [--participant 1..10]
+  [--limit n] [--output path|-]` streams unchanged candidate JSONL rows from
+  either default or `--event-jsonl-only` 16.19 CLI artifacts. It checks Replay
+  identity and declared row counts, reports the original capability status and
+  separate scanned/matched/emitted counts, and leaves unknown participants
+  unselected by the participant filter. Real HN queries scanned 270 JSONL-only
+  rows (27 participant-1 matches, two emitted by the limit) and 350 default
+  rows (35 participant-2 matches, one emitted). This reads existing artifacts;
+  it does not execute or promote the decoder.
 - **Done:** The exact HN runtime identifies `0x04d9` as `PKT_NPC_Hero_Die_s`,
   `0x02d6` as `PKT_S2C_UpdateDeathTimer_s`, and `0x0357` as
   `PKT_HeroReincarnateAlive_s`. Its five-byte timer transform yields seconds;
@@ -289,6 +299,21 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   rows with zero framing errors. The label remains an unpublished tail
   correlation; no individual damage event, source, target or mitigation is
   inferred.
+- **Done:** Opt-in `hero_damage_self_mitigated_snapshot` emits the raw decoded
+  HeroStats f32 at `0x208` and a separate derived floor. The two exact-build HN
+  Replays contain 350 and 270 participant snapshots across 35 and 27 keyframes.
+  The values rise 301 and 230 times, never decline or floor above their
+  participant's `TOTAL_DAMAGE_SELF_MITIGATED` Replay tail. Last floors match
+  4/10 and 2/10 tails; the remaining unobserved gap totals are 9,170 and
+  4,455 over 36,824 and 26,577 ms. The aligned-offset and shifted-participant
+  controls favor `0x208`; `0x20c` and `0x23c` remain research-only because their
+  controls are weaker or ambiguous. A selected CLI run on both Replays returned
+  `CANDIDATE` with zero framing errors. Its Buff decoders used image SHA-256
+  `7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f780af11ed6df76d`.
+  This is an unpublished tail correlation, not an
+  individual mitigation event or proof of the runtime field's meaning. Local
+  evidence is under `artifacts/16_19_development/next_field_probe/` and
+  `artifacts/16_19_development/self_mitigated_buff_pair_cli_smoke/`.
 - **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
   runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
   observed slot/item-definition-key records as candidates. All 94 game packets
@@ -378,6 +403,21 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   For the high-volume BuffAdd2 and BuffRemove2 outputs, repeated field grades
   and limits are stored once per capability in `semantic_run.json`; each JSONL
   row retains its candidate status, build profile and raw packet provenance.
+- **Done:** Selecting both Buff packet candidates now adds an unpublished
+  `candidate_associations.npc_buff_add_remove_opaque_key` summary in
+  `semantic_run.json` and the exact-build API. It compares only the anonymous
+  `(u32 token, u8 slot)` fields from the two decoded routes. All 3,217 distinct
+  Remove keys in the first Replay and all 2,730 in the second appear among Add
+  keys; 3,212 and 2,726 also appear in game-stream Adds. The corresponding
+  packet counts are 32,434 Add / 11,950 Remove and 26,150 Add / 10,548 Remove.
+  Missing exact-image dependencies produce an `UNAVAILABLE` association while
+  preserving each capability's own status. In the second Replay, a preceding
+  same-key Add within 30 seconds is absent for 614 Remove rows and non-unique
+  for 4,518; a rotated-key control leaves 6,932 unmatched. Repeated keys and
+  ambiguous timing prevent a deterministic packet join. The summary claims no
+  buff identity, owner, application, removal, duration or lifecycle. The
+  second-Replay ordering and shuffled controls are retained under
+  `artifacts/16_19_development/buff_link_probe_second/`.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and further
   independent HN Replays to test level, HeroStats and inventory candidates. The HN
   Broadcast participant mapping remains candidate-only after two Replays, and
