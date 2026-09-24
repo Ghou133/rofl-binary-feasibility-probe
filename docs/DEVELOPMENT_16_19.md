@@ -138,6 +138,37 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   The exact `0x0089` factory object still consumed only 5/1263 bytes of real
   keyframe payloads, so full runtime carrier binding and published semantics
   remain unproven.
+- **821 ward and cannon mission count candidates:** `hero_ward_stats_snapshot`
+  reads transformed raw bytes 834/838/842 for `WARD_PLACED_DETECTOR`,
+  `WARD_KILLED`, and `WARD_PLACED`; `hero_missions_cannon_minions_killed_snapshot`
+  reads byte 450 for `Missions_CannonMinionsKilled`. All four decoded upper
+  three bytes are zero across 3,270 selected hero packets in 327 keyframes.
+  For each field, all 110 participant sequences start at zero, remain
+  monotone, and do not exceed their own numeric Replay tail. Final snapshots
+  equal the respective tail for 104, 106, 98, and 93 participants; aggregate
+  retained gaps are 7, 5, 19, and 25. Rotated participant controls and an
+  all-offset screen on two calibration Replays were much weaker; nine further
+  checked Replays are part of the same exploratory corpus, not a protected
+  holdout. The standard `NEUTRAL_MINIONS_KILLED` offset 1094 lead failed
+  discrimination (45/110 final matches) and is not registered. The 11-Replay
+  CLI batch selected both abilities, returned 11/11 `CANDIDATE`, emitted 3,270
+  records for each, and had zero errors. Input hashes, per-field gaps, and
+  raw refs remain under ignored
+  `artifacts/16_19_development/kr_821_ward_cannon_11/`.
+- **821 keyframe carrier structure:** A separate strict scan of those 327
+  keyframes found 3,270/3,270 hero-family payloads with fixed `67 00 de`
+  prefix and length 1,263. The exact 821 byte transform maps `00 de` to
+  canonical ULEB128 `ec 09` (=1,260 bytes), matching a one-byte selector,
+  two-byte size, and a 1,260-byte reversed blob. Under that structure, raw
+  offsets 1186/1182/1178 map to object offsets `0x4c/0x50/0x54` for the
+  existing KDA candidates; 842/838/834 map to `0x1a4/0x1a8/0x1ac` for the
+  new ward candidates; 450 maps to `0x32c` for cannon mission count; and
+  371..374 map to `0x378` for `Missions_MinionsKilled`. Raw 434 maps to
+  `0x33c` and mirrors the `0x4c` kill candidate in all 3,270 packets. This
+  cross-check strengthens the structural hypothesis, while the exact 821
+  factory's 5/1,263 consumption still leaves carrier-to-runtime-object binding
+  unconfirmed. Its ignored audit is in
+  `artifacts/16_19_development/keyframe_carrier_821/carrier_scan.json`.
 - **821 gold snapshot negative lead:** The same 3,270 keyframe hero packets
   did not yield a defensible `GOLD_EARNED` or `GOLD_SPENT` numeric candidate.
   Raw integer-window survivors from the first two Replays reversed or lost

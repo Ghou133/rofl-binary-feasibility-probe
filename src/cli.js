@@ -23,6 +23,8 @@ const {
   require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const { assessHeroLevelTail821 } =
   require('./decoders/rofl_16_19_821_level_candidate');
+const { assessHeroWardStatsTail821, assessHeroMissionsCannonMinionsTail821 } =
+  require('./decoders/rofl_16_19_821_aux_counts_candidate');
 const { analyzeReplayWith821Routes } = require('./decoders/rofl_16_19_821_scan');
 const {
   assessHeroMinionsKilledSnapshotTail,
@@ -551,6 +553,7 @@ function parseOne1619(replay, options, started) {
       'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_missions_minions_killed_snapshot',
+      'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
       'hero_level_state',
     ].includes(name)))] : [];
   const selectsBuffAdd = options.semantic !== false
@@ -1775,6 +1778,12 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_missions_minions_killed_snapshot'
           ? assessHeroMissionsMinionsKilledSnapshotTail821(replay)
         : profile.game_version === '16.19.821.7343'
+          && capability === 'hero_ward_stats_snapshot'
+          ? assessHeroWardStatsTail821(replay)
+        : profile.game_version === '16.19.821.7343'
+          && capability === 'hero_missions_cannon_minions_killed_snapshot'
+          ? assessHeroMissionsCannonMinionsTail821(replay)
+        : profile.game_version === '16.19.821.7343'
           && (capability === 'hero_death' || capability === 'hero_death_timer')
           ? (() => {
             const assessment = assessHeroDeathTail821(replay);
@@ -1894,6 +1903,16 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_missions_minions_killed_snapshot') {
         validationPending.push('KR keyframe 0x0089 structure, raw bytes 374/373, upper-zero scope, and pinned 821 runtime byte transform',
           'monotone snapshots and ten Missions_MinionsKilled tails; distinct from MINIONS_KILLED');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_ward_stats_snapshot') {
+        validationPending.push('KR keyframe 0x0089 structure, raw bytes 834/838/842, upper-zero scope, and pinned 821 runtime byte transform',
+          'monotone snapshots and ten WARD_PLACED_DETECTOR, WARD_KILLED, and WARD_PLACED tails');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_missions_cannon_minions_killed_snapshot') {
+        validationPending.push('KR keyframe 0x0089 structure, raw byte 450, upper-zero scope, and pinned 821 runtime byte transform',
+          'monotone snapshots and ten Missions_CannonMinionsKilled tails');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_level_state') {
@@ -2073,6 +2092,9 @@ function capabilityQuery(replay, options = {}) {
             hero_assists_snapshot: 'hero_assists_snapshot_candidates',
             hero_missions_minions_killed_snapshot:
               'hero_missions_minions_killed_snapshot_candidates',
+            hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
+            hero_missions_cannon_minions_killed_snapshot:
+              'hero_missions_cannon_minions_killed_snapshot_candidates',
             hero_level_state: 'hero_level_state_candidates' })[capability] ?? null
           : profile.game_version === '16.19.820.7193'
           ? ({

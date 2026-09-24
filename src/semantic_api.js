@@ -32,6 +32,10 @@ const {
   require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const { decodeHeroLevelCandidates821 } =
   require('./decoders/rofl_16_19_821_level_candidate');
+const {
+  decodeHeroWardStatsSnapshotCandidates821,
+  decodeHeroMissionsCannonMinionsKilledSnapshotCandidates821,
+} = require('./decoders/rofl_16_19_821_aux_counts_candidate');
 const { collect821Routes } = require('./decoders/rofl_16_19_821_scan');
 const { decodeNpcBuffRemovePacketCandidates } =
   require('./decoders/rofl_16_19_buff_remove_candidate');
@@ -2011,6 +2015,9 @@ function decode1619821(replay, profile, options = {}) {
     hero_champion_kills_snapshot: decodeHeroChampionKillsSnapshotCandidates821,
     hero_assists_snapshot: decodeHeroAssistsSnapshotCandidates821,
     hero_missions_minions_killed_snapshot: decodeHeroMissionsMinionsKilledSnapshotCandidates821,
+    hero_ward_stats_snapshot: decodeHeroWardStatsSnapshotCandidates821,
+    hero_missions_cannon_minions_killed_snapshot:
+      decodeHeroMissionsCannonMinionsKilledSnapshotCandidates821,
     hero_level_state: decodeHeroLevelCandidates821,
   };
   const outputKeys = {
@@ -2021,6 +2028,9 @@ function decode1619821(replay, profile, options = {}) {
     hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
     hero_assists_snapshot: 'hero_assists_snapshot_candidates',
     hero_missions_minions_killed_snapshot: 'hero_missions_minions_killed_snapshot_candidates',
+    hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
+    hero_missions_cannon_minions_killed_snapshot:
+      'hero_missions_cannon_minions_killed_snapshot_candidates',
     hero_level_state: 'hero_level_state_candidates',
   };
   const capabilityResults = {};
@@ -2029,6 +2039,7 @@ function decode1619821(replay, profile, options = {}) {
     'hero_death', 'hero_death_timer', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
     'hero_assists_snapshot', 'hero_level_state', 'hero_respawn',
     'hero_missions_minions_killed_snapshot',
+    'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
   ]);
   const supported = capabilities.filter((capability) => sharedScanCapabilities.has(capability));
   let candidate821Scan = options.candidate821Scan ?? null;

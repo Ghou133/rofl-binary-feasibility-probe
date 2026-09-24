@@ -33,6 +33,9 @@ function keyframeDeathsPacket(participantId, count, timeMs,
   payload[1186] = killCode;
   payload[1178] = assistCode;
   payload[374] = count === 0 ? 0x97 : 0xcc;
+  for (const offset of [834, 838, 842, 450]) {
+    payload[offset] = count === 0 ? 0x97 : 0xcc;
+  }
   const header = Buffer.alloc(15);
   header.writeFloatLE(timeMs / 1000, 1);
   header.writeUInt32LE(payload.length, 5);
@@ -78,6 +81,10 @@ function replay({ unknownLevel = false, runtimeLevel20 = false, observedReturn =
     ASSISTS: index === 0 ? aboveTailAssist || runtimeHighCounts ? '28' : '1' : '0',
     Missions_MinionsKilled: index === 0 ? '1' : '0',
     MINIONS_KILLED: index === 0 ? '2' : '1',
+    WARD_PLACED_DETECTOR: index === 0 ? '1' : '0',
+    WARD_KILLED: index === 0 ? '1' : '0',
+    WARD_PLACED: index === 0 ? '1' : '0',
+    Missions_CannonMinionsKilled: index === 0 ? '1' : '0',
     LEVEL: (unknownLevel || runtimeLevel20) && index === 0 ? '20' : '2',
   }));
   return input;
@@ -94,6 +101,9 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.equal(resolveCapability(BUILD, 'hero_assists_snapshot').status, 'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_missions_minions_killed_snapshot').status,
     'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'hero_ward_stats_snapshot').status, 'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'hero_missions_cannon_minions_killed_snapshot').status,
+    'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_level_state').status, 'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_death_timer').status, 'CANDIDATE');
   const query = capabilityQuery(input);
@@ -104,6 +114,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     ['hero_death', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_missions_minions_killed_snapshot',
+      'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
       'hero_level_state']);
   const queried = Object.fromEntries(query.capabilities.map((row) => [row.capability, row]));
   assert.equal(queried.hero_death.runtime_image_requirement, 'NOT_REQUIRED');
@@ -128,6 +139,12 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.equal(queried.hero_missions_minions_killed_snapshot.output,
     'hero_missions_minions_killed_snapshot_candidates');
   assert.deepEqual(queried.hero_missions_minions_killed_snapshot.missing_inputs, []);
+  assert.equal(queried.hero_ward_stats_snapshot.output,
+    'hero_ward_stats_snapshot_candidates');
+  assert.deepEqual(queried.hero_ward_stats_snapshot.missing_inputs, []);
+  assert.equal(queried.hero_missions_cannon_minions_killed_snapshot.output,
+    'hero_missions_cannon_minions_killed_snapshot_candidates');
+  assert.deepEqual(queried.hero_missions_cannon_minions_killed_snapshot.missing_inputs, []);
   assert.equal(queried.hero_level_state.output, 'hero_level_state_candidates');
   assert.deepEqual(queried.hero_level_state.missing_inputs, []);
   input.tail.stats[0].NUM_DEATHS = null;
@@ -161,6 +178,14 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     .map((row) => [row.capability, row]));
   assert.deepEqual(afterMissionsMissing.hero_missions_minions_killed_snapshot.missing_inputs,
     ['replay_tail_Missions_MinionsKilled']);
+  input.tail.stats[0].WARD_KILLED = null;
+  input.tail.stats[0].Missions_CannonMinionsKilled = null;
+  const afterAuxMissing = Object.fromEntries(capabilityQuery(input).capabilities
+    .map((row) => [row.capability, row]));
+  assert.deepEqual(afterAuxMissing.hero_ward_stats_snapshot.missing_inputs,
+    ['replay_tail_WARD_KILLED']);
+  assert.deepEqual(afterAuxMissing.hero_missions_cannon_minions_killed_snapshot.missing_inputs,
+    ['replay_tail_Missions_CannonMinionsKilled']);
 });
 
 test('821 API exposes only observed return candidates and retains the death dependency', () => {
@@ -220,6 +245,7 @@ test('821 API dispatch emits separate candidate records and no confirmed deaths'
     capabilities: ['hero_death', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_missions_minions_killed_snapshot',
+      'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
       'hero_level_state'],
   });
   assert.equal(combined.status, 'EXPERIMENTAL_CANDIDATE');
@@ -238,6 +264,12 @@ test('821 API dispatch emits separate candidate records and no confirmed deaths'
     'CANDIDATE');
   assert.equal(combined.events.hero_missions_minions_killed_snapshot_candidates[10]
     .missions_minions_killed_candidate, 1);
+  assert.equal(combined.capability_results.hero_ward_stats_snapshot.status, 'CANDIDATE');
+  assert.equal(combined.events.hero_ward_stats_snapshot_candidates[10].ward_placed_candidate, 1);
+  assert.equal(combined.capability_results.hero_missions_cannon_minions_killed_snapshot.status,
+    'CANDIDATE');
+  assert.equal(combined.events.hero_missions_cannon_minions_killed_snapshot_candidates[10]
+    .missions_cannon_minions_killed_candidate, 1);
   assert.equal(combined.capability_results.hero_level_state.status, 'CANDIDATE');
   assert.equal(combined.events.hero_level_state_candidates.length, 10);
   assert.equal(combined.events.hero_level_state_candidates[0].level_after_candidate, 2);

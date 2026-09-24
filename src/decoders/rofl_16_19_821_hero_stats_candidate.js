@@ -786,6 +786,8 @@ function decodeHeroMissionsMinionsKilledSnapshotCandidates821(replay, precollect
 }
 
 module.exports = {
+  assessHeroStatsTail821,
+  scanHeroStatsPackets821,
   HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE,
   HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE,
   HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE,
