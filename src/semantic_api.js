@@ -19,6 +19,8 @@ const {
   decodeHeroInventoryBroadcastCandidates,
 } = require('./decoders/rofl_16_19_820_7193');
 const { decodeHeroDeathCandidates821 } = require('./decoders/rofl_16_19_821_7343');
+const { decodeHeroDeathsSnapshotCandidates821 } =
+  require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const { decodeNpcBuffRemovePacketCandidates } =
   require('./decoders/rofl_16_19_buff_remove_candidate');
 const { decodeNpcBuffAddPacketCandidates } =
@@ -1989,16 +1991,24 @@ function decode1619821(replay, profile, options = {}) {
     throw new TypeError('16.19 capabilities must be an array of nonempty names');
   }
   const capabilities = [...new Set(requested)];
+  const decoders = {
+    hero_death: decodeHeroDeathCandidates821,
+    hero_deaths_snapshot: decodeHeroDeathsSnapshotCandidates821,
+  };
+  const outputKeys = {
+    hero_death: 'hero_death_candidates',
+    hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
+  };
   const capabilityResults = {};
   const events = {};
   for (const capability of capabilities) {
     let outcome;
-    if (capability !== 'hero_death') {
+    if (!decoders[capability]) {
       outcome = { status: 'UNSUPPORTED', input_count: null, event_count: null,
         error: `16.19.821.7343 has no decoder for ${capability}`, events: null };
     } else {
       try {
-        outcome = decodeHeroDeathCandidates821(replay);
+        outcome = decoders[capability](replay);
       } catch (error) {
         outcome = { status: 'DECODE_FAILED', input_count: null, event_count: null,
           error: error.message || String(error), events: null };
@@ -2010,7 +2020,7 @@ function decode1619821(replay, profile, options = {}) {
     result.runtime_image_used = false;
     capabilityResults[capability] = result;
     if (result.status === 'CANDIDATE') {
-      events.hero_death_candidates = candidateEvents;
+      events[outputKeys[capability]] = candidateEvents;
     }
   }
   const results = Object.values(capabilityResults);

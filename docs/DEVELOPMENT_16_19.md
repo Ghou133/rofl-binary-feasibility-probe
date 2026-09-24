@@ -13,6 +13,13 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   These are retained as negative route evidence and excluded from candidate
   events. No 820 opcode transform or image is reused for 821; payloads,
   killer, assists, death timer, and respawn remain unclassified.
+- **821 keyframe candidate:** `--events hero_deaths_snapshot` now reads only
+  raw byte 1182 from exact KR `0x0089` keyframes of length 1263 and prefix
+  `6700de`. A finite, locally derived codebook covers counts 0–12; 327
+  keyframes yield 3,270 candidate snapshots across all 11 Replays. All 110
+  participant sequences start at zero and remain monotone. The last snapshot
+  equals tail `NUM_DEATHS` for 82 participants and trails by one for 28; the
+  gap is retained. This is not a full HeroStats decode or a death event.
 
 - **Done:** The HN `16.19.820.7193` replay's 107 chunks and 2,035,757 blocks
   pass strict container/framing inspection with zero errors. The main CLI/API now
@@ -500,8 +507,8 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   `artifacts/16_19_development/buff_link_probe_second/`.
   In the third Replay all 3,030 distinct Remove keys appear in Add rows, while
   3,023 appear in game-stream Adds; row identity remains unresolved.
-- **Next:** Finish the independent 821 raw HeroStats deaths-snapshot candidate,
-  and obtain a matching 821 runtime image if payload semantics are needed.
+- **Next:** Integrate the independent 821 level-observation candidate, and
+  obtain a matching 821 runtime image if payload semantics are needed.
   Further independent HN Replays
   can test HeroStats and inventory candidates. The HN
   Broadcast participant mapping remains candidate-only after three Replays, and

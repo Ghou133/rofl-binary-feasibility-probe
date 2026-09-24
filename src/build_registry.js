@@ -7,6 +7,8 @@ const oldDecoder = require('./decoders/rofl_16_15_801_3452');
 const newDecoder = require('./decoders/rofl_16_16_805_0442');
 const decoder1619 = require('./decoders/rofl_16_19_820_7193');
 const decoder1619821 = require('./decoders/rofl_16_19_821_7343');
+const heroStatsCandidate1619821 =
+  require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const heroStatsCandidate1619 = require('./decoders/rofl_16_19_hero_stats_candidate');
 const buffRemoveCandidate1619 = require('./decoders/rofl_16_19_buff_remove_candidate');
 const buffAddCandidate1619 = require('./decoders/rofl_16_19_buff_add_candidate');
@@ -438,18 +440,23 @@ const BUILD_PROFILES = deepFreeze({
       status: 'UNPROFILED',
       image_sha256: null,
     },
-    packet_routes: { hero_death: 0x0259 },
+    packet_routes: { hero_death: 0x0259, hero_deaths_snapshot: 0x0089 },
     decoder_profile: {
       hero_death: decoder1619821.HERO_DEATH_CANDIDATE_PROFILE_821,
+      hero_deaths_snapshot:
+        heroStatsCandidate1619821.HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE,
     },
     evidence_grades: {
       hero_death: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_CORRELATION',
+      hero_deaths_snapshot: 'CANDIDATE_821_RAW_BYTE_KEYFRAME_TAIL_CORRELATION',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, 821 route-profile bounded',
+      keyframe_deaths_snapshot:
+        'exact 0x0089 raw byte 1182 finite codebook, 821 KR keyframe candidate only',
     },
     verified_capabilities: [],
-    candidate_capabilities: ['hero_death'],
+    candidate_capabilities: ['hero_death', 'hero_deaths_snapshot'],
     unsupported_capabilities: [],
     validation_artifacts: [],
     regression_fixture_set: null,

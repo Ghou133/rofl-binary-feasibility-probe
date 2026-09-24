@@ -12,6 +12,8 @@ const {
   candidateTailStatAssessment,
 } = require('./decoders/rofl_16_19_820_7193');
 const { assessHeroDeathTail821 } = require('./decoders/rofl_16_19_821_7343');
+const { assessHeroDeathsSnapshotTail821 } =
+  require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const {
   assessHeroMinionsKilledSnapshotTail,
   assessHeroJungleMinionsKilledSnapshotTail,
@@ -1720,7 +1722,10 @@ function capabilityQuery(replay, options = {}) {
         || capability === 'npc_buff_remove_packet'
         || capability === 'npc_buff_add_packet';
       const tailStat = perCapabilityInputsAssessed
-        ? profile.game_version === '16.19.821.7343' && capability === 'hero_death'
+        ? profile.game_version === '16.19.821.7343'
+          && capability === 'hero_deaths_snapshot'
+          ? assessHeroDeathsSnapshotTail821(replay)
+        : profile.game_version === '16.19.821.7343' && capability === 'hero_death'
           ? (() => {
             const assessment = assessHeroDeathTail821(replay);
             return { required_fields: [{ field: 'NUM_DEATHS',
@@ -1798,8 +1803,13 @@ function capabilityQuery(replay, options = {}) {
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_death') {
-        validationPending.push('KR 0x0259/0x0438/0x031b/0x03d4 co-timed route fingerprint',
+        validationPending.push('KR 0x0259/0x0438/0x031b co-timed core and optional 0x03d4',
           'ten-participant NUM_DEATHS presence and equality');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_deaths_snapshot') {
+        validationPending.push('KR keyframe 0x0089 length, prefix, param, and raw-byte codebook',
+          'ten-participant NUM_DEATHS final gap 0..1 and monotone snapshots');
       }
       if (profile.game_version === '16.19.820.7193'
           && (capability === 'hero_death_timer' || capability === 'hero_respawn')) {
@@ -1966,7 +1976,8 @@ function capabilityQuery(replay, options = {}) {
           && !inputs.some((input) => input.status === 'NOT_ASSESSED'),
         validation_pending: validationPending,
         output: profile.game_version === '16.19.821.7343'
-          ? capability === 'hero_death' ? 'hero_death_candidates' : null
+          ? ({ hero_death: 'hero_death_candidates',
+            hero_deaths_snapshot: 'hero_deaths_snapshot_candidates' })[capability] ?? null
           : profile.game_version === '16.19.820.7193'
           ? ({
             hero_death: 'hero_death_candidates',
