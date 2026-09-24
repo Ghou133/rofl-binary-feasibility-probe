@@ -19,6 +19,7 @@
 | `16.19.821.7343 --events hero_death` | KR `0x0259/0x0438/0x031b` 同刻路由与十名参与者回放尾部死亡数均匹配时，输出候选受害者和时间；`0x03d4` 作为可缺失的辅助观测 | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；孤立 `0x0259` 不输出，无 821 镜像，包 payload、杀手、计时及复活含义未确认 |
 | `16.19.821.7343 --events hero_respawn` | KR `0x0048` 与已验证死亡核心唯一配对、同刻前序 `0x018d` 支持，且每名参与者的已配对死亡到返回时长之和取整等于结算 `TOTAL_TIME_SPENT_DEAD` | 仅写入 `hero_respawn_candidates`，状态为 `CANDIDATE`；保留未观察到返回的末次死亡及额外 `0x018d`，不解释载荷或推断计时器；无 821 运行时镜像 |
 | `16.19.821.7343 --events hero_deaths_snapshot` | KR `0x0089` 关键帧中一个原始字节的有限编码表，输出候选累计死亡次数快照 | 仅写入 `hero_deaths_snapshot_candidates`；末帧与结算可差 1 并保留差值；不是逐次死亡事件，也没有完整 HeroStats 变换或 821 镜像证明 |
+| `16.19.821.7343 --events hero_champion_kills_snapshot` | KR `0x0089` 关键帧的原始字节 434/1186 镜像与有限 0–17 编码表，输出候选累计英雄击杀数快照 | 仅写入 `hero_champion_kills_snapshot_candidates`；尾部差值原样保留；一份高击杀回放含未知编码，该能力失败但其他能力可继续；不推断击杀时点、击杀者或助攻 |
 | `16.19.821.7343 --events hero_level_state` | KR `0x0197` 两组精确原始参数上的有限载荷编码表，输出已观察到的候选等级值 | 仅写入 `hero_level_state_candidates`；重复观测与等级缺口保留。一个回放含未分类的等级 20 编码，该能力在该回放失败并不输出候选等级；不补造升级事件 |
 | `16.19.820.7193 --events hero_death_timer` | HN 路由的计时 float、同刻 Hero_Die 和后续复活时间相互校验时，输出候选计时秒数 | 仅写入 `hero_death_timer_candidates`；目前只覆盖 HN 路由，KR 回放会报 `PROFILE_UNAVAILABLE`，不产生确认的死亡或重生事件 |
 | `16.19.820.7193 --events hero_respawn` | 将 HN 已观察且与计时包唯一配对的 `0x0357` 包输出为候选复活时点 | 仅写入 `hero_respawn_candidates`；依赖完整的 HN 计时候选校验，不补造回放结束后的复活 |
@@ -118,7 +119,7 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events hero_death --out-dir "work\16-19-821-death-candidate"
 ```
 
-821 的候选死亡记录保留原始包来源及未配对路由的负例计数；没有该 build 的运行时镜像时，不解释 payload 中的杀手、助攻或死亡计时。可追加 `hero_respawn,hero_deaths_snapshot,hero_level_state` 到 `--events`；各能力独立报告执行状态。含未知等级编码的回放会保留其他已通过能力的候选输出，同时将等级能力明确标为失败。
+821 的候选死亡记录保留原始包来源及未配对路由的负例计数；没有该 build 的运行时镜像时，不解释 payload 中的杀手、助攻或死亡计时。可追加 `hero_respawn,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_level_state` 到 `--events`；各能力独立报告执行状态。含未知等级或击杀数编码的回放会保留其他已通过能力的候选输出，并明确标出失败项。
 
 对 HN 路由的同一完整 build，可单独选择计时候选，或用
 `--events hero_death,hero_death_timer` 一起运行。计时输出包含原始包引用、
@@ -126,7 +127,7 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 同刻 Hero_Die 配对及复活时序都通过校验。未执行的旧版事件汇总计数为
 `null`，不会把未解码误写成零事件。
 
-`--events hero_respawn` 可单独查询已观察到的候选复活时点，也可与计时候选
+在 820 HN 路由中，`--events hero_respawn` 可单独查询已观察到的候选复活时点，也可与计时候选
 同时选择。输出按复活包时间排序，保留复活、计时和 Hero_Die 的原始包引用；
 它复用计时能力的配对校验，不产生已确认的 `respawn_events`。
 

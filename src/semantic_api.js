@@ -21,7 +21,10 @@ const {
 const { decodeHeroDeathCandidates821 } = require('./decoders/rofl_16_19_821_7343');
 const { decodeHeroRespawnCandidates821 } =
   require('./decoders/rofl_16_19_821_respawn_candidate');
-const { decodeHeroDeathsSnapshotCandidates821 } =
+const {
+  decodeHeroDeathsSnapshotCandidates821,
+  decodeHeroChampionKillsSnapshotCandidates821,
+} =
   require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const { decodeHeroLevelCandidates821 } =
   require('./decoders/rofl_16_19_821_level_candidate');
@@ -2000,12 +2003,14 @@ function decode1619821(replay, profile, options = {}) {
     hero_death: decodeHeroDeathCandidates821,
     hero_respawn: decodeHeroRespawnCandidates821,
     hero_deaths_snapshot: decodeHeroDeathsSnapshotCandidates821,
+    hero_champion_kills_snapshot: decodeHeroChampionKillsSnapshotCandidates821,
     hero_level_state: decodeHeroLevelCandidates821,
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
     hero_respawn: 'hero_respawn_candidates',
     hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
+    hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
     hero_level_state: 'hero_level_state_candidates',
   };
   const capabilityResults = {};

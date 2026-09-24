@@ -14,7 +14,10 @@ const {
 const { assessHeroDeathTail821 } = require('./decoders/rofl_16_19_821_7343');
 const { assessHeroRespawnTail821 } =
   require('./decoders/rofl_16_19_821_respawn_candidate');
-const { assessHeroDeathsSnapshotTail821 } =
+const {
+  assessHeroDeathsSnapshotTail821,
+  assessHeroChampionKillsSnapshotTail821,
+} =
   require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const { assessHeroLevelTail821 } =
   require('./decoders/rofl_16_19_821_level_candidate');
@@ -543,7 +546,8 @@ function parseOne1619(replay, options, started) {
   const is821 = replay.header.version === '16.19.821.7343';
   const selected821 = is821 && options.semantic !== false && Array.isArray(options.events)
     ? [...new Set(options.events.filter((name) => [
-      'hero_death', 'hero_deaths_snapshot', 'hero_level_state',
+      'hero_death', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+      'hero_level_state',
     ].includes(name)))] : [];
   const selectsBuffAdd = options.semantic !== false
     && Array.isArray(options.events) && options.events.includes('npc_buff_add_packet');
@@ -1757,6 +1761,9 @@ function capabilityQuery(replay, options = {}) {
         : profile.game_version === '16.19.821.7343'
           && capability === 'hero_deaths_snapshot'
           ? assessHeroDeathsSnapshotTail821(replay)
+        : profile.game_version === '16.19.821.7343'
+          && capability === 'hero_champion_kills_snapshot'
+          ? assessHeroChampionKillsSnapshotTail821(replay)
         : profile.game_version === '16.19.821.7343' && capability === 'hero_death'
           ? (() => {
             const assessment = assessHeroDeathTail821(replay);
@@ -1855,6 +1862,11 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_deaths_snapshot') {
         validationPending.push('KR keyframe 0x0089 length, prefix, param, and raw-byte codebook',
           'ten-participant NUM_DEATHS final gap 0..1 and monotone snapshots');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_champion_kills_snapshot') {
+        validationPending.push('KR keyframe 0x0089 structure and mirrored bytes 434/1186',
+          'finite 0..17 codebook, monotone snapshots, and ten CHAMPIONS_KILLED tails');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_level_state') {
@@ -2029,6 +2041,7 @@ function capabilityQuery(replay, options = {}) {
           ? ({ hero_death: 'hero_death_candidates',
             hero_respawn: 'hero_respawn_candidates',
             hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
+            hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
             hero_level_state: 'hero_level_state_candidates' })[capability] ?? null
           : profile.game_version === '16.19.820.7193'
           ? ({

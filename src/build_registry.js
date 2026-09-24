@@ -446,6 +446,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_death: 0x0259,
       hero_respawn: 0x0048,
       hero_deaths_snapshot: 0x0089,
+      hero_champion_kills_snapshot: 0x0089,
       hero_level_state: 0x0197,
     },
     decoder_profile: {
@@ -453,12 +454,15 @@ const BUILD_PROFILES = deepFreeze({
       hero_respawn: respawnCandidate1619821.HERO_RESPAWN_CANDIDATE_PROFILE_821,
       hero_deaths_snapshot:
         heroStatsCandidate1619821.HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE,
+      hero_champion_kills_snapshot:
+        heroStatsCandidate1619821.HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE,
       hero_level_state: levelCandidate1619821.HERO_LEVEL_CANDIDATE_PROFILE_821,
     },
     evidence_grades: {
       hero_death: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_CORRELATION',
       hero_respawn: 'CANDIDATE_821_REPLAY_TAIL_DEAD_TIME_CORRELATION',
       hero_deaths_snapshot: 'CANDIDATE_821_RAW_BYTE_KEYFRAME_TAIL_CORRELATION',
+      hero_champion_kills_snapshot: 'CANDIDATE_821_MIRRORED_RAW_BYTE_KEYFRAME_TAIL_CORRELATION',
       hero_level_state: 'CANDIDATE_821_LEVEL_ROUTE_TAIL_CODEBOOK',
     },
     semantic_mappings: {
@@ -466,10 +470,15 @@ const BUILD_PROFILES = deepFreeze({
       observed_return_time: '0x0048 route uniquely paired with a matched death core and 0x018d support; candidate only',
       keyframe_deaths_snapshot:
         'exact 0x0089 raw byte 1182 finite codebook, 821 KR keyframe candidate only',
+      keyframe_champion_kills_snapshot:
+        'exact 0x0089 mirrored raw bytes 434/1186 finite codebook, 821 KR keyframe candidate only',
       level_state: 'exact 0x0197 full-param families and finite payload codebook, candidate only',
     },
     verified_capabilities: [],
-    candidate_capabilities: ['hero_death', 'hero_respawn', 'hero_deaths_snapshot', 'hero_level_state'],
+    candidate_capabilities: [
+      'hero_death', 'hero_respawn', 'hero_deaths_snapshot',
+      'hero_champion_kills_snapshot', 'hero_level_state',
+    ],
     unsupported_capabilities: [],
     validation_artifacts: [],
     regression_fixture_set: null,

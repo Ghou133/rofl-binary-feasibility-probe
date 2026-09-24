@@ -31,6 +31,21 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   participant sequences start at zero and remain monotone. The last snapshot
   equals tail `NUM_DEATHS` for 82 participants and trails by one for 28; the
   gap is retained. This is not a full HeroStats decode or a death event.
+- **821 champion-kill keyframe candidate:** `--events
+  hero_champion_kills_snapshot` reads mirrored raw bytes 434 and 1186 from
+  the same exact `0x0089` keyframe. A finite 0–17 codebook derived from the
+  first two KR Replays is gated by ten `CHAMPIONS_KILLED` tail values, zero
+  starts, and monotone per-participant snapshots. Ten of eleven Replays yield
+  candidate output; KR_8394000013 contains an unknown higher-count code and
+  returns `DECODE_FAILED` for this capability with a raw packet reference.
+  The other selected capabilities remain available. Mirrored bytes are one
+  packet observation, not independent confirmation. Tail gaps are measured
+  and retained without a fixed upper bound or invented kill events; there is
+  no 821 runtime transform or killer attribution. The five-capability 11-file
+  CLI run yields 2,960 kill snapshots across ten Replays, nine whole-Replay
+  `CANDIDATE` results and two `PARTIAL` results (one unknown level code, one
+  unknown kill-count code). Existing four-capability candidate JSONL files
+  remain byte-identical after adding this scanner consumer.
 - **821 level observation candidate:** KR game route `0x0197` with exact
   `0x400000ae..b7` or `0x400001ae..b7` params has a bounded payload codebook
   for observed levels 1–19. The first two Replays supplied 304/304 decoded
