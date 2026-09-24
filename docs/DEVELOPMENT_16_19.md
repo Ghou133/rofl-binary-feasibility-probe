@@ -60,6 +60,14 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   six-capability 11-Replay CLI batch yields six `CANDIDATE` and five `PARTIAL`
   Replay statuses; the five prior candidate JSONL families are byte-identical
   to the preceding five-capability run.
+- **821 minion-count negative lead:** A bounded search over all 3,270 exact
+  `0x0089` hero packets found no defensible numeric `MINIONS_KILLED` field.
+  Raw byte 374 has an ordered structural signal for some participants, but
+  only 30/110 final values fit the known finite codebook, and rotating the
+  participant tails passes the same weak check. Other variable byte windows
+  have ordering contradictions. It remains raw evidence, not a registered
+  candidate, until an exact 821 runtime transform or independent intermediate
+  count can discriminate the interpretations.
 - **821 level observation candidate:** KR game route `0x0197` with exact
   `0x400000ae..b7` or `0x400001ae..b7` params has a bounded payload codebook
   for observed levels 1–19. The first two Replays supplied 304/304 decoded
