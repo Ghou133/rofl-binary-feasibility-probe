@@ -4,6 +4,18 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Research-only:** The isolated KR 821 movement/full-parameter association
+  utility checks a complete candidate `0x0089` roster, latest `0x018d`
+  packet-local inventory, and a unique 7/7 Replay-tail item match for each
+  shared full `raw_param`. A run over all 11 Replays found five replay/key
+  candidates; 6,160 `0x00ba` and 98 `0x0335` rows share those keys. Those
+  row counts do not establish an actor for each packet. Another 1,648 direct
+  and 14 Set rows use noncanonical parameter variants and remain unbound.
+  The utility accepts trusted complete decoder arrays; it does not rewalk
+  each referenced payload. It is not wired to default CLI/API output or
+  participant fields. A per-packet callback/receiver identity anchor remains
+  missing. Ignored positive and negative evidence is under
+  `artifacts/16_19_development/movement821_identity/`.
 - **Completed:** KR 821 `cast_spell_ans_packet` profile v2 retains protected
   native bytes and the decoded anonymous f32 at packet object `+0xe0`.
   The exact-image inverse table is pinned by SHA-256 and checked again at
