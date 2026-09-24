@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 
 const { analyzeReplay } = require('../analysis');
 const { walkBlocks } = require('../rofl');
+const { replaySourceError } = require('./replay_source_integrity');
 
 const REPLAY_VERSION = '16.19.820.7193';
 const PACKET_ID = 0x0276;
@@ -403,14 +404,28 @@ function finalizeHeroStatsRows(replay, rows, scannedBlockCount) {
   return { status: 'PASS', scanned_block_count: scannedBlockCount, rows };
 }
 
+function replayWithStableChunks(replay) {
+  // Capture the parsed chunk list once. The strict walk and source check use
+  // the same list, including when a caller exposes chunks through a getter.
+  const scanReplay = Object.create(replay);
+  Object.defineProperty(scanReplay, 'chunks', { value: replay.chunks });
+  return scanReplay;
+}
+
 function scanHeroStatsRows(replay) {
   if (replay?.header?.version !== REPLAY_VERSION) {
     return { status: 'UNSUPPORTED', scanned_block_count: null };
   }
+  const scanReplay = replayWithStableChunks(replay);
+  const sourceError = replaySourceError(scanReplay);
+  if (sourceError) {
+    return { status: 'DECODE_FAILED', scanned_block_count: null,
+      error: `Replay source failed: ${sourceError}` };
+  }
   const rows = [];
   let walk;
   try {
-    walk = walkBlocks(replay, (block, chunk) => {
+    walk = walkBlocks(scanReplay, (block, chunk) => {
       if (block.packet_id === PACKET_ID) rows.push({ block, chunk });
     }, { includeStreams: [2, 3], strict: true });
   } catch (error) {
@@ -420,7 +435,7 @@ function scanHeroStatsRows(replay) {
   return finalizeHeroStatsRows(replay, rows, walk.block_count);
 }
 
-function createHeroStatsScanCollector(replay) {
+function createHeroStatsScanCollector(replay, scanReplay = replay) {
   if (!replay || typeof replay !== 'object') {
     throw new TypeError('HeroStats scan collector requires a Replay object');
   }
@@ -470,7 +485,11 @@ function createHeroStatsScanCollector(replay) {
         throw new RangeError('HeroStats expected keyframe block count differs from observed framing');
       }
       finished = true;
-      const scan = finalizeHeroStatsRows(replay, rows, keyframeBlockCount);
+      const sourceError = replaySourceError(scanReplay);
+      const scan = sourceError
+        ? { status: 'DECODE_FAILED', scanned_block_count: keyframeBlockCount,
+          error: `Replay source failed: ${sourceError}` }
+        : finalizeHeroStatsRows(replay, rows, keyframeBlockCount);
       const token = Object.freeze({
         status: scan.status,
         scanned_block_count: scan.scanned_block_count,
@@ -487,11 +506,12 @@ function analyzeReplayWithHeroStats(replay, options = {}, afterBlock = null) {
   if (afterBlock !== null && typeof afterBlock !== 'function') {
     throw new TypeError('HeroStats additional block observer must be a function');
   }
-  const collector = createHeroStatsScanCollector(replay);
+  const scanReplay = replayWithStableChunks(replay);
+  const collector = createHeroStatsScanCollector(replay, scanReplay);
   // The observer is owned by this function and only receives blocks from the
   // full analyzer walk. Copy the HeroStats bytes before another observer sees
   // them; neither collector exposes a source of forgeable packet refs.
-  const analysis = analyzeReplay(replay, {
+  const analysis = analyzeReplay(scanReplay, {
     ...options,
     includeStreams: [1, 2, 3],
     onBlock(block, chunk) {

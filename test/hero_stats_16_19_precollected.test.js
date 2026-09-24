@@ -122,6 +122,24 @@ test('precollected scan rejects a different Replay and forged or copied tokens',
     .hero_deaths_snapshot.status, 'DECODE_FAILED');
 });
 
+test('HeroStats scans reject Replay byte and chunk-layout changes before candidate publication', () => {
+  const changedBytes = fixture();
+  changedBytes.buffer[changedBytes.chunks[1].body_offset + 15 + 10] ^= 0xff;
+  const standalone = decodeHeroStatsSnapshotCandidateSet(changedBytes, SELECTED);
+  assert.equal(standalone.hero_minions_killed_snapshot.status, 'DECODE_FAILED');
+  assert.match(standalone.hero_minions_killed_snapshot.error, /source bytes differ/);
+  const collected = analyzeReplayWithHeroStats(changedBytes, { strict: true });
+  assert.equal(collected.heroStatsScan.status, 'DECODE_FAILED');
+  assert.equal(decodeHeroStatsSnapshotCandidateSet(changedBytes, SELECTED,
+    collected.heroStatsScan).hero_deaths_snapshot.status, 'DECODE_FAILED');
+
+  const changedLayout = fixture();
+  changedLayout.chunks[1].offset += 1;
+  const layout = decodeHeroStatsSnapshotCandidateSet(changedLayout, SELECTED);
+  assert.equal(layout.hero_deaths_snapshot.status, 'DECODE_FAILED');
+  assert.match(layout.hero_deaths_snapshot.error, /chunk layout differs/);
+});
+
 test('foreign KR-like keyframe shape remains unavailable through precollection', () => {
   const replay = fixture({ foreignShape: true });
   const { heroStatsScan: scan } = analyzeReplayWithHeroStats(replay, { strict: true });

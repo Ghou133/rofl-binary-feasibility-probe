@@ -4,12 +4,12 @@ const crypto = require('node:crypto');
 const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
-const { isDeepStrictEqual } = require('node:util');
 
 const { analyzeReplay } = require('../analysis');
 const { deathEvent } = require('../events');
-const { parseReplayBuffer, walkBlocks } = require('../rofl');
+const { walkBlocks } = require('../rofl');
 const { analyzeReplayWithHeroStats } = require('./rofl_16_19_hero_stats_candidate');
+const { replaySourceError } = require('./replay_source_integrity');
 
 const REPLAY_VERSION = '16.19.820.7193';
 const PROFILE_LIMITS = Object.freeze([
@@ -254,30 +254,8 @@ function retainCandidateRoute(routes, block, chunk) {
   });
 }
 
-function candidateReplaySourceError(replay) {
-  if (!Buffer.isBuffer(replay?.buffer)) return 'Replay source buffer is unavailable';
-  let parsed;
-  try {
-    // Reuse the container parser for byte and chunk-layout checks. A Replay
-    // object exposes writable bytes and metadata, so its parse-time digest
-    // alone does not authenticate a later route scan.
-    parsed = parseReplayBuffer(replay.buffer, replay.source_path);
-  } catch (error) {
-    return `Replay source no longer parses: ${error.message}`;
-  }
-  if (parsed.source_sha256 !== replay.source_sha256
-      || parsed.file_size !== replay.file_size) {
-    return 'Replay source bytes differ from their parse-time identity';
-  }
-  if (!isDeepStrictEqual(parsed.header, replay.header)
-      || !isDeepStrictEqual(parsed.chunks, replay.chunks)) {
-    return 'Replay header or chunk layout differs from its source bytes';
-  }
-  return null;
-}
-
 function collectCandidateRoutes(replay) {
-  const sourceError = candidateReplaySourceError(replay);
+  const sourceError = replaySourceError(replay);
   if (sourceError) {
     return bindRouteScan({ routes: null, walk: null, error: sourceError }, replay);
   }
@@ -306,7 +284,7 @@ function createCandidateRouteScanCollector(replay) {
     finish() {
       if (finished) throw new Error('candidate route scan collector is already finished');
       finished = true;
-      const sourceError = candidateReplaySourceError(replay);
+      const sourceError = replaySourceError(replay);
       return bindRouteScan({ routes: sourceError ? null : routes,
         walk: sourceError ? null : { block_count: gameBlockCount },
         error: sourceError }, replay);

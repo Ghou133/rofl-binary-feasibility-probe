@@ -67,7 +67,9 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   that walk for selected game-route candidates, avoiding a second game-stream
   scan. A mixed compressed game/keyframe test decompresses each chunk once;
   malformed framing suppresses candidate output. Standalone API calls still
-  perform their own strict walk. On the exact HN Replay, the six earlier
+  perform their own strict walk. Both candidate route collectors check the
+  Replay source bytes and chunk layout before publishing copied packet refs.
+  On the exact HN Replay, the six earlier
   death/timer/respawn/level/CS/EXP candidate JSONL files remain byte-identical
   after game-scan reuse. The KR Replay retains its death candidate and reports
   `PROFILE_UNAVAILABLE` for the HN-only selections.
