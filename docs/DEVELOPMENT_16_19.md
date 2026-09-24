@@ -60,7 +60,7 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   were excluded. This cross-route check strengthens the one-Replay candidate,
   but does not establish a runtime semantic label or a confirmed XP field.
 - **CLI/API efficiency:** Selecting the lane-CS, jungle-CS, EXP, GOLD_EARNED, GOLD_SPENT,
-  CHAMPIONS_KILLED, NUM_DEATHS, ASSISTS and kill-stat HeroStats candidates together shares one
+  CHAMPIONS_KILLED, NUM_DEATHS, ASSISTS, kill-stat and ward-stat HeroStats candidates shares one
   keyframe collection and retains separate field validation and results. The
   16.19 CLI reuses its raw-analysis walk for that collection; a compressed
   synthetic keyframe now decompresses once instead of twice. It also reuses
@@ -175,6 +175,17 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   `artifacts/16_19_development/kill_stats_hn_cli_smoke/analysis.json`, generated
   by `analyze_kill_stats.js` in that directory from the pinned Replay SHA above;
   the CLI candidate output is retained beside it. Neither is packaged.
+- **Done:** `hero_ward_stats_snapshot` emits three observed u32 HeroStats
+  values at offsets `0x1a4/0x1a8/0x1ac`, correlated with Replay-tail
+  `WARD_PLACED`, `WARD_KILLED` and `WARD_PLACED_DETECTOR`. All 350 values for
+  each field start at zero per participant, do not decline, and remain within
+  their own tail values. The final killed/detector vectors match 10/10; placed
+  matches 9/10 with one unobserved gap. In the same HN Replay, each full
+  sequence is unique among 315 aligned u32 offsets; only the killed and
+  detector offsets also uniquely match their complete final tail vectors.
+  This is one-Replay field correlation, not a ward spawn, position, lifecycle
+  or removal event. Local-only probe output and script are retained under
+  `artifacts/16_19_development/ward_stats_hn_probe/` and are not packaged.
 - **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
   runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
   observed slot/item-definition-key records as candidates. All 94 game packets

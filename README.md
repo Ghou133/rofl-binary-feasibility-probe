@@ -22,6 +22,7 @@
 | `16.19.820.7193 --events hero_minions_killed_snapshot` | HN `0x0276` HeroStats keyframe 中已观察到的候选 `MINIONS_KILLED` 数值 | 仅写入 `hero_minions_killed_snapshot_candidates`；不是连续补刀事件，尾部差额不插值；KR 同号包不匹配 HN 指纹 |
 | `16.19.820.7193 --events hero_jungle_minions_killed_snapshot` | 同一 HN keyframe 中 `0x40/0x44/0x48` 的原始浮点值及向下取整后的中立野怪总数、己方野区和敌方野区候选快照 | 仅写入 `hero_jungle_minions_killed_snapshot_candidates`；一场回放的尾部相关性，不推导逐次清野事件 |
 | `16.19.820.7193 --events hero_kill_stats_snapshot` | 同一 HN keyframe 中已观察到的最大连杀、连杀次数、最大多杀及双杀至四杀计数候选快照 | 仅写入 `hero_kill_stats_snapshot_candidates`；六项尾部相关性来自一场回放，不推导击杀事件或时间 |
+| `16.19.820.7193 --events hero_ward_stats_snapshot` | 同一 HN keyframe 中已观察到的插眼、拆眼与探测守卫计数候选快照 | 仅写入 `hero_ward_stats_snapshot_candidates`；不推导守卫生成、位置、生命周期或拆除事件 |
 | `16.19.820.7193 --events hero_experience_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x28` 浮点候选经验值 | 仅写入 `hero_experience_snapshot_candidates`；小数及尾部差额保留，不推导升级或经验获取时点；KR 的 HN profile 不可用 |
 | `16.19.820.7193 --events hero_gold_earned_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x38` 浮点候选已赚金币值 | 仅写入 `hero_gold_earned_snapshot_candidates`；一场 HN 回放的字段相关性，不推导金币收入事件；KR 的 HN profile 不可用 |
 | `16.19.820.7193 --events hero_gold_spent_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x34` 候选已花金币值 | 仅写入 `hero_gold_spent_snapshot_candidates`；保留数值下降，不推导退款、出售或购买；KR 的 HN profile 不可用 |
@@ -119,7 +120,7 @@ node src/cli.js batch "D:\Replays\HN-example.rofl" "D:\Replays\KR-example.rofl" 
 
 ```powershell
 node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
-  --events hero_minions_killed_snapshot,hero_jungle_minions_killed_snapshot,hero_experience_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_champion_kills_snapshot,hero_deaths_snapshot,hero_assists_snapshot,hero_kill_stats_snapshot `
+  --events hero_minions_killed_snapshot,hero_jungle_minions_killed_snapshot,hero_experience_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_champion_kills_snapshot,hero_deaths_snapshot,hero_assists_snapshot,hero_kill_stats_snapshot,hero_ward_stats_snapshot `
   --out-dir "work\16-19-hero-stats-snapshots"
 ```
 

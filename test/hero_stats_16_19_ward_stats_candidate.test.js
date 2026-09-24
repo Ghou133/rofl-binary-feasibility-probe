@@ -9,29 +9,26 @@ const test = require('node:test');
 
 const { replayFromChunks } = require('./helpers/synthetic_replay');
 const {
-  HERO_KILL_STATS_SNAPSHOT_CANDIDATE_PROFILE: profile,
+  HERO_WARD_STATS_SNAPSHOT_CANDIDATE_PROFILE: profile,
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   analyzeReplayWithHeroStats,
-  assessHeroKillStatsSnapshotTail,
+  assessHeroWardStatsSnapshotTail,
   decodeHeroStatsByte,
-  decodeHeroKillStatsPayload,
-  decodeHeroKillStatsSnapshotCandidates,
+  decodeHeroWardStatsPayload,
+  decodeHeroWardStatsSnapshotCandidates,
   decodeHeroStatsSnapshotCandidateSet,
 } = require('../src/decoders/rofl_16_19_hero_stats_candidate');
 
 const BUILD = '16.19.820.7193';
-const CAPABILITY = 'hero_kill_stats_snapshot';
-const OUTPUT = 'hero_kill_stats_snapshot_candidates';
+const CAPABILITY = 'hero_ward_stats_snapshot';
+const OUTPUT = 'hero_ward_stats_snapshot_candidates';
 const FIELDS = [
-  ['LARGEST_KILLING_SPREE', 'largest_killing_spree_candidate', 0x58],
-  ['KILLING_SPREES', 'killing_sprees_candidate', 0x5c],
-  ['LARGEST_MULTI_KILL', 'largest_multi_kill_candidate', 0x60],
-  ['DOUBLE_KILLS', 'double_kills_candidate', 0x64],
-  ['TRIPLE_KILLS', 'triple_kills_candidate', 0x68],
-  ['QUADRA_KILLS', 'quadra_kills_candidate', 0x6c],
+  ['WARD_PLACED', 'ward_placed_candidate', 0x1a4],
+  ['WARD_KILLED', 'ward_killed_candidate', 0x1a8],
+  ['WARD_PLACED_DETECTOR', 'ward_placed_detector_candidate', 0x1ac],
 ];
 
-// Synthetic inverse only. The decoder owns the exact-image byte transform.
+// Synthetic inverse only. Production decoding remains bound to the exact-image transform.
 const ENCODE_BYTE = Array(256).fill(null);
 for (let encoded = 0; encoded < 256; encoded += 1) {
   ENCODE_BYTE[decodeHeroStatsByte(encoded)] = encoded;
@@ -66,8 +63,11 @@ function blockFor(participantId, timeMs, payload, packetId = 0x0276) {
 function fixture({ times = [0, 1000], values, tails, version = BUILD, stream = 2,
   extraBlocks = [], omitParticipant = null } = {}) {
   const rows = values ?? times.map((_, timeIndex) => Array.from({ length: 10 }, (__, index) =>
-    timeIndex === 0 ? valueRow() : Object.fromEntries(FIELDS.map(([, key], fieldIndex) =>
-      [key, fieldIndex === 2 || fieldIndex === 5 ? index % 4 : index + 1]))));
+    timeIndex === 0 ? valueRow() : {
+      ward_placed_candidate: index + 1,
+      ward_killed_candidate: index % 4,
+      ward_placed_detector_candidate: index % 3,
+    }));
   const body = Buffer.concat([
     ...times.flatMap((timeMs, timeIndex) => rows[timeIndex].flatMap((row, index) =>
       omitParticipant === index + 1 && timeIndex === 0 ? []
@@ -77,9 +77,10 @@ function fixture({ times = [0, 1000], values, tails, version = BUILD, stream = 2
   const replay = replayFromChunks([{ stream, body }], version);
   replay.tail.stats = (tails ?? rows.at(-1).map((row, index) =>
     Object.fromEntries(FIELDS.map(([tailField, key]) =>
-      [tailField, row[key] + (tailField === 'KILLING_SPREES' && index === 3 ? 1 : 0)]))))
-    .map((row) => ({ ...Object.fromEntries(Object.entries(row).map(([key, value]) =>
-      [key, String(value)])), ASSISTS: '0' }));
+      [tailField, row[key] + (tailField === 'WARD_PLACED' && index === 1 ? 1 : 0)]))))
+    .map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) =>
+      [key, String(value)])));
+  for (const row of replay.tail.stats) row.ASSISTS = '0';
   replay.tail.metadata.gameLength = times.at(-1) + 1000;
   return replay;
 }
@@ -96,7 +97,7 @@ function writeReplayWithTailStats(replay, outputPath) {
   ]));
 }
 
-test('profile pins six candidate u32 offsets and keeps one-Replay evidence limits', () => {
+test('profile pins three candidate u32 offsets and limits the output to observed snapshots', () => {
   assert.ok(HERO_STATS_SNAPSHOT_CAPABILITIES.includes(CAPABILITY));
   assert.equal(profile.replay_version, BUILD);
   assert.equal(profile.replay_block_packet_id, 0x0276);
@@ -105,91 +106,91 @@ test('profile pins six candidate u32 offsets and keeps one-Replay evidence limit
     assert.equal(profile[`${key.replace(/_candidate$/, '')}_u32le_offset_candidate`], offset);
   }
   assert.match(profile.evidence_scope, /one HN Replay/);
-  assert.ok(profile.known_limits.some((limit) => /no kill, multikill, or spree event/.test(limit)));
-  assert.ok(profile.known_limits.some((limit) => /0x2bc/.test(limit)));
-  assert.deepEqual(decodeHeroKillStatsPayload(payloadFor(Object.fromEntries(FIELDS.map(
-    ([, key], index) => [key, index + 1])))), {
-    status: 'PASS', ...Object.fromEntries(FIELDS.map(([, key], index) => [key, index + 1])),
+  assert.ok(profile.known_limits.some((limit) => /no ward placement.*event/.test(limit)));
+  assert.deepEqual(decodeHeroWardStatsPayload(payloadFor({
+    ward_placed_candidate: 17,
+    ward_killed_candidate: 3,
+    ward_placed_detector_candidate: 2,
+  })), {
+    status: 'PASS', ward_placed_candidate: 17, ward_killed_candidate: 3,
+    ward_placed_detector_candidate: 2,
   });
   const badPrefix = payloadFor();
   badPrefix[0] = 0x1d;
-  assert.equal(decodeHeroKillStatsPayload(badPrefix).status, 'DECODE_FAILED');
-  assert.equal(decodeHeroKillStatsPayload(badPrefix.subarray(1)).status, 'DECODE_FAILED');
+  assert.equal(decodeHeroWardStatsPayload(badPrefix).status, 'DECODE_FAILED');
+  assert.equal(decodeHeroWardStatsPayload(badPrefix.subarray(1)).status, 'DECODE_FAILED');
 });
 
-test('observed keyframes preserve six raw values, packet refs, and field-specific tail gaps', () => {
+test('observed keyframes retain three raw counts, provenance, and the placement tail gap', () => {
   const replay = fixture();
-  const result = decodeHeroKillStatsSnapshotCandidates(replay);
+  const result = decodeHeroWardStatsSnapshotCandidates(replay);
   assert.equal(result.status, 'CANDIDATE');
   assert.equal(result.event_count, 20);
   assert.equal(result.input_count, 20);
   assert.equal(result.keyframe_timestamp_count, 2);
   assert.equal(result.observed_participant_count, 10);
-  assert.equal(result.evidence_status, 'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_SIX_FIELD_TAIL_BOUND');
-  assert.equal(result.tail_gap_totals.KILLING_SPREES, 1);
-  for (const [field] of FIELDS.filter(([field]) => field !== 'KILLING_SPREES')) {
-    assert.equal(result.tail_gap_totals[field], 0);
-  }
-  assert.deepEqual(result.tail_gaps[3].field_gaps.KILLING_SPREES,
-    { last_snapshot_candidate: 4, final_tail: 5, unobserved_tail_gap: 1 });
-  assert.equal(result.tail_gaps[3].unobserved_tail_time_ms, 1000);
+  assert.equal(result.evidence_status, 'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_THREE_FIELD_TAIL_BOUND');
+  assert.deepEqual(result.tail_gap_totals,
+    { WARD_PLACED: 1, WARD_KILLED: 0, WARD_PLACED_DETECTOR: 0 });
+  assert.deepEqual(result.tail_gaps[1].field_gaps.WARD_PLACED,
+    { last_snapshot_candidate: 2, final_tail: 3, unobserved_tail_gap: 1 });
+  assert.equal(result.tail_gaps[1].unobserved_tail_time_ms, 1000);
   const last = result.events.at(-1);
-  assert.equal(last.event_type, 'HERO_KILL_STATS_SNAPSHOT_CANDIDATE');
+  assert.equal(last.event_type, 'HERO_WARD_STATS_SNAPSHOT_CANDIDATE');
   assert.equal(last.observation_kind, 'KEYFRAME_SNAPSHOT');
   assert.equal(last.confidence, 'CANDIDATE');
   assert.equal(last.raw_packet_ref.packet_id, 0x0276);
   assert.equal(last.raw_packet_ref.raw_param, 0x400000b7);
   assert.equal(last.raw_packet_ref.replay_sha256, replay.source_sha256);
   assert.equal(last.raw_packet_ref.raw_payload_sha256,
-    crypto.createHash('sha256').update(payloadFor(Object.fromEntries(FIELDS.map(
-      ([, key], fieldIndex) => [key, fieldIndex === 2 || fieldIndex === 5 ? 1 : 10]))))
-      .digest('hex'));
+    crypto.createHash('sha256').update(payloadFor({ ward_placed_candidate: 10,
+      ward_killed_candidate: 1, ward_placed_detector_candidate: 0 })).digest('hex'));
   for (const [, key] of FIELDS) {
     assert.equal(last.field_confidence[key], 'CANDIDATE_ONE_REPLAY_TAIL_CORRELATION');
   }
-  assert.equal(Object.hasOwn(last, 'kill_event_time_ms'), false);
-  assert.equal(Object.hasOwn(last, 'spree_start_time_ms'), false);
+  assert.equal(Object.hasOwn(last, 'ward_event_time_ms'), false);
+  assert.equal(Object.hasOwn(last, 'ward_location'), false);
 });
 
-test('all six tail fields are required, and failures stay local to this selected capability', () => {
+test('all three tail fields are required and failures stay local to the selected capability', () => {
   const replay = fixture();
-  assert.deepEqual(assessHeroKillStatsSnapshotTail(replay).required_fields.map((row) => row.field),
+  assert.deepEqual(assessHeroWardStatsSnapshotTail(replay).required_fields.map((row) => row.field),
     FIELDS.map(([field]) => field));
   for (const [field] of FIELDS) {
     const missing = fixture();
     delete missing.tail.stats[0][field];
-    assert.equal(assessHeroKillStatsSnapshotTail(missing).status, 'MISSING_INPUT');
+    assert.equal(assessHeroWardStatsSnapshotTail(missing).status, 'MISSING_INPUT');
     const outcomes = decodeHeroStatsSnapshotCandidateSet(missing,
       [CAPABILITY, 'hero_assists_snapshot']);
     assert.equal(outcomes[CAPABILITY].status, 'MISSING_INPUT');
     assert.equal(outcomes.hero_assists_snapshot.status, 'CANDIDATE');
     const invalid = fixture();
     invalid.tail.stats[0][field] = '-1';
-    assert.equal(decodeHeroKillStatsSnapshotCandidates(invalid).status, 'UNSUPPORTED');
+    assert.equal(decodeHeroWardStatsSnapshotCandidates(invalid).status, 'UNSUPPORTED');
     const beyondU32 = fixture();
     beyondU32.tail.stats[0][field] = '4294967296';
-    assert.equal(decodeHeroKillStatsSnapshotCandidates(beyondU32).status, 'UNSUPPORTED');
+    assert.equal(decodeHeroWardStatsSnapshotCandidates(beyondU32).status, 'UNSUPPORTED');
   }
   const noTail = fixture();
   noTail.tail.stats = null;
-  assert.equal(decodeHeroKillStatsSnapshotCandidates(noTail).status, 'MISSING_INPUT');
+  assert.equal(decodeHeroWardStatsSnapshotCandidates(noTail).status, 'MISSING_INPUT');
 });
 
-test('each candidate field rejects decreasing observations and Replay-tail overruns', () => {
+test('each count rejects decreases and Replay-tail overruns independently', () => {
   for (const [field, key] of FIELDS) {
     const first = Array.from({ length: 10 }, () => valueRow(3));
     const second = Array.from({ length: 10 }, () => valueRow(3));
     second[0][key] = 2;
     const tails = Array.from({ length: 10 }, () =>
       Object.fromEntries(FIELDS.map(([tailField]) => [tailField, 5])));
-    const decreasing = decodeHeroKillStatsSnapshotCandidates(fixture({
+    const decreasing = decodeHeroWardStatsSnapshotCandidates(fixture({
       values: [first, second], tails,
     }));
     assert.equal(decreasing.status, 'DECODE_FAILED', field);
     assert.match(decreasing.error, new RegExp(`decreasing observed ${field}`));
     const aboveTail = fixture();
     aboveTail.tail.stats[1][field] = '0';
-    const overrun = decodeHeroKillStatsSnapshotCandidates(aboveTail);
+    const overrun = decodeHeroWardStatsSnapshotCandidates(aboveTail);
     assert.equal(overrun.status, 'DECODE_FAILED', field);
     assert.match(overrun.error, new RegExp(`exceeds Replay tail ${field}`));
     assert.equal(overrun.events, null);
@@ -197,28 +198,28 @@ test('each candidate field rejects decreasing observations and Replay-tail overr
 });
 
 test('wrong build, foreign route, malformed packet, source mutation, and incomplete roster fail closed', () => {
-  assert.equal(decodeHeroKillStatsSnapshotCandidates(
+  assert.equal(decodeHeroWardStatsSnapshotCandidates(
     fixture({ version: '16.19.820.7194' })).status, 'UNSUPPORTED');
-  assert.equal(decodeHeroKillStatsSnapshotCandidates(fixture({ stream: 1 })).status,
+  assert.equal(decodeHeroWardStatsSnapshotCandidates(fixture({ stream: 1 })).status,
     'PROFILE_UNAVAILABLE');
   const foreign = replayFromChunks([{ stream: 2, body: Buffer.concat(
     Array.from({ length: 10 }, (_, index) =>
       blockFor(index + 1, 0, Buffer.from([1, 2]))),
   ) }], BUILD);
-  assert.equal(decodeHeroKillStatsSnapshotCandidates(foreign).status, 'PROFILE_UNAVAILABLE');
+  assert.equal(decodeHeroWardStatsSnapshotCandidates(foreign).status, 'PROFILE_UNAVAILABLE');
   const mixed = fixture({ times: [0], extraBlocks: [blockFor(1, 0, Buffer.from([1, 2]))] });
-  assert.equal(decodeHeroKillStatsSnapshotCandidates(mixed).status, 'DECODE_FAILED');
+  assert.equal(decodeHeroWardStatsSnapshotCandidates(mixed).status, 'DECODE_FAILED');
   const tampered = fixture();
   tampered.buffer[0] = 0;
-  assert.match(decodeHeroKillStatsSnapshotCandidates(tampered).error, /Replay source failed/);
+  assert.match(decodeHeroWardStatsSnapshotCandidates(tampered).error, /Replay source failed/);
   const missingHero = fixture({ times: [0], omitParticipant: 3 });
-  assert.match(decodeHeroKillStatsSnapshotCandidates(missingHero).error,
+  assert.match(decodeHeroWardStatsSnapshotCandidates(missingHero).error,
     /lacks one or more hero params/);
 });
 
-test('bound HeroStats scan reuses the same observations without a second chunk walk', () => {
+test('bound HeroStats scan reuses observations without a second chunk walk', () => {
   const replay = fixture();
-  const standalone = decodeHeroKillStatsSnapshotCandidates(replay);
+  const standalone = decodeHeroWardStatsSnapshotCandidates(replay);
   const { heroStatsScan } = analyzeReplayWithHeroStats(replay, { strict: true });
   Object.defineProperty(replay, 'chunks', { get() {
     throw new Error('precollected decode must not scan Replay chunks');
@@ -228,15 +229,15 @@ test('bound HeroStats scan reuses the same observations without a second chunk w
 });
 
 test('selected API and capability query expose only bounded candidate snapshots', () => {
-  const { decodeSemanticReplay, getHeroKillStatsSnapshotCandidates } = require('../src/semantic_api');
+  const { decodeSemanticReplay, getHeroWardStatsSnapshotCandidates } = require('../src/semantic_api');
   const { capabilityQuery } = require('../src/cli');
   const replay = fixture();
   const decoded = decodeSemanticReplay(replay, { capabilities: [CAPABILITY] });
   assert.equal(decoded.status, 'EXPERIMENTAL_CANDIDATE');
   assert.equal(decoded.capability_results[CAPABILITY].status, 'CANDIDATE');
   assert.deepEqual(Object.keys(decoded.events), [OUTPUT]);
-  assert.equal(getHeroKillStatsSnapshotCandidates(decoded).length, 20);
-  assert.equal(decoded.events.hero_kill_events, undefined);
+  assert.equal(getHeroWardStatsSnapshotCandidates(decoded).length, 20);
+  assert.equal(decoded.events.ward_events, undefined);
   const row = capabilityQuery(replay).capabilities.find((entry) => entry.capability === CAPABILITY);
   assert.equal(row.status, 'CANDIDATE');
   assert.equal(row.output, OUTPUT);
@@ -244,15 +245,15 @@ test('selected API and capability query expose only bounded candidate snapshots'
     'replay', 'replay_tail_statsJson', ...FIELDS.map(([field]) => `replay_tail_${field}`),
   ]);
   assert.deepEqual(row.missing_inputs, []);
-  delete replay.tail.stats[2].TRIPLE_KILLS;
+  delete replay.tail.stats[2].WARD_KILLED;
   assert.deepEqual(capabilityQuery(replay).capabilities
     .find((entry) => entry.capability === CAPABILITY).missing_inputs,
-  ['replay_tail_TRIPLE_KILLS']);
+  ['replay_tail_WARD_KILLED']);
 });
 
-test('selected CLI writes candidate JSONL with six snapshot counts', async (t) => {
+test('selected CLI writes three-count snapshot candidates as JSONL', async (t) => {
   const { main } = require('../src/cli');
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-kill-stats-cli-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-ward-stats-cli-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const input = path.join(root, 'synthetic-16.19.rofl');
   const output = path.join(root, 'output');
@@ -262,10 +263,11 @@ test('selected CLI writes candidate JSONL with six snapshot counts', async (t) =
   assert.equal(summary.status, 'CANDIDATE');
   const replayDirectory = path.join(output, summary.replay_artifacts[0].artifact_directory);
   const semantic = JSON.parse(fs.readFileSync(path.join(replayDirectory, 'semantic_run.json'), 'utf8'));
-  assert.equal(semantic.capability_results[CAPABILITY].tail_gap_totals.KILLING_SPREES, 1);
+  assert.equal(semantic.capability_results[CAPABILITY].tail_gap_totals.WARD_PLACED, 1);
   const rows = fs.readFileSync(path.join(replayDirectory, `${OUTPUT}.jsonl`), 'utf8')
     .trim().split(/\r?\n/).map((line) => JSON.parse(line));
   assert.equal(rows.length, 20);
-  assert.equal(rows.at(-1).largest_killing_spree_candidate, 10);
+  assert.equal(rows.at(-1).ward_placed_candidate, 10);
+  assert.equal(rows.at(-1).ward_killed_candidate, 1);
   assert.equal(rows.at(-1).raw_packet_ref.packet_id, 0x0276);
 });

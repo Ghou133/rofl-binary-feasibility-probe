@@ -30,6 +30,11 @@ const KILL_STATS_FIELDS = Object.freeze([
   Object.freeze({ tailField: 'TRIPLE_KILLS', candidateKey: 'triple_kills_candidate', offset: 0x68 }),
   Object.freeze({ tailField: 'QUADRA_KILLS', candidateKey: 'quadra_kills_candidate', offset: 0x6c }),
 ]);
+const WARD_STATS_FIELDS = Object.freeze([
+  Object.freeze({ tailField: 'WARD_PLACED', candidateKey: 'ward_placed_candidate', offset: 0x1a4 }),
+  Object.freeze({ tailField: 'WARD_KILLED', candidateKey: 'ward_killed_candidate', offset: 0x1a8 }),
+  Object.freeze({ tailField: 'WARD_PLACED_DETECTOR', candidateKey: 'ward_placed_detector_candidate', offset: 0x1ac }),
+]);
 const CHAMPION_KILLS_MIRROR_OFFSET = 0x33c;
 const RUNTIME_IMAGE_SHA256 = '7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f780af11ed6df76d';
 const LOOKUP_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b';
@@ -43,6 +48,7 @@ const HERO_STATS_SNAPSHOT_CAPABILITIES = Object.freeze([
   'hero_deaths_snapshot',
   'hero_assists_snapshot',
   'hero_kill_stats_snapshot',
+  'hero_ward_stats_snapshot',
 ]);
 const HERO_STATS_SNAPSHOT_CAPABILITY_SET = new Set(HERO_STATS_SNAPSHOT_CAPABILITIES);
 const PRECOLLECTED_SCAN_SOURCE = new WeakMap();
@@ -274,12 +280,38 @@ const HERO_KILL_STATS_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
   quadra_kills_u32le_offset_candidate: 0x6c,
   evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
   lookup_table_sha256: LOOKUP_TABLE_SHA256,
-  evidence_scope: 'exact HN HeroStats route and transform; six candidate u32 offsets across 350 keyframe snapshots in one HN Replay, with participant-aligned Replay-tail comparisons',
+  evidence_scope: 'exact HN HeroStats route and transform; six candidate u32 offsets across 350 participant snapshots from 35 keyframes in one HN Replay, with participant-aligned Replay-tail comparisons',
   known_limits: Object.freeze([
     'Only observed keyframe 0x0276 snapshots are emitted; no kill, multikill, or spree event, timing, attribution, or intervening value is inferred.',
     'The six field interpretations and hero participant mapping remain candidates from one HN Replay, not exact-runtime field semantics.',
     'The last observed KILLING_SPREES snapshot is below its Replay tail for one participant; that gap is retained without explanation or interpolation.',
     'Offset 0x6c matches the QUADRA_KILLS tail, but its final values also mirror offset 0x2bc; final-only equality does not resolve storage identity.',
+  ]),
+});
+
+const HERO_WARD_STATS_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-hero-ward-stats-keyframe-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_ward_stats_snapshot',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: PACKET_ID,
+  stream_tags: Object.freeze([2, 3]),
+  hero_raw_param_first: HERO_PARAM_FIRST,
+  hero_raw_param_last: HERO_PARAM_LAST,
+  payload_length: PAYLOAD_LENGTH,
+  decoded_blob_length: BLOB_LENGTH,
+  ward_placed_u32le_offset_candidate: 0x1a4,
+  ward_killed_u32le_offset_candidate: 0x1a8,
+  ward_placed_detector_u32le_offset_candidate: 0x1ac,
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  evidence_scope: 'exact HN HeroStats route and transform; three candidate u32 offsets across 350 participant snapshots from 35 keyframes in one HN Replay, with participant-aligned Replay-tail comparisons',
+  known_limits: Object.freeze([
+    'Only observed keyframe 0x0276 snapshots are emitted; no ward placement, removal, detection, or kill event, timing, location, or intervening count is inferred.',
+    'The three field interpretations and hero participant mapping remain candidates from one HN Replay, not exact-runtime field semantics.',
+    'The last observed WARD_PLACED snapshot is below its Replay tail for one participant; that gap is retained without explanation or interpolation.',
+    'Ward entity, type, ownership, and map truth are outside this candidate snapshot profile.',
   ]),
 });
 
@@ -407,6 +439,13 @@ function decodeHeroKillStatsPayload(payload) {
     [candidateKey, decoded.blob.readUInt32LE(offset)])) };
 }
 
+function decodeHeroWardStatsPayload(payload) {
+  const decoded = decodeHeroStatsBlob(payload);
+  if (decoded.status !== 'PASS') return decoded;
+  return { status: 'PASS', ...Object.fromEntries(WARD_STATS_FIELDS.map(({ candidateKey, offset }) =>
+    [candidateKey, decoded.blob.readUInt32LE(offset)])) };
+}
+
 function assessHeroStatsTail(replay, field) {
   const stats = replay?.tail?.stats;
   if (!Array.isArray(stats)) {
@@ -477,8 +516,25 @@ function assessHeroAssistsSnapshotTail(replay) {
   return assessHeroStatsTail(replay, 'ASSISTS');
 }
 
+function assessHeroStatsUInt32Tail(replay, field) {
+  const assessment = assessHeroStatsTail(replay, field);
+  if (assessment.status === 'PASS' && assessment.values.some((value) => value > 0xffffffff)) {
+    return { field, status: 'UNSUPPORTED',
+      error: `Replay tail ${field} exceeds the u32 candidate field range` };
+  }
+  return assessment;
+}
+
 function assessHeroKillStatsSnapshotTail(replay) {
-  const assessments = KILL_STATS_FIELDS.map(({ tailField }) => assessHeroStatsTail(replay, tailField));
+  const assessments = KILL_STATS_FIELDS.map(({ tailField }) => assessHeroStatsUInt32Tail(replay, tailField));
+  const failure = assessments.find((row) => row.status !== 'PASS');
+  if (failure) return { ...failure, required_fields: assessments };
+  return { ...assessments[0], required_fields: assessments,
+    valuesByField: Object.fromEntries(assessments.map(({ field, values }) => [field, values])) };
+}
+
+function assessHeroWardStatsSnapshotTail(replay) {
+  const assessments = WARD_STATS_FIELDS.map(({ tailField }) => assessHeroStatsUInt32Tail(replay, tailField));
   const failure = assessments.find((row) => row.status !== 'PASS');
   if (failure) return { ...failure, required_fields: assessments };
   return { ...assessments[0], required_fields: assessments,
@@ -1222,6 +1278,72 @@ function decodeHeroKillStatsFromScan(replay, scan) {
   };
 }
 
+function decodeHeroWardStatsFromScan(replay, scan) {
+  const profile = HERO_WARD_STATS_SNAPSHOT_CANDIDATE_PROFILE;
+  const collected = collectHeroStatsSnapshotCandidates(replay, {
+    profile,
+    assessTail: assessHeroWardStatsSnapshotTail,
+    decodePayload: decodeHeroWardStatsPayload,
+    valueKey: WARD_STATS_FIELDS[0].candidateKey,
+    tailProjection: (value) => value,
+  }, scan);
+  if (collected.status !== 'CANDIDATE') return collected;
+  const { observations, observedDeclines, previous, lastTimes, tailValues, gameLengthMs, ...base } = collected;
+  const tail = assessHeroWardStatsSnapshotTail(replay);
+  const previousValues = Object.fromEntries(WARD_STATS_FIELDS.map(({ candidateKey }) =>
+    [candidateKey, Array(10).fill(null)]));
+  const events = [];
+  const fail = (error) => ({ profile_id: profile.id, input_packet_id: PACKET_ID,
+    status: 'DECODE_FAILED', event_count: null, input_count: base.input_count,
+    scanned_block_count: base.scanned_block_count, events: null, error });
+  for (const observation of observations) {
+    const index = observation.participantId - 1;
+    const values = {};
+    const confidence = {};
+    for (const { tailField, candidateKey } of WARD_STATS_FIELDS) {
+      const value = observation.decoded[candidateKey];
+      if (previousValues[candidateKey][index] !== null
+        && value < previousValues[candidateKey][index]) {
+        return fail(`HN participant ${observation.participantId} has a decreasing observed ${tailField} snapshot`);
+      }
+      if (value > tail.valuesByField[tailField][index]) {
+        return fail(`HN participant ${observation.participantId} exceeds Replay tail ${tailField}`);
+      }
+      previousValues[candidateKey][index] = value;
+      values[candidateKey] = value;
+      confidence[candidateKey] = 'CANDIDATE_ONE_REPLAY_TAIL_CORRELATION';
+    }
+    events.push(snapshotEvent(replay, profile, observation,
+      'HERO_WARD_STATS_SNAPSHOT_CANDIDATE',
+      'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_THREE_FIELD_TAIL_BOUND', values, confidence));
+  }
+  const tailGaps = Array.from({ length: 10 }, (_, index) => ({
+    participant_id_candidate: index + 1,
+    last_snapshot_replay_time_ms: lastTimes[index],
+    field_gaps: Object.fromEntries(WARD_STATS_FIELDS.map(({ tailField, candidateKey }) => [
+      tailField,
+      { last_snapshot_candidate: previousValues[candidateKey][index],
+        final_tail: tail.valuesByField[tailField][index],
+        unobserved_tail_gap: tail.valuesByField[tailField][index]
+          - previousValues[candidateKey][index] },
+    ])),
+    unobserved_tail_time_ms: gameLengthMs === null ? null : gameLengthMs - lastTimes[index],
+  }));
+  return {
+    ...base,
+    evidence_status: 'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_THREE_FIELD_TAIL_BOUND',
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    final_tail_values: tail.valuesByField,
+    observed_last_values: previousValues,
+    tail_gaps: tailGaps,
+    tail_gap_totals: Object.fromEntries(WARD_STATS_FIELDS.map(({ tailField }) => [
+      tailField,
+      tailGaps.reduce((sum, row) => sum + row.field_gaps[tailField].unobserved_tail_gap, 0),
+    ])),
+    events,
+  };
+}
+
 function decodeHeroStatsSnapshotCandidateSet(replay, capabilities, precollectedScan) {
   if (!Array.isArray(capabilities) && !(capabilities instanceof Set)) {
     throw new TypeError('HeroStats candidate capabilities must be an array or Set');
@@ -1262,6 +1384,9 @@ function decodeHeroStatsSnapshotCandidateSet(replay, capabilities, precollectedS
   }
   if (selected.has('hero_kill_stats_snapshot')) {
     outcomes.hero_kill_stats_snapshot = decodeHeroKillStatsFromScan(replay, scan);
+  }
+  if (selected.has('hero_ward_stats_snapshot')) {
+    outcomes.hero_ward_stats_snapshot = decodeHeroWardStatsFromScan(replay, scan);
   }
   return outcomes;
 }
@@ -1311,6 +1436,11 @@ function decodeHeroKillStatsSnapshotCandidates(replay) {
     ['hero_kill_stats_snapshot']).hero_kill_stats_snapshot;
 }
 
+function decodeHeroWardStatsSnapshotCandidates(replay) {
+  return decodeHeroStatsSnapshotCandidateSet(replay,
+    ['hero_ward_stats_snapshot']).hero_ward_stats_snapshot;
+}
+
 module.exports = {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   HERO_ASSISTS_SNAPSHOT_CANDIDATE_PROFILE,
@@ -1320,6 +1450,7 @@ module.exports = {
   HERO_GOLD_EARNED_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_GOLD_SPENT_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_KILL_STATS_SNAPSHOT_CANDIDATE_PROFILE,
+  HERO_WARD_STATS_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_JUNGLE_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
   assessHeroAssistsSnapshotTail,
@@ -1330,6 +1461,7 @@ module.exports = {
   assessHeroGoldSpentSnapshotTail,
   assessHeroJungleMinionsKilledSnapshotTail,
   assessHeroKillStatsSnapshotTail,
+  assessHeroWardStatsSnapshotTail,
   assessHeroMinionsKilledSnapshotTail,
   analyzeReplayWithHeroStats,
   decodeHeroStatsByte,
@@ -1349,6 +1481,8 @@ module.exports = {
   decodeHeroJungleMinionsKilledSnapshotCandidates,
   decodeHeroKillStatsPayload,
   decodeHeroKillStatsSnapshotCandidates,
+  decodeHeroWardStatsPayload,
+  decodeHeroWardStatsSnapshotCandidates,
   decodeHeroStatsSnapshotCandidateSet,
   decodeHeroMinionsKilledPayload,
   decodeHeroMinionsKilledSnapshotCandidates,
