@@ -31,7 +31,8 @@ test('Broadcast participant candidates are limited to exact observed raw params'
   fs.writeFileSync(image, Buffer.from([1, 2, 3]));
   const params = [
     ...Array.from({ length: 10 }, (_, index) => 0x400000ae + index),
-    0x400001b1, 0x400001b7, 0x400002b1,
+    0x400001b1, 0x400001af, 0x400001b7, 0x400001b0,
+    0x400002af, 0x400002b1,
   ];
   const replay = replayFromChunks(params.map((param, index) => ({
     stream: index === 0 ? 2 : 1,
@@ -60,20 +61,25 @@ test('Broadcast participant candidates are limited to exact observed raw params'
   const result = decodeHeroInventoryBroadcastCandidates(replay, null,
     { runtimeImagePath: image });
   assert.equal(result.status, 'CANDIDATE');
-  assert.match(result.profile_id, /inventory-broadcast-runtime-candidate-v2$/);
-  assert.equal(result.input_count, 13);
-  assert.equal(result.event_count, 13);
-  assert.equal(result.unmapped_raw_param_count, 2);
+  assert.match(result.profile_id, /inventory-broadcast-runtime-candidate-v3$/);
+  assert.equal(result.input_count, 16);
+  assert.equal(result.event_count, 16);
+  assert.equal(result.unmapped_raw_param_count, 4);
   assert.deepEqual(result.events.map((row) => row.participant_id_candidate),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 4, null, null]);
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 4, 2, null, null, null, null]);
   assert.deepEqual(result.events.map((row) => row.field_confidence.participant_id_candidate),
-    [...Array(11).fill('CANDIDATE'), 'UNAVAILABLE', 'UNAVAILABLE']);
+    [...Array(12).fill('CANDIDATE'), ...Array(4).fill('UNAVAILABLE')]);
   assert.deepEqual(result.events.map((row) => row.raw_param), params);
   assert.deepEqual(result.events.map((row) => row.raw_packet_ref.raw_param), params);
+  assert.equal(result.events[11].raw_packet_ref.packet_id, 0x03ef);
+  assert.equal(result.events[11].raw_packet_ref.raw_payload_sha256,
+    crypto.createHash('sha256').update(Buffer.alloc(79)).digest('hex'));
+  assert.equal(result.events[11].semantic_status,
+    'CANDIDATE_EXACT_RUNTIME_BROADCAST_TWO_REPLAYS');
   assert.ok(result.events.every((row) =>
     row.raw_packet_ref.replay_sha256 === replay.source_sha256
     && row.raw_packet_ref.packet_id === 0x03ef
     && row.confidence === 'CANDIDATE'
-    && row.known_limits.some((limit) => limit.includes('one HN Replay'))));
+    && row.known_limits.some((limit) => limit.includes('no generic masking rule'))));
   assert.equal(mock.mock.callCount(), 1);
 });
