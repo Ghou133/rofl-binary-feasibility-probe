@@ -66,6 +66,24 @@ const HERO_DEATH_TIMER_CANDIDATE_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_LEVEL_STATE_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-hero-level-state-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_level_state',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: 0x02b3,
+  hero_raw_param_first: 0x400000ae,
+  hero_raw_param_last: 0x400000b7,
+  evidence_runtime_image_sha256: '7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f780af11ed6df76d',
+  evidence_scope: 'exact HN runtime 0x02b3 deserializer and one HN Replay; observed level packets can have gaps',
+  known_limits: Object.freeze([
+    'Only levels present in HN route 0x02b3 are emitted; missing updates are not reconstructed.',
+    'Participant mapping and level meaning remain candidate semantics from one Replay.',
+    'No experience, level-before, or complete level timeline is inferred.',
+  ]),
+});
+
 const TIMER_FLOAT_CODES = new Set([1, 2, 4, 6]);
 
 function packetRef(replay, block, chunk) {
@@ -101,14 +119,17 @@ function finalDeathCounts(replay) {
     return { status: 'UNSUPPORTED', error: `candidate scope requires 10 participants; got ${stats.length}` };
   }
   const rawCounts = stats.map((row) => row?.NUM_DEATHS);
+  if (rawCounts.some((value) => value === undefined || value === null || value === '')) {
+    return { status: 'MISSING_INPUT', missing_input: 'Replay tail NUM_DEATHS for all 10 participants' };
+  }
   if (rawCounts.some((value) =>
     !(typeof value === 'string' && /^\d+$/.test(value))
     && !(Number.isSafeInteger(value) && value >= 0))) {
-    return { status: 'MISSING_INPUT', missing_input: 'Replay tail NUM_DEATHS for all 10 participants' };
+    return { status: 'UNSUPPORTED', error: 'Replay tail NUM_DEATHS must be nonnegative integers' };
   }
   const counts = rawCounts.map(Number);
   if (counts.some((count) => !Number.isSafeInteger(count))) {
-    return { status: 'MISSING_INPUT', missing_input: 'Replay tail NUM_DEATHS must be a safe integer' };
+    return { status: 'UNSUPPORTED', error: 'Replay tail NUM_DEATHS must be safe integers' };
   }
   return { status: 'PASS', counts, stats };
 }
@@ -129,6 +150,7 @@ function collectCandidateRoutes(replay) {
       profile.corroborating_replay_block_packet_id,
     ]),
     HERO_DEATH_TIMER_CANDIDATE_PROFILE.reincarnate_alive_packet_id,
+    HERO_LEVEL_STATE_CANDIDATE_PROFILE.replay_block_packet_id,
   ]);
   const routes = new Map([...relevantPacketIds].map((packetId) => [packetId, []]));
   try {
@@ -543,13 +565,174 @@ function decodeHeroDeathTimerCandidates(replay, collected = null) {
   };
 }
 
+function rotateLeftByte(value, count) {
+  return ((value << count) | (value >>> (8 - count))) & 0xff;
+}
+
+function decodeHeroLevelPayload(payload) {
+  if (!Buffer.isBuffer(payload) || payload.length < 1) return null;
+  const code = payload[0] & 7;
+  // In the exact 16.19 image, the 0x02b3 deserializer reads this three-bit
+  // selector at RVA 0xf21d4c and writes object+0x10. Its one-byte helper at
+  // 0xe85fc0 re-encodes the object field; its inverse below
+  // recovers the field value from the second Replay payload byte.
+  if (code === 3 && payload.length === 1) return { level_candidate: 1, code };
+  if (code === 5 && payload.length === 1) return { level_candidate: 2, code };
+  if (![0, 1, 2, 6].includes(code) || payload.length !== 2) return null;
+  const encoded = payload[1];
+  const step = (0x18 - rotateLeftByte(encoded, 3)) & 0xff;
+  const level = (rotateLeftByte(step ^ 0x2d, 1) + 0x19) & 0xff;
+  return { level_candidate: level, code };
+}
+
+function finalLevelValues(replay) {
+  const stats = replay?.tail?.stats;
+  if (!Array.isArray(stats)) {
+    return { status: 'MISSING_INPUT', missing_input: 'Replay tail statsJson participant rows' };
+  }
+  if (stats.length !== 10) {
+    return { status: 'UNSUPPORTED', error: `candidate scope requires 10 participants; got ${stats.length}` };
+  }
+  const values = stats.map((row) => row?.LEVEL);
+  if (values.some((value) => value === undefined || value === null || value === '')) {
+    return { status: 'MISSING_INPUT', missing_input: 'Replay tail LEVEL for all 10 participants' };
+  }
+  if (values.some((value) =>
+    !(typeof value === 'string' && /^\d+$/.test(value))
+    && !(Number.isSafeInteger(value) && value >= 1))) {
+    return { status: 'UNSUPPORTED', error: 'Replay tail LEVEL must be positive integers' };
+  }
+  const levels = values.map(Number);
+  if (levels.some((value) => !Number.isSafeInteger(value) || value < 1 || value > 30)) {
+    return { status: 'UNSUPPORTED', error: 'Replay tail LEVEL is outside the observed 1–30 candidate scope' };
+  }
+  return { status: 'PASS', levels };
+}
+
+function candidateTailStatAssessment(replay, capability) {
+  const field = capability === 'hero_level_state' ? 'LEVEL'
+    : ['hero_death', 'hero_death_timer'].includes(capability) ? 'NUM_DEATHS' : null;
+  if (!field) return null;
+  const result = field === 'LEVEL' ? finalLevelValues(replay) : finalDeathCounts(replay);
+  return { field, status: result.status, error: result.error ?? result.missing_input ?? null };
+}
+
+function decodeHeroLevelStateCandidates(replay, collected = null) {
+  if (replay?.header?.version !== REPLAY_VERSION) {
+    return { status: 'UNSUPPORTED', event_count: null, input_count: null, events: null,
+      error: `hero_level_state candidate supports only ${REPLAY_VERSION}` };
+  }
+  const scan = collected ?? collectCandidateRoutes(replay);
+  if (scan.error) {
+    return { status: 'DECODE_FAILED', event_count: null, input_count: null, events: null,
+      error: `Replay framing failed: ${scan.error}` };
+  }
+  const profile = HERO_LEVEL_STATE_CANDIDATE_PROFILE;
+  const { routes, walk } = scan;
+  const rows = routes.get(profile.replay_block_packet_id).filter(({ block }) =>
+    (block.param >>> 0) >= profile.hero_raw_param_first
+    && (block.param >>> 0) <= profile.hero_raw_param_last);
+  if (rows.length === 0) {
+    return { status: 'PROFILE_UNAVAILABLE', profile_id: profile.id,
+      event_count: null, input_count: null, events: null,
+      scanned_block_count: walk.block_count,
+      error: 'HN 0x02b3 hero-parameter level route is absent from this Replay' };
+  }
+  const inputCount = rows.length;
+  const fail = (error) => ({
+    status: 'DECODE_FAILED', profile_id: profile.id,
+    event_count: null, input_count: inputCount, events: null,
+    scanned_block_count: walk.block_count, error,
+  });
+  const final = finalLevelValues(replay);
+  if (final.status !== 'PASS') {
+    return { ...final, profile_id: profile.id,
+      event_count: null, input_count: inputCount, events: null };
+  }
+  const sorted = [...rows].sort((left, right) => left.block.timestamp_ms - right.block.timestamp_ms
+    || left.chunk.index - right.chunk.index || left.block.offset - right.block.offset);
+  const lastLevel = Array(10).fill(null);
+  const observedByPlayer = Array.from({ length: 10 }, () => new Set());
+  const decoded = [];
+  for (const row of sorted) {
+    const participantId = (row.block.param >>> 0) - 0x400000ad;
+    const payload = decodeHeroLevelPayload(row.block.payload);
+    if (!payload || payload.level_candidate < 1 || payload.level_candidate > 30) {
+      return fail(`HN level payload is outside the exact-runtime candidate shape at ${row.block.timestamp_ms} ms`);
+    }
+    const index = participantId - 1;
+    const previous = lastLevel[index];
+    if (previous !== null && payload.level_candidate <= previous) {
+      return fail(`HN participant ${participantId} has a nonincreasing observed level`);
+    }
+    if (payload.level_candidate > final.levels[index]) {
+      return fail(`HN participant ${participantId} exceeds Replay tail LEVEL`);
+    }
+    lastLevel[index] = payload.level_candidate;
+    observedByPlayer[index].add(payload.level_candidate);
+    decoded.push({ row, participantId, payload });
+  }
+  const missingLevelUpdates = final.levels.map((finalLevel, index) => {
+    const missing = [];
+    for (let level = 2; level <= finalLevel; level += 1) {
+      if (!observedByPlayer[index].has(level)) missing.push(level);
+    }
+    return missing;
+  });
+  const events = decoded.map(({ row, participantId, payload }) => ({
+    event_type: 'HERO_LEVEL_STATE_CANDIDATE',
+    game_version: REPLAY_VERSION,
+    patch: '16.19',
+    build_profile: profile.id,
+    replay_sha256: replay.source_sha256 ?? null,
+    replay_time_ms: row.block.timestamp_ms,
+    hero_raw_param: row.block.param >>> 0,
+    participant_id_candidate: participantId,
+    level_after_candidate: payload.level_candidate,
+    observation_kind: payload.level_candidate === 1
+      ? 'LEVEL_ONE_OBSERVATION' : 'HIGHER_LEVEL_OBSERVATION',
+    payload_selector_code: payload.code,
+    confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_EXACT_RUNTIME_FIELD_WITH_SEQUENCE_GAPS',
+    field_confidence: {
+      replay_time_ms: 'VERIFIED_DIRECT',
+      hero_raw_param: 'VERIFIED_DIRECT',
+      participant_id_candidate: 'CANDIDATE',
+      level_after_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD',
+    },
+    raw_packet_ref: packetRef(replay, row.block, row.chunk),
+    known_limits: [...profile.known_limits],
+  }));
+  return {
+    status: 'CANDIDATE',
+    evidence_status: 'CANDIDATE_EXACT_RUNTIME_FIELD_WITH_SEQUENCE_GAPS',
+    profile_id: profile.id,
+    evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+    event_count: events.length,
+    input_count: inputCount,
+    input_packet_id: profile.replay_block_packet_id,
+    scanned_block_count: walk.block_count,
+    final_levels: final.levels,
+    observed_max_levels: lastLevel,
+    missing_level_updates: missingLevelUpdates,
+    missing_level_update_count: missingLevelUpdates.reduce((sum, levels) => sum + levels.length, 0),
+    level_one_packet_count: events.filter((event) =>
+      event.observation_kind === 'LEVEL_ONE_OBSERVATION').length,
+    events,
+  };
+}
+
 module.exports = {
   REPLAY_VERSION,
   HERO_DEATH_CANDIDATE_PROFILES,
   HERO_DEATH_TIMER_CANDIDATE_PROFILE,
+  HERO_LEVEL_STATE_CANDIDATE_PROFILE,
   collectCandidateRoutes,
   decodeHeroDeathCandidates,
   decodeHeroDeathTimerCandidates,
   decodeHeroDeathTimerPayload,
+  decodeHeroLevelStateCandidates,
+  decodeHeroLevelPayload,
+  candidateTailStatAssessment,
   participantIdFromDeathParam,
 };

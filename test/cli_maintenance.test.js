@@ -108,7 +108,7 @@ test('capabilities reports only the 16.19 candidate without packet decoding or a
   assert.equal(result.semantic_decode_performed, false);
   assert.equal(result.runtime_image_used, false);
   assert.equal(result.runtime_image_requested, fakeRuntime);
-  assert.equal(result.input_assessment_scope, 'PRESENCE_ONLY');
+  assert.equal(result.input_assessment_scope, 'CONTAINER_TAIL_FIELD_PREFLIGHT');
   assert.deepEqual(result.capabilities.map((row) => row.capability),
     require('../src/build_registry').BUILD_PROFILES['16.19.820.7193'].candidate_capabilities);
   const heroDeath = result.capabilities.find((row) => row.capability === 'hero_death');
@@ -118,7 +118,7 @@ test('capabilities reports only the 16.19 candidate without packet decoding or a
   assert.deepEqual(heroDeath.missing_inputs, []);
   assert.equal(heroDeath.runtime_image_requirement, 'NOT_REQUIRED');
   assert.deepEqual(heroDeath.required_inputs.map((row) => row.name),
-    ['replay', 'replay_tail_statsJson']);
+    ['replay', 'replay_tail_statsJson', 'replay_tail_NUM_DEATHS']);
   assert.ok(heroDeath.validation_pending.includes('matching 16.19 route fingerprint'));
   const timer = result.capabilities.find((row) => row.capability === 'hero_death_timer');
   assert.equal(timer.output, 'hero_death_timer_candidates');

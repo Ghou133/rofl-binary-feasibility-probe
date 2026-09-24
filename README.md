@@ -13,10 +13,11 @@
 | 入口 / 层 | 当前提供 | 使用边界 |
 | --- | --- | --- |
 | `inspect` / `src/rofl.js` | RIOT 头、metadata、chunk/Zstd、packet framing、原始清单与锚点 | 容器结构可解析，不代表该版本语义已验证 |
-| `capabilities` | 从回放容器读取完整 build，查询已登记能力、入口及输入存在性 | 不解压 packet、不运行语义解码；候选能力仍需逐回放校验 |
+| `capabilities` | 从回放容器读取完整 build，查询已登记能力、入口及尾部字段输入预检 | 不解压 packet、不运行语义解码；候选能力仍需逐回放校验 |
 | `decode` / `analyze` / `batch` / `validate` | `16.15.801.3452` 旧版整合管线；16.19 精确 build 的指定能力实验入口 | 16.19 必须显式传 `--events`；16.16 语义 API 尚未由主 CLI 分发；`validate` 还会运行完整 Node 套件 |
 | `16.19.820.7193 --events hero_death` | HN/KR 结构指纹与回放尾部死亡总数同时匹配时，输出候选受害者和回放时间 | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；无杀手、助攻或重生推断，其他完整 build 不复用 |
 | `16.19.820.7193 --events hero_death_timer` | HN 路由的计时 float、同刻 Hero_Die 和后续复活时间相互校验时，输出候选计时秒数 | 仅写入 `hero_death_timer_candidates`；目前只覆盖 HN 路由，KR 回放会报 `PROFILE_UNAVAILABLE`，不产生确认的死亡或重生事件 |
+| `16.19.820.7193 --events hero_level_state` | HN `0x02b3` 包中观察到的候选英雄等级值及原始包来源 | 仅写入 `hero_level_state_candidates`；逐参与者列出未观察到的升级值，不补造事件；KR 路由未适配 |
 | `src/semantic_api.js` 与精确 build profiles | `16.16.805.0442` 的 HeroPath、等级、WardSpawn、伤害、死亡、重生、XP/lane-CS keyframe、受限 ItemState 和 gameplay-tail 等 | 独立 API 的逐字段能力；需要外部精确镜像、profiles 或对应已验证输入，不是主 CLI 的完整分析模式 |
 | V2 Ward / Path | 已验证位置、守卫事件及受限派生关联 | 来源 SHA 必须与回放一致；类型、匹配、生命周期和位置插值与直接字段分级 |
 | `research-v3/`、`research-v4/` | DuckDB 研究查询、保护量增量表和验证器 | 保留的真实功能，不是因版本号旧就可删除的目录；全量重建需要私有输入 |
@@ -60,7 +61,8 @@ node src/cli.js capabilities "D:\Replays\example-16.19.820.7193.rofl" --json
 ```
 
 查询只读容器、metadata、chunk 描述和精确 build 注册表，不遍历 packet；`--json`
-输出逐能力状态、所需输入、已知缺项以及尚待运行的校验。16.19 列出精确
+输出逐能力状态、所需输入、已知缺项以及尚待运行的校验；16.19 还检查尾部十名参与者的
+`NUM_DEATHS` 或 `LEVEL` 是否齐备且在候选范围内。16.19 列出精确
 build 注册表中的候选能力，运行时镜像对这些候选路径不要求；查询不是成功解码证明。
 16.15/16.16 的外部文件仅按完整管线入口做存在性预检；单项能力的依赖和
 镜像哈希仍标记为未核验。
@@ -81,6 +83,11 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 候选参与者、解出的秒数，以及存在匹配时的复活包引用；它要求十名参与者的死亡总数、
 同刻 Hero_Die 配对及复活时序都通过校验。未执行的旧版事件汇总计数为
 `null`，不会把未解码误写成零事件。
+
+对 HN 路由可单独运行 `--events hero_level_state`，也可与上述候选能力组合。
+输出中的 `level_after_candidate` 是已观察到的等级字段，`missing_level_updates`
+列出该回放里没有对应包的等级；它不是完整的升级时间线，也不会写入已确认的
+`level_transition_events`。该候选只绑定完整 build `16.19.820.7193`。
 
 执行 **16.15.801.3452** 的旧版整合语义分析：
 

@@ -229,6 +229,7 @@ const BUILD_PROFILES = deepFreeze({
     packet_routes: {
       hero_death: null,
       hero_death_timer: 0x02d6,
+      hero_level_state: 0x02b3,
     },
     decoder_profile: {
       hero_death: {
@@ -239,17 +240,20 @@ const BUILD_PROFILES = deepFreeze({
         route_profiles: decoder1619.HERO_DEATH_CANDIDATE_PROFILES,
       },
       hero_death_timer: decoder1619.HERO_DEATH_TIMER_CANDIDATE_PROFILE,
+      hero_level_state: decoder1619.HERO_LEVEL_STATE_CANDIDATE_PROFILE,
     },
     field_semantics: {
       hero_death: 'CANDIDATE_EXACT_BUILD_ROUTE_FINGERPRINT',
       hero_death_timer: 'CANDIDATE_EXACT_RUNTIME_FLOAT_AND_REPLAY_TIMING',
+      hero_level_state: 'CANDIDATE_EXACT_RUNTIME_FIELD_WITH_SEQUENCE_GAPS',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, route-profile bounded',
       death_timer_seconds_candidate: '0x02d6 decoded float; HN route profile only',
+      level_after_candidate: '0x02b3 decoded object field; HN route profile only',
     },
     verified_capabilities: [],
-    candidate_capabilities: ['hero_death', 'hero_death_timer'],
+    candidate_capabilities: ['hero_death', 'hero_death_timer', 'hero_level_state'],
     unsupported_capabilities: [],
     validation_artifacts: [],
     regression_fixture_set: null,

@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { rawAnchorChainStatus, renderAcceptanceReport } = require('./cli_report');
 const { resolveBuildProfile } = require('./build_registry');
+const { candidateTailStatAssessment } = require('./decoders/rofl_16_19_820_7193');
 
 const {
   TOOL_VERSION,
@@ -1524,7 +1525,8 @@ function capabilityQuery(replay, options = {}) {
     semantic_decode_performed: false,
     runtime_image_used: false,
     runtime_image_requested: options.runtimeImage ? path.resolve(options.runtimeImage) : null,
-    input_assessment_scope: 'PRESENCE_ONLY',
+    input_assessment_scope: replay.header.version === '16.19.820.7193'
+      ? 'CONTAINER_TAIL_FIELD_PREFLIGHT' : 'PRESENCE_ONLY',
     runtime_profile_status: profile?.runtime_profile?.status
       ?? (profile?.runtime_profile?.image_sha256 ? 'EXACT_IMAGE_HASH_REGISTERED' : null),
     capabilities: [],
@@ -1545,10 +1547,7 @@ function capabilityQuery(replay, options = {}) {
       { name: 'replay_tail_statsJson', status: tailStatus, path: replay.source_path },
     ];
     entrypoint = 'SELECTED_CLI_AND_EXACT_BUILD_API';
-    pendingChecks = [
-      'packet framing', 'matching 16.19 route fingerprint',
-      'ten-participant NUM_DEATHS presence and equality',
-    ];
+    pendingChecks = ['packet framing'];
   } else if (profile.game_version === '16.16.805.0442') {
     dependencies = [
       { name: 'replay', status: 'PRESENT', path: replay.source_path },
@@ -1591,7 +1590,17 @@ function capabilityQuery(replay, options = {}) {
       const applicable = status !== 'UNSUPPORTED' && status !== 'UNVERIFIED';
       const perCapabilityInputsAssessed = applicable
         && profile.game_version === '16.19.820.7193';
-      const inputs = perCapabilityInputsAssessed ? dependencies : [{
+      const tailStat = perCapabilityInputsAssessed
+        ? candidateTailStatAssessment(replay, capability) : null;
+      const tailStatInput = tailStat ? [{
+        name: `replay_tail_${tailStat.field}`,
+        status: !Array.isArray(replay.tail?.stats) ? 'NOT_ASSESSED'
+          : tailStat.status === 'PASS' ? 'PRESENT_UNVALIDATED'
+          : tailStat.status === 'MISSING_INPUT' ? 'MISSING' : 'INVALID',
+        path: replay.source_path,
+        error: tailStat.status === 'PASS' ? null : tailStat.error,
+      }] : [];
+      const inputs = perCapabilityInputsAssessed ? [...dependencies, ...tailStatInput] : [{
         name: 'replay', status: 'PRESENT', path: replay.source_path,
       }];
       const validationPending = applicable ? [...pendingChecks] : [];
@@ -1599,9 +1608,20 @@ function capabilityQuery(replay, options = {}) {
         validationPending.push('capability-specific input dependencies');
       }
       if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_death') {
+        validationPending.push('matching 16.19 route fingerprint',
+          'ten-participant NUM_DEATHS presence and equality');
+      }
+      if (profile.game_version === '16.19.820.7193'
           && capability === 'hero_death_timer') {
-        validationPending.push('HN route, timer field, and death-to-respawn invariants',
+        validationPending.push('ten-participant NUM_DEATHS presence and equality',
+          'HN route, timer field, and death-to-respawn invariants',
           'Replay tail gameLength if a timer has no observed reincarnation');
+      }
+      if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_level_state') {
+        validationPending.push('ten-participant LEVEL presence and value range',
+          'HN level route, payload, and observed sequence against final LEVEL');
       }
       const gameLength = replay.tail?.metadata?.gameLength;
       const conditionalInputs = capability === 'hero_death_timer'
@@ -1636,6 +1656,7 @@ function capabilityQuery(replay, options = {}) {
           ? ({
             hero_death: 'hero_death_candidates',
             hero_death_timer: 'hero_death_timer_candidates',
+            hero_level_state: 'hero_level_state_candidates',
           })[capability] ?? null
           : null,
       });
