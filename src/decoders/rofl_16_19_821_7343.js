@@ -6,11 +6,16 @@ const { deathEvent } = require('../events');
 const { walkBlocks } = require('../rofl');
 const { replaySourceError } = require('./replay_source_integrity');
 const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
+const { assessHeroChampionKillsSnapshotTail821 } =
+  require('./rofl_16_19_821_hero_stats_candidate');
+const { RUNTIME_IMAGE_SHA256, LOOKUP_TABLE_SHA256, decodeHeroDieSourceId821 } =
+  require('./rofl_16_19_821_runtime_bytes');
 
 const REPLAY_VERSION_821 = '16.19.821.7343';
 
-// These route IDs and checks come from eleven exact 821.7343 KR Replays. The
-// packet payloads have not been interpreted against an 821 runtime image.
+// The route core comes from eleven exact 821.7343 KR Replays. The optional
+// 0x0438 source ID uses an exact-image static transform; its killer label
+// remains conditional on the independent Replay-tail kill counts.
 const HERO_DEATH_CANDIDATE_PROFILE_821 = Object.freeze({
   id: 'rofl-16.19.821.7343-kr-death-route-tail-candidate-v1',
   replay_version: REPLAY_VERSION_821,
@@ -23,12 +28,14 @@ const HERO_DEATH_CANDIDATE_PROFILE_821 = Object.freeze({
   corroborating_replay_block_packet_ids: Object.freeze([0x031b, 0x03d4]),
   participant_mapping: 'observed 821 raw_param families 0x400000ae..b7 and 0x400001ae..b7; low byte maps to Replay tail participant 1..10',
   evidence_scope: 'eleven KR exact-build 821.7343 Replays; unique three-route core and all ten final death totals per Replay',
-  evidence_runtime_image_sha256: null,
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  source_id_lookup_table_sha256: LOOKUP_TABLE_SHA256,
   known_limits: Object.freeze([
     'Experimental exact-build Replay-tail route candidate, not a published death capability.',
     'Victim participant mapping is supported by final NUM_DEATHS counts, not an 821 runtime deserializer.',
-    'The observed upper 0x100 raw-param bit and all payload fields remain unclassified.',
-    'No killer, assists, damage, death timer, respawn, or complete combat semantics are inferred.',
+    'The observed upper 0x100 raw-param bit and all 0x0259 payload fields remain unclassified.',
+    'The 0x0438 source ID is runtime decoded; killer participant remains a candidate only after ten CHAMPIONS_KILLED tails align.',
+    'Nonhero source IDs remain unmapped; assists, damage, and complete combat semantics are unknown.',
     'Core 0x0259/0x0438/0x031b must join uniquely; isolated 0x0259 is excluded and reported.',
     'Optional 0x03d4 was absent at one matched core in each of two observed Replays; omissions are reported.',
     'An unmatched paired or long route, ambiguous join, unexpected 0x03d4, or tail mismatch fails closed.',
@@ -99,8 +106,10 @@ function decodeHeroDeathCandidates821(replay, precollected = null) {
   const base = {
     profile_id: profile.id,
     input_packet_id: profile.replay_block_packet_id,
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    source_id_lookup_table_sha256: LOOKUP_TABLE_SHA256,
     runtime_image_used: false,
-    runtime_image_status: 'NOT_REQUIRED_ROUTE_TAIL_CANDIDATE',
+    runtime_image_status: 'STATIC_821_HERO_DIE_SOURCE_TRANSFORM_EMBEDDED',
     known_limits: [...profile.known_limits],
   };
   if (replay?.header?.version !== REPLAY_VERSION_821) {
@@ -231,8 +240,25 @@ function decodeHeroDeathCandidates821(replay, precollected = null) {
 
   const unmatchedPrimary = primary.filter((row) => !usedPrimaryKeys.has(pairKey(row)));
   const missingShort = core.filter((row) => row.fourth === null);
-  const events = core.map(({ first, second, third, fourth }) => {
+  const decodedSources = core.map(({ second }) =>
+    decodeHeroDieSourceId821(second.block.payload));
+  const fullyDecodedSources = decodedSources.every((value) => value !== null);
+  const sourceHeroCounts = Array(10).fill(0);
+  for (const sourceId of decodedSources) {
+    const participant = participantFrom821RawParam(sourceId);
+    if (participant !== null) sourceHeroCounts[participant - 1] += 1;
+  }
+  const killTail = assessHeroChampionKillsSnapshotTail821(replay);
+  const sourceTailAligned = fullyDecodedSources && killTail.status === 'PASS'
+    && sourceHeroCounts.every((count, index) => count === killTail.values[index]);
+  const sourceTailStatus = !fullyDecodedSources ? 'WIRE_SHAPE_UNAVAILABLE'
+    : killTail.status !== 'PASS' ? killTail.status
+      : sourceTailAligned ? 'CANDIDATE_ALIGNED' : 'TAIL_MISMATCH';
+  const events = core.map(({ first, second, third, fourth }, index) => {
     const participantId = participantFrom821RawParam(first.block.param);
+    const dieSourceId = decodedSources[index];
+    const sourceParticipant = sourceTailAligned
+      ? participantFrom821RawParam(dieSourceId) : null;
     const refs = [
       packetRef(replay, first, 'candidate_primary'),
       packetRef(replay, second, 'candidate_paired'),
@@ -252,6 +278,12 @@ function decodeHeroDeathCandidates821(replay, precollected = null) {
       victim_network_id: null,
       killer_network_id: null,
       killer_participant_id: null,
+      die_source_network_id_candidate: dieSourceId,
+      killer_participant_id_candidate: sourceParticipant,
+      die_source_decode_status: dieSourceId === null
+        ? 'WIRE_SHAPE_UNAVAILABLE' : 'EXACT_821_RUNTIME_WIRE_TRANSFORM',
+      killer_alignment_status: sourceTailStatus,
+      die_source_raw_packet_ref: refs[1],
       assists: null,
       respawn_timestamp_ms: null,
       confidence: 'CANDIDATE',
@@ -261,6 +293,11 @@ function decodeHeroDeathCandidates821(replay, precollected = null) {
         victim_raw_param: 'VERIFIED_DIRECT',
         victim_participant_id: 'CANDIDATE_REPLAY_TAIL_COUNTS',
         killer_network_id: 'UNAVAILABLE',
+        die_source_network_id_candidate: dieSourceId === null ? 'UNAVAILABLE'
+          : 'CANDIDATE_821_RUNTIME_HERO_DIE_SOURCE_WIRE',
+        killer_participant_id_candidate: sourceParticipant === null ? 'UNAVAILABLE'
+          : 'CANDIDATE_821_SOURCE_ID_KILL_TAIL_ALIGNMENT',
+        die_source_raw_packet_ref: 'VERIFIED_DIRECT',
         assists: 'UNAVAILABLE',
         respawn_timestamp_ms: 'UNAVAILABLE',
       },
@@ -284,6 +321,14 @@ function decodeHeroDeathCandidates821(replay, precollected = null) {
     missing_optional_0x03d4_count: missingShort.length,
     missing_optional_0x03d4_primary_refs: missingShort.map((row) =>
       packetRef(replay, row.first, 'matched_core_missing_optional_corroboration')),
+    hero_die_source_decoded_count: decodedSources.filter((value) => value !== null).length,
+    hero_die_source_hero_family_count: decodedSources.filter((value) =>
+      participantFrom821RawParam(value) !== null).length,
+    hero_die_source_other_count: decodedSources.filter((value) =>
+      value !== null && participantFrom821RawParam(value) === null).length,
+    observed_champion_kills_by_source: fullyDecodedSources ? sourceHeroCounts : null,
+    champion_kills_tail_alignment_status: sourceTailStatus,
+    final_champion_kills_tails: killTail.status === 'PASS' ? killTail.values : null,
     final_death_counts: tail.counts,
     observed_death_counts: observedCounts,
     events,

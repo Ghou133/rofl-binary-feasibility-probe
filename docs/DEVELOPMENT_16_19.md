@@ -15,9 +15,9 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   `NUM_DEATHS` counts in all 11 files (655 candidate rows). Two files each
   lack one auxiliary `0x03d4`; one file contains two isolated `0x0259` packets.
   These are retained as negative route evidence and excluded from candidate
-  events. No 820 opcode transform or image is reused for 821. Killer and
-  assist attribution remain unclassified; the 821 death-timer candidate is
-  described below, while confirmed death and respawn semantics remain open.
+  events. No 820 opcode transform or image is reused for 821. A separately
+  gated `0x0438` killer-participant candidate is described below; assist
+  attribution and confirmed death/respawn semantics remain open.
 - **821 observed-return candidate:** `--events hero_respawn` pairs each matched
   death core with a subsequent same-participant `0x0048` and preceding co-timed
   `0x018d`, requiring the ten per-participant sums of elapsed milliseconds,
@@ -57,6 +57,28 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   records, and two excluded isolated packet references. Its per-Replay
   provenance is under ignored
   `artifacts/16_19_development/kr_821_runtime_timer_11/`.
+- **821 Hero_Die source candidate:** Exact image factory `0x0438` constructs
+  `PKT_NPC_Hero_Die_s` and its deserializer fully consumed 655/655 real
+  game packets across the 11 KR Replays. Last-byte truncation failed AL in
+  655/655 controls; an appended zero left one byte unread in 655/655.
+  Static decoding of each payload's final two bytes matched the runtime
+  object's `+0x50` inverse in 655/655. The decoded source IDs include 653
+  hero-family values (`0x400000ae..b7`) and two unmapped nonhero values
+  (`0x400000a6`, `0x40000094`). Hero-source counts match all 110 numeric
+  `CHAMPIONS_KILLED` Replay tails exactly; all 653 differ from the victim
+  and fall in the opposing five-participant group. The `hero_death` CLI/API
+  now reports `die_source_network_id_candidate` and its `0x0438` raw ref for
+  each decoded event, plus `killer_participant_id_candidate` only when all
+  ten kill tails align. A malformed source wire shape or absent/mismatched
+  kill tail leaves the killer participant `null` without suppressing the
+  independently validated victim candidate. The two nonhero source IDs stay
+  unmapped. There is no confirmed callback field name for `+0x50` or assist
+  list; assists remain unknown. The 11-Replay CLI batch yielded 655 decoded
+  sources, 653 killer-participant candidates, 2 nonhero raw sources, and
+  11/11 `CANDIDATE` with zero errors. Reproducible static/runtime checks and
+  batch provenance remain under ignored
+  `artifacts/16_19_development/hero_die_821_probe/` and
+  `artifacts/16_19_development/kr_821_hero_die_source_11/`.
 - **821 exact-image count-byte transform:** The captured 821 image's
   `0x0089` object deserializer contains a byte transform with a 256-byte
   lookup table at RVA `0x01ba1560` (SHA-256
@@ -158,8 +180,11 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 - **821 keyframe carrier structure:** A separate strict scan of those 327
   keyframes found 3,270/3,270 hero-family payloads with fixed `67 00 de`
   prefix and length 1,263. The exact 821 byte transform maps `00 de` to
-  canonical ULEB128 `ec 09` (=1,260 bytes), matching a one-byte selector,
-  two-byte size, and a 1,260-byte reversed blob. Under that structure, raw
+  canonical ULEB128 `ec 09` (=1,260 bytes), consistent with a one-byte prefix,
+  two-byte size, and a 1,260-byte reversed blob. The observed native factory
+  instead consumes `0x67` as a base field, reads the object selector from
+  raw byte 1, and finishes at byte 5; it does not read `00 de` as this proposed
+  length. Under the independent structural hypothesis, raw
   offsets 1186/1182/1178 map to object offsets `0x4c/0x50/0x54` for the
   existing KDA candidates; 842/838/834 map to `0x1a4/0x1a8/0x1ac` for the
   new ward candidates; 450 maps to `0x32c` for cannon mission count; and

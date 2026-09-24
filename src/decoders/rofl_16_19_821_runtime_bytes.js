@@ -40,9 +40,27 @@ function decodeRuntimeCountByte(encoded) {
   return (LOOKUP_TABLE[index] + 0x39) & 0xff;
 }
 
+// Exact 821 PKT_NPC_Hero_Die_s wire path at RVA 0xf1ce16/e81d40. In every
+// observed 0x0438 payload, the source ID occupies the final two bytes.
+function decodeHeroDieSourceByte821(encoded) {
+  const looked = LOOKUP_TABLE[LOOKUP_TABLE[rotateRight8(encoded, 7)]];
+  const permuted = (((looked & 0xd5) << 1) | ((looked >>> 1) & 0x55)) & 0xff;
+  return (~rotateRight8(permuted, 4)) & 0xff;
+}
+
+function decodeHeroDieSourceId821(payload) {
+  if (!Buffer.isBuffer(payload) || payload.length < 2) return null;
+  const first = decodeHeroDieSourceByte821(payload[payload.length - 2]);
+  const second = decodeHeroDieSourceByte821(payload[payload.length - 1]);
+  if ((first & 0x80) === 0 || (second & 0x80) !== 0) return null;
+  const value = (first & 0x7f) | ((second & 0x7f) << 7);
+  return (value & 0xffffff) === 0 ? value : (value ^ 0x40000000);
+}
+
 module.exports = {
   RUNTIME_IMAGE_SHA256,
   LOOKUP_TABLE_SHA256,
   decodeRuntimeLevelByte,
   decodeRuntimeCountByte,
+  decodeHeroDieSourceId821,
 };

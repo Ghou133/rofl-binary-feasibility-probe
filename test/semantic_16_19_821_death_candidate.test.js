@@ -10,6 +10,8 @@ const {
   assessHeroDeathTail821,
   decodeHeroDeathCandidates821,
 } = require('../src/decoders/rofl_16_19_821_7343');
+const { RUNTIME_IMAGE_SHA256, decodeHeroDieSourceId821 } =
+  require('../src/decoders/rofl_16_19_821_runtime_bytes');
 
 function packet(packetId, timestampMs, rawParam, payloadLength) {
   const header = Buffer.alloc(12);
@@ -38,8 +40,12 @@ function replayWithRoute(options = {}) {
       options.badPrimaryLength && index ? 4 : 5));
     if (options.duplicatePrimary && index) rows.push(packet(0x0259, timestampMs, rawParam, 5));
     if (!(options.missingPair && index)) {
-      rows.push(packet(0x0438, timestampMs,
-        options.badPairParam && index ? rawParam + 1 : rawParam, 13));
+      const die = packet(0x0438, timestampMs,
+        options.badPairParam && index ? rawParam + 1 : rawParam, 13);
+      if (options.sourceWires) {
+        die.set(Buffer.from(options.sourceWires[index], 'hex'), die.length - 2);
+      }
+      rows.push(die);
       if (options.duplicatePair && index) rows.push(packet(0x0438, timestampMs, rawParam, 13));
     }
   }
@@ -54,13 +60,15 @@ function replayWithRoute(options = {}) {
     options.version ?? REPLAY_VERSION_821);
   replay.tail.stats = Array.from({ length: 10 }, (_, index) => ({
     NUM_DEATHS: String(index === 0 || index === 3 ? 1 : 0),
+    CHAMPIONS_KILLED: String(index === 5 ? options.sourceHeroKillTail ?? 0 : 0),
   }));
   return replay;
 }
 
 test('821 death profile and tail preflight are exact and fail closed on missing counts', () => {
   assert.equal(HERO_DEATH_CANDIDATE_PROFILE_821.replay_version, REPLAY_VERSION_821);
-  assert.equal(HERO_DEATH_CANDIDATE_PROFILE_821.evidence_runtime_image_sha256, null);
+  assert.equal(HERO_DEATH_CANDIDATE_PROFILE_821.evidence_runtime_image_sha256,
+    RUNTIME_IMAGE_SHA256);
   const replay = replayWithRoute();
   assert.deepEqual(assessHeroDeathTail821(replay), {
     status: 'PASS', counts: [1, 0, 0, 1, 0, 0, 0, 0, 0, 0],
@@ -72,6 +80,31 @@ test('821 death profile and tail preflight are exact and fail closed on missing 
   assert.equal(assessHeroDeathTail821(replay).status, 'UNSUPPORTED');
   replay.tail.stats = [];
   assert.equal(assessHeroDeathTail821(replay).status, 'UNSUPPORTED');
+});
+
+test('821 Hero_Die source wire yields kill-tail-gated killer candidate and preserves nonhero ID', () => {
+  assert.equal(decodeHeroDieSourceId821(Buffer.from('3678', 'hex')), 0x400000b3);
+  assert.equal(decodeHeroDieSourceId821(Buffer.from('3478', 'hex')), 0x400000a6);
+  const replay = replayWithRoute({ sourceWires: ['3678', '3478'],
+    sourceHeroKillTail: 1 });
+  const result = decodeHeroDeathCandidates821(replay);
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.hero_die_source_decoded_count, 2);
+  assert.equal(result.hero_die_source_hero_family_count, 1);
+  assert.equal(result.hero_die_source_other_count, 1);
+  assert.equal(result.champion_kills_tail_alignment_status, 'CANDIDATE_ALIGNED');
+  assert.deepEqual(result.events.map((row) => row.die_source_network_id_candidate),
+    [0x400000b3, 0x400000a6]);
+  assert.deepEqual(result.events.map((row) => row.killer_participant_id_candidate),
+    [6, null]);
+  assert.equal(result.events[0].killer_network_id, null);
+  assert.equal(result.events[0].die_source_raw_packet_ref.packet_id, 0x0438);
+  replay.tail.stats[5].CHAMPIONS_KILLED = '0';
+  const mismatch = decodeHeroDeathCandidates821(replay);
+  assert.equal(mismatch.status, 'CANDIDATE');
+  assert.equal(mismatch.champion_kills_tail_alignment_status, 'TAIL_MISMATCH');
+  assert.deepEqual(mismatch.events.map((row) => row.killer_participant_id_candidate),
+    [null, null]);
 });
 
 test('four 821 routes produce candidate victim/time with original distinct packet refs', () => {
