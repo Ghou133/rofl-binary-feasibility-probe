@@ -248,6 +248,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_damage_taken_from_champions_snapshot: 0x0276,
       hero_damage_self_mitigated_snapshot: 0x0276,
       hero_longest_living_time_snapshot: 0x0276,
+      hero_total_time_spent_dead_snapshot: 0x0276,
       hero_total_heal_snapshot: 0x0276,
       hero_vision_score_snapshot: 0x0276,
       hero_epic_monster_damage_snapshot: 0x0276,
@@ -298,6 +299,8 @@ const BUILD_PROFILES = deepFreeze({
         heroStatsCandidate1619.HERO_DAMAGE_SELF_MITIGATED_SNAPSHOT_CANDIDATE_PROFILE,
       hero_longest_living_time_snapshot:
         heroStatsCandidate1619.HERO_LONGEST_LIVING_TIME_SNAPSHOT_CANDIDATE_PROFILE,
+      hero_total_time_spent_dead_snapshot:
+        heroStatsCandidate1619.HERO_TOTAL_TIME_SPENT_DEAD_SNAPSHOT_CANDIDATE_PROFILE,
       hero_total_heal_snapshot:
         heroStatsCandidate1619.HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE,
       hero_vision_score_snapshot:
@@ -336,6 +339,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_KEYFRAME_DAMAGE_SELF_MITIGATED_TAIL_CORRELATION',
       hero_longest_living_time_snapshot:
         'CANDIDATE_KEYFRAME_LONGEST_LIVING_TIME_TAIL_CORRELATION',
+      hero_total_time_spent_dead_snapshot:
+        'CANDIDATE_KEYFRAME_TOTAL_TIME_SPENT_DEAD_TAIL_CORRELATION',
       hero_total_heal_snapshot: 'CANDIDATE_KEYFRAME_TOTAL_HEAL_TAIL_CORRELATION',
       hero_vision_score_snapshot: 'CANDIDATE_KEYFRAME_VISION_SCORE_TAIL_CORRELATION',
       hero_epic_monster_damage_snapshot: 'CANDIDATE_KEYFRAME_EPIC_MONSTER_DAMAGE_TAIL_CORRELATION',
@@ -366,6 +371,7 @@ const BUILD_PROFILES = deepFreeze({
       damage_taken_from_champions_candidate: '0x0276 keyframe HeroStats f32 offset 0x200; floors correlate with TOTAL_DAMAGE_TAKEN_FROM_CHAMPIONS tails in two HN Replays; no individual damage event',
       damage_self_mitigated_candidate: '0x0276 keyframe HeroStats f32 offset 0x208; floors correlate with TOTAL_DAMAGE_SELF_MITIGATED tails in two HN Replays; no individual damage or mitigation event',
       longest_living_time_candidate: '0x0276 keyframe HeroStats f32 offset 0x244; floors correlate with LONGEST_TIME_SPENT_LIVING tails in three HN Replays, with one post-keyframe tail gap; no individual life-span event',
+      total_time_spent_dead_candidate: '0x0276 keyframe HeroStats f32 offset 0x248; floors correlate with TOTAL_TIME_SPENT_DEAD tails in three HN Replays; no individual death-duration event',
       total_heal_candidate: '0x0276 keyframe HeroStats u32 offset 0x234; observed values correlate with TOTAL_HEAL tail in one HN Replay',
       vision_score_candidate: '0x0276 keyframe HeroStats f32 offset 0x1b0; floors correlate with VISION_SCORE tail in one HN Replay',
       epic_monster_damage_candidate: '0x0276 keyframe HeroStats f32 offset 0x21c; floors correlate with TOTAL_DAMAGE_DEALT_TO_EPIC_MONSTERS tail in one HN Replay',
@@ -394,6 +400,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_damage_taken_from_champions_snapshot',
       'hero_damage_self_mitigated_snapshot',
       'hero_longest_living_time_snapshot',
+      'hero_total_time_spent_dead_snapshot',
       'hero_total_heal_snapshot',
       'hero_vision_score_snapshot',
       'hero_epic_monster_damage_snapshot',
