@@ -25,6 +25,8 @@ const castSpellAnsCandidate1619821 =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const buffRemovePacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_buff_remove_packet_candidate');
+const buffAddPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_buff_add_packet_candidate');
 const damageFloatCandidate1619821 =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
 const timeStatsCandidate1619821 =
@@ -493,6 +495,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_inventory_packet: 0x018d,
       cast_spell_ans_packet: 0x01da,
       npc_buff_remove_packet: 0x047c,
+      npc_buff_add_packet: 0x00ae,
     },
     decoder_profile: {
       hero_death: decoder1619821.HERO_DEATH_CANDIDATE_PROFILE_821,
@@ -541,6 +544,8 @@ const BUILD_PROFILES = deepFreeze({
         castSpellAnsCandidate1619821.CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
       npc_buff_remove_packet:
         buffRemovePacketCandidate1619821.NPC_BUFF_REMOVE_PACKET_CANDIDATE_PROFILE_821,
+      npc_buff_add_packet:
+        buffAddPacketCandidate1619821.NPC_BUFF_ADD_PACKET_CANDIDATE_PROFILE_821,
     },
     evidence_grades: {
       hero_death: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_AND_RUNTIME_DIE_SOURCE',
@@ -576,6 +581,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_inventory_packet: 'CANDIDATE_821_NATIVE_MAPVIEW_SLOT_ITEM_RECORDS',
       cast_spell_ans_packet: 'CANDIDATE_821_NATIVE_CAST_SPELL_ANS_OPAQUE_PACKET_FIELDS',
       npc_buff_remove_packet: 'CANDIDATE_821_NATIVE_BUFF_REMOVE2_OPAQUE_PACKET_FIELDS',
+      npc_buff_add_packet: 'CANDIDATE_821_NATIVE_BUFF_ADD2_OPAQUE_PACKET_FIELDS',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, 821 route-profile bounded',
@@ -605,6 +611,7 @@ const BUILD_PROFILES = deepFreeze({
       inventory_packet: 'exact 821 native 0x018d MapView record vector and slot/item transforms; exact-image callback resets slots 0–9 then applies records; raw-param participant mapping candidate, with no between-packet state or transaction inference',
       cast_spell_ans_packet: 'exact 821 native 0x01da packet constructor/deserializer and callback transforms for opaque object offsets 0x148/0x14c; no successful-cast, owner, target, spell or slot inference',
       npc_buff_remove_packet: 'exact 821 native 0x047c BuffRemove2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14/0x18; no owner, buff identity, target or lifecycle inference',
+      npc_buff_add_packet: 'exact 821 native 0x00ae BuffAdd2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14; no owner, buff identity, target or lifecycle inference',
     },
     verified_capabilities: [],
     candidate_capabilities: [
@@ -621,7 +628,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
       'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
       'hero_level_state', 'hero_inventory_packet',
-      'cast_spell_ans_packet', 'npc_buff_remove_packet',
+      'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
     ],
     unsupported_capabilities: [],
     validation_artifacts: [],

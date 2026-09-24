@@ -147,7 +147,7 @@ Options:
   --include-private-metadata     Include Riot ID/PUUID fields in roster output
   --strict                       Stop at the first framing error
   --decoder-image <path>        Exact 16.15 runtime image (external input; not bundled)
-  --runtime-image <path>        Exact external image for 16.16 or 16.19 inventory candidates
+  --runtime-image <path>        Exact-build runtime image for selected native packet candidates
   --events <name[,name...]>     Select 16.19 semantic capabilities to decode
   --event-jsonl-only            Store 16.19 event rows only in JSONL (decode/batch with --events)
   --event <key>                 Exact 16.19 candidate JSONL key (query-events)
@@ -592,7 +592,7 @@ function parseOne1619(replay, options, started) {
       'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
       'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
       'hero_level_state', 'hero_inventory_packet',
-      'cast_spell_ans_packet', 'npc_buff_remove_packet',
+      'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
     ].includes(name)))] : [];
   const selectsBuffAdd = options.semantic !== false
     && Array.isArray(options.events) && options.events.includes('npc_buff_add_packet');
@@ -2030,6 +2030,11 @@ function capabilityQuery(replay, options = {}) {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x047c full packet consumption',
           'callback-transformed opaque fields and raw packet provenance; no buff identity or lifecycle inference');
       }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'npc_buff_add_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x00ae full packet consumption',
+          'callback-transformed opaque fields and raw packet provenance; no buff identity or lifecycle inference');
+      }
       if (profile.game_version === '16.19.820.7193'
           && (capability === 'hero_death_timer' || capability === 'hero_respawn')) {
         validationPending.push('ten-participant NUM_DEATHS presence and equality',
@@ -2215,6 +2220,7 @@ function capabilityQuery(replay, options = {}) {
             hero_inventory_packet: 'hero_inventory_packet_candidates',
             cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
             npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
+            npc_buff_add_packet: 'npc_buff_add_packet_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
             hero_damage_taken_from_champions_snapshot:
               'hero_damage_taken_from_champions_snapshot_candidates',

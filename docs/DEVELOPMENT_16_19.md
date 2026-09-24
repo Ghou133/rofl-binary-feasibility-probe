@@ -14,6 +14,13 @@ Current progress (older notes below retain their original research context):
   `CANDIDATE`, with 139,457/139,457 exact-image native packets fully consumed,
   zero framing errors, and three callback-transformed anonymous fields in
   CLI/API JSONL. The 820 HN route and decoder remain separate.
+- **Completed:** KR 821 `npc_buff_add_packet` now selects the independently
+  registered game/keyframe `0x00ae` BuffAdd2 route. It emits only the
+  callback-transformed anonymous u32 at object `0x10` and u8 at `0x14`,
+  with exact image and per-packet native full-consumption gates. The 820 HN
+  route and decoder remain separate. All 11 supplied KR Replays returned
+  `CANDIDATE`: 346,098/346,098 native packets fully consumed, with zero
+  framing errors and exact agreement with independently counted raw routes.
 - **Current:** Building versus turret labels, CastSpellAns field meanings, and
   all per-action interpretations remain candidate or unknown; no public
   capability was promoted.
@@ -59,6 +66,30 @@ Current progress (older notes below retain their original research context):
   Run the selected capability with `node src/cli.js batch <821-rofl-directory>
   --events npc_buff_remove_packet --runtime-image <captured-821-image>
   --event-jsonl-only --out-dir <output-directory>`.
+- **821 BuffAdd2 packet candidate:** The exact image independently links
+  `PKT_NPC_BuffAdd2_s` to callback RVA `0x008f2620`, factory route `0x00ae`,
+  constructor `0x00e9cbd0`, and deserializer `0x010d88d0`. Callback byte
+  transforms at `0x00873b80` and `0x00873df0` supply anonymous object
+  offsets `0x10` (u32) and `0x14` (u8). The selected CLI/API capability
+  requires the captured 821 image SHA-256, observed game/keyframe stream and
+  length shapes, a matching native object and raw param, and full native
+  consumption for every packet. A complete KR Replay gave 34,527/34,527
+  fully consumed packets, and 584/584 first/last route-shape samples from
+  all 11 Replays did likewise. All eight rare keyframe packets (seven length
+  41, one length 42) fully consumed and matched their distinct one-element
+  vector structures; each one-byte truncation failed and each appended byte
+  remained unread. The selected 11-Replay CLI batch emitted 346,098 candidate
+  rows (144,163 game, 201,935 keyframe), matching the independent raw route
+  counts and Replay hashes, with `MATCHED_USED` image status for every Replay.
+  Its local output is under
+  `artifacts/16_19_development/kr_821_buff_add_cli_11/`. Vector elements
+  stay opaque and are not emitted. The
+  output assigns no owner, buff identity, application, duration or lifecycle.
+  Ignored evidence is under
+  `artifacts/16_19_development/kr_821_buff_route_probe/`.
+  Run `node src/cli.js batch <821-rofl-directory> --events npc_buff_add_packet
+  --runtime-image <captured-821-image> --event-jsonl-only
+  --out-dir <output-directory>`.
 - **821 observed-return candidate:** `--events hero_respawn` pairs each matched
   death core with a subsequent same-participant `0x0048` and preceding co-timed
   `0x018d`, requiring the ten per-participant sums of elapsed milliseconds,
