@@ -12,7 +12,18 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   lack one auxiliary `0x03d4`; one file contains two isolated `0x0259` packets.
   These are retained as negative route evidence and excluded from candidate
   events. No 820 opcode transform or image is reused for 821; payloads,
-  killer, assists, death timer, and respawn remain unclassified.
+  killer, assists, death timer, and confirmed respawn semantics remain unclassified.
+- **821 observed-return candidate:** `--events hero_respawn` pairs each matched
+  death core with a subsequent same-participant `0x0048` and preceding co-timed
+  `0x018d`, requiring the ten per-participant sums of elapsed milliseconds,
+  floored to seconds, to equal Replay-tail `TOTAL_TIME_SPENT_DEAD`. All 11
+  Replays pass: 607 observed return candidates, 48 unpaired final deaths, and
+  64 extra `0x018d` packets retained as negative evidence. Return `0x0048`
+  uses the observed `0x400000ae..b7` full raw-param family and payload lengths
+  9 or 13; 33 matched deaths use a different full-param family, so identity is
+  joined only through the validated participant candidate. This is a Replay
+  correlation, not a runtime-confirmed respawn or payload decode. No timer is
+  inferred for unpaired final deaths.
 - **821 keyframe candidate:** `--events hero_deaths_snapshot` now reads only
   raw byte 1182 from exact KR `0x0089` keyframes of length 1263 and prefix
   `6700de`. A finite, locally derived codebook covers counts 0–12; 327

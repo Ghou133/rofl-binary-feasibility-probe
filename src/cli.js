@@ -12,6 +12,8 @@ const {
   candidateTailStatAssessment,
 } = require('./decoders/rofl_16_19_820_7193');
 const { assessHeroDeathTail821 } = require('./decoders/rofl_16_19_821_7343');
+const { assessHeroRespawnTail821 } =
+  require('./decoders/rofl_16_19_821_respawn_candidate');
 const { assessHeroDeathsSnapshotTail821 } =
   require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const { assessHeroLevelTail821 } =
@@ -1734,6 +1736,18 @@ function capabilityQuery(replay, options = {}) {
         || capability === 'npc_buff_add_packet';
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
+          && capability === 'hero_respawn'
+          ? (() => {
+            const death = assessHeroDeathTail821(replay);
+            const deadTime = assessHeroRespawnTail821(replay);
+            return { required_fields: [
+              { field: 'NUM_DEATHS', status: death.status,
+                error: death.error ?? death.missing_input ?? null },
+              { field: 'TOTAL_TIME_SPENT_DEAD', status: deadTime.status,
+                error: deadTime.error ?? deadTime.missing_input ?? null },
+            ] };
+          })()
+        : profile.game_version === '16.19.821.7343'
           && capability === 'hero_level_state'
           ? (() => {
             const assessment = assessHeroLevelTail821(replay);
@@ -1808,7 +1822,15 @@ function capabilityQuery(replay, options = {}) {
           ? [dependencies[0], options.runtimeImage
             ? fileInputDependency('exact_runtime_image', options.runtimeImage)
             : { name: 'exact_runtime_image', status: 'MISSING', path: null }]
-          : [...dependencies, ...tailStatInput]
+          : [...dependencies, ...tailStatInput,
+            ...(profile.game_version === '16.19.821.7343' && capability === 'hero_respawn'
+              ? [{ name: 'replay_tail_gameLength',
+                status: Number.isSafeInteger(replay.tail?.metadata?.gameLength)
+                    && replay.tail.metadata.gameLength >= 0
+                  ? 'PRESENT_UNVALIDATED'
+                  : replay.tail?.metadata?.gameLength == null ? 'MISSING' : 'INVALID',
+                path: replay.source_path }]
+              : [])]
         : [{ name: 'replay', status: 'PRESENT', path: replay.source_path }];
       const validationPending = applicable ? [...pendingChecks] : [];
       if (applicable && !perCapabilityInputsAssessed) {
@@ -1823,6 +1845,11 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_death') {
         validationPending.push('KR 0x0259/0x0438/0x031b co-timed core and optional 0x03d4',
           'ten-participant NUM_DEATHS presence and equality');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_respawn') {
+        validationPending.push('matched 821 death cores and exact 0x0048 route with co-timed 0x018d',
+          'ten-participant TOTAL_TIME_SPENT_DEAD aggregate equality and final-death censoring');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_deaths_snapshot') {
@@ -2000,6 +2027,7 @@ function capabilityQuery(replay, options = {}) {
         validation_pending: validationPending,
         output: profile.game_version === '16.19.821.7343'
           ? ({ hero_death: 'hero_death_candidates',
+            hero_respawn: 'hero_respawn_candidates',
             hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
             hero_level_state: 'hero_level_state_candidates' })[capability] ?? null
           : profile.game_version === '16.19.820.7193'

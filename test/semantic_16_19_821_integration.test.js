@@ -14,10 +14,10 @@ const { replayFromChunks } = require('./helpers/synthetic_replay');
 
 const BUILD = '16.19.821.7343';
 
-function packet(packetId, rawParam, payloadLength) {
+function packet(packetId, rawParam, payloadLength, timestampMs = 1000) {
   const header = Buffer.alloc(12);
   header[0] = 0x10;
-  header.writeFloatLE(1, 1);
+  header.writeFloatLE(timestampMs / 1000, 1);
   header[5] = payloadLength;
   header.writeUInt16LE(packetId, 6);
   header.writeUInt32LE(rawParam >>> 0, 8);
@@ -36,7 +36,7 @@ function keyframeDeathsPacket(participantId, count, timeMs) {
   return Buffer.concat([header, payload]);
 }
 
-function replay({ unknownLevel = false } = {}) {
+function replay({ unknownLevel = false, observedReturn = false } = {}) {
   const levelPackets = Array.from({ length: 10 }, (_, index) => {
     const row = packet(0x0197, 0x400000ae + index,
       unknownLevel && index === 0 ? 2 : 1);
@@ -50,6 +50,10 @@ function replay({ unknownLevel = false } = {}) {
     packet(0x031b, 0, 12),
     packet(0x03d4, 0, 3),
     ...levelPackets,
+    ...(observedReturn ? [
+      packet(0x018d, 0x400000ae, 55, 10000),
+      packet(0x0048, 0x400000ae, 13, 10000),
+    ] : []),
   ]) };
   const snapshots = [0, 1].map((frame) => ({ stream: 2,
     body: Buffer.concat(Array.from({ length: 10 }, (_, index) =>
@@ -58,6 +62,7 @@ function replay({ unknownLevel = false } = {}) {
   const input = replayFromChunks([game, ...snapshots], BUILD);
   input.tail.stats = Array.from({ length: 10 }, (_, index) => ({
     NUM_DEATHS: index === 0 ? '1' : '0',
+    TOTAL_TIME_SPENT_DEAD: observedReturn && index === 0 ? '9' : '0',
     LEVEL: unknownLevel && index === 0 ? '20' : '2',
   }));
   return input;
@@ -67,6 +72,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   const input = replay();
   assert.equal(resolveBuildProfile(input).status, 'SUPPORTED');
   assert.equal(resolveCapability(BUILD, 'hero_death').status, 'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'hero_respawn').status, 'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_deaths_snapshot').status, 'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_level_state').status, 'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_death_timer').status, 'UNAVAILABLE');
@@ -75,22 +81,55 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.equal(query.packet_framing_inspected, false);
   assert.equal(query.semantic_decode_performed, false);
   assert.deepEqual(query.capabilities.map((row) => row.capability),
-    ['hero_death', 'hero_deaths_snapshot', 'hero_level_state']);
+    ['hero_death', 'hero_respawn', 'hero_deaths_snapshot', 'hero_level_state']);
   assert.equal(query.capabilities[0].runtime_image_requirement, 'NOT_REQUIRED');
   assert.equal(query.capabilities[0].output, 'hero_death_candidates');
   assert.deepEqual(query.capabilities[0].missing_inputs, []);
   assert.equal(query.capabilities[1].runtime_image_requirement, 'NOT_REQUIRED');
-  assert.equal(query.capabilities[1].output, 'hero_deaths_snapshot_candidates');
+  assert.equal(query.capabilities[1].output, 'hero_respawn_candidates');
   assert.deepEqual(query.capabilities[1].missing_inputs, []);
-  assert.equal(query.capabilities[2].output, 'hero_level_state_candidates');
+  assert.deepEqual(query.capabilities[1].required_inputs.map((row) => row.name),
+    ['replay', 'replay_tail_statsJson', 'replay_tail_NUM_DEATHS',
+      'replay_tail_TOTAL_TIME_SPENT_DEAD',
+      'replay_tail_gameLength']);
+  assert.equal(query.capabilities[2].output, 'hero_deaths_snapshot_candidates');
   assert.deepEqual(query.capabilities[2].missing_inputs, []);
+  assert.equal(query.capabilities[3].output, 'hero_level_state_candidates');
+  assert.deepEqual(query.capabilities[3].missing_inputs, []);
   input.tail.stats[0].NUM_DEATHS = null;
-  for (const row of capabilityQuery(input).capabilities.slice(0, 2)) {
+  for (const row of capabilityQuery(input).capabilities.slice(0, 3)) {
     assert.deepEqual(row.missing_inputs, ['replay_tail_NUM_DEATHS']);
   }
+  input.tail.stats[0].TOTAL_TIME_SPENT_DEAD = null;
+  assert.deepEqual(capabilityQuery(input).capabilities[1].missing_inputs,
+    ['replay_tail_NUM_DEATHS', 'replay_tail_TOTAL_TIME_SPENT_DEAD']);
   input.tail.stats[0].LEVEL = null;
-  assert.deepEqual(capabilityQuery(input).capabilities[2].missing_inputs,
+  assert.deepEqual(capabilityQuery(input).capabilities[3].missing_inputs,
     ['replay_tail_LEVEL']);
+});
+
+test('821 API exposes only observed return candidates and retains the death dependency', () => {
+  const input = replay({ observedReturn: true });
+  const result = decodeSemanticReplay(input, {
+    capabilities: ['hero_death', 'hero_respawn'],
+  });
+  assert.equal(result.status, 'EXPERIMENTAL_CANDIDATE');
+  assert.equal(result.capability_results.hero_death.status, 'CANDIDATE');
+  assert.equal(result.capability_results.hero_respawn.status, 'CANDIDATE');
+  assert.equal(result.capability_results.hero_respawn.event_count, 1);
+  assert.equal(result.events.hero_respawn_candidates[0].replay_time_ms, 10000);
+  assert.equal(result.events.hero_respawn_candidates[0].matched_death_replay_time_ms_candidate,
+    1000);
+  assert.equal(result.events.respawn_events, undefined);
+
+  input.tail.stats[0].TOTAL_TIME_SPENT_DEAD = '10';
+  const failed = decodeSemanticReplay(input, {
+    capabilities: ['hero_death', 'hero_respawn'],
+  });
+  assert.equal(failed.status, 'PARTIAL');
+  assert.equal(failed.capability_results.hero_respawn.status, 'DECODE_FAILED');
+  assert.equal(failed.events.hero_death_candidates.length, 1);
+  assert.equal(failed.events.hero_respawn_candidates, undefined);
 });
 
 test('821 API dispatch emits separate candidate records and no confirmed deaths', () => {
