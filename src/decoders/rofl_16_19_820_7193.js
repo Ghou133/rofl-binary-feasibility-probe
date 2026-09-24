@@ -1,0 +1,296 @@
+'use strict';
+
+const crypto = require('node:crypto');
+
+const { deathEvent } = require('../events');
+const { walkBlocks } = require('../rofl');
+
+const REPLAY_VERSION = '16.19.820.7193';
+const PROFILE_LIMITS = Object.freeze([
+  'Route identity and victim mapping are experimental; a matching route fingerprint and death-count invariant are required for each Replay.',
+  'Killer, assists, respawn time, and inner payload fields are unavailable.',
+]);
+
+const HERO_DEATH_CANDIDATE_PROFILES = Object.freeze([
+  Object.freeze({
+    id: 'rofl-16.19.820.7193-hn-death-route-triad-candidate-v1',
+    replay_version: REPLAY_VERSION,
+    capability: 'hero_death',
+    status: 'CANDIDATE',
+    enabled: true,
+    stream_tag: 1,
+    replay_block_packet_id: 0x02d6,
+    paired_replay_block_packet_id: 0x04d9,
+    corroborating_replay_block_packet_id: 0x0326,
+    corroborating_param_mode: 'zero',
+    corroborating_payload_minimum: 16,
+    participant_mapping: '(raw_param & 0xff) - 0xad; upper bytes unknown',
+    evidence_scope: 'one HN exact-build Replay; three co-timed routes and all ten final death totals',
+    known_limits: PROFILE_LIMITS,
+  }),
+  Object.freeze({
+    id: 'rofl-16.19.820.7193-kr-death-route-triad-candidate-v1',
+    replay_version: REPLAY_VERSION,
+    capability: 'hero_death',
+    status: 'CANDIDATE',
+    enabled: true,
+    stream_tag: 1,
+    replay_block_packet_id: 0x0259,
+    paired_replay_block_packet_id: 0x0438,
+    corroborating_replay_block_packet_id: 0x0396,
+    corroborating_param_mode: 'victim_low_byte',
+    corroborating_payload_length: 3,
+    participant_mapping: '(raw_param & 0xff) - 0xad; upper bytes unknown',
+    evidence_scope: 'two KR exact-build Replays; three co-timed routes and all ten final death totals per Replay',
+    known_limits: PROFILE_LIMITS,
+  }),
+]);
+
+function packetRef(replay, block, chunk) {
+  return {
+    source_path: replay.source_path ?? null,
+    replay_sha256: replay.source_sha256 ?? null,
+    chunk_index: chunk.index,
+    chunk_id: chunk.chunk_id,
+    chunk_stream: chunk.stream,
+    chunk_file_offset: chunk.offset,
+    decompressed_block_offset: block.offset,
+    decompressed_payload_offset: block.payload_offset,
+    packet_id: block.packet_id,
+    replay_time_ms: block.timestamp_ms,
+    payload_length: block.payload_length,
+    raw_param: block.param >>> 0,
+    raw_payload_sha256: crypto.createHash('sha256').update(block.payload).digest('hex'),
+  };
+}
+
+function participantIdFromDeathParam(rawParam) {
+  if (!Number.isInteger(rawParam) || rawParam < 0 || rawParam > 0xffffffff) return null;
+  const participantId = (rawParam & 0xff) - 0xad;
+  return participantId >= 1 && participantId <= 10 ? participantId : null;
+}
+
+function finalDeathCounts(replay) {
+  const stats = replay?.tail?.stats;
+  if (!Array.isArray(stats)) {
+    return { status: 'MISSING_INPUT', missing_input: 'Replay tail statsJson participant rows' };
+  }
+  if (stats.length !== 10) {
+    return { status: 'UNSUPPORTED', error: `candidate scope requires 10 participants; got ${stats.length}` };
+  }
+  const rawCounts = stats.map((row) => row?.NUM_DEATHS);
+  if (rawCounts.some((value) =>
+    !(typeof value === 'string' && /^\d+$/.test(value))
+    && !(Number.isSafeInteger(value) && value >= 0))) {
+    return { status: 'MISSING_INPUT', missing_input: 'Replay tail NUM_DEATHS for all 10 participants' };
+  }
+  const counts = rawCounts.map(Number);
+  if (counts.some((count) => !Number.isSafeInteger(count))) {
+    return { status: 'MISSING_INPUT', missing_input: 'Replay tail NUM_DEATHS must be a safe integer' };
+  }
+  return { status: 'PASS', counts, stats };
+}
+
+function sortPacketRows(rows, withParticipant) {
+  return rows.sort((left, right) => left.block.timestamp_ms - right.block.timestamp_ms
+    || (withParticipant ? participantIdFromDeathParam(left.block.param)
+      - participantIdFromDeathParam(right.block.param) : 0)
+    || left.chunk.index - right.chunk.index
+    || left.block.offset - right.block.offset);
+}
+
+function decodeHeroDeathCandidates(replay) {
+  if (replay?.header?.version !== REPLAY_VERSION) {
+    return { status: 'UNSUPPORTED', event_count: null, input_count: null,
+      error: `hero_death candidate supports only ${REPLAY_VERSION}` };
+  }
+  const relevantPacketIds = new Set(HERO_DEATH_CANDIDATE_PROFILES.flatMap((profile) => [
+    profile.replay_block_packet_id,
+    profile.paired_replay_block_packet_id,
+    profile.corroborating_replay_block_packet_id,
+  ]));
+  const routes = new Map([...relevantPacketIds].map((packetId) => [packetId, []]));
+  let walk;
+  try {
+    walk = walkBlocks(replay, (block, chunk) => {
+      if (routes.has(block.packet_id)) routes.get(block.packet_id).push({ block, chunk });
+    }, { includeStreams: [1], strict: true });
+  } catch (error) {
+    return { status: 'DECODE_FAILED', event_count: null, input_count: null,
+      error: `Replay framing failed: ${error.message}`, events: null };
+  }
+
+  const matchingProfiles = HERO_DEATH_CANDIDATE_PROFILES.filter((candidate) => [
+    candidate.replay_block_packet_id,
+    candidate.paired_replay_block_packet_id,
+    candidate.corroborating_replay_block_packet_id,
+  ].every((packetId) => routes.get(packetId).length > 0));
+  if (matchingProfiles.length === 0) {
+    return {
+      status: 'PROFILE_UNAVAILABLE', event_count: null, input_count: null, events: null,
+      scanned_block_count: walk.block_count,
+      error: 'no exact-build experimental death route triad fingerprint matched this Replay',
+    };
+  }
+  if (matchingProfiles.length > 1) {
+    return {
+      status: 'DECODE_FAILED', event_count: null, input_count: null, events: null,
+      scanned_block_count: walk.block_count,
+      error: 'multiple experimental death route triads matched this Replay',
+    };
+  }
+  const profile = matchingProfiles[0];
+  const primary = routes.get(profile.replay_block_packet_id);
+  const paired = routes.get(profile.paired_replay_block_packet_id);
+  const corroborating = routes.get(profile.corroborating_replay_block_packet_id);
+  const inputCount = primary.length;
+  const fail = (error) => ({
+    status: 'DECODE_FAILED', event_count: null, input_count: inputCount,
+    profile_id: profile.id,
+    supporting_packet_count: primary.length + paired.length + corroborating.length,
+    scanned_block_count: walk.block_count, error, events: null,
+  });
+  const finalCounts = finalDeathCounts(replay);
+  if (finalCounts.status !== 'PASS') {
+    return { ...finalCounts, profile_id: profile.id,
+      event_count: null, input_count: inputCount, events: null };
+  }
+  if (primary.length !== paired.length || primary.length !== corroborating.length) {
+    return fail(`death route triad counts differ: ${primary.length}, ${paired.length}, ${corroborating.length}`);
+  }
+  if (primary.some(({ block }) => block.payload_length !== 5)
+      || paired.some(({ block }) => block.payload_length <= 5)
+      || corroborating.some(({ block }) => profile.corroborating_payload_length === undefined
+        ? block.payload_length < profile.corroborating_payload_minimum
+        : block.payload_length !== profile.corroborating_payload_length)) {
+    return fail('death route triad payload lengths no longer match the selected structural fingerprint');
+  }
+  if (primary.some(({ block }) => participantIdFromDeathParam(block.param) === null)
+      || paired.some(({ block }) => participantIdFromDeathParam(block.param) === null)
+      || (profile.corroborating_param_mode === 'victim_low_byte'
+        && corroborating.some(({ block }) => participantIdFromDeathParam(block.param) === null))) {
+    return fail('a death route raw param does not identify one of the ten participants');
+  }
+  if (profile.corroborating_param_mode === 'zero'
+      && corroborating.some(({ block }) => (block.param >>> 0) !== 0)) {
+    return fail('corroborating death route raw param is no longer zero');
+  }
+
+  sortPacketRows(primary, true);
+  sortPacketRows(paired, true);
+  sortPacketRows(corroborating, profile.corroborating_param_mode === 'victim_low_byte');
+  if (primary.some((row, index) => index > 0
+      && row.block.timestamp_ms === primary[index - 1].block.timestamp_ms
+      && participantIdFromDeathParam(row.block.param)
+        === participantIdFromDeathParam(primary[index - 1].block.param))) {
+    return fail('same-millisecond deaths for one victim have ambiguous route pairing');
+  }
+  const corroboratingByTime = new Map();
+  for (const row of corroborating) {
+    const rows = corroboratingByTime.get(row.block.timestamp_ms) ?? [];
+    rows.push(row);
+    corroboratingByTime.set(row.block.timestamp_ms, rows);
+  }
+  const observedCounts = Array(10).fill(0);
+  for (let index = 0; index < primary.length; index += 1) {
+    const first = primary[index].block;
+    const second = paired[index].block;
+    const third = corroborating[index].block;
+    if (first.timestamp_ms !== second.timestamp_ms
+        || first.timestamp_ms !== third.timestamp_ms
+        || (first.param >>> 0) !== (second.param >>> 0)
+        || (profile.corroborating_param_mode === 'victim_low_byte'
+          && participantIdFromDeathParam(first.param) !== participantIdFromDeathParam(third.param))) {
+      return fail(`death route triad does not match at occurrence ${index}`);
+    }
+    observedCounts[participantIdFromDeathParam(first.param) - 1] += 1;
+  }
+  if (observedCounts.some((count, index) => count !== finalCounts.counts[index])) {
+    return fail('death route victim counts do not match Replay tail NUM_DEATHS');
+  }
+
+  const events = primary.map((row, index) => {
+    const participantId = participantIdFromDeathParam(row.block.param);
+    const stat = finalCounts.stats[participantId - 1];
+    const corroboratingGroup = corroboratingByTime.get(row.block.timestamp_ms);
+    const sourceRows = profile.corroborating_param_mode === 'zero'
+      ? [
+        { row: paired[index], role: 'hero_die' },
+        { row, role: 'death_timer_update' },
+        ...corroboratingGroup.map((sourceRow) => ({
+          row: sourceRow,
+          role: corroboratingGroup.length === 1
+            ? 'corroborating'
+            : 'corroborating_timestamp_group',
+        })),
+      ]
+      : [
+        { row, role: 'candidate_primary' },
+        { row: paired[index], role: 'candidate_paired' },
+        { row: corroborating[index], role: 'corroborating' },
+      ];
+    const refs = sourceRows.map(({ row: sourceRow, role }) => ({
+      ...packetRef(replay, sourceRow.block, sourceRow.chunk), role,
+    }));
+    return deathEvent({
+      game_version: REPLAY_VERSION,
+      patch: '16.19',
+      build_profile: profile.id,
+      replay_sha256: replay.source_sha256 ?? null,
+      replay_time_ms: row.block.timestamp_ms,
+      timestamp_ms: row.block.timestamp_ms,
+      victim_network_id: null,
+      victim_raw_param: row.block.param >>> 0,
+      victim_participant_id: participantId,
+      victim_champion: stat.SKIN ?? null,
+      victim_team_id: Number(stat.TEAM) || null,
+      target_participant_id: participantId,
+      target_champion: stat.SKIN ?? null,
+      target_team_id: Number(stat.TEAM) || null,
+      killer_network_id: null,
+      killer_participant_id: null,
+      assists: null,
+      respawn_timestamp_ms: null,
+      confidence: 'CANDIDATE',
+      semantic_status: 'CANDIDATE_EXACT_BUILD_ROUTE_FINGERPRINT',
+      field_confidence: {
+        replay_time_ms: 'VERIFIED_DIRECT',
+        victim_raw_param: 'VERIFIED_DIRECT',
+        victim_participant_id: 'CANDIDATE',
+        victim_champion: 'CANDIDATE_FROM_REPLAY_TAIL',
+        victim_team_id: 'CANDIDATE_FROM_REPLAY_TAIL',
+        killer_network_id: 'UNAVAILABLE',
+        assists: 'UNAVAILABLE',
+        respawn_timestamp_ms: 'UNAVAILABLE',
+      },
+      raw_packet_ref: refs[0],
+      raw_packet_refs: refs,
+      corroboration_assignment: profile.corroborating_param_mode === 'zero'
+        && corroboratingGroup.length > 1
+        ? 'TIMESTAMP_GROUP_UNRESOLVED'
+        : 'ONE_TO_ONE',
+      corroborating_packet_group_size: profile.corroborating_param_mode === 'zero'
+        ? corroboratingGroup.length : 1,
+      known_limits: [...profile.known_limits],
+    });
+  });
+  return {
+    status: 'CANDIDATE',
+    evidence_status: 'CANDIDATE_EXACT_BUILD_ROUTE_FINGERPRINT',
+    profile_id: profile.id,
+    event_count: events.length,
+    input_count: primary.length,
+    supporting_packet_count: primary.length + paired.length + corroborating.length,
+    scanned_block_count: walk.block_count,
+    final_death_counts: finalCounts.counts,
+    observed_death_counts: observedCounts,
+    events,
+  };
+}
+
+module.exports = {
+  REPLAY_VERSION,
+  HERO_DEATH_CANDIDATE_PROFILES,
+  decodeHeroDeathCandidates,
+  participantIdFromDeathParam,
+};

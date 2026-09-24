@@ -4,6 +4,7 @@ const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { rawAnchorChainStatus, renderAcceptanceReport } = require('./cli_report');
+const { resolveBuildProfile } = require('./build_registry');
 
 const {
   TOOL_VERSION,
@@ -19,6 +20,7 @@ const {
   decodeSemanticReplay,
   DEFAULT_DECODER_IMAGE,
 } = require('./semantic_pipeline');
+const { decodeSemanticReplay: decodeExactBuildReplay } = require('./semantic_api');
 const { buildWardOutputs } = require('./ward_pipeline_v2');
 const { buildPathOutputs } = require('./path_pipeline_v2');
 const { buildReplayPacketIndex } = require('./provenance_v2');
@@ -65,8 +67,10 @@ Usage:
   node src/cli.js ward-events <rows.json|rows.jsonl|file.rofl> [--out-dir artifacts]
 
 Runtime: Node >=22.15.0 with native Zstd.
-Semantic CLI scope: exact 16.15.801.3452 only. The separate 16.16 public API
-is not dispatched by this legacy CLI; see docs/PUBLIC_DEVELOPMENT.md.
+Legacy semantic CLI scope: exact 16.15.801.3452. The separate 16.16 public API
+is not dispatched by this CLI; see docs/PUBLIC_DEVELOPMENT.md.
+16.19 decode and batch use the exact-build semantic API when --events is selected.
+Inspect reads the container and packet framing without a runtime image.
 
 Options:
   --out-dir <path>              Independent output directory (default: artifacts)
@@ -75,6 +79,8 @@ Options:
   --include-private-metadata     Include Riot ID/PUUID fields in roster output
   --strict                       Stop at the first framing error
   --decoder-image <path>        Exact 16.15 runtime image (external input; not bundled)
+  --runtime-image <path>        Exact 16.19 runtime image (external input; not bundled)
+  --events <name[,name...]>     Select 16.19 semantic capabilities to decode
   --python <command>            Python command with Unicorn installed (default: python)
   --details-dir <path>          Validation-only directory for same-game Details matching
   --ward-spawns <jsonl>         Verified current-build WardSpawn decoder rows
@@ -111,6 +117,8 @@ function parseArgs(argv) {
     strict: false,
     detailsDir: null,
     decoderImage: DEFAULT_DECODER_IMAGE,
+    runtimeImage: null,
+    events: null,
     python: null,
     wardSpawns: null,
     wardLifecycles: null,
@@ -189,6 +197,8 @@ function parseArgs(argv) {
       else if (key === 'sample-stride') options.sampleStride = positiveInteger(value, key);
       else if (key === 'details-dir') options.detailsDir = value;
       else if (key === 'decoder-image') options.decoderImage = value;
+      else if (key === 'runtime-image') options.runtimeImage = value;
+      else if (key === 'events') options.events = parseEventNames(value);
       else if (key === 'python') options.python = value;
       else if (key === 'ward-spawns') options.wardSpawns = value;
       else if (key === 'ward-lifecycles') options.wardLifecycles = value;
@@ -223,6 +233,14 @@ function parseArgs(argv) {
     positionals.push(...options.inputs);
   }
   return { command, positionals, options };
+}
+
+function parseEventNames(value) {
+  const names = String(value).split(',').map((name) => name.trim());
+  if (names.length === 0 || names.some((name) => !/^[a-z][a-z0-9_]*$/.test(name))) {
+    throw new Error('--events requires a comma-separated list of capability names');
+  }
+  return [...new Set(names)];
 }
 
 function positiveInteger(value, label) {
@@ -382,10 +400,179 @@ function v2InputsForReplay(replay, options = {}) {
   };
 }
 
+function summarizeCapabilityResults(requested, decoded) {
+  const source = decoded?.capability_results ?? {};
+  const fallbackStatus = decoded?.status === 'UNSUPPORTED_VERSION' ? 'UNSUPPORTED'
+    : decoded?.status === 'BLOCKED' || decoded?.status === 'MISSING_INPUT'
+      ? 'MISSING_INPUT' : 'DECODE_FAILED';
+  const capabilityResults = {};
+  for (const capability of requested) {
+    const row = source[capability];
+    if (!row || typeof row !== 'object' || typeof row.status !== 'string') {
+      capabilityResults[capability] = {
+        status: fallbackStatus,
+        input_count: null,
+        event_count: null,
+        error: decoded?.note ?? `Decoder did not report ${capability}.`,
+      };
+      continue;
+    }
+    if ((row.status === 'PASS' || row.status === 'CANDIDATE')
+        && (!Number.isSafeInteger(row.input_count)
+        || row.input_count < 0 || !Number.isSafeInteger(row.event_count)
+        || row.event_count < 0)) {
+      capabilityResults[capability] = {
+        status: 'DECODE_FAILED',
+        input_count: null,
+        event_count: null,
+        error: `Decoder returned ${row.status} without valid counts for ${capability}.`,
+      };
+      continue;
+    }
+    capabilityResults[capability] = row;
+  }
+  const statuses = Object.values(capabilityResults).map((row) => row.status);
+  const completed = statuses.filter((status) => status === 'PASS' || status === 'CANDIDATE').length;
+  const status = completed === requested.length
+    ? statuses.includes('CANDIDATE') ? 'CANDIDATE' : 'PASS'
+    : completed > 0 ? 'PARTIAL'
+      : statuses.every((item) => item === statuses[0]) ? statuses[0]
+        : 'DECODE_FAILED';
+  return { status, capabilityResults };
+}
+
+function parseOne1619(replay, options, started) {
+  const analysis = analyzeReplay(replay, {
+    timelineLimit: options.timelineLimit,
+    includePrivateMetadata: options.includePrivateMetadata,
+    strict: options.strict,
+  });
+  // The raw analyzer initializes legacy event arrays. For a 16.19 run, only
+  // arrays returned by an executed exact-build decoder may appear here.
+  analysis.events = {};
+  analysis.event_counts = {};
+  analysis.capabilities = [];
+  analysis.adc_deaths = [];
+  analysis.decoder = {
+    profile: null,
+    status: analysis.block_errors.length === 0 ? 'CONTAINER_INSPECTED' : 'FRAMING_FAILED',
+    note: analysis.block_errors.length === 0
+      ? 'Container and packet framing inspected; no semantic decoder was requested.'
+      : `${analysis.block_errors.length} packet framing/decompression error(s) prevent semantic decoding.`,
+  };
+  if (options.semantic !== false) {
+    const requested = options.events ?? [];
+    let decoded = null;
+    if (analysis.block_errors.length > 0) {
+      analysis.decoder.status = 'FRAMING_FAILED';
+      analysis.semantic = {
+        status: 'FRAMING_FAILED',
+        requested_capabilities: requested,
+        capability_results: Object.fromEntries(requested.map((capability) => [capability, {
+          status: 'DECODE_FAILED', input_count: null, event_count: null,
+          error: 'Replay packet framing/decompression failed.',
+        }])),
+      };
+    } else if (!resolveBuildProfile(replay).profile) {
+      analysis.decoder.status = 'UNSUPPORTED_VERSION';
+      analysis.decoder.note = `No exact build profile is registered for ${replay.header.version}.`;
+      analysis.semantic = {
+        status: 'UNSUPPORTED_VERSION',
+        requested_capabilities: requested,
+        capability_results: Object.fromEntries(requested.map((capability) => [capability, {
+          status: 'UNSUPPORTED', input_count: null, event_count: null,
+          error: analysis.decoder.note,
+        }])),
+      };
+    } else if (requested.length === 0) {
+      analysis.decoder.status = 'MISSING_CAPABILITY_SELECTION';
+      analysis.decoder.note = 'Specify --events with the 16.19 capability to decode.';
+      analysis.semantic = {
+        status: 'MISSING_CAPABILITY_SELECTION',
+        requested_capabilities: [],
+        capability_results: {},
+      };
+    } else {
+      try {
+        decoded = decodeExactBuildReplay(replay, {
+          capabilities: requested,
+          runtimeImagePath: options.runtimeImage ?? undefined,
+          pythonExecutable: options.python ?? undefined,
+        });
+      } catch (error) {
+        decoded = {
+          status: 'DECODE_FAILED',
+          note: error.message || String(error),
+          capability_results: Object.fromEntries(requested.map((capability) => [capability, {
+            status: 'DECODE_FAILED', input_count: null, event_count: null,
+            error: error.message || String(error),
+          }])),
+        };
+      }
+      const capabilitySummary = summarizeCapabilityResults(requested, decoded);
+      const runtimeStatuses = Object.values(capabilitySummary.capabilityResults)
+        .map((row) => row.runtime_image_status);
+      const runtimeImageUsed = typeof decoded.runtime_image_used === 'boolean'
+        ? decoded.runtime_image_used
+        : runtimeStatuses.length > 0 && runtimeStatuses.every((status) => [
+          'PROVIDED_NOT_USED', 'NOT_REQUIRED',
+        ].includes(status)) ? false : null;
+      analysis.decoder = {
+        profile: decoded.profile ?? null,
+        status: capabilitySummary.status,
+        note: decoded.note ?? (capabilitySummary.status === 'CANDIDATE'
+          ? 'Experimental candidate output; it is not a confirmed semantic event.' : null),
+      };
+      analysis.semantic = {
+        status: capabilitySummary.status,
+        api_status: decoded.status ?? null,
+        note: decoded.note ?? null,
+        requested_capabilities: requested,
+        capability_results: capabilitySummary.capabilityResults,
+        runtime_image_requested: options.runtimeImage ? path.resolve(options.runtimeImage) : null,
+        runtime_image_used: runtimeImageUsed,
+        runtime_image_sha256: decoded.runtime_image_sha256 ?? null,
+      };
+      analysis.events = Object.fromEntries(Object.entries(decoded.events ?? {})
+        .filter(([, rows]) => Array.isArray(rows)));
+      analysis.event_counts = Object.fromEntries(Object.entries(analysis.events)
+        .map(([name, rows]) => [name, rows.length]));
+      if (Number.isSafeInteger(decoded.decoded_packet_count)
+          && decoded.decoded_packet_count >= 0) {
+        analysis.decoded_packet_count = decoded.decoded_packet_count;
+        analysis.unknown_packet_count = Math.max(0,
+          analysis.packet_count - decoded.decoded_packet_count);
+      }
+    }
+  }
+  analysis.input_parse_elapsed_ms = Number((Number(process.hrtime.bigint() - started) / 1e6).toFixed(3));
+  return { ok: true, analysis };
+}
+
 function parseOne(filePath, options) {
   const started = process.hrtime.bigint();
   try {
     const replay = parseReplayFile(filePath);
+    if (replay.header.patch === '16.19') {
+      return parseOne1619(replay, options, started);
+    }
+    if (options.events || options.runtimeImage) {
+      const analysis = analyzeReplay(replay, {
+        timelineLimit: options.timelineLimit,
+        includePrivateMetadata: options.includePrivateMetadata,
+        strict: options.strict,
+      });
+      analysis.events = {};
+      analysis.event_counts = {};
+      analysis.capabilities = [];
+      analysis.decoder = {
+        profile: null,
+        status: 'UNSUPPORTED_REPLAY_VERSION',
+        note: `--events and --runtime-image select the 16.19 path; received ${replay.header.version}.`,
+      };
+      analysis.input_parse_elapsed_ms = Number((Number(process.hrtime.bigint() - started) / 1e6).toFixed(3));
+      return { ok: true, analysis };
+    }
     const v2Inputs = v2InputsForReplay(replay, options);
     const v2PacketIds = [
       ...(options.wardSpawns || options.wardLifecycles ? [0x0353] : []),
@@ -661,8 +848,35 @@ function errorToObject(error) {
   };
 }
 
-function writePerReplayArtifacts(analysis, rootDir) {
-  const replayDir = path.join(rootDir, 'replays', safeStem(analysis.source_path));
+function replayDirectoryNames(analyses) {
+  const stems = analyses.map((analysis) => safeStem(analysis.source_path));
+  const stemCounts = new Map();
+  for (const stem of stems) stemCounts.set(stem, (stemCounts.get(stem) ?? 0) + 1);
+  const candidates = analyses.map((analysis, index) => {
+    const stem = stems[index];
+    const sourcePath = path.resolve(analysis.source_path);
+    const identity = process.platform === 'win32' ? sourcePath.toLowerCase() : sourcePath;
+    const pathHash = sha256(Buffer.from(identity, 'utf8'));
+    return {
+      stem,
+      pathHash,
+      name: stemCounts.get(stem) > 1 ? `${stem}-${pathHash.slice(0, 12)}` : stem,
+    };
+  });
+  const candidateCounts = new Map();
+  for (const row of candidates) {
+    candidateCounts.set(row.name, (candidateCounts.get(row.name) ?? 0) + 1);
+  }
+  const names = candidates.map((row) => candidateCounts.get(row.name) > 1
+    ? `${row.stem}-${row.pathHash}` : row.name);
+  if (new Set(names).size !== names.length) {
+    throw new Error('Replay output directory identities are not unique');
+  }
+  return names;
+}
+
+function writePerReplayArtifacts(analysis, rootDir, replayDirName) {
+  const replayDir = path.join(rootDir, 'replays', replayDirName);
   ensureDir(replayDir);
   writeJson(path.join(replayDir, 'replay_analysis.json'), analysis);
   writeJson(path.join(replayDir, 'rofl_inventory.json'), inventoryFromAnalysis(analysis));
@@ -680,6 +894,14 @@ function writePerReplayArtifacts(analysis, rootDir) {
   ]);
   writeJsonl(path.join(replayDir, 'packet_timeline_sample.jsonl'), analysis.packet_timeline_sample);
   writeJson(path.join(replayDir, 'raw_packet_anchors.json'), analysis.raw_anchors);
+  if (analysis.patch === '16.19' && analysis.semantic) {
+    writeJson(path.join(replayDir, 'semantic_run.json'), {
+      replay_version: analysis.replay_version,
+      replay_sha256: analysis.replay_sha256,
+      container_status: analysis.block_errors.length === 0 ? 'PASS' : 'FRAMING_FAILED',
+      ...analysis.semantic,
+    });
+  }
   writeJson(path.join(replayDir, 'events.json'), analysis.events);
   for (const [name, rows] of Object.entries(analysis.events)) {
     writeJsonl(path.join(replayDir, `${name}.jsonl`), rows);
@@ -774,7 +996,9 @@ function detailsValidationRows(results, detailsDir) {
       details_death_count: null,
       replay_damage_count: result.ok ? result.analysis.event_counts.damage_events : null,
       details_damage_rows: null,
-      mismatch_notes: detailsPath
+      mismatch_notes: result.ok && result.analysis.patch === '16.19'
+        ? '16.19 capability execution is recorded separately in semantic_run.json; Match Details are validation-only and were not used for decoding.'
+        : detailsPath
         ? 'Replay semantic events were decoded without Details; use the dedicated validators for cross-source comparison.'
         : 'Replay semantic events were decoded without Details; no cross-source claim was made for this row.',
     };
@@ -876,7 +1100,7 @@ function buildAcceptanceSummary(results, beforeHashes, afterHashes, testSummary,
     && blockErrorCount === 0
     && !testRunFailed
     && upstream.unchanged;
-  const status = successful.length === 0
+  let status = successful.length === 0
     ? 'NEED_USER_FILE'
     : validationClean && allSemanticReady && allV2Ready
       ? 'RESEARCH_READY_V2_COMPLETE'
@@ -885,6 +1109,25 @@ function buildAcceptanceSummary(results, beforeHashes, afterHashes, testSummary,
       : failed.length > 0 || blockErrorCount > 0 || testRunFailed || !upstream.unchanged
         ? 'VALIDATION_FAILED'
         : 'UNSUPPORTED_REPLAY_VERSION';
+  const has1619 = successful.some((result) => result.analysis.patch === '16.19');
+  if (has1619 && successful.length > 0) {
+    const statuses = successful.map((result) => result.analysis.decoder.status);
+    const completed = new Set(['PASS', 'CANDIDATE', 'RESEARCH_READY_COMPLETE']);
+    if (!validationClean) status = 'VALIDATION_FAILED';
+    else if (args[0] === 'inspect' || statuses.every((item) => item === 'CONTAINER_INSPECTED')) {
+      status = 'CONTAINER_INSPECTED';
+    } else if (statuses.every((item) => item === 'PASS' || item === 'RESEARCH_READY_COMPLETE')) {
+      status = 'PASS';
+    } else if (statuses.every((item) => completed.has(item))) {
+      status = 'CANDIDATE';
+    } else if (statuses.some((item) => completed.has(item))) {
+      status = 'PARTIAL';
+    } else if (statuses.every((item) => item === statuses[0])) {
+      status = statuses[0];
+    } else {
+      status = 'DECODE_FAILED';
+    }
+  }
   return {
     status,
     milestone: status,
@@ -896,6 +1139,11 @@ function buildAcceptanceSummary(results, beforeHashes, afterHashes, testSummary,
     replay_file_count: successful.length,
     replay_files_tested: replaySha256,
     replay_sha256: replaySha256,
+    replay_artifacts: successful.map((result) => ({
+      source_path: result.analysis.source_path,
+      replay_sha256: result.analysis.replay_sha256,
+      artifact_directory: result.analysis.artifact_directory ?? null,
+    })),
     tests_total: testSummary?.total ?? null,
     tests_passed: testSummary?.passed ?? null,
     tests_failed: testSummary?.failed ?? null,
@@ -971,31 +1219,88 @@ function buildAcceptanceSummary(results, beforeHashes, afterHashes, testSummary,
       path_decode: result.analysis.semantic?.path_decode ?? null,
       v2_status: result.analysis.v2_status ?? null,
     })),
+    capability_runs: successful.filter((result) => result.analysis.patch === '16.19')
+      .map((result) => ({
+        source_path: result.analysis.source_path,
+        replay_sha256: result.analysis.replay_sha256,
+        replay_version: result.analysis.replay_version,
+        status: result.analysis.decoder.status,
+        requested_capabilities: result.analysis.semantic?.requested_capabilities ?? [],
+        capability_results: result.analysis.semantic?.capability_results ?? {},
+      })),
     capabilities: successful[0]?.analysis.capabilities ?? [],
   };
 }
 
 function buildAcceptanceReport(summary, results, artifactRoot) {
+  if (results.some((result) => result.ok && result.analysis.patch === '16.19')) {
+    const lines = [
+      '# ROFL Analyzer Run Report', '',
+      `- Run status: **${summary.status}**`,
+      `- Output: ${path.resolve(artifactRoot)}`,
+      `- Parsed Replays: ${summary.replay_file_count}`,
+      `- Packet framing errors: ${summary.real_replay_validation.block_framing_errors}`, '',
+      '## Per-Replay execution', '',
+    ];
+    for (const result of results) {
+      if (!result.ok) {
+        lines.push(`- ${result.source_path}: INPUT_FAILED — ${result.error.message}`);
+        continue;
+      }
+      const analysis = result.analysis;
+      lines.push(`- ${analysis.source_path}: ${analysis.replay_version}; ${analysis.packet_count} blocks; ${analysis.decoder.status}`);
+      for (const [name, capability] of Object.entries(
+        analysis.semantic?.capability_results ?? {},
+      )) {
+        const count = capability.event_count === null || capability.event_count === undefined
+          ? 'unavailable' : capability.event_count;
+        const missing = capability.missing_input == null ? null
+          : typeof capability.missing_input === 'string'
+            ? capability.missing_input : JSON.stringify(capability.missing_input);
+        lines.push(`  - ${name}: ${capability.status}; ${count} events; ${capability.input_count ?? 'unavailable'} inputs${capability.profile_id ? `; profile ${capability.profile_id}` : ''}${missing ? `; missing input: ${missing}` : ''}${capability.error ? `; ${capability.error}` : ''}`);
+      }
+    }
+    lines.push('', '## Interpretation', '',
+      'PASS with zero events means the requested capability executed and found no matching events.',
+      'CANDIDATE marks experimental output and is not a confirmed semantic event.',
+      'MISSING_INPUT, UNSUPPORTED, PROFILE_UNAVAILABLE, DECODE_FAILED and FRAMING_FAILED do not mean zero events.',
+      'Per-Replay semantic_run.json records requested capability results and Replay identity.', '');
+    return lines.join('\n');
+  }
   return renderAcceptanceReport(summary, results, artifactRoot, TEST_COMMAND);
 }
 
 function buildReviewerManifest(summary, rootDir, results, args) {
   const absoluteRoot = path.resolve(rootDir);
   const successful = results.filter((result) => result.ok);
-  const reviewReplay = successful[0]?.analysis.source_path || results[0]?.source_path || null;
+  const first1619 = successful.find((result) => result.analysis.patch === '16.19')?.analysis;
+  const reviewReplay = first1619?.source_path
+    || successful[0]?.analysis.source_path || results[0]?.source_path || null;
   const reviewerRerunRoot = path.resolve(absoluteRoot, 'reviewer-rerun');
-  const replayCommand = reviewReplay
-    ? `node src/cli.js analyze ${quoteCommandArg(reviewReplay)} --out-dir ${quoteCommandArg(reviewerRerunRoot)}`
+  const selected1619 = first1619?.semantic?.requested_capabilities ?? [];
+  const selectedArg = selected1619.length > 0
+    ? ` --events ${quoteCommandArg(selected1619.join(','))}` : '';
+  const runtimeArg = first1619?.semantic?.runtime_image_requested
+    ? ` --runtime-image ${quoteCommandArg(first1619.semantic.runtime_image_requested)}` : '';
+  const replayCommand = reviewReplay ? first1619
+    ? `node src/cli.js ${selected1619.length > 0 ? 'decode' : 'inspect'} ${quoteCommandArg(reviewReplay)}${selectedArg}${runtimeArg} --out-dir ${quoteCommandArg(reviewerRerunRoot)}`
+    : `node src/cli.js analyze ${quoteCommandArg(reviewReplay)} --out-dir ${quoteCommandArg(reviewerRerunRoot)}`
     : null;
   const validationInputs = [...new Set(results.map((result) => result.ok ? result.analysis.source_path : result.source_path))];
-  const validationCommand = validationInputs.length > 0
+  const validationCommand = validationInputs.length > 0 && !first1619
     ? `node src/cli.js validate ${validationInputs.map(quoteCommandArg).join(' ')} --out-dir ${quoteCommandArg(absoluteRoot)}`
     : null;
   return {
     generated_at_utc: new Date().toISOString(),
     status: summary.status,
     repository_root: REPOSITORY_ROOT,
-    key_source_files: [
+    key_source_files: first1619 ? [
+      path.resolve(__dirname, 'rofl.js'),
+      path.resolve(__dirname, 'build_registry.js'),
+      path.resolve(__dirname, 'semantic_api.js'),
+      path.resolve(__dirname, 'cli.js'),
+      path.resolve(__dirname, '..', 'test'),
+    ] : [
       path.resolve(__dirname, 'rofl.js'),
       path.resolve(__dirname, 'semantic_pipeline.js'),
       path.resolve(__dirname, 'decoders', 'rofl_16_15_801_3452.js'),
@@ -1013,9 +1318,11 @@ function buildReviewerManifest(summary, rootDir, results, args) {
     output_root: absoluteRoot,
     acceptance_summary: path.resolve(absoluteRoot, 'acceptance_summary.json'),
     acceptance_report: path.resolve(absoluteRoot, 'ACCEPTANCE_REPORT.md'),
-    capability_matrix: path.resolve(REPOSITORY_ROOT, 'docs', 'PROTECTION_V4_CAPABILITY_MATRIX.md'),
+    capability_matrix: first1619 ? null
+      : path.resolve(REPOSITORY_ROOT, 'docs', 'PROTECTION_V4_CAPABILITY_MATRIX.md'),
     format_documentation: path.resolve(REPOSITORY_ROOT, 'docs', 'ROFL_FORMAT.md'),
-    protocol_report: path.resolve(REPOSITORY_ROOT, 'docs', 'PROTECTION_V4_COMPLETION_REPORT.md'),
+    protocol_report: first1619 ? null
+      : path.resolve(REPOSITORY_ROOT, 'docs', 'PROTECTION_V4_COMPLETION_REPORT.md'),
     test_command: TEST_COMMAND,
     npm_test_command: 'npm run test:all',
     replay_command: replayCommand,
@@ -1028,17 +1335,21 @@ function buildReviewerManifest(summary, rootDir, results, args) {
       packet_timeline: path.resolve(absoluteRoot, 'packet_timeline_sample.jsonl'),
       raw_packet_anchors: path.resolve(absoluteRoot, 'raw_packet_anchors.json'),
       replay_vs_details: path.resolve(absoluteRoot, 'replay_vs_details_validation.csv'),
-      damage_validation: path.resolve(REPOSITORY_ROOT, 'artifacts', 'semantic_probe', 'damage_validation_summary.json'),
-      death_validation: path.resolve(REPOSITORY_ROOT, 'artifacts', 'semantic_probe', 'death_validation.json'),
-      spell_validation: path.resolve(REPOSITORY_ROOT, 'artifacts', 'semantic_probe', 'spell_validation_summary.json'),
-      buff_validation: path.resolve(REPOSITORY_ROOT, 'artifacts', 'runtime_probe', 'buff_validation_summary.json'),
+      ...(first1619 ? {} : {
+        damage_validation: path.resolve(REPOSITORY_ROOT, 'artifacts', 'semantic_probe', 'damage_validation_summary.json'),
+        death_validation: path.resolve(REPOSITORY_ROOT, 'artifacts', 'semantic_probe', 'death_validation.json'),
+        spell_validation: path.resolve(REPOSITORY_ROOT, 'artifacts', 'semantic_probe', 'spell_validation_summary.json'),
+        buff_validation: path.resolve(REPOSITORY_ROOT, 'artifacts', 'runtime_probe', 'buff_validation_summary.json'),
+      }),
     },
     raw_anchor_guidance: [
       'Use raw_packet_anchors.json to select a real chunk/block.',
       'Verify replay_sha256 before reading the recorded offsets.',
       'Check chunk_file_offset and decompressed_block_offset against the source Replay.',
       'Open the matching semantic JSONL row and verify its raw_packet_ref and payload_sha256.',
-      'Follow source Replay bytes → chunk → decompressed block → exact-build decoder → semantic event → ADC output.',
+      first1619
+        ? 'Follow source Replay bytes through the exact-build candidate profile; CANDIDATE is not a confirmed semantic event.'
+        : 'Follow source Replay bytes → chunk → decompressed block → exact-build decoder → semantic event → ADC output.',
     ],
     raw_anchor_chain_status: rawAnchorChainStatus(summary),
     details_comparison: {
@@ -1055,7 +1366,11 @@ function buildReviewerManifest(summary, rootDir, results, args) {
 async function writeRunArtifacts(results, rootDir, beforeHashes, afterHashes, args, testSummary = null, detailsDir = null) {
   ensureDir(rootDir);
   const successful = results.filter((result) => result.ok);
-  for (const result of successful) writePerReplayArtifacts(result.analysis, rootDir);
+  const replayDirNames = replayDirectoryNames(successful.map((result) => result.analysis));
+  for (const [index, result] of successful.entries()) {
+    result.analysis.artifact_directory = path.posix.join('replays', replayDirNames[index]);
+    writePerReplayArtifacts(result.analysis, rootDir, replayDirNames[index]);
+  }
 
   const inventories = successful.map((result) => inventoryFromAnalysis(result.analysis));
   writeJson(path.join(rootDir, 'rofl_inventory.json'), inventories);
@@ -1089,6 +1404,7 @@ async function writeRunArtifacts(results, rootDir, beforeHashes, afterHashes, ar
     'mismatch_notes',
   ]);
   const summary = buildAcceptanceSummary(results, beforeHashes, afterHashes, testSummary, args);
+  summary.output_root = path.resolve(rootDir);
   writeJson(path.join(rootDir, 'acceptance_summary.json'), summary);
   fs.writeFileSync(path.join(rootDir, 'ACCEPTANCE_REPORT.md'), `${buildAcceptanceReport(summary, results, rootDir)}\n`, 'utf8');
   const reviewerManifest = buildReviewerManifest(summary, rootDir, results, args);
@@ -1097,6 +1413,7 @@ async function writeRunArtifacts(results, rootDir, beforeHashes, afterHashes, ar
   const hashes = await outputHashes(rootDir, { exclude: outputHashExclusions });
   writeJson(path.join(rootDir, 'manifest.json'), {
     tool_version: TOOL_VERSION,
+    output_root: path.resolve(rootDir),
     parser_version: successful[0]?.analysis.parser_version || null,
     git_commit: gitCommit(),
     generated_at_utc: new Date().toISOString(),
@@ -1105,7 +1422,13 @@ async function writeRunArtifacts(results, rootDir, beforeHashes, afterHashes, ar
     platform: `${process.platform}-${process.arch}`,
     dependencies: {
       zstd_native: typeof require('node:zlib').zstdDecompressSync === 'function',
-      external_runtime_dependencies: [],
+      external_runtime_dependencies: [...new Set(successful
+        .filter((result) => result.analysis.semantic?.runtime_image_used === true)
+        .map((result) => result.analysis.semantic?.runtime_image_requested)
+        .filter(Boolean))],
+      requested_runtime_images: [...new Set(successful
+        .map((result) => result.analysis.semantic?.runtime_image_requested)
+        .filter(Boolean))],
     },
     replay_inputs: successful.map((result) => ({
       path: result.analysis.source_path,
@@ -1113,6 +1436,8 @@ async function writeRunArtifacts(results, rootDir, beforeHashes, afterHashes, ar
       version: result.analysis.replay_version,
       decoder_profile: result.analysis.decoder.profile,
       decoder_status: result.analysis.decoder.status,
+      requested_capabilities: result.analysis.semantic?.requested_capabilities ?? null,
+      artifact_directory: result.analysis.artifact_directory ?? null,
     })),
     decoder_profiles: successful.map((result) => ({
       replay_version: result.analysis.replay_version,
@@ -1129,6 +1454,33 @@ async function writeRunArtifacts(results, rootDir, beforeHashes, afterHashes, ar
   return summary;
 }
 
+function isIgnoredRepositoryOutputRoot(resolved, repositoryRoot = REPOSITORY_ROOT) {
+  const normalized = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  return ['artifacts', 'work', 'dist', 'evidence'].some((name) => {
+    const candidate = path.resolve(repositoryRoot, name);
+    return normalized === (process.platform === 'win32' ? candidate.toLowerCase() : candidate);
+  });
+}
+
+function reserveOutputDirectory(requested, repositoryRoot = REPOSITORY_ROOT) {
+  const resolved = path.resolve(requested);
+  ensureDir(path.dirname(resolved));
+  try {
+    fs.mkdirSync(resolved);
+    return resolved;
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+  }
+  const stat = fs.lstatSync(resolved);
+  if (!stat.isDirectory()) throw new Error(`Output path is not a directory: ${resolved}`);
+  if (fs.readdirSync(resolved).length === 0) return resolved;
+  const timestamp = new Date().toISOString().replace(/[^0-9A-Za-z]/g, '');
+  if (isIgnoredRepositoryOutputRoot(resolved, repositoryRoot)) {
+    return fs.mkdtempSync(path.join(resolved, `run-${timestamp}-`));
+  }
+  return fs.mkdtempSync(`${resolved}-run-${timestamp}-`);
+}
+
 async function main(argv = process.argv.slice(2)) {
   const parsed = parseArgs(argv);
   if (parsed.options.help || parsed.command === 'help') {
@@ -1140,7 +1492,6 @@ async function main(argv = process.argv.slice(2)) {
   const inputs = parsed.positionals.length > 0 ? parsed.positionals : ['replay'];
   const files = discoverReplayFiles(inputs);
   if (files.length === 0) throw new Error('No .rofl files found in the supplied input.');
-  const outDir = path.resolve(parsed.options.outDir);
   const beforeHashes = await hashFiles(DEFAULT_UPSTREAM_PATHS);
   const parseOptions = { ...parsed.options, semantic: parsed.command !== 'inspect' };
   const results = files.map((filePath) => parseOne(filePath, parseOptions));
@@ -1149,6 +1500,7 @@ async function main(argv = process.argv.slice(2)) {
   const validationDetailsDir = parsed.command === 'validate' && parsed.options.detailsDir
     ? path.resolve(parsed.options.detailsDir)
     : null;
+  const outDir = reserveOutputDirectory(parsed.options.outDir);
   const summary = await writeRunArtifacts(
     results,
     outDir,
@@ -1160,13 +1512,22 @@ async function main(argv = process.argv.slice(2)) {
   );
   for (const result of results) {
     if (result.ok) {
-      process.stdout.write(`${result.analysis.source_path}\t${result.analysis.replay_version}\t${result.analysis.packet_count} blocks\t${result.analysis.block_errors.length} errors\n`);
+      process.stdout.write(`${result.analysis.source_path}\t${result.analysis.replay_version}\t${result.analysis.packet_count} blocks\t${result.analysis.block_errors.length} errors\t${result.analysis.decoder.status}\n`);
     } else {
       process.stderr.write(`${result.source_path}\t${result.error.code}\t${result.error.message}\n`);
     }
   }
   process.stdout.write(`Status: ${summary.status}\nOutput: ${outDir}\n`);
-  return results.some((result) => !result.ok) || (testSummary && testSummary.exit_code !== 0) ? 2 : 0;
+  const includes1619 = results.some((result) => result.ok && result.analysis.patch === '16.19');
+  const semanticRunFailed = includes1619 && parsed.command !== 'inspect'
+    && results.some((result) => result.ok && (
+      result.analysis.block_errors.length > 0
+      || !['PASS', 'CANDIDATE', 'RESEARCH_READY_COMPLETE'].includes(result.analysis.decoder.status)
+    ));
+  const framingRunFailed = results.some((result) => result.ok
+    && result.analysis.block_errors.length > 0);
+  return results.some((result) => !result.ok) || semanticRunFailed || framingRunFailed
+    || (testSummary && testSummary.exit_code !== 0) ? 2 : 0;
 }
 
 if (require.main === module) {
@@ -1190,5 +1551,6 @@ module.exports = {
   v2InputsForReplay,
   inventoryFromAnalysis,
   buildAcceptanceSummary,
+  reserveOutputDirectory,
   main,
 };

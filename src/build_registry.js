@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const oldDecoder = require('./decoders/rofl_16_15_801_3452');
 const newDecoder = require('./decoders/rofl_16_16_805_0442');
+const decoder1619 = require('./decoders/rofl_16_19_820_7193');
 const { SWEEPER_CAPABILITY_CONTRACT_ID } = require('./sweeper_capability');
 const { PATH_PACKET_PROFILE: OLD_PATH_PROFILE } = require('./path_pipeline_v2');
 const { WARD_SPAWN_PROFILE: OLD_WARD_PROFILE } = require('./ward_pipeline_v2');
@@ -209,6 +210,45 @@ const BUILD_PROFILES = deepFreeze({
     ],
     capability_contracts: [SWEEPER_CAPABILITY_CONTRACT_ID],
     regression_fixture_set: '16.16-deep-semantic-exact-build-safe-corpus-v2',
+  },
+  '16.19.820.7193': {
+    schema_version: 1,
+    game_version: '16.19.820.7193',
+    patch: '16.19',
+    support_level: 'CORE_READY',
+    release_status: 'EXPERIMENTAL_CANDIDATE',
+    downstream_release_gate: null,
+    format_profile: {
+      implementation: 'src/rofl.js',
+      status: 'FORMAT_VERIFIED_LOCAL_REPLAYS',
+    },
+    runtime_profile: {
+      status: 'UNPROFILED',
+      image_sha256: null,
+    },
+    packet_routes: {
+      hero_death: null,
+    },
+    decoder_profile: {
+      hero_death: {
+        id: 'rofl-16.19.820.7193-hero-death-triad-selector-candidate-v1',
+        replay_version: decoder1619.REPLAY_VERSION,
+        status: 'CANDIDATE',
+        enabled: true,
+        route_profiles: decoder1619.HERO_DEATH_CANDIDATE_PROFILES,
+      },
+    },
+    field_semantics: {
+      hero_death: 'CANDIDATE_EXACT_BUILD_ROUTE_FINGERPRINT',
+    },
+    semantic_mappings: {
+      victim_participant: '(raw_param & 0xff) - 0xad, route-profile bounded',
+    },
+    verified_capabilities: [],
+    candidate_capabilities: ['hero_death'],
+    unsupported_capabilities: [],
+    validation_artifacts: [],
+    regression_fixture_set: null,
   },
 });
 

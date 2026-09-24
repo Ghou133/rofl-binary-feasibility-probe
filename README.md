@@ -2,7 +2,7 @@
 
 精确版本绑定的《英雄联盟》`.rofl` 回放研究工具：解析容器和数据包，输出带来源、证据等级和明确边界的语义事实。
 
-> **协议研究仍处于 `SOURCE_FROZEN_DURING_MIGRATION`。** 语义基线截至 2026-08-21，公开源码基线发布于 2026-09-23。本次维护修正解析安全、无效计算、报告与打包，不增加已验证语义、不解除冻结、不删除研究证据。迁移目标仍为 `lol-inference-lab/replay/`，不是两套独立活跃实现。
+> **当前开发分支：16.19。** `codex/16-19-development` 已获授权继续适配、接通 CLI/API 并研究新字段。`16.19.820.7193` 的死亡候选输出仍是实验结果，不是已发布的可靠语义能力。2026-08-21 的公开语义基线及 `SOURCE_FROZEN_DURING_MIGRATION` 记录保留为历史状态；本分支不覆盖旧版证据。
 
 [使用与维护](docs/PUBLIC_DEVELOPMENT.md) · [代码结构](ARCHITECTURE.md) · [路线图](ROADMAP.md) · [历史验证记录](VALIDATION_STATUS.md) · [AI 接手入口](AI_HANDOFF.md)
 
@@ -13,12 +13,13 @@
 | 入口 / 层 | 当前提供 | 使用边界 |
 | --- | --- | --- |
 | `inspect` / `src/rofl.js` | RIOT 头、metadata、chunk/Zstd、packet framing、原始清单与锚点 | 容器结构可解析，不代表该版本语义已验证 |
-| `decode` / `analyze` / `batch` / `validate` | 旧版整合语义管线：死亡、伤害、施法、Buff、等级和保护量等 | **仅 `16.15.801.3452`**；这四个命令未分发到 16.16 语义 API |
+| `decode` / `analyze` / `batch` / `validate` | `16.15.801.3452` 旧版整合管线；16.19 精确 build 的指定能力实验入口 | 16.19 必须显式传 `--events`；16.16 语义 API 尚未由主 CLI 分发；`validate` 还会运行完整 Node 套件 |
+| `16.19.820.7193 --events hero_death` | HN/KR 结构指纹与回放尾部死亡总数同时匹配时，输出候选受害者和回放时间 | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；无杀手、助攻或重生推断，其他完整 build 不复用 |
 | `src/semantic_api.js` 与精确 build profiles | `16.16.805.0442` 的 HeroPath、等级、WardSpawn、伤害、死亡、重生、XP/lane-CS keyframe、受限 ItemState 和 gameplay-tail 等 | 独立 API 的逐字段能力；需要外部精确镜像、profiles 或对应已验证输入，不是主 CLI 的完整分析模式 |
 | V2 Ward / Path | 已验证位置、守卫事件及受限派生关联 | 来源 SHA 必须与回放一致；类型、匹配、生命周期和位置插值与直接字段分级 |
 | `research-v3/`、`research-v4/` | DuckDB 研究查询、保护量增量表和验证器 | 保留的真实功能，不是因版本号旧就可删除的目录；全量重建需要私有输入 |
 
-两版都保留“直接、派生、部分、候选、不可用”的区别。完整 Cast/Buff/Protection、CurrentHP、当前 Armor/MR、护盾实例与剩余量、effective heal/overheal、普通野怪清野等能力不能从现有有限字段外推。`stats_at` / `statsAt` 有逐字段 fail-closed 接口，但当前不发布 MaxHP/Armor/MR 数值；库存部分状态不是通用买卖事件。
+各版本都保留“直接、派生、部分、候选、不可用”的区别。完整 Cast/Buff/Protection、CurrentHP、当前 Armor/MR、护盾实例与剩余量、effective heal/overheal、普通野怪清野等能力不能从现有有限字段外推。`stats_at` / `statsAt` 有逐字段 fail-closed 接口，但当前不发布 MaxHP/Armor/MR 数值；库存部分状态不是通用买卖事件。
 
 完整字段合同以 [能力矩阵](docs/ROFL_CAPABILITY_MATRIX.md)、[版本矩阵](docs/PROTOCOL_VERSION_MATRIX.md) 和 `src/capability_manifest.js` 为准。`READY`、`EVIDENCE_EXHAUSTED`、`SEMANTIC_RECOVERY_SATURATED` 均不表示 `FULLY_PARSED`。
 
@@ -49,6 +50,17 @@ npm test
 node src/cli.js inspect "D:\Replays\example.rofl" --out-dir "work\inspect"
 ```
 
+对完整版本为 **16.19.820.7193** 的回放运行实验死亡候选解码：
+
+```powershell
+node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
+  --events hero_death --out-dir "work\16-19-death-candidate"
+```
+
+`semantic_run.json` 逐能力记录实际执行、候选、缺输入、不支持和失败；
+`hero_death_candidates.jsonl` 只在结构指纹与死亡总数校验均通过时产生。
+`inspect` 不要求镜像或语义 profile。实验候选没有使用运行时镜像，传入镜像路径不会使其成为已验证语义。
+
 执行 **16.15.801.3452** 的旧版整合语义分析：
 
 ```powershell
@@ -67,11 +79,11 @@ node src/cli.js ward-events "D:\Data\ward_events.jsonl" `
   --from-minute 3 --to-minute 15 --output "work\enemy-support-wards.csv"
 ```
 
-`examples/level_transitions.js` 也是 **16.15** 管线示例，不是 16.16 通用入口。16.16 的能力和依赖应从 `src/semantic_api.js` 及 [新版本手册](docs/ROFL_NEW_BUILD_PLAYBOOK.md) 核对；本次没有添加未经真实输入回归的统一 CLI。
+`examples/level_transitions.js` 也是 **16.15** 管线示例，不是 16.16 通用入口。16.16 的能力和依赖应从 `src/semantic_api.js` 及 [新版本手册](docs/ROFL_NEW_BUILD_PLAYBOOK.md) 核对。16.19 的实验入口只运行指定能力，不把 16.16 解码器用于 16.19。
 
 ## 命令与输出
 
-`decode` 与 `analyze` 共用一条管线，没有不同输出契约；`batch` 对目录中的每个回放执行同一管线。`validate` 额外运行完整 Node 回归，可用 `--details-dir` 做验证对照；Match Details 不进入解码规则。
+`16.15` 的 `decode` 与 `analyze` 共用旧管线。`16.19` 通过精确 build API 执行 `--events` 指定的实验能力；`batch` 逐回放记录成功、候选和失败，不以某项成功掩盖另一项失败。`validate` 额外运行完整 Node 回归，可用 `--details-dir` 做验证对照；Match Details 不进入解码规则。
 
 默认时间线保留前 `--timeline-limit` 条。`--sample-stride` 仅为兼容旧命令保留，已弃用且不改变输出；不再计算最终会被截掉的间隔样本。
 
@@ -99,7 +111,7 @@ node src/cli.js ward-events "D:\Data\ward_events.jsonl" `
 
 ```text
 src/                    容器解析、语义接口、精确版本解码与受限状态查询
-src/cli.js              16.15 旧版 CLI 编排
+src/cli.js              16.15 旧版 CLI 与 16.19 精确 build 选项分发
 src/cli_report.js       本次执行结果驱动的验收报告
 scripts/                解码、研究与维护工具；多数研究命令需要外部输入
 test/, tests/           Node/Python 测试，公共与私有输入范围分别列明

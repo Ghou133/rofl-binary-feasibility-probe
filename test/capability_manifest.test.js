@@ -9,11 +9,15 @@ const test = require('node:test');
 const manifestApi = require('../src/capability_manifest');
 const repositoryRoot = path.resolve(__dirname, '..');
 
-test('capability manifest covers the canonical vocabulary for each registered exact build', () => {
+test('capability manifest covers published builds and keeps experimental builds separate', () => {
   const manifest = manifestApi.createCapabilityManifest();
   assert.deepEqual(manifestApi.validateCapabilityManifest(manifest), []);
   assert.equal(manifest.exact_build_only, true);
   assert.equal(manifest.nearest_build_fallback, 'FORBIDDEN');
+  assert.deepEqual(Object.keys(manifest.build_profiles), [
+    manifestApi.BUILD_16_15, manifestApi.BUILD_16_16,
+  ]);
+  assert.equal(manifest.build_profiles['16.19.820.7193'], undefined);
   for (const build of [manifestApi.BUILD_16_15, manifestApi.BUILD_16_16]) {
     assert.deepEqual(manifest.build_profiles[build].records.map((record) => record.semantic_capability),
       manifestApi.CAPABILITY_VOCABULARY);

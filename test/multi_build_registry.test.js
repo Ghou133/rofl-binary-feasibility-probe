@@ -27,22 +27,31 @@ const {
   withBuildMetadata,
 } = require('../src/semantic_api');
 
-test('build registry keeps two exact profiles in a three-build rolling window', () => {
+test('build registry keeps three exact profiles in a three-build rolling window', () => {
   assert.equal(ROLLING_COMPATIBILITY_WINDOW, 3);
-  assert.deepEqual(Object.keys(BUILD_PROFILES), ['16.15.801.3452', '16.16.805.0442']);
+  assert.deepEqual(Object.keys(BUILD_PROFILES), [
+    '16.15.801.3452', '16.16.805.0442', '16.19.820.7193',
+  ]);
   assert.equal(BUILD_PROFILES['16.15.801.3452'].support_level, 'FULL_PLATFORM_READY');
   assert.equal(BUILD_PROFILES['16.16.805.0442'].support_level, 'DEEP_SEMANTIC_READY');
+  assert.equal(BUILD_PROFILES['16.19.820.7193'].release_status, 'EXPERIMENTAL_CANDIDATE');
   assert.equal(BUILD_PROFILES['16.16.805.0442'].downstream_release_gate,
     'RELEASE_16_16_EXACT_BUILD_DEEP_SEMANTICS');
   assert.deepEqual(rollingCompatibilityWindow(), [
     {
       position: 'CURRENT',
+      game_version: '16.19.820.7193',
+      support_level: 'CORE_READY',
+      release_status: 'EXPERIMENTAL_CANDIDATE',
+    },
+    {
+      position: 'CURRENT-1',
       game_version: '16.16.805.0442',
       support_level: 'DEEP_SEMANTIC_READY',
       release_status: 'SUPPORTED_VERIFIED_DEEP_SEMANTICS_PARTIAL',
     },
     {
-      position: 'CURRENT-1',
+      position: 'CURRENT-2',
       game_version: '16.15.801.3452',
       support_level: 'FULL_PLATFORM_READY',
       release_status: 'SUPPORTED',

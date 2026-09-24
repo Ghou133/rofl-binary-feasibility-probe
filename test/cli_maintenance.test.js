@@ -10,7 +10,7 @@ const Module = require('node:module');
 const test = require('node:test');
 const { packet, replayFromChunks } = require('./helpers/synthetic_replay');
 
-function loadCli(decode) {
+function loadCli(decode, decodeExact) {
   const filename = path.resolve(__dirname, '../src/cli.js');
   const loaded = new Module(filename, module);
   loaded.filename = filename;
@@ -21,12 +21,13 @@ function loadCli(decode) {
       DEFAULT_DECODER_IMAGE: 'synthetic-external-image.bin',
       decodeSemanticReplay: decode || (() => { throw new Error('semantic decoder must not run'); }),
     },
+    './semantic_api': {
+      decodeSemanticReplay: decodeExact || (() => { throw new Error('exact-build decoder must not run'); }),
+    },
     './ward_pipeline_v2': { buildWardOutputs() { throw new Error('Ward is outside this unit test'); } },
     './path_pipeline_v2': {},
     './provenance_v2': {},
     './ward_analysis_v2': {},
-    './integrity': {},
-    './io': {},
   };
   loaded.require = (name) => Object.hasOwn(substitutes, name) ? substitutes[name] : nativeRequire(name);
   loaded._compile(fs.readFileSync(filename, 'utf8'), filename);
@@ -83,4 +84,277 @@ test('help explains the Node minimum, CLI version scope and external runtime ima
   assert.match(output, /16\.16/);
   assert.match(output, /not bundled/);
   assert.match(output, /deprecated/i);
+});
+
+test('16.19 inspect reports container-only success without invoking a decoder', async (t) => {
+  const cli = loadCli();
+  const input = fixture(t, '16.19.820.7193');
+  const output = path.join(path.dirname(input), 'inspect-output');
+  const code = await cli.main(['inspect', input, '--out-dir', output]);
+  assert.equal(code, 0);
+  const summary = JSON.parse(fs.readFileSync(path.join(output, 'acceptance_summary.json'), 'utf8'));
+  assert.equal(summary.status, 'CONTAINER_INSPECTED');
+  assert.equal(summary.decoder_summaries[0].status, 'CONTAINER_INSPECTED');
+  assert.equal(summary.replay_versions[0], '16.19.820.7193');
+});
+
+test('16.19 candidate decode preserves experimental events and exact capability status', async (t) => {
+  let calls = 0;
+  const requestedImage = path.join(os.tmpdir(), 'unused-16-19-image.bin');
+  const cli = loadCli(null, (replay, options) => {
+    calls += 1;
+    assert.equal(replay.header.version, '16.19.820.7193');
+    assert.deepEqual(options.capabilities, ['hero_death']);
+    assert.equal(options.runtimeImagePath, requestedImage);
+    return {
+      status: 'EXPERIMENTAL_CANDIDATE',
+      profile: { game_version: replay.header.version },
+      events: { hero_death_candidates: [{ victim_participant: 1, timestamp_ms: 3000 }] },
+      capability_results: {
+        hero_death: { status: 'CANDIDATE', input_count: 1, event_count: 1,
+          runtime_image_status: 'PROVIDED_NOT_USED' },
+      },
+    };
+  });
+  const input = fixture(t, '16.19.820.7193');
+  const output = path.join(path.dirname(input), 'decode-output');
+  const code = await cli.main(['decode', input, '--events', 'hero_death',
+    '--runtime-image', requestedImage, '--out-dir', output]);
+  assert.equal(code, 0);
+  assert.equal(calls, 1);
+  const summary = JSON.parse(fs.readFileSync(path.join(output, 'acceptance_summary.json'), 'utf8'));
+  assert.equal(summary.status, 'CANDIDATE');
+  assert.equal(summary.capability_runs[0].capability_results.hero_death.status, 'CANDIDATE');
+  const replayDir = path.join(output, 'replays', fs.readdirSync(path.join(output, 'replays'))[0]);
+  const semantic = JSON.parse(fs.readFileSync(path.join(replayDir, 'semantic_run.json'), 'utf8'));
+  const events = JSON.parse(fs.readFileSync(path.join(replayDir, 'events.json'), 'utf8'));
+  assert.equal(semantic.api_status, 'EXPERIMENTAL_CANDIDATE');
+  assert.equal(semantic.container_status, 'PASS');
+  assert.equal(semantic.runtime_image_requested, requestedImage);
+  assert.equal(semantic.runtime_image_used, false);
+  const manifest = JSON.parse(fs.readFileSync(path.join(output, 'manifest.json'), 'utf8'));
+  assert.deepEqual(manifest.dependencies.external_runtime_dependencies, []);
+  assert.deepEqual(manifest.dependencies.requested_runtime_images, [requestedImage]);
+  assert.deepEqual(Object.keys(events), ['hero_death_candidates']);
+  assert.equal(events.hero_death_candidates.length, 1);
+  assert.match(fs.readFileSync(path.join(output, 'ACCEPTANCE_REPORT.md'), 'utf8'),
+    /CANDIDATE marks experimental output/);
+});
+
+test('16.19 zero-event PASS remains distinct from missing input and partial failure', (t) => {
+  const input = fixture(t, '16.19.820.7193');
+  const passed = loadCli(null, () => ({
+    status: 'PASS',
+    events: { hero_path_events: [] },
+    capability_results: {
+      hero_path: { status: 'PASS', input_count: 0, event_count: 0 },
+    },
+  })).parseOne(input, {
+    ...loadCli().parseArgs(['decode', input, '--events', 'hero_path']).options,
+    semantic: true,
+  });
+  assert.equal(passed.ok, true);
+  assert.equal(passed.analysis.decoder.status, 'PASS');
+  assert.equal(passed.analysis.semantic.capability_results.hero_path.event_count, 0);
+  assert.deepEqual(passed.analysis.events.hero_path_events, []);
+
+  const partial = loadCli(null, () => ({
+    status: 'PARTIAL',
+    events: { hero_death_candidates: [{ victim_participant: 1 }] },
+    capability_results: {
+      hero_death: { status: 'CANDIDATE', input_count: 1, event_count: 1 },
+      hero_path: { status: 'MISSING_INPUT', input_count: null, event_count: null,
+        missing_input: 'exact runtime image' },
+    },
+  })).parseOne(input, {
+    ...loadCli().parseArgs(['decode', input, '--events', 'hero_death,hero_path']).options,
+    semantic: true,
+  });
+  assert.equal(partial.analysis.decoder.status, 'PARTIAL');
+  assert.equal(partial.analysis.events.hero_death_candidates.length, 1);
+  assert.equal(partial.analysis.semantic.capability_results.hero_path.status, 'MISSING_INPUT');
+  assert.equal(partial.analysis.events.death_events, undefined);
+});
+
+test('16.19 decode requires an explicit capability and reports missing input as failure', async (t) => {
+  const cli = loadCli(null, () => ({
+    status: 'BLOCKED',
+    events: null,
+    capability_results: {
+      hero_path: { status: 'MISSING_INPUT', event_count: null, input_count: null,
+        missing_input: 'exact runtime image' },
+    },
+  }));
+  const input = fixture(t, '16.19.820.7193');
+  const noSelection = cli.parseOne(input, { ...cli.parseArgs(['decode', input]).options, semantic: true });
+  assert.equal(noSelection.analysis.decoder.status, 'MISSING_CAPABILITY_SELECTION');
+  const output = path.join(path.dirname(input), 'missing-output');
+  const code = await cli.main(['decode', input, '--events', 'hero_path', '--out-dir', output]);
+  assert.equal(code, 2);
+  const summary = JSON.parse(fs.readFileSync(path.join(output, 'acceptance_summary.json'), 'utf8'));
+  assert.equal(summary.status, 'MISSING_INPUT');
+  assert.equal(summary.capability_runs[0].capability_results.hero_path.status, 'MISSING_INPUT');
+  assert.match(fs.readFileSync(path.join(output, 'ACCEPTANCE_REPORT.md'), 'utf8'),
+    /missing input: exact runtime image/);
+});
+
+test('16.19 profile-unavailable replay is not reported as zero candidate events', async (t) => {
+  const cli = loadCli(null, () => ({
+    status: 'PROFILE_UNAVAILABLE',
+    events: null,
+    capability_results: {
+      hero_death: { status: 'PROFILE_UNAVAILABLE', input_count: null,
+        event_count: null, error: 'No bounded route profile matches this Replay.' },
+    },
+  }));
+  const input = fixture(t, '16.19.820.7193');
+  const output = path.join(path.dirname(input), 'profile-unavailable');
+  const code = await cli.main(['decode', input, '--events', 'hero_death', '--out-dir', output]);
+  assert.equal(code, 2);
+  const summary = JSON.parse(fs.readFileSync(path.join(output, 'acceptance_summary.json'), 'utf8'));
+  assert.equal(summary.status, 'PROFILE_UNAVAILABLE');
+  assert.equal(summary.capability_runs[0].capability_results.hero_death.event_count, null);
+  const replayDir = path.join(output, 'replays', fs.readdirSync(path.join(output, 'replays'))[0]);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(replayDir, 'events.json'), 'utf8')), {});
+});
+
+test('mixed-build semantic batch fails on an unsupported replay while inspect stays container-only', async (t) => {
+  const cli = loadCli(() => ({
+    status: 'UNSUPPORTED_REPLAY_VERSION', profile: null, events: null,
+    adc_deaths: [], capabilities: null, decoded_packet_count: 0,
+  }), () => ({
+    status: 'EXPERIMENTAL_CANDIDATE',
+    events: { hero_death_candidates: [{ victim_participant: 1 }] },
+    capability_results: {
+      hero_death: { status: 'CANDIDATE', input_count: 1, event_count: 1 },
+    },
+  }));
+  const current = fixture(t, '16.19.820.7193');
+  const legacy = fixture(t, '16.16.805.0442');
+  const namedLegacy = path.join(path.dirname(legacy), 'unsupported.rofl');
+  fs.renameSync(legacy, namedLegacy);
+  const output = path.join(path.dirname(current), 'batch-output');
+  const code = await cli.main(['batch', current, namedLegacy,
+    '--events', 'hero_death', '--out-dir', output]);
+  assert.equal(code, 2);
+  const summary = JSON.parse(fs.readFileSync(path.join(output, 'acceptance_summary.json'), 'utf8'));
+  assert.equal(summary.status, 'PARTIAL');
+  assert.deepEqual(summary.decoder_summaries.map((row) => row.status).sort(),
+    ['CANDIDATE', 'UNSUPPORTED_REPLAY_VERSION']);
+
+  const inspectOutput = path.join(path.dirname(current), 'mixed-inspect-output');
+  const inspectCode = await cli.main(['inspect', current, namedLegacy, '--out-dir', inspectOutput]);
+  assert.equal(inspectCode, 0);
+  const inspectSummary = JSON.parse(fs.readFileSync(
+    path.join(inspectOutput, 'acceptance_summary.json'), 'utf8'));
+  assert.equal(inspectSummary.status, 'CONTAINER_INSPECTED');
+});
+
+test('a rerun into a populated output directory keeps the first artifacts and writes a fresh sibling', async (t) => {
+  let decodeCount = 0;
+  const cli = loadCli(null, () => {
+    decodeCount += 1;
+    return decodeCount === 1 ? {
+      status: 'EXPERIMENTAL_CANDIDATE',
+      events: { hero_death_candidates: [{ victim_participant: 1 }] },
+      capability_results: {
+        hero_death: { status: 'CANDIDATE', input_count: 1, event_count: 1 },
+      },
+    } : {
+      status: 'PROFILE_UNAVAILABLE', events: null,
+      capability_results: {
+        hero_death: { status: 'PROFILE_UNAVAILABLE', input_count: null,
+          event_count: null },
+      },
+    };
+  });
+  const input = fixture(t, '16.19.820.7193');
+  const requested = path.join(path.dirname(input), 'results');
+  const argv = ['decode', input, '--events', 'hero_death', '--out-dir', requested];
+  assert.equal(await cli.main(argv), 0);
+  const firstSummary = JSON.parse(fs.readFileSync(
+    path.join(requested, 'acceptance_summary.json'), 'utf8'));
+  const firstEventFile = path.join(requested, firstSummary.replay_artifacts[0].artifact_directory,
+    'hero_death_candidates.jsonl');
+  const firstEventBytes = fs.readFileSync(firstEventFile, 'utf8');
+
+  assert.equal(await cli.main(argv), 2);
+  const siblings = fs.readdirSync(path.dirname(requested))
+    .filter((name) => name.startsWith('results-run-'));
+  assert.equal(siblings.length, 1);
+  const actual = path.join(path.dirname(requested), siblings[0]);
+  const secondSummary = JSON.parse(fs.readFileSync(
+    path.join(actual, 'acceptance_summary.json'), 'utf8'));
+  const secondManifest = JSON.parse(fs.readFileSync(path.join(actual, 'manifest.json'), 'utf8'));
+  assert.equal(secondSummary.output_root, actual);
+  assert.equal(secondManifest.output_root, actual);
+  assert.equal(fs.readFileSync(firstEventFile, 'utf8'), firstEventBytes);
+  assert.equal(fs.existsSync(path.join(actual, secondSummary.replay_artifacts[0].artifact_directory,
+    'hero_death_candidates.jsonl')), false);
+});
+
+test('populated gitignored output roots keep reruns inside the ignored directory', (t) => {
+  const cli = loadCli();
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-ignored-output-unit-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const ignorePatterns = new Set(fs.readFileSync(
+    path.resolve(__dirname, '../.gitignore'), 'utf8').split(/\r?\n/));
+  for (const name of ['artifacts', 'work', 'dist', 'evidence']) {
+    assert.equal(ignorePatterns.has(`${name}/`), true);
+    const requested = path.join(root, name);
+    fs.mkdirSync(requested);
+    const sentinel = path.join(requested, 'earlier-result.jsonl');
+    fs.writeFileSync(sentinel, '{"prior":true}\n');
+    const actual = cli.reserveOutputDirectory(requested, root);
+    assert.equal(path.dirname(actual), requested);
+    assert.match(path.basename(actual), /^run-[0-9A-Za-z]+-/);
+    assert.equal(fs.readFileSync(sentinel, 'utf8'), '{"prior":true}\n');
+  }
+});
+
+test('same-basename Replays get distinct stable artifact directories in one batch', async (t) => {
+  const cli = loadCli(null, () => ({
+    status: 'EXPERIMENTAL_CANDIDATE',
+    events: { hero_death_candidates: [{ victim_participant: 1 }] },
+    capability_results: {
+      hero_death: { status: 'CANDIDATE', input_count: 1, event_count: 1 },
+    },
+  }));
+  const first = fixture(t, '16.19.820.7193');
+  const second = fixture(t, '16.19.820.7193');
+  const output = path.join(path.dirname(first), 'collision-output');
+  assert.equal(await cli.main(['batch', first, second, '--events', 'hero_death',
+    '--out-dir', output]), 0);
+  const summary = JSON.parse(fs.readFileSync(path.join(output, 'acceptance_summary.json'), 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(path.join(output, 'manifest.json'), 'utf8'));
+  const directories = summary.replay_artifacts.map((row) => row.artifact_directory);
+  assert.equal(new Set(directories).size, 2);
+  assert.ok(directories.every((directory) => /^replays\/synthetic-[a-f0-9]{12}$/.test(directory)));
+  assert.deepEqual(manifest.replay_inputs.map((row) => row.artifact_directory), directories);
+  for (const directory of directories) {
+    assert.equal(fs.existsSync(path.join(output, directory, 'hero_death_candidates.jsonl')), true);
+  }
+});
+
+test('unregistered full 16.19 build is unsupported before capability selection', async (t) => {
+  const cli = loadCli();
+  const input = fixture(t, '16.19.9999.9999');
+  const output = path.join(path.dirname(input), 'unregistered-output');
+  assert.equal(await cli.main(['decode', input, '--out-dir', output]), 2);
+  const summary = JSON.parse(fs.readFileSync(path.join(output, 'acceptance_summary.json'), 'utf8'));
+  assert.equal(summary.status, 'UNSUPPORTED_VERSION');
+  assert.equal(summary.capability_runs[0].status, 'UNSUPPORTED_VERSION');
+});
+
+test('non-strict inspect exits unsuccessfully when packet framing is damaged', async (t) => {
+  const cli = loadCli();
+  const input = fixture(t, '16.19.820.7193');
+  fs.writeFileSync(input, replayFromChunks([{
+    body: Buffer.concat([packet(1), Buffer.from([0])]),
+  }], '16.19.820.7193').buffer);
+  const output = path.join(path.dirname(input), 'damaged-inspect-output');
+  assert.equal(await cli.main(['inspect', input, '--out-dir', output]), 2);
+  const summary = JSON.parse(fs.readFileSync(path.join(output, 'acceptance_summary.json'), 'utf8'));
+  assert.equal(summary.status, 'VALIDATION_FAILED');
+  assert.equal(summary.real_replay_validation.block_framing_errors, 1);
 });

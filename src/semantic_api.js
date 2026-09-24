@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { resolveBuildProfile } = require('./build_registry');
+const { decodeHeroDeathCandidates } = require('./decoders/rofl_16_19_820_7193');
 const {
   createSweeperCapabilityExport,
   emptySweeperEvents,
@@ -1760,6 +1761,50 @@ function decode1616(replay, buildProfile, options = {}) {
   }
 }
 
+function decode1619(replay, profile, options = {}) {
+  const requested = options.capabilities ?? [];
+  if (!Array.isArray(requested)
+      || requested.some((capability) => typeof capability !== 'string' || !capability)) {
+    throw new TypeError('16.19 capabilities must be an array of nonempty names');
+  }
+  const capabilities = [...new Set(requested)];
+  const capabilityResults = {};
+  const events = {};
+  for (const capability of capabilities) {
+    if (capability !== 'hero_death') {
+      capabilityResults[capability] = {
+        status: 'UNSUPPORTED', event_count: null, input_count: null,
+        error: `16.19.820.7193 has no decoder for ${capability}`,
+      };
+      continue;
+    }
+    const outcome = decodeHeroDeathCandidates(replay);
+    const { events: candidateEvents, ...result } = outcome;
+    result.runtime_image_status = options.runtimeImagePath
+      ? 'PROVIDED_NOT_USED'
+      : 'NOT_REQUIRED';
+    result.runtime_image_used = false;
+    capabilityResults[capability] = result;
+    if (result.status === 'CANDIDATE') events.hero_death_candidates = candidateEvents;
+  }
+  const results = Object.values(capabilityResults);
+  const usable = results.filter((result) => result.status === 'CANDIDATE' || result.status === 'PASS');
+  const failed = results.filter((result) => result.status !== 'CANDIDATE' && result.status !== 'PASS');
+  const status = results.length === 0 ? 'PROFILE_RESOLVED'
+    : failed.length > 0 ? (usable.length > 0 ? 'PARTIAL' : failed[0].status)
+      : 'EXPERIMENTAL_CANDIDATE';
+  return {
+    status,
+    game_version: profile.game_version,
+    profile,
+    events: usable.length > 0 ? events : null,
+    capability_results: capabilityResults,
+    decoded_packet_count: usable.reduce((sum, result) => sum + result.input_count, 0),
+    runtime_image_used: false,
+    sweeper_capability: createSweeperCapabilityExport(profile.game_version),
+  };
+}
+
 function decodeSemanticReplay(input, options = {}) {
   const { replay, status, profile, game_version: gameVersion } = profileResolution(input);
   if (!profile) {
@@ -1768,6 +1813,7 @@ function decodeSemanticReplay(input, options = {}) {
       game_version: gameVersion,
       profile: null,
       events: null,
+      capability_results: {},
       decoded_packet_count: 0,
       sweeper_capability: createSweeperCapabilityExport(gameVersion),
     };
@@ -1778,10 +1824,12 @@ function decodeSemanticReplay(input, options = {}) {
       game_version: gameVersion,
       profile,
       events: null,
+      capability_results: {},
       decoded_packet_count: 0,
       sweeper_capability: createSweeperCapabilityExport(gameVersion),
     };
   }
+  if (gameVersion === '16.19.820.7193') return decode1619(replay, profile, options);
   if (gameVersion === '16.16.805.0442') return decode1616(replay, profile, options);
   const legacy = require('./semantic_pipeline').decodeSemanticReplay(replay, options);
   return {
@@ -1851,6 +1899,10 @@ function getHeroDamage(decoded) {
 
 function getHeroDeaths(decoded) {
   return decoded?.events?.death_events ?? [];
+}
+
+function getHeroDeathCandidates(decoded) {
+  return decoded?.events?.hero_death_candidates ?? null;
 }
 
 function getHeroStates(decoded) {
@@ -1960,6 +2012,7 @@ module.exports = {
   getGameplayRouteTailEvents,
   getHeroDamage,
   getHeroDeaths,
+  getHeroDeathCandidates,
   getHeroPaths,
   getHeroRespawns,
   getHeroStates,
