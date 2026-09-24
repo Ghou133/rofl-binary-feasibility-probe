@@ -85,6 +85,15 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   The six mismatches are one exponent behind the final tail, consistent with
   a last-keyframe lag. Lower bytes and the inverse numeric transform remain
   unknown, so 776–779 stays raw structural evidence, not a damage total.
+- **821 completed dead-time raw state:** Keyframe payload bytes 675–678 changed
+  on exactly the 591/3,160 adjacent participant-frame transitions where
+  cumulative completed death-to-return time advanced, and stayed fixed on
+  2,569 others, including 318 with only an unfinished death interval growing.
+  Rotating participant IDs leaves only 148–186 of those 591 transitions
+  matched. The raw little-endian integer decreases on 302 true advances;
+  per-byte substitution checks for direct float seconds/milliseconds or
+  integer milliseconds/seconds already contradict the first two Replays.
+  This is a strong raw structural clue, not a numeric dead-time snapshot.
 - **821 level observation candidate:** KR game route `0x0197` with exact
   `0x400000ae..b7` or `0x400001ae..b7` params has a bounded payload codebook
   for observed levels 1–19. The first two Replays supplied 304/304 decoded
