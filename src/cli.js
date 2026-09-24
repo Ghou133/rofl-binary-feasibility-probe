@@ -30,6 +30,15 @@ const { assessHeroFloatSnapshotTail821 } =
   require('./decoders/rofl_16_19_821_float_stats_candidate');
 const { PROFILES: DAMAGE_PROFILES_821 } =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
+const { PROFILES: TIME_PROFILES_821 } =
+  require('./decoders/rofl_16_19_821_time_stats_candidate');
+const { PROFILES: HEAL_PROFILES_821 } =
+  require('./decoders/rofl_16_19_821_heal_stats_candidate');
+const { PROFILES: EPIC_CC_PROFILES_821 } =
+  require('./decoders/rofl_16_19_821_epic_cc_candidate');
+const EXTRA_STATS_PROFILES_821 = Object.freeze({
+  ...TIME_PROFILES_821, ...HEAL_PROFILES_821, ...EPIC_CC_PROFILES_821,
+});
 const { analyzeReplayWith821Routes } = require('./decoders/rofl_16_19_821_scan');
 const {
   assessHeroMinionsKilledSnapshotTail,
@@ -563,6 +572,9 @@ function parseOne1619(replay, options, started) {
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
       'hero_damage_self_mitigated_snapshot',
+      'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
+      'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
+      'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
       'hero_level_state', 'hero_inventory_packet',
     ].includes(name)))] : [];
   const selectsBuffAdd = options.semantic !== false
@@ -1785,6 +1797,14 @@ function capabilityQuery(replay, options = {}) {
               error: assessment.error ?? assessment.missing_input ?? null };
           }) }
         : profile.game_version === '16.19.821.7343'
+          && Object.hasOwn(EXTRA_STATS_PROFILES_821, capability)
+          ? (() => {
+            const field = EXTRA_STATS_PROFILES_821[capability].replay_tail_field;
+            const assessment = assessHeroStatsTail821(replay, field);
+            return { field, status: assessment.status,
+              error: assessment.error ?? assessment.missing_input ?? null };
+          })()
+        : profile.game_version === '16.19.821.7343'
           && capability === 'hero_level_state'
           ? (() => {
             const assessment = assessHeroLevelTail821(replay);
@@ -1962,6 +1982,11 @@ function capabilityQuery(replay, options = {}) {
           && Object.hasOwn(DAMAGE_PROFILES_821, capability)) {
         validationPending.push('KR keyframe 0x0089 native vector and reversed-byte f32 transform',
           'selected numeric damage Replay tails, zero starts, monotone snapshots and retained final gaps');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && Object.hasOwn(EXTRA_STATS_PROFILES_821, capability)) {
+        validationPending.push('KR keyframe 0x0089 native vector and exact 821 byte transform',
+          'selected numeric Replay tail, zero start, monotone snapshots and retained final gap');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_level_state') {
@@ -2160,7 +2185,17 @@ function capabilityQuery(replay, options = {}) {
             hero_damage_taken_from_champions_snapshot:
               'hero_damage_taken_from_champions_snapshot_candidates',
             hero_damage_self_mitigated_snapshot:
-              'hero_damage_self_mitigated_snapshot_candidates' })[capability] ?? null
+              'hero_damage_self_mitigated_snapshot_candidates',
+            hero_longest_living_time_snapshot:
+              'hero_longest_living_time_snapshot_candidates',
+            hero_total_time_spent_dead_snapshot:
+              'hero_total_time_spent_dead_snapshot_candidates',
+            hero_total_heal_snapshot: 'hero_total_heal_snapshot_candidates',
+            hero_total_units_healed_snapshot: 'hero_total_units_healed_snapshot_candidates',
+            hero_epic_monster_damage_snapshot:
+              'hero_epic_monster_damage_snapshot_candidates',
+            hero_crowd_control_time_snapshot:
+              'hero_crowd_control_time_snapshot_candidates' })[capability] ?? null
           : profile.game_version === '16.19.820.7193'
           ? ({
             hero_death: 'hero_death_candidates',

@@ -143,6 +143,9 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
       'hero_damage_self_mitigated_snapshot',
+      'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
+      'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
+      'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
       'hero_level_state', 'hero_inventory_packet']);
   const queried = Object.fromEntries(query.capabilities.map((row) => [row.capability, row]));
   assert.equal(queried.hero_death.runtime_image_requirement, 'NOT_REQUIRED');
@@ -151,6 +154,10 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.equal(queried.hero_assist.output, 'hero_assist_candidates');
   assert.equal(queried.hero_damage_totals_snapshot.output,
     'hero_damage_totals_snapshot_candidates');
+  assert.equal(queried.hero_total_heal_snapshot.output,
+    'hero_total_heal_snapshot_candidates');
+  assert.equal(queried.hero_crowd_control_time_snapshot.output,
+    'hero_crowd_control_time_snapshot_candidates');
   assert.equal(queried.hero_death.output, 'hero_death_candidates');
   assert.deepEqual(queried.hero_death.missing_inputs, []);
   assert.equal(queried.hero_death_timer.runtime_image_requirement, 'NOT_REQUIRED');

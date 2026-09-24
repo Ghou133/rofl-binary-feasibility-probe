@@ -23,6 +23,12 @@ const inventoryPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_inventory_packet_candidate');
 const damageFloatCandidate1619821 =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
+const timeStatsCandidate1619821 =
+  require('./decoders/rofl_16_19_821_time_stats_candidate');
+const healStatsCandidate1619821 =
+  require('./decoders/rofl_16_19_821_heal_stats_candidate');
+const epicCcCandidate1619821 =
+  require('./decoders/rofl_16_19_821_epic_cc_candidate');
 const heroStatsCandidate1619 = require('./decoders/rofl_16_19_hero_stats_candidate');
 const buffRemoveCandidate1619 = require('./decoders/rofl_16_19_buff_remove_candidate');
 const buffAddCandidate1619 = require('./decoders/rofl_16_19_buff_add_candidate');
@@ -472,6 +478,12 @@ const BUILD_PROFILES = deepFreeze({
       hero_damage_totals_snapshot: 0x0089,
       hero_damage_taken_from_champions_snapshot: 0x0089,
       hero_damage_self_mitigated_snapshot: 0x0089,
+      hero_longest_living_time_snapshot: 0x0089,
+      hero_total_time_spent_dead_snapshot: 0x0089,
+      hero_total_heal_snapshot: 0x0089,
+      hero_total_units_healed_snapshot: 0x0089,
+      hero_epic_monster_damage_snapshot: 0x0089,
+      hero_crowd_control_time_snapshot: 0x0089,
       hero_level_state: 0x0197,
       hero_inventory_packet: 0x018d,
     },
@@ -502,6 +514,17 @@ const BUILD_PROFILES = deepFreeze({
         damageFloatCandidate1619821.PROFILES.hero_damage_taken_from_champions_snapshot,
       hero_damage_self_mitigated_snapshot:
         damageFloatCandidate1619821.PROFILES.hero_damage_self_mitigated_snapshot,
+      hero_longest_living_time_snapshot:
+        timeStatsCandidate1619821.PROFILES.hero_longest_living_time_snapshot,
+      hero_total_time_spent_dead_snapshot:
+        timeStatsCandidate1619821.PROFILES.hero_total_time_spent_dead_snapshot,
+      hero_total_heal_snapshot: healStatsCandidate1619821.PROFILES.hero_total_heal_snapshot,
+      hero_total_units_healed_snapshot:
+        healStatsCandidate1619821.PROFILES.hero_total_units_healed_snapshot,
+      hero_epic_monster_damage_snapshot:
+        epicCcCandidate1619821.PROFILES.hero_epic_monster_damage_snapshot,
+      hero_crowd_control_time_snapshot:
+        epicCcCandidate1619821.PROFILES.hero_crowd_control_time_snapshot,
       hero_level_state: levelCandidate1619821.HERO_LEVEL_CANDIDATE_PROFILE_821,
       hero_inventory_packet:
         inventoryPacketCandidate1619821.HERO_INVENTORY_PACKET_CANDIDATE_PROFILE_821,
@@ -528,6 +551,12 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_NATIVE_F32_DAMAGE_TAKEN_FROM_CHAMPIONS_TAIL',
       hero_damage_self_mitigated_snapshot:
         'CANDIDATE_821_NATIVE_F32_SELF_MITIGATED_TAIL',
+      hero_longest_living_time_snapshot: 'CANDIDATE_821_NATIVE_F32_LONGEST_LIVING_TAIL',
+      hero_total_time_spent_dead_snapshot: 'CANDIDATE_821_NATIVE_F32_TOTAL_DEAD_TIME_TAIL',
+      hero_total_heal_snapshot: 'CANDIDATE_821_NATIVE_U32_TOTAL_HEAL_TAIL',
+      hero_total_units_healed_snapshot: 'CANDIDATE_821_NATIVE_U32_UNITS_HEALED_TAIL',
+      hero_epic_monster_damage_snapshot: 'CANDIDATE_821_NATIVE_F32_EPIC_DAMAGE_TAIL',
+      hero_crowd_control_time_snapshot: 'CANDIDATE_821_NATIVE_F32_CROWD_CONTROL_TAIL',
       hero_level_state: 'CANDIDATE_821_RUNTIME_LEVEL_BYTE_AND_REPLAY_TAIL',
       hero_inventory_packet: 'CANDIDATE_821_NATIVE_MAPVIEW_SLOT_ITEM_RECORDS',
     },
@@ -553,6 +582,8 @@ const BUILD_PROFILES = deepFreeze({
         'exact 821 native 0x0089 carrier and reversed vector at offsets 0x28/0x1b0/0x38/0x34; EXP/VISION_SCORE/GOLD_EARNED/GOLD_SPENT semantic labels candidate only',
       keyframe_damage_float_snapshots:
         'exact 821 native 0x0089 carrier and reversed vector at offsets 0x1d0/0x1e0/0x1f0/0x200/0x208; five damage-tail labels candidate only',
+      keyframe_time_heal_epic_cc_snapshots:
+        'exact 821 native 0x0089 carrier and reversed vector at offsets 0x244/0x248/0x234/0x23c/0x21c/0x230; Replay-tail labels candidate only',
       level_state: 'exact 821 PKT_NPC_LevelUp_s route and +0x11 byte transform; participant alignment and event interpretation candidate only',
       inventory_packet: 'exact 821 native 0x018d MapView record vector and slot/item transforms; raw-param participant mapping candidate and no inventory-state or transaction inference',
     },
@@ -566,6 +597,9 @@ const BUILD_PROFILES = deepFreeze({
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
       'hero_damage_self_mitigated_snapshot',
+      'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
+      'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
+      'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
       'hero_level_state', 'hero_inventory_packet',
     ],
     unsupported_capabilities: [],

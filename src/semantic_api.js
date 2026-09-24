@@ -44,6 +44,12 @@ const { decodeHeroInventoryPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_packet_candidate');
 const { decodeHeroDamageSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
+const { decodeHeroTimeSnapshotCandidates821 } =
+  require('./decoders/rofl_16_19_821_time_stats_candidate');
+const { decodeHeroHealSnapshotCandidates821 } =
+  require('./decoders/rofl_16_19_821_heal_stats_candidate');
+const { decodeHeroEpicCcSnapshotCandidates821 } =
+  require('./decoders/rofl_16_19_821_epic_cc_candidate');
 const { collect821Routes } = require('./decoders/rofl_16_19_821_scan');
 const { decodeNpcBuffRemovePacketCandidates } =
   require('./decoders/rofl_16_19_buff_remove_candidate');
@@ -2043,6 +2049,23 @@ function decode1619821(replay, profile, options = {}) {
     hero_damage_self_mitigated_snapshot: (input, collected) =>
       decodeHeroDamageSnapshotCandidates821(input,
         'hero_damage_self_mitigated_snapshot', collected),
+    hero_longest_living_time_snapshot: (input, collected) =>
+      decodeHeroTimeSnapshotCandidates821(input,
+        'hero_longest_living_time_snapshot', collected),
+    hero_total_time_spent_dead_snapshot: (input, collected) =>
+      decodeHeroTimeSnapshotCandidates821(input,
+        'hero_total_time_spent_dead_snapshot', collected),
+    hero_total_heal_snapshot: (input, collected) =>
+      decodeHeroHealSnapshotCandidates821(input, 'hero_total_heal_snapshot', collected),
+    hero_total_units_healed_snapshot: (input, collected) =>
+      decodeHeroHealSnapshotCandidates821(input,
+        'hero_total_units_healed_snapshot', collected),
+    hero_epic_monster_damage_snapshot: (input, collected) =>
+      decodeHeroEpicCcSnapshotCandidates821(input,
+        'hero_epic_monster_damage_snapshot', collected),
+    hero_crowd_control_time_snapshot: (input, collected) =>
+      decodeHeroEpicCcSnapshotCandidates821(input,
+        'hero_crowd_control_time_snapshot', collected),
     hero_level_state: decodeHeroLevelCandidates821,
     hero_inventory_packet: (input, collected) =>
       decodeHeroInventoryPacketCandidates821(input, {
@@ -2072,6 +2095,12 @@ function decode1619821(replay, profile, options = {}) {
       'hero_damage_taken_from_champions_snapshot_candidates',
     hero_damage_self_mitigated_snapshot:
       'hero_damage_self_mitigated_snapshot_candidates',
+    hero_longest_living_time_snapshot: 'hero_longest_living_time_snapshot_candidates',
+    hero_total_time_spent_dead_snapshot: 'hero_total_time_spent_dead_snapshot_candidates',
+    hero_total_heal_snapshot: 'hero_total_heal_snapshot_candidates',
+    hero_total_units_healed_snapshot: 'hero_total_units_healed_snapshot_candidates',
+    hero_epic_monster_damage_snapshot: 'hero_epic_monster_damage_snapshot_candidates',
+    hero_crowd_control_time_snapshot: 'hero_crowd_control_time_snapshot_candidates',
     hero_level_state: 'hero_level_state_candidates',
     hero_inventory_packet: 'hero_inventory_packet_candidates',
   };
@@ -2086,6 +2115,9 @@ function decode1619821(replay, profile, options = {}) {
     'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
     'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
     'hero_damage_self_mitigated_snapshot',
+    'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
+    'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
+    'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
     'hero_inventory_packet',
   ]);
   const supported = capabilities.filter((capability) => sharedScanCapabilities.has(capability));

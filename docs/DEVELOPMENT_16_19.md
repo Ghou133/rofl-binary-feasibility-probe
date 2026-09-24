@@ -308,6 +308,24 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   with 5,327 records, and 3,270 rows for each damage ability. Input hashes
   and individual outcomes are ignored under
   `artifacts/16_19_development/kr_821_assist_inventory_damage_11/`.
+- **821 further native-vector cumulative candidates:** The same 1,260-byte
+  vector carries candidate `f32LE` values at `0x244`
+  (`LONGEST_TIME_SPENT_LIVING`), `0x248` (`TOTAL_TIME_SPENT_DEAD`), `0x21c`
+  (`TOTAL_DAMAGE_DEALT_TO_EPIC_MONSTERS`), and `0x230`
+  (`TOTAL_TIME_CROWD_CONTROL_DEALT_TO_CHAMPIONS`), plus candidate `u32LE`
+  values at `0x234` (`TOTAL_HEAL`) and `0x23c` (`TOTAL_UNITS_HEALED`). Each
+  passed zero-start, monotone, and Replay-tail bounds for all 110 participant
+  sequences across 11 exact-build KR Replays. Final matches are respectively
+  109, 94, 110, 59, 57, and 109 of 110; all gaps are retained. Rotated
+  participant and nearby-offset controls were weaker. These are six separate
+  `CANDIDATE` keyframe snapshots, without individual time, damage, control,
+  healing, effective-heal, source, or target claims. Reproducible probes are
+  ignored under `artifacts/16_19_development/time_stats_821_probe/`,
+  `artifacts/16_19_development/kr_821_heal_probe/`, and
+  `artifacts/16_19_development/epic_cc_821_probe/`.
+  The combined six-capability CLI batch returned 11/11 `CANDIDATE`, zero
+  errors, and 3,270 rows per ability; input hashes and individual results are
+  ignored under `artifacts/16_19_development/kr_821_time_heal_epic_cc_11/`.
 - **821 completed dead-time raw state:** Keyframe payload bytes 675–678 changed
   on exactly the 591/3,160 adjacent participant-frame transitions where
   cumulative completed death-to-return time advanced, and stayed fixed on

@@ -13,6 +13,9 @@ const CAPABILITIES = new Set([
   'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
   'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
   'hero_damage_self_mitigated_snapshot',
+  'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
+  'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
+  'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
   'hero_level_state', 'hero_respawn', 'hero_assist', 'hero_inventory_packet',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
@@ -70,6 +73,12 @@ function create821ScanCollector(replay, selectedCapabilities) {
     hero_damage_totals_snapshot: heroStatsRows,
     hero_damage_taken_from_champions_snapshot: heroStatsRows,
     hero_damage_self_mitigated_snapshot: heroStatsRows,
+    hero_longest_living_time_snapshot: heroStatsRows,
+    hero_total_time_spent_dead_snapshot: heroStatsRows,
+    hero_total_heal_snapshot: heroStatsRows,
+    hero_total_units_healed_snapshot: heroStatsRows,
+    hero_epic_monster_damage_snapshot: heroStatsRows,
+    hero_crowd_control_time_snapshot: heroStatsRows,
     hero_level_state: [],
   };
   const selectsHeroStats = selected.has('hero_deaths_snapshot')
@@ -84,7 +93,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
     || selected.has('hero_gold_spent_snapshot')
     || selected.has('hero_damage_totals_snapshot')
     || selected.has('hero_damage_taken_from_champions_snapshot')
-    || selected.has('hero_damage_self_mitigated_snapshot');
+    || selected.has('hero_damage_self_mitigated_snapshot')
+    || selected.has('hero_longest_living_time_snapshot')
+    || selected.has('hero_total_time_spent_dead_snapshot')
+    || selected.has('hero_total_heal_snapshot')
+    || selected.has('hero_total_units_healed_snapshot')
+    || selected.has('hero_epic_monster_damage_snapshot')
+    || selected.has('hero_crowd_control_time_snapshot');
   // A return candidate is only meaningful after validating its death cores.
   // Keep those route packets in the same walk even for respawn-only requests.
   const selectsDeathRoutes = selected.has('hero_death') || selected.has('hero_death_timer')
@@ -201,6 +216,12 @@ function rowsFor821Capability(replay, token, capability) {
       || capability === 'hero_damage_totals_snapshot'
       || capability === 'hero_damage_taken_from_champions_snapshot'
       || capability === 'hero_damage_self_mitigated_snapshot'
+      || capability === 'hero_longest_living_time_snapshot'
+      || capability === 'hero_total_time_spent_dead_snapshot'
+      || capability === 'hero_total_heal_snapshot'
+      || capability === 'hero_total_units_healed_snapshot'
+      || capability === 'hero_epic_monster_damage_snapshot'
+      || capability === 'hero_crowd_control_time_snapshot'
       ? bound.keyframeBlockCount : bound.blockCount,
   };
 }
