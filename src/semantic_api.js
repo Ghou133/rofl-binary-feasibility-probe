@@ -21,6 +21,8 @@ const {
 const { decodeHeroDeathCandidates821 } = require('./decoders/rofl_16_19_821_7343');
 const { decodeHeroDeathsSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_hero_stats_candidate');
+const { decodeHeroLevelCandidates821 } =
+  require('./decoders/rofl_16_19_821_level_candidate');
 const { decodeNpcBuffRemovePacketCandidates } =
   require('./decoders/rofl_16_19_buff_remove_candidate');
 const { decodeNpcBuffAddPacketCandidates } =
@@ -1994,10 +1996,12 @@ function decode1619821(replay, profile, options = {}) {
   const decoders = {
     hero_death: decodeHeroDeathCandidates821,
     hero_deaths_snapshot: decodeHeroDeathsSnapshotCandidates821,
+    hero_level_state: decodeHeroLevelCandidates821,
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
     hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
+    hero_level_state: 'hero_level_state_candidates',
   };
   const capabilityResults = {};
   const events = {};

@@ -20,6 +20,15 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   participant sequences start at zero and remain monotone. The last snapshot
   equals tail `NUM_DEATHS` for 82 participants and trails by one for 28; the
   gap is retained. This is not a full HeroStats decode or a death event.
+- **821 level observation candidate:** KR game route `0x0197` with exact
+  `0x400000ae..b7` or `0x400001ae..b7` params has a bounded payload codebook
+  for observed levels 1–19. The first two Replays supplied 304/304 decoded
+  training rows; nine others had 1,308/1,309 recognized rows. Ten Replays
+  yield 1,463 candidate level observations. One Replay contains unclassified
+  `fa4d` at tail level 20 and returns `DECODE_FAILED` for this capability,
+  retaining the raw ref without candidate level rows. A single adjacent
+  `0x400002ae` level-10 lead remains excluded. Repeats and gaps are reported;
+  neither a complete upgrade timeline nor an exact runtime transform is claimed.
 
 - **Done:** The HN `16.19.820.7193` replay's 107 chunks and 2,035,757 blocks
   pass strict container/framing inspection with zero errors. The main CLI/API now
@@ -507,8 +516,8 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   `artifacts/16_19_development/buff_link_probe_second/`.
   In the third Replay all 3,030 distinct Remove keys appear in Add rows, while
   3,023 appear in game-stream Adds; row identity remains unresolved.
-- **Next:** Integrate the independent 821 level-observation candidate, and
-  obtain a matching 821 runtime image if payload semantics are needed.
+- **Next:** Seek independent 821 runtime evidence for the unclassified level
+  code and payload semantics; continue bounded KR route research.
   Further independent HN Replays
   can test HeroStats and inventory candidates. The HN
   Broadcast participant mapping remains candidate-only after three Replays, and

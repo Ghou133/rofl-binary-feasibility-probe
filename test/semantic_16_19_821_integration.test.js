@@ -36,12 +36,20 @@ function keyframeDeathsPacket(participantId, count, timeMs) {
   return Buffer.concat([header, payload]);
 }
 
-function replay() {
+function replay({ unknownLevel = false } = {}) {
+  const levelPackets = Array.from({ length: 10 }, (_, index) => {
+    const row = packet(0x0197, 0x400000ae + index,
+      unknownLevel && index === 0 ? 2 : 1);
+    if (unknownLevel && index === 0) row.set([0xfa, 0x4d], 12);
+    else row[12] = 0xe5;
+    return row;
+  });
   const game = { body: Buffer.concat([
     packet(0x0259, 0x400000ae, 5),
     packet(0x0438, 0x400000ae, 13),
     packet(0x031b, 0, 12),
     packet(0x03d4, 0, 3),
+    ...levelPackets,
   ]) };
   const snapshots = [0, 1].map((frame) => ({ stream: 2,
     body: Buffer.concat(Array.from({ length: 10 }, (_, index) =>
@@ -50,6 +58,7 @@ function replay() {
   const input = replayFromChunks([game, ...snapshots], BUILD);
   input.tail.stats = Array.from({ length: 10 }, (_, index) => ({
     NUM_DEATHS: index === 0 ? '1' : '0',
+    LEVEL: unknownLevel && index === 0 ? '20' : '2',
   }));
   return input;
 }
@@ -59,23 +68,29 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.equal(resolveBuildProfile(input).status, 'SUPPORTED');
   assert.equal(resolveCapability(BUILD, 'hero_death').status, 'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_deaths_snapshot').status, 'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'hero_level_state').status, 'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_death_timer').status, 'UNAVAILABLE');
   const query = capabilityQuery(input);
   assert.equal(query.profile_release_status, 'EXPERIMENTAL_CANDIDATE');
   assert.equal(query.packet_framing_inspected, false);
   assert.equal(query.semantic_decode_performed, false);
   assert.deepEqual(query.capabilities.map((row) => row.capability),
-    ['hero_death', 'hero_deaths_snapshot']);
+    ['hero_death', 'hero_deaths_snapshot', 'hero_level_state']);
   assert.equal(query.capabilities[0].runtime_image_requirement, 'NOT_REQUIRED');
   assert.equal(query.capabilities[0].output, 'hero_death_candidates');
   assert.deepEqual(query.capabilities[0].missing_inputs, []);
   assert.equal(query.capabilities[1].runtime_image_requirement, 'NOT_REQUIRED');
   assert.equal(query.capabilities[1].output, 'hero_deaths_snapshot_candidates');
   assert.deepEqual(query.capabilities[1].missing_inputs, []);
+  assert.equal(query.capabilities[2].output, 'hero_level_state_candidates');
+  assert.deepEqual(query.capabilities[2].missing_inputs, []);
   input.tail.stats[0].NUM_DEATHS = null;
-  for (const row of capabilityQuery(input).capabilities) {
+  for (const row of capabilityQuery(input).capabilities.slice(0, 2)) {
     assert.deepEqual(row.missing_inputs, ['replay_tail_NUM_DEATHS']);
   }
+  input.tail.stats[0].LEVEL = null;
+  assert.deepEqual(capabilityQuery(input).capabilities[2].missing_inputs,
+    ['replay_tail_LEVEL']);
 });
 
 test('821 API dispatch emits separate candidate records and no confirmed deaths', () => {
@@ -95,19 +110,38 @@ test('821 API dispatch emits separate candidate records and no confirmed deaths'
   assert.equal(getHeroDeathCandidates(decoded)[0].victim_participant_id, 1);
 
   const combined = decodeSemanticReplay(input, {
-    capabilities: ['hero_death', 'hero_deaths_snapshot'],
+    capabilities: ['hero_death', 'hero_deaths_snapshot', 'hero_level_state'],
   });
   assert.equal(combined.status, 'EXPERIMENTAL_CANDIDATE');
   assert.equal(combined.capability_results.hero_deaths_snapshot.status, 'CANDIDATE');
   assert.equal(combined.capability_results.hero_deaths_snapshot.event_count, 20);
   assert.equal(combined.events.hero_deaths_snapshot_candidates.length, 20);
   assert.equal(combined.events.hero_deaths_snapshot_candidates[10].deaths_candidate, 1);
+  assert.equal(combined.capability_results.hero_level_state.status, 'CANDIDATE');
+  assert.equal(combined.events.hero_level_state_candidates.length, 10);
+  assert.equal(combined.events.hero_level_state_candidates[0].level_after_candidate, 2);
   assert.equal(combined.events.death_events, undefined);
 
   const unavailable = decodeSemanticReplay(input, { capabilities: ['hero_death_timer'] });
   assert.equal(unavailable.status, 'UNSUPPORTED');
   assert.equal(unavailable.events, null);
   assert.equal(unavailable.capability_results.hero_death_timer.status, 'UNSUPPORTED');
+});
+
+test('unknown 821 level code leaves independent death candidates available', () => {
+  const decoded = decodeSemanticReplay(replay({ unknownLevel: true }), {
+    capabilities: ['hero_death', 'hero_deaths_snapshot', 'hero_level_state'],
+  });
+  assert.equal(decoded.status, 'PARTIAL');
+  assert.equal(decoded.capability_results.hero_death.status, 'CANDIDATE');
+  assert.equal(decoded.capability_results.hero_deaths_snapshot.status, 'CANDIDATE');
+  assert.equal(decoded.capability_results.hero_level_state.status, 'DECODE_FAILED');
+  assert.equal(decoded.capability_results.hero_level_state.event_count, null);
+  assert.equal(decoded.capability_results.hero_level_state.rejected_packet_ref.raw_payload_hex,
+    'fa4d');
+  assert.equal(decoded.events.hero_death_candidates.length, 1);
+  assert.equal(decoded.events.hero_deaths_snapshot_candidates.length, 20);
+  assert.equal(decoded.events.hero_level_state_candidates, undefined);
 });
 
 test('821 CLI dispatch reads a replay file and labels selected output candidate', (t) => {
@@ -128,14 +162,15 @@ test('821 CLI dispatch reads a replay file and labels selected output candidate'
   const file = path.join(directory, 'sample.rofl');
   fs.writeFileSync(file, bytes);
   const result = parseOne(file, {
-    semantic: true, events: ['hero_death', 'hero_deaths_snapshot'],
+    semantic: true, events: ['hero_death', 'hero_deaths_snapshot', 'hero_level_state'],
     strict: true, timelineLimit: 0,
   });
   assert.equal(result.ok, true);
   assert.equal(result.analysis.decoder.status, 'CANDIDATE');
-  assert.equal(result.analysis.packet_count, 24);
+  assert.equal(result.analysis.packet_count, 34);
   assert.equal(result.analysis.block_errors.length, 0);
   assert.equal(result.analysis.event_counts.hero_death_candidates, 1);
   assert.equal(result.analysis.event_counts.hero_deaths_snapshot_candidates, 20);
+  assert.equal(result.analysis.event_counts.hero_level_state_candidates, 10);
   assert.deepEqual(result.analysis.events.death_events, undefined);
 });

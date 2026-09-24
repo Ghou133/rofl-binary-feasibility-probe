@@ -14,6 +14,8 @@ const {
 const { assessHeroDeathTail821 } = require('./decoders/rofl_16_19_821_7343');
 const { assessHeroDeathsSnapshotTail821 } =
   require('./decoders/rofl_16_19_821_hero_stats_candidate');
+const { assessHeroLevelTail821 } =
+  require('./decoders/rofl_16_19_821_level_candidate');
 const {
   assessHeroMinionsKilledSnapshotTail,
   assessHeroJungleMinionsKilledSnapshotTail,
@@ -1723,6 +1725,13 @@ function capabilityQuery(replay, options = {}) {
         || capability === 'npc_buff_add_packet';
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
+          && capability === 'hero_level_state'
+          ? (() => {
+            const assessment = assessHeroLevelTail821(replay);
+            return { field: 'LEVEL', status: assessment.status,
+              error: assessment.error ?? assessment.missing_input ?? null };
+          })()
+        : profile.game_version === '16.19.821.7343'
           && capability === 'hero_deaths_snapshot'
           ? assessHeroDeathsSnapshotTail821(replay)
         : profile.game_version === '16.19.821.7343' && capability === 'hero_death'
@@ -1810,6 +1819,11 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_deaths_snapshot') {
         validationPending.push('KR keyframe 0x0089 length, prefix, param, and raw-byte codebook',
           'ten-participant NUM_DEATHS final gap 0..1 and monotone snapshots');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_level_state') {
+        validationPending.push('KR game 0x0197 full-param families and finite payload codebook',
+          'ten-participant LEVEL sequence and tail equality; unknown codes fail closed');
       }
       if (profile.game_version === '16.19.820.7193'
           && (capability === 'hero_death_timer' || capability === 'hero_respawn')) {
@@ -1977,7 +1991,8 @@ function capabilityQuery(replay, options = {}) {
         validation_pending: validationPending,
         output: profile.game_version === '16.19.821.7343'
           ? ({ hero_death: 'hero_death_candidates',
-            hero_deaths_snapshot: 'hero_deaths_snapshot_candidates' })[capability] ?? null
+            hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
+            hero_level_state: 'hero_level_state_candidates' })[capability] ?? null
           : profile.game_version === '16.19.820.7193'
           ? ({
             hero_death: 'hero_death_candidates',
