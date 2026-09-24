@@ -246,6 +246,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_total_heal_snapshot: 0x0276,
       hero_inventory_mapview: 0x0420,
       hero_inventory_set_item: 0x03b7,
+      hero_inventory_broadcast: 0x03ef,
     },
     decoder_profile: {
       hero_death: {
@@ -284,6 +285,7 @@ const BUILD_PROFILES = deepFreeze({
         heroStatsCandidate1619.HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE,
       hero_inventory_mapview: decoder1619.HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE,
       hero_inventory_set_item: decoder1619.HERO_INVENTORY_SET_ITEM_CANDIDATE_PROFILE,
+      hero_inventory_broadcast: decoder1619.HERO_INVENTORY_BROADCAST_CANDIDATE_PROFILE,
     },
     field_semantics: {
       hero_death: 'CANDIDATE_EXACT_BUILD_ROUTE_FINGERPRINT',
@@ -304,6 +306,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_total_heal_snapshot: 'CANDIDATE_KEYFRAME_TOTAL_HEAL_TAIL_CORRELATION',
       hero_inventory_mapview: 'CANDIDATE_EXACT_RUNTIME_MAPVIEW_PACKET_SLOT_RECORDS',
       hero_inventory_set_item: 'CANDIDATE_EXACT_RUNTIME_SET_ITEM_PACKET_FIELDS',
+      hero_inventory_broadcast: 'CANDIDATE_EXACT_RUNTIME_BROADCAST_SLOT_RECORDS',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, route-profile bounded',
@@ -324,6 +327,7 @@ const BUILD_PROFILES = deepFreeze({
       total_heal_candidate: '0x0276 keyframe HeroStats u32 offset 0x234; observed values correlate with TOTAL_HEAL tail in one HN Replay',
       inventory_mapview_candidate: '0x0420 observed HN packet slot/item-ID records; no continuous inventory state or purchase event',
       inventory_set_item_candidate: '0x03b7 observed HN packet slot/item-ID fields; no item transaction or general participant mapping',
+      inventory_broadcast_candidate: '0x03ef exact HN runtime vector and record fields; raw param retained without participant ownership or transaction inference',
     },
     verified_capabilities: [],
     candidate_capabilities: [
@@ -342,6 +346,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_total_heal_snapshot',
       'hero_inventory_mapview',
       'hero_inventory_set_item',
+      'hero_inventory_broadcast',
     ],
     unsupported_capabilities: [],
     validation_artifacts: [],

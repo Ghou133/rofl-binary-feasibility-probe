@@ -473,7 +473,7 @@ function parseOne1619(replay, options, started) {
     && Array.isArray(options.events)
     && options.events.some((name) => [
       'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
-      'hero_inventory_mapview', 'hero_inventory_set_item',
+      'hero_inventory_mapview', 'hero_inventory_set_item', 'hero_inventory_broadcast',
     ].includes(name));
   const selectsHeroStats = options.semantic !== false
     && Array.isArray(options.events)
@@ -1626,7 +1626,8 @@ function capabilityQuery(replay, options = {}) {
       const perCapabilityInputsAssessed = applicable
         && profile.game_version === '16.19.820.7193';
       const needs1619InventoryImage = capability === 'hero_inventory_mapview'
-        || capability === 'hero_inventory_set_item';
+        || capability === 'hero_inventory_set_item'
+        || capability === 'hero_inventory_broadcast';
       const tailStat = perCapabilityInputsAssessed
         ? capability === 'hero_minions_killed_snapshot'
           ? assessHeroMinionsKilledSnapshotTail(replay)
@@ -1759,7 +1760,9 @@ function capabilityQuery(replay, options = {}) {
         validationPending.push('exact runtime image SHA-256 and decoder execution',
           capability === 'hero_inventory_mapview'
             ? 'HN 0x0420 MapView route, full packet consumption, and slot record provenance'
-            : 'HN 0x03b7 SetItem route, full packet consumption, and slot/item field provenance');
+            : capability === 'hero_inventory_set_item'
+              ? 'HN 0x03b7 SetItem route, full packet consumption, and slot/item field provenance'
+              : 'HN 0x03ef Broadcast route, full packet consumption, and record provenance');
       }
       const gameLength = replay.tail?.metadata?.gameLength;
       const conditionalInputs = ['hero_death_timer', 'hero_respawn'].includes(capability)
@@ -1812,6 +1815,7 @@ function capabilityQuery(replay, options = {}) {
             hero_total_heal_snapshot: 'hero_total_heal_snapshot_candidates',
             hero_inventory_mapview: 'hero_inventory_mapview_candidates',
             hero_inventory_set_item: 'hero_inventory_set_item_candidates',
+            hero_inventory_broadcast: 'hero_inventory_broadcast_candidates',
           })[capability] ?? null
           : null,
       });

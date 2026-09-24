@@ -15,6 +15,7 @@ const {
   decodeHeroLevelStateCandidates,
   decodeHeroInventoryMapViewCandidates,
   decodeHeroInventorySetItemCandidates,
+  decodeHeroInventoryBroadcastCandidates,
 } = require('./decoders/rofl_16_19_820_7193');
 const {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
@@ -1789,6 +1790,7 @@ function decode1619(replay, profile, options = {}) {
     hero_level_state: decodeHeroLevelStateCandidates,
     hero_inventory_mapview: decodeHeroInventoryMapViewCandidates,
     hero_inventory_set_item: decodeHeroInventorySetItemCandidates,
+    hero_inventory_broadcast: decodeHeroInventoryBroadcastCandidates,
     hero_minions_killed_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_jungle_minions_killed_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_experience_snapshot: decodeHeroStatsSnapshotCandidateSet,
@@ -1809,6 +1811,7 @@ function decode1619(replay, profile, options = {}) {
     hero_level_state: 'hero_level_state_candidates',
     hero_inventory_mapview: 'hero_inventory_mapview_candidates',
     hero_inventory_set_item: 'hero_inventory_set_item_candidates',
+    hero_inventory_broadcast: 'hero_inventory_broadcast_candidates',
     hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
     hero_jungle_minions_killed_snapshot: 'hero_jungle_minions_killed_snapshot_candidates',
     hero_experience_snapshot: 'hero_experience_snapshot_candidates',
@@ -1824,7 +1827,7 @@ function decode1619(replay, profile, options = {}) {
   };
   const gameRouteCapabilities = new Set([
     'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
-    'hero_inventory_mapview', 'hero_inventory_set_item',
+    'hero_inventory_mapview', 'hero_inventory_set_item', 'hero_inventory_broadcast',
   ]);
   const heroStatsCapabilities = new Set(HERO_STATS_SNAPSHOT_CAPABILITIES);
   const collected = capabilities.some((capability) => gameRouteCapabilities.has(capability))
@@ -1851,7 +1854,8 @@ function decode1619(replay, profile, options = {}) {
           options.heroStatsScan);
         outcome = heroStatsOutcomes[capability];
       } else if (capability === 'hero_inventory_mapview'
-          || capability === 'hero_inventory_set_item') {
+          || capability === 'hero_inventory_set_item'
+          || capability === 'hero_inventory_broadcast') {
         outcome = decoders[capability](replay, collected, options);
       } else {
         outcome = decoders[capability](replay, collected);
@@ -2016,6 +2020,10 @@ function getHeroInventorySetItemCandidates(decoded) {
   return decoded?.events?.hero_inventory_set_item_candidates ?? null;
 }
 
+function getHeroInventoryBroadcastCandidates(decoded) {
+  return decoded?.events?.hero_inventory_broadcast_candidates ?? null;
+}
+
 function getHeroMinionsKilledSnapshotCandidates(decoded) {
   return decoded?.events?.hero_minions_killed_snapshot_candidates ?? null;
 }
@@ -2177,6 +2185,7 @@ module.exports = {
   getHeroLevelStateCandidates,
   getHeroInventoryMapViewCandidates,
   getHeroInventorySetItemCandidates,
+  getHeroInventoryBroadcastCandidates,
   getHeroMinionsKilledSnapshotCandidates,
   getHeroJungleMinionsKilledSnapshotCandidates,
   getHeroExperienceSnapshotCandidates,

@@ -235,11 +235,23 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   candidate. A truncated packet fails, while changing only its raw param does
   not change decoded slot/item fields. This supplies observed packet fields,
   not a purchase, sale, transition, or general participant mapping.
+- **Done:** `--events hero_inventory_broadcast --runtime-image <exact-image>`
+  uses the pinned HN `0x03ef` Broadcast constructor/vector/record parsers and
+  emits observed candidate slot/item-key records with raw packet references.
+  The exact runtime fully consumed 356/356 HN packets (350 keyframe, six game)
+  and returned 3,546 records; the tracked helper matched an independent
+  packet probe on all 356. A truncated packet returned failure without full
+  consumption. The real CLI emitted 3,546 candidate records with zero Replay
+  framing errors and `MATCHED_USED` image status; local evidence is under
+  `artifacts/16_19_development/broadcast_03ef_probe/` and
+  `artifacts/16_19_development/inventory_broadcast_hn_cli_smoke/`. The
+  emulated TLS epoch selects captured image static data; the live thread
+  epoch was not captured. Raw params remain unassigned to participants, and
+  no transaction or continuous inventory state is inferred.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
   HN Replays to test level, HeroStats and inventory candidates. The HN
-  Broadcast `0x03ef` vector reaches ten records but its record parser still
-  depends on runtime TLS state; no record decoder is published for it.
-  Movement-route research still needs a position-field link.
+  Broadcast candidate still needs independent participant and inventory-state
+  anchors. Movement-route research still needs a position-field link.
 - **Path negative control:** The exact HN image identifies `0x03ee` as
   DirectInputMovementDriverServerTurnData (84 HN packets in one short interval),
   `0x0160` as SetMovementDriver (4), `0x04dd` as AddFollowTargetPosition (0),
