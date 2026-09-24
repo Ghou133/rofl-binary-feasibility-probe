@@ -2,6 +2,22 @@
 
 Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
+Current progress (older notes below retain their original research context):
+
+- **Completed:** KR 821 structure/objective damage keyframe candidates and
+  exact-image CastSpellAns packet fields are available through selected CLI/API
+  output. All 11 supplied KR Replays returned `CANDIDATE`: 3,270 damage
+  snapshots and 63,496 CastSpellAns packet rows. A source-check cache reduced
+  the same 19-snapshot batch from 4.94 to 3.63 seconds with identical event JSON.
+- **Current:** Building versus turret labels, CastSpellAns field meanings, and
+  all per-action interpretations remain candidate or unknown; no public
+  capability was promoted.
+- **Next:** Seek independent owner/spell or ward-identity anchors before
+  interpreting packet fields as actions or placing wards on a map.
+- **Blocked:** KR 821 ward spawn/position/owner remains unavailable; the
+  surveyed routes occur in zero-increment ward windows. Exact HN 820 image
+  remains absent. Ignored probe results retain the negative controls.
+
 - **New exact KR build:** The user supplied 11 `16.19.821.7343` Replays under
   `kr-rofl-batch-collector/data/KR/16.19/builds/16.19.821.7343/rofl/`.
   Their complete header build is distinct from the HN/KR `820.7193` inputs;
