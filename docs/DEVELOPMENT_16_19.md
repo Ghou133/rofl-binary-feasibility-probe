@@ -45,6 +45,15 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   The tail `NEUTRAL_MINIONS_KILLED` is a negative control and does not fit the
   field; a separate decoded kills field agrees with nine last snapshots and
   has one late tail increment.
+- **Done:** The same exact HN HeroStats transform exposes an unpublished
+  `hero_experience_snapshot` candidate at decoded f32LE offset `0x28`.
+  All 350 observed keyframe values are finite, nonnegative, monotonic per
+  participant, and their floors do not exceed Replay-tail `EXP`. Five final
+  floors equal the matching tail; the other five final floor gaps are
+  `551, 466, 511, 581, 104` (total 2213) in the unobserved last 36,824 ms.
+  A four-byte-aligned scan found no second offset meeting the same tail and
+  monotonic criteria; adjacent gold/CS offsets fail the EXP control. This is
+  one-Replay field correlation, not an XP transition or confirmed field.
 - **Current:** Candidate participant identity, timer and respawn meaning are bounded to
   one HN Replay; KR uses different death/timer route IDs and reports
   `PROFILE_UNAVAILABLE` for the HN timer profile. Eleven raw KR `0x0357`
@@ -65,7 +74,7 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   of lengths 2–16 bytes and zero HN 1263-byte fingerprints. The HN HeroStats
   candidate reports `PROFILE_UNAVAILABLE`; these raw KR packets are unclassified.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
-  HN Replays to test level and HeroStats candidate fields. Movement-route
+  HN Replays to test level and HeroStats CS/EXP candidate fields. Movement-route
   research remains blocked on an exact registration-to-position-field link.
 - **CLI batch:** A two-Replay HN/KR run with death, respawn and level selection
   yielded HN `CANDIDATE`, KR `PARTIAL`, and aggregate `PARTIAL`, retaining the

@@ -233,6 +233,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_respawn: 0x0357,
       hero_level_state: 0x02b3,
       hero_minions_killed_snapshot: 0x0276,
+      hero_experience_snapshot: 0x0276,
     },
     decoder_profile: {
       hero_death: {
@@ -247,6 +248,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_level_state: decoder1619.HERO_LEVEL_STATE_CANDIDATE_PROFILE,
       hero_minions_killed_snapshot:
         heroStatsCandidate1619.HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
+      hero_experience_snapshot:
+        heroStatsCandidate1619.HERO_EXPERIENCE_SNAPSHOT_CANDIDATE_PROFILE,
     },
     field_semantics: {
       hero_death: 'CANDIDATE_EXACT_BUILD_ROUTE_FINGERPRINT',
@@ -254,6 +257,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_respawn: 'CANDIDATE_EXACT_RUNTIME_ROUTE_AND_TIMER_MATCH',
       hero_level_state: 'CANDIDATE_EXACT_RUNTIME_FIELD_WITH_SEQUENCE_GAPS',
       hero_minions_killed_snapshot: 'CANDIDATE_KEYFRAME_MINIONS_KILLED_FIELD',
+      hero_experience_snapshot: 'CANDIDATE_KEYFRAME_EXPERIENCE_FIELD',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, route-profile bounded',
@@ -261,11 +265,13 @@ const BUILD_PROFILES = deepFreeze({
       respawn_time_candidate: 'observed 0x0357 time matched to HN death timer; HN route profile only',
       level_after_candidate: '0x02b3 decoded object field; HN route profile only',
       minions_killed_candidate: '0x0276 keyframe HeroStats f32 field; HN route profile only',
+      experience_points_candidate: '0x0276 keyframe HeroStats f32 offset 0x28; HN route profile only',
     },
     verified_capabilities: [],
     candidate_capabilities: [
       'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
       'hero_minions_killed_snapshot',
+      'hero_experience_snapshot',
     ],
     unsupported_capabilities: [],
     validation_artifacts: [],

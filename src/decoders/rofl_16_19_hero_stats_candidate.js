@@ -10,6 +10,7 @@ const HERO_PARAM_FIRST = 0x400000ae;
 const HERO_PARAM_LAST = 0x400000b7;
 const BLOB_LENGTH = 1260;
 const PAYLOAD_LENGTH = BLOB_LENGTH + 3;
+const EXPERIENCE_OFFSET = 0x28;
 const MINIONS_KILLED_OFFSET = 0x3c;
 const RUNTIME_IMAGE_SHA256 = '7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f780af11ed6df76d';
 const LOOKUP_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b';
@@ -55,6 +56,29 @@ const HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_EXPERIENCE_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-hero-experience-keyframe-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_experience_snapshot',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: PACKET_ID,
+  stream_tags: Object.freeze([2, 3]),
+  hero_raw_param_first: HERO_PARAM_FIRST,
+  hero_raw_param_last: HERO_PARAM_LAST,
+  payload_length: PAYLOAD_LENGTH,
+  decoded_blob_length: BLOB_LENGTH,
+  experience_f32le_offset_candidate: EXPERIENCE_OFFSET,
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  evidence_scope: 'exact HN runtime HeroStats deserializer; offset 0x28 correlates with EXP in one HN Replay with 350 keyframe snapshots',
+  known_limits: Object.freeze([
+    'Only observed keyframe 0x0276 snapshots are emitted; no experience-gain event or intervening value is inferred.',
+    'The offset 0x28 experience interpretation and hero participant mapping remain candidates from one HN Replay, not exact-runtime field semantics.',
+    'The Replay tail can exceed the last observed floor(snapshot); tail gaps are reported without interpolation.',
+  ]),
+});
+
 function decodeHeroStatsByte(encoded) {
   const x = LOOKUP_TABLE[encoded];
   let y = (((x & 0xd5) << 1) | ((x >>> 1) & 0x55)) & 0xff;
@@ -63,7 +87,7 @@ function decodeHeroStatsByte(encoded) {
   return ((~y) - 0x5a) & 0xff;
 }
 
-function decodeHeroMinionsKilledPayload(payload) {
+function decodeHeroStatsBlob(payload) {
   if (!Buffer.isBuffer(payload) || payload.length !== PAYLOAD_LENGTH) {
     return { status: 'DECODE_FAILED', error: `HeroStats payload must contain exactly ${PAYLOAD_LENGTH} bytes` };
   }
@@ -80,40 +104,65 @@ function decodeHeroMinionsKilledPayload(payload) {
   for (let index = 0; index < BLOB_LENGTH; index += 1) {
     blob[BLOB_LENGTH - 1 - index] = decodeHeroStatsByte(payload[index + 3]);
   }
-  const value = blob.readFloatLE(MINIONS_KILLED_OFFSET);
+  return { status: 'PASS', blob };
+}
+
+function decodeHeroMinionsKilledPayload(payload) {
+  const decoded = decodeHeroStatsBlob(payload);
+  if (decoded.status !== 'PASS') return decoded;
+  const value = decoded.blob.readFloatLE(MINIONS_KILLED_OFFSET);
   if (!Number.isSafeInteger(value) || value < 0) {
     return { status: 'DECODE_FAILED', error: 'HeroStats offset 0x3c is not a finite nonnegative integer f32' };
   }
   return { status: 'PASS', minions_killed_candidate: value };
 }
 
-function assessHeroMinionsKilledSnapshotTail(replay) {
+function decodeHeroExperiencePayload(payload) {
+  const decoded = decodeHeroStatsBlob(payload);
+  if (decoded.status !== 'PASS') return decoded;
+  const value = decoded.blob.readFloatLE(EXPERIENCE_OFFSET);
+  if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.floor(value))) {
+    return { status: 'DECODE_FAILED', error: 'HeroStats offset 0x28 is not a finite nonnegative safe-range f32 experience candidate' };
+  }
+  return { status: 'PASS', experience_points_candidate: value,
+    experience_floor_candidate: Math.floor(value) };
+}
+
+function assessHeroStatsTail(replay, field) {
   const stats = replay?.tail?.stats;
   if (!Array.isArray(stats)) {
-    return { field: 'MINIONS_KILLED', status: 'MISSING_INPUT',
+    return { field, status: 'MISSING_INPUT',
       error: 'Replay tail statsJson participant rows are missing' };
   }
   if (stats.length !== 10) {
-    return { field: 'MINIONS_KILLED', status: 'UNSUPPORTED',
+    return { field, status: 'UNSUPPORTED',
       error: `candidate scope requires 10 participants; got ${stats.length}` };
   }
-  const rawValues = stats.map((row) => row?.MINIONS_KILLED);
+  const rawValues = stats.map((row) => row?.[field]);
   if (rawValues.some((value) => value === undefined || value === null || value === '')) {
-    return { field: 'MINIONS_KILLED', status: 'MISSING_INPUT',
-      error: 'Replay tail MINIONS_KILLED is missing for one or more participants' };
+    return { field, status: 'MISSING_INPUT',
+      error: `Replay tail ${field} is missing for one or more participants` };
   }
   if (rawValues.some((value) =>
     !(typeof value === 'string' && /^\d+$/.test(value))
     && !(Number.isSafeInteger(value) && value >= 0))) {
-    return { field: 'MINIONS_KILLED', status: 'UNSUPPORTED',
-      error: 'Replay tail MINIONS_KILLED must be nonnegative integers' };
+    return { field, status: 'UNSUPPORTED',
+      error: `Replay tail ${field} must be nonnegative integers` };
   }
   const values = rawValues.map(Number);
   if (values.some((value) => !Number.isSafeInteger(value))) {
-    return { field: 'MINIONS_KILLED', status: 'UNSUPPORTED',
-      error: 'Replay tail MINIONS_KILLED must be safe integers' };
+    return { field, status: 'UNSUPPORTED',
+      error: `Replay tail ${field} must be safe integers` };
   }
-  return { field: 'MINIONS_KILLED', status: 'PASS', values };
+  return { field, status: 'PASS', values };
+}
+
+function assessHeroMinionsKilledSnapshotTail(replay) {
+  return assessHeroStatsTail(replay, 'MINIONS_KILLED');
+}
+
+function assessHeroExperienceSnapshotTail(replay) {
+  return assessHeroStatsTail(replay, 'EXP');
 }
 
 function packetRef(replay, block, chunk) {
@@ -134,13 +183,13 @@ function packetRef(replay, block, chunk) {
   };
 }
 
-function decodeHeroMinionsKilledSnapshotCandidates(replay) {
-  const profile = HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE;
+function collectHeroStatsSnapshotCandidates(replay, spec) {
+  const { profile } = spec;
   const base = { profile_id: profile.id, input_packet_id: PACKET_ID };
   if (replay?.header?.version !== REPLAY_VERSION) {
     return { ...base, status: 'UNSUPPORTED', event_count: null, input_count: null,
       scanned_block_count: null, events: null,
-      error: `hero_minions_killed_snapshot candidate supports only ${REPLAY_VERSION}` };
+      error: `${profile.capability} candidate supports only ${REPLAY_VERSION}` };
   }
   const rows = [];
   let walk;
@@ -167,7 +216,7 @@ function decodeHeroMinionsKilledSnapshotCandidates(replay) {
   const inputCount = rows.length;
   const fail = (error) => ({ ...base, status: 'DECODE_FAILED', event_count: null,
     input_count: inputCount, scanned_block_count: walk.block_count, events: null, error });
-  const tail = assessHeroMinionsKilledSnapshotTail(replay);
+  const tail = spec.assessTail(replay);
   if (tail.status !== 'PASS') {
     return { ...base, status: tail.status, event_count: null, input_count: inputCount,
       scanned_block_count: walk.block_count, events: null, error: tail.error };
@@ -177,7 +226,7 @@ function decodeHeroMinionsKilledSnapshotCandidates(replay) {
     || left.chunk.index - right.chunk.index || left.block.offset - right.block.offset);
   const previous = Array(10).fill(null);
   const lastTimes = Array(10).fill(null);
-  const events = [];
+  const observations = [];
   let timestamp = null;
   let currentGroup = new Set();
   let keyframeTimestampCount = 0;
@@ -202,48 +251,83 @@ function decodeHeroMinionsKilledSnapshotCandidates(replay) {
       return fail(`HN HeroStats keyframe duplicates participant ${participantId} at ${timestamp} ms`);
     }
     currentGroup.add(participantId);
-    const decoded = decodeHeroMinionsKilledPayload(block.payload);
+    const decoded = spec.decodePayload(block.payload);
     if (decoded.status !== 'PASS') {
       return fail(`${decoded.error} at ${block.timestamp_ms} ms, participant ${participantId}`);
     }
-    const value = decoded.minions_killed_candidate;
+    const value = decoded[spec.valueKey];
     if (previous[participantId - 1] !== null && value < previous[participantId - 1]) {
-      return fail(`HN participant ${participantId} has a decreasing observed MINIONS_KILLED snapshot`);
+      return fail(`HN participant ${participantId} has a decreasing observed ${tail.field} snapshot`);
     }
-    if (value > tail.values[participantId - 1]) {
-      return fail(`HN participant ${participantId} exceeds Replay tail MINIONS_KILLED`);
+    if (spec.tailProjection(value) > tail.values[participantId - 1]) {
+      return fail(`HN participant ${participantId} exceeds Replay tail ${tail.field}`);
     }
     previous[participantId - 1] = value;
     lastTimes[participantId - 1] = block.timestamp_ms;
-    events.push({
-      event_type: 'HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE',
-      game_version: REPLAY_VERSION,
-      patch: '16.19',
-      build_profile: profile.id,
-      replay_sha256: replay.source_sha256 ?? null,
-      replay_time_ms: block.timestamp_ms,
-      hero_raw_param: rawParam,
-      participant_id_candidate: participantId,
-      minions_killed_candidate: value,
-      observation_kind: 'KEYFRAME_SNAPSHOT',
-      confidence: 'CANDIDATE',
-      semantic_status: 'CANDIDATE_EXACT_RUNTIME_KEYFRAME_FIELD_AND_TAIL_BOUND',
-      field_confidence: {
-        replay_time_ms: 'VERIFIED_DIRECT',
-        hero_raw_param: 'VERIFIED_DIRECT',
-        participant_id_candidate: 'CANDIDATE',
-        minions_killed_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD',
-      },
-      raw_packet_ref: packetRef(replay, block, chunk),
-      known_limits: [...profile.known_limits],
-    });
+    observations.push({ block, chunk, rawParam, participantId, value,
+      rawPacketRef: packetRef(replay, block, chunk) });
   }
   if (currentGroup.size !== 10) {
     return fail(`HN HeroStats keyframe at ${timestamp} ms lacks one or more hero params`);
   }
   const gameLength = replay?.tail?.metadata?.gameLength;
   const gameLengthMs = Number.isSafeInteger(gameLength) && gameLength >= 0 ? gameLength : null;
-  const tailGaps = tail.values.map((finalValue, index) => ({
+  if (gameLengthMs !== null && lastTimes.some((time) => gameLengthMs - time < 0)) {
+    return fail('HN HeroStats keyframe timestamp exceeds Replay tail gameLength');
+  }
+  return {
+    ...base,
+    status: 'CANDIDATE',
+    event_count: observations.length,
+    input_count: inputCount,
+    scanned_block_count: walk.block_count,
+    keyframe_timestamp_count: keyframeTimestampCount,
+    observed_participant_count: previous.filter((value) => value !== null).length,
+    observations,
+    previous,
+    lastTimes,
+    tailValues: tail.values,
+    gameLengthMs,
+  };
+}
+
+function snapshotEvent(replay, profile, observation, semanticStatus, valueFields, fieldConfidence) {
+  return {
+    event_type: `HERO_${profile.capability === 'hero_experience_snapshot' ? 'EXPERIENCE' : 'MINIONS_KILLED'}_SNAPSHOT_CANDIDATE`,
+    game_version: REPLAY_VERSION,
+    patch: '16.19',
+    build_profile: profile.id,
+    replay_sha256: replay.source_sha256 ?? null,
+    replay_time_ms: observation.block.timestamp_ms,
+    hero_raw_param: observation.rawParam,
+    participant_id_candidate: observation.participantId,
+    ...valueFields,
+    observation_kind: 'KEYFRAME_SNAPSHOT',
+    confidence: 'CANDIDATE',
+    semantic_status: semanticStatus,
+    field_confidence: {
+      replay_time_ms: 'VERIFIED_DIRECT',
+      hero_raw_param: 'VERIFIED_DIRECT',
+      participant_id_candidate: 'CANDIDATE',
+      ...fieldConfidence,
+    },
+    raw_packet_ref: observation.rawPacketRef,
+    known_limits: [...profile.known_limits],
+  };
+}
+
+function decodeHeroMinionsKilledSnapshotCandidates(replay) {
+  const profile = HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE;
+  const collected = collectHeroStatsSnapshotCandidates(replay, {
+    profile,
+    assessTail: assessHeroMinionsKilledSnapshotTail,
+    decodePayload: decodeHeroMinionsKilledPayload,
+    valueKey: 'minions_killed_candidate',
+    tailProjection: (value) => value,
+  });
+  if (collected.status !== 'CANDIDATE') return collected;
+  const { observations, previous, lastTimes, tailValues, gameLengthMs, ...base } = collected;
+  const tailGaps = tailValues.map((finalValue, index) => ({
     participant_id_candidate: index + 1,
     last_snapshot_replay_time_ms: lastTimes[index],
     last_snapshot_minions_killed_candidate: previous[index],
@@ -251,31 +335,67 @@ function decodeHeroMinionsKilledSnapshotCandidates(replay) {
     unobserved_tail_gap: finalValue - previous[index],
     unobserved_tail_time_ms: gameLengthMs === null ? null : gameLengthMs - lastTimes[index],
   }));
-  if (gameLengthMs !== null && tailGaps.some((gap) => gap.unobserved_tail_time_ms < 0)) {
-    return fail('HN HeroStats keyframe timestamp exceeds Replay tail gameLength');
-  }
   return {
     ...base,
-    status: 'CANDIDATE',
     evidence_status: 'CANDIDATE_EXACT_RUNTIME_KEYFRAME_FIELD_AND_TAIL_BOUND',
     evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
-    event_count: events.length,
-    input_count: inputCount,
-    scanned_block_count: walk.block_count,
-    keyframe_timestamp_count: keyframeTimestampCount,
-    observed_participant_count: previous.filter((value) => value !== null).length,
-    final_minions_killed: tail.values,
+    final_minions_killed: tailValues,
     observed_max_minions_killed: previous,
     tail_gaps: tailGaps,
     tail_gap_total: tailGaps.reduce((sum, gap) => sum + gap.unobserved_tail_gap, 0),
-    events,
+    events: observations.map((observation) => snapshotEvent(replay, profile, observation,
+      'CANDIDATE_EXACT_RUNTIME_KEYFRAME_FIELD_AND_TAIL_BOUND',
+      { minions_killed_candidate: observation.value },
+      { minions_killed_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD' })),
+  };
+}
+
+function decodeHeroExperienceSnapshotCandidates(replay) {
+  const profile = HERO_EXPERIENCE_SNAPSHOT_CANDIDATE_PROFILE;
+  const collected = collectHeroStatsSnapshotCandidates(replay, {
+    profile,
+    assessTail: assessHeroExperienceSnapshotTail,
+    decodePayload: decodeHeroExperiencePayload,
+    valueKey: 'experience_points_candidate',
+    tailProjection: Math.floor,
+  });
+  if (collected.status !== 'CANDIDATE') return collected;
+  const { observations, previous, lastTimes, tailValues, gameLengthMs, ...base } = collected;
+  const tailGaps = tailValues.map((finalValue, index) => ({
+    participant_id_candidate: index + 1,
+    last_snapshot_replay_time_ms: lastTimes[index],
+    last_snapshot_experience_points_candidate: previous[index],
+    last_snapshot_experience_floor_candidate: Math.floor(previous[index]),
+    final_experience_tail: finalValue,
+    unobserved_tail_floor_gap: finalValue - Math.floor(previous[index]),
+    unobserved_tail_time_ms: gameLengthMs === null ? null : gameLengthMs - lastTimes[index],
+  }));
+  return {
+    ...base,
+    evidence_status: 'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_FIELD_CORRELATION',
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    final_experience: tailValues,
+    observed_max_experience_points: previous,
+    observed_max_experience_floor: previous.map(Math.floor),
+    tail_gaps: tailGaps,
+    tail_gap_total: tailGaps.reduce((sum, gap) => sum + gap.unobserved_tail_floor_gap, 0),
+    events: observations.map((observation) => snapshotEvent(replay, profile, observation,
+      'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_FIELD_CORRELATION',
+      { experience_points_candidate: observation.value,
+        experience_floor_candidate: Math.floor(observation.value) },
+      { experience_points_candidate: 'CANDIDATE_ONE_REPLAY_TAIL_CORRELATION',
+        experience_floor_candidate: 'DERIVED_FROM_CANDIDATE' })),
   };
 }
 
 module.exports = {
+  HERO_EXPERIENCE_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
+  assessHeroExperienceSnapshotTail,
   assessHeroMinionsKilledSnapshotTail,
   decodeHeroStatsByte,
+  decodeHeroExperiencePayload,
+  decodeHeroExperienceSnapshotCandidates,
   decodeHeroMinionsKilledPayload,
   decodeHeroMinionsKilledSnapshotCandidates,
 };

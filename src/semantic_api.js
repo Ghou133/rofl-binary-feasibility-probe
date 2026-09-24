@@ -16,6 +16,7 @@ const {
 } = require('./decoders/rofl_16_19_820_7193');
 const {
   decodeHeroMinionsKilledSnapshotCandidates,
+  decodeHeroExperienceSnapshotCandidates,
 } = require('./decoders/rofl_16_19_hero_stats_candidate');
 const {
   createSweeperCapabilityExport,
@@ -1785,6 +1786,7 @@ function decode1619(replay, profile, options = {}) {
     hero_respawn: decodeHeroRespawnCandidates,
     hero_level_state: decodeHeroLevelStateCandidates,
     hero_minions_killed_snapshot: decodeHeroMinionsKilledSnapshotCandidates,
+    hero_experience_snapshot: decodeHeroExperienceSnapshotCandidates,
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -1792,6 +1794,7 @@ function decode1619(replay, profile, options = {}) {
     hero_respawn: 'hero_respawn_candidates',
     hero_level_state: 'hero_level_state_candidates',
     hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
+    hero_experience_snapshot: 'hero_experience_snapshot_candidates',
   };
   const gameRouteCapabilities = new Set([
     'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
@@ -1814,6 +1817,7 @@ function decode1619(replay, profile, options = {}) {
         ? decodeHeroRespawnCandidates(replay, collected, timerOutcome) : timerOutcome;
     } else {
       outcome = capability === 'hero_minions_killed_snapshot'
+        || capability === 'hero_experience_snapshot'
         ? decoders[capability](replay) : decoders[capability](replay, collected);
     }
     const { events: candidateEvents, ...result } = outcome;
@@ -1967,6 +1971,10 @@ function getHeroMinionsKilledSnapshotCandidates(decoded) {
   return decoded?.events?.hero_minions_killed_snapshot_candidates ?? null;
 }
 
+function getHeroExperienceSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_experience_snapshot_candidates ?? null;
+}
+
 function getHeroStates(decoded) {
   return decoded?.events?.hero_state_events ?? decoded?.events?.state_update_events ?? [];
 }
@@ -2079,6 +2087,7 @@ module.exports = {
   getHeroRespawnCandidates,
   getHeroLevelStateCandidates,
   getHeroMinionsKilledSnapshotCandidates,
+  getHeroExperienceSnapshotCandidates,
   getHeroPaths,
   getHeroRespawns,
   getHeroStates,

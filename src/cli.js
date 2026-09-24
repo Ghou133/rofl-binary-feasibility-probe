@@ -8,6 +8,7 @@ const { resolveBuildProfile } = require('./build_registry');
 const { candidateTailStatAssessment } = require('./decoders/rofl_16_19_820_7193');
 const {
   assessHeroMinionsKilledSnapshotTail,
+  assessHeroExperienceSnapshotTail,
 } = require('./decoders/rofl_16_19_hero_stats_candidate');
 
 const {
@@ -1596,7 +1597,9 @@ function capabilityQuery(replay, options = {}) {
       const tailStat = perCapabilityInputsAssessed
         ? capability === 'hero_minions_killed_snapshot'
           ? assessHeroMinionsKilledSnapshotTail(replay)
-          : candidateTailStatAssessment(replay, capability)
+          : capability === 'hero_experience_snapshot'
+            ? assessHeroExperienceSnapshotTail(replay)
+            : candidateTailStatAssessment(replay, capability)
         : null;
       const tailStatInput = tailStat ? [{
         name: `replay_tail_${tailStat.field}`,
@@ -1638,6 +1641,11 @@ function capabilityQuery(replay, options = {}) {
         validationPending.push('ten-participant MINIONS_KILLED tail values',
           'HN keyframe 0x0276 route, field transform, and per-participant sequences');
       }
+      if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_experience_snapshot') {
+        validationPending.push('ten-participant EXP tail values',
+          'HN keyframe 0x0276 route, offset 0x28 candidate, and per-participant sequences');
+      }
       const gameLength = replay.tail?.metadata?.gameLength;
       const conditionalInputs = ['hero_death_timer', 'hero_respawn'].includes(capability)
         && profile.game_version === '16.19.820.7193'
@@ -1674,6 +1682,7 @@ function capabilityQuery(replay, options = {}) {
             hero_respawn: 'hero_respawn_candidates',
             hero_level_state: 'hero_level_state_candidates',
             hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
+            hero_experience_snapshot: 'hero_experience_snapshot_candidates',
           })[capability] ?? null
           : null,
       });
