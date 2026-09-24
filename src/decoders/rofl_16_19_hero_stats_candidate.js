@@ -25,6 +25,7 @@ const ASSISTS_OFFSET = 0x54;
 const VISION_SCORE_OFFSET = 0x1b0;
 const DAMAGE_TAKEN_FROM_CHAMPIONS_OFFSET = 0x200;
 const DAMAGE_SELF_MITIGATED_OFFSET = 0x208;
+const LONGEST_LIVING_TIME_OFFSET = 0x244;
 const STRUCTURE_DAMAGE_OFFSET = 0x210;
 const STRUCTURE_DAMAGE_MIRROR_OFFSET = 0x214;
 const OBJECTIVE_DAMAGE_OFFSET = 0x218;
@@ -66,6 +67,7 @@ const HERO_STATS_SNAPSHOT_CAPABILITIES = Object.freeze([
   'hero_damage_totals_snapshot',
   'hero_damage_taken_from_champions_snapshot',
   'hero_damage_self_mitigated_snapshot',
+  'hero_longest_living_time_snapshot',
   'hero_total_heal_snapshot',
   'hero_vision_score_snapshot',
   'hero_epic_monster_damage_snapshot',
@@ -411,6 +413,31 @@ const HERO_DAMAGE_SELF_MITIGATED_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_LONGEST_LIVING_TIME_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-hero-longest-living-time-keyframe-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_longest_living_time_snapshot',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: PACKET_ID,
+  stream_tags: Object.freeze([2, 3]),
+  hero_raw_param_first: HERO_PARAM_FIRST,
+  hero_raw_param_last: HERO_PARAM_LAST,
+  payload_length: PAYLOAD_LENGTH,
+  decoded_blob_length: BLOB_LENGTH,
+  longest_living_time_f32le_offset_candidate: LONGEST_LIVING_TIME_OFFSET,
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  evidence_scope: 'exact HN HeroStats route and transform; decoded f32 offset 0x244 floors correlate with LONGEST_TIME_SPENT_LIVING Replay tails across 910 participant snapshots in three HN Replays (35, 27 and 29 keyframes); final floor matches 10/10, 10/10 and 9/10',
+  known_limits: Object.freeze([
+    'Only observed keyframe 0x0276 snapshots are emitted; no individual life span, death duration, or intervening value is inferred.',
+    'The offset 0x244 interpretation and hero participant mapping remain candidates, not exact-runtime field semantics.',
+    'Raw f32 and its derived floor are retained separately; the floor is not a stored integer time.',
+    'In the third Replay participant 5 has last snapshot zero versus tail 1706; a candidate death occurs after the last keyframe, but this does not prove the field update rule.',
+    'The last keyframe precedes game end, so Replay-tail gaps are retained without interpolation.',
+  ]),
+});
+
 const HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
   id: 'rofl-16.19.820.7193-hn-hero-total-heal-keyframe-candidate-v1',
   replay_version: REPLAY_VERSION,
@@ -693,6 +720,12 @@ function decodeHeroDamageSelfMitigatedPayload(payload) {
     'damage_self_mitigated_floor_candidate', 'damage self mitigated');
 }
 
+function decodeHeroLongestLivingTimePayload(payload) {
+  return decodeHeroFloatTailPayload(payload, LONGEST_LIVING_TIME_OFFSET,
+    'longest_living_time_raw_f32_candidate',
+    'longest_living_time_floor_candidate', 'longest living time');
+}
+
 function decodeHeroTotalHealPayload(payload) {
   const decoded = decodeHeroStatsBlob(payload);
   if (decoded.status !== 'PASS') return decoded;
@@ -862,6 +895,10 @@ function assessHeroDamageTakenFromChampionsSnapshotTail(replay) {
 
 function assessHeroDamageSelfMitigatedSnapshotTail(replay) {
   return assessHeroStatsTail(replay, 'TOTAL_DAMAGE_SELF_MITIGATED');
+}
+
+function assessHeroLongestLivingTimeSnapshotTail(replay) {
+  return assessHeroStatsTail(replay, 'LONGEST_TIME_SPENT_LIVING');
 }
 
 function assessHeroTotalHealSnapshotTail(replay) {
@@ -1877,6 +1914,19 @@ function decodeHeroDamageSelfMitigatedFromScan(replay, scan) {
   });
 }
 
+function decodeHeroLongestLivingTimeFromScan(replay, scan) {
+  return decodeHeroFloatTailFromScan(replay, scan, {
+    profile: HERO_LONGEST_LIVING_TIME_SNAPSHOT_CANDIDATE_PROFILE,
+    assessTail: assessHeroLongestLivingTimeSnapshotTail,
+    decodePayload: decodeHeroLongestLivingTimePayload,
+    rawKey: 'longest_living_time_raw_f32_candidate',
+    floorKey: 'longest_living_time_floor_candidate',
+    eventType: 'HERO_LONGEST_LIVING_TIME_SNAPSHOT_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_EXACT_ROUTE_THREE_REPLAY_LONGEST_LIVING_TIME_TAIL_CORRELATION',
+    rawFieldConfidence: 'CANDIDATE_THREE_REPLAY_TAIL_CORRELATION',
+  });
+}
+
 function decodeHeroVisionScoreFromScan(replay, scan) {
   return decodeHeroFloatTailFromScan(replay, scan, {
     profile: HERO_VISION_SCORE_SNAPSHOT_CANDIDATE_PROFILE,
@@ -2059,6 +2109,10 @@ function decodeHeroStatsSnapshotCandidateSet(replay, capabilities, precollectedS
     outcomes.hero_damage_self_mitigated_snapshot =
       decodeHeroDamageSelfMitigatedFromScan(replay, scan);
   }
+  if (selected.has('hero_longest_living_time_snapshot')) {
+    outcomes.hero_longest_living_time_snapshot =
+      decodeHeroLongestLivingTimeFromScan(replay, scan);
+  }
   if (selected.has('hero_total_heal_snapshot')) {
     outcomes.hero_total_heal_snapshot = decodeHeroTotalHealFromScan(replay, scan);
   }
@@ -2143,6 +2197,11 @@ function decodeHeroDamageSelfMitigatedSnapshotCandidates(replay) {
     ['hero_damage_self_mitigated_snapshot']).hero_damage_self_mitigated_snapshot;
 }
 
+function decodeHeroLongestLivingTimeSnapshotCandidates(replay) {
+  return decodeHeroStatsSnapshotCandidateSet(replay,
+    ['hero_longest_living_time_snapshot']).hero_longest_living_time_snapshot;
+}
+
 function decodeHeroTotalHealSnapshotCandidates(replay) {
   return decodeHeroStatsSnapshotCandidateSet(replay,
     ['hero_total_heal_snapshot']).hero_total_heal_snapshot;
@@ -2182,6 +2241,7 @@ module.exports = {
   HERO_DAMAGE_TOTALS_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_DAMAGE_TAKEN_FROM_CHAMPIONS_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_DAMAGE_SELF_MITIGATED_SNAPSHOT_CANDIDATE_PROFILE,
+  HERO_LONGEST_LIVING_TIME_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_VISION_SCORE_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_EPIC_MONSTER_DAMAGE_SNAPSHOT_CANDIDATE_PROFILE,
@@ -2201,6 +2261,7 @@ module.exports = {
   assessHeroDamageTotalsSnapshotTail,
   assessHeroDamageTakenFromChampionsSnapshotTail,
   assessHeroDamageSelfMitigatedSnapshotTail,
+  assessHeroLongestLivingTimeSnapshotTail,
   assessHeroTotalHealSnapshotTail,
   assessHeroVisionScoreSnapshotTail,
   assessHeroEpicMonsterDamageSnapshotTail,
@@ -2233,6 +2294,8 @@ module.exports = {
   decodeHeroDamageTakenFromChampionsSnapshotCandidates,
   decodeHeroDamageSelfMitigatedPayload,
   decodeHeroDamageSelfMitigatedSnapshotCandidates,
+  decodeHeroLongestLivingTimePayload,
+  decodeHeroLongestLivingTimeSnapshotCandidates,
   decodeHeroTotalHealPayload,
   decodeHeroTotalHealSnapshotCandidates,
   decodeHeroVisionScorePayload,
