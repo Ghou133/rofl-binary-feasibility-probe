@@ -18,12 +18,15 @@
 | `16.19.820.7193 --events hero_death` | HN/KR 结构指纹与回放尾部死亡总数同时匹配时，输出候选受害者和回放时间 | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；无杀手、助攻或重生推断，其他完整 build 不复用 |
 | `16.19.820.7193 --events hero_death_timer` | HN 路由的计时 float、同刻 Hero_Die 和后续复活时间相互校验时，输出候选计时秒数 | 仅写入 `hero_death_timer_candidates`；目前只覆盖 HN 路由，KR 回放会报 `PROFILE_UNAVAILABLE`，不产生确认的死亡或重生事件 |
 | `16.19.820.7193 --events hero_respawn` | 将 HN 已观察且与计时包唯一配对的 `0x0357` 包输出为候选复活时点 | 仅写入 `hero_respawn_candidates`；依赖完整的 HN 计时候选校验，不补造回放结束后的复活 |
-| `16.19.820.7193 --events hero_level_state` | HN `0x02b3` 包中观察到的候选英雄等级值及原始包来源 | 仅写入 `hero_level_state_candidates`；逐参与者列出未观察到的升级值，不补造事件；KR 路由未适配 |
+| `16.19.820.7193 --events hero_level_state` | HN `0x02b3` 包中观察到的候选英雄等级值及原始包来源 | 仅写入 `hero_level_state_candidates`；同等级的独立包保留为重复观测，不补造升级事件；KR 路由未适配 |
 | `16.19.820.7193 --events hero_minions_killed_snapshot` | HN `0x0276` HeroStats keyframe 中已观察到的候选 `MINIONS_KILLED` 数值 | 仅写入 `hero_minions_killed_snapshot_candidates`；不是连续补刀事件，尾部差额不插值；KR 同号包不匹配 HN 指纹 |
 | `16.19.820.7193 --events hero_jungle_minions_killed_snapshot` | 同一 HN keyframe 中 `0x40/0x44/0x48` 的原始浮点值及向下取整后的中立野怪总数、己方野区和敌方野区候选快照 | 仅写入 `hero_jungle_minions_killed_snapshot_candidates`；一场回放的尾部相关性，不推导逐次清野事件 |
 | `16.19.820.7193 --events hero_kill_stats_snapshot` | 同一 HN keyframe 中已观察到的最大连杀、连杀次数、最大多杀及双杀至四杀计数候选快照 | 仅写入 `hero_kill_stats_snapshot_candidates`；六项尾部相关性来自一场回放，不推导击杀事件或时间 |
 | `16.19.820.7193 --events hero_ward_stats_snapshot` | 同一 HN keyframe 中已观察到的插眼、拆眼与探测守卫计数候选快照 | 仅写入 `hero_ward_stats_snapshot_candidates`；不推导守卫生成、位置、生命周期或拆除事件 |
 | `16.19.820.7193 --events hero_damage_totals_snapshot` | 同一 HN keyframe 中三处浮点值及其向下取整值，对应英雄伤害、总伤害与承伤的候选累计快照 | 仅写入 `hero_damage_totals_snapshot_candidates`；一场回放的尾部相关性，不推导逐次伤害、目标、来源或减伤 |
+| `16.19.820.7193 --events hero_damage_taken_from_champions_snapshot` | HN HeroStats keyframe `0x200` 的原始浮点值及取整后的候选对英雄承伤快照 | 仅写入 `hero_damage_taken_from_champions_snapshot_candidates`；尾部相关性不证明逐次伤害或来源 |
+| `16.19.820.7193 --events hero_damage_self_mitigated_snapshot` | HN HeroStats keyframe `0x208` 的原始浮点值及取整后的候选自我减伤快照 | 仅写入 `hero_damage_self_mitigated_snapshot_candidates`；不推导逐次减伤事件 |
+| `16.19.820.7193 --events hero_longest_living_time_snapshot` | HN HeroStats keyframe `0x244` 的原始浮点值及取整后的候选最长存活时间快照 | 仅写入 `hero_longest_living_time_snapshot_candidates`；三场尾部对照为 10/10、10/10、9/10，不推导单次存活或死亡时长 |
 | `16.19.820.7193 --events hero_total_heal_snapshot` | 同一 HN keyframe 中 `0x234` 的候选累计治疗上报值 | 仅写入 `hero_total_heal_snapshot_candidates`；一场回放的尾部相关性，不推导逐次治疗、有效治疗或过量治疗 |
 | `16.19.820.7193 --events hero_vision_score_snapshot` | 同一 HN keyframe 中 `0x1b0` 原始浮点值及取整后的候选视野得分 | 仅写入 `hero_vision_score_snapshot_candidates`；一场回放的尾部相关性，不推导守卫或视野事件 |
 | `16.19.820.7193 --events hero_epic_monster_damage_snapshot` | 同一 HN keyframe 中 `0x21c` 原始浮点值及取整后的候选史诗野怪伤害累计值 | 仅写入 `hero_epic_monster_damage_snapshot_candidates`；一场回放的尾部相关性，不推导逐次伤害或目标归属 |
@@ -37,9 +40,9 @@
 | `16.19.820.7193 --events hero_assists_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x54` 候选助攻次数 | 仅写入 `hero_assists_snapshot_candidates`；缺少独立助攻事件锚点，不推导助攻时点或归属 |
 | `16.19.820.7193 --events hero_inventory_mapview` | 使用精确运行时镜像解码 HN `0x0420` 包中已观察到的候选物品槽与物品 ID | 仅写入 `hero_inventory_mapview_candidates`；不构造连续库存状态、购买或出售事件；其他路由不可复用 |
 | `16.19.820.7193 --events hero_inventory_set_item` | 使用精确运行时镜像解码 HN `0x03b7` SetItem 包中的候选槽位与物品键 | 仅写入 `hero_inventory_set_item_candidates`；其中一个非标准 raw param 不映射参与者，不推导买卖或物品变化 |
-| `16.19.820.7193 --events hero_inventory_broadcast` | 使用精确运行时镜像解码 HN `0x03ef` Broadcast 包中的候选槽位、物品键和有界参与者映射 | 仅写入 `hero_inventory_broadcast_candidates`；保留原始参数，参与者仍为单场回放候选，不推导买卖、交换或库存变化 |
+| `16.19.820.7193 --events hero_inventory_broadcast` | 使用精确运行时镜像解码 HN `0x03ef` Broadcast 包中的候选槽位、物品键和有界参与者映射 | 仅写入 `hero_inventory_broadcast_candidates`；三场回放仍只支持候选参与者映射，flag 3 含义未分类，不推导买卖、交换或库存变化 |
 | `16.19.820.7193 --events npc_buff_remove_packet` | 使用精确运行时镜像解码 HN `0x043c` BuffRemove2 包中的候选浮点秒数、槽索引与查找令牌 | 仅写入 `npc_buff_remove_packet_candidates`；保留原始参数与包来源，不推断 Buff 归属、名称或移除成功 |
-| `16.19.820.7193 --events npc_buff_add_packet` | 使用精确运行时镜像解码 HN `0x03ed` BuffAdd2 包中 game/keyframe 均有的候选原始标量 | 仅写入 `npc_buff_add_packet_candidates`；两个浮点字段只按偏移命名，不推断持续时间、Buff 归属或应用成功 |
+| `16.19.820.7193 --events npc_buff_add_packet` | 使用精确运行时镜像解码 HN `0x03ed` BuffAdd2 包中 game/keyframe 均有的候选原始标量；已观察到的 41 字节 keyframe 另带不透明向量标记 | 仅写入 `npc_buff_add_packet_candidates`；两个浮点字段只按偏移命名，不推断持续时间、Buff 归属或应用成功 |
 | `src/semantic_api.js` 与精确 build profiles | `16.16.805.0442` 的 HeroPath、等级、WardSpawn、伤害、死亡、重生、XP/lane-CS keyframe、受限 ItemState 和 gameplay-tail 等 | 独立 API 的逐字段能力；需要外部精确镜像、profiles 或对应已验证输入，不是主 CLI 的完整分析模式 |
 | V2 Ward / Path | 已验证位置、守卫事件及受限派生关联 | 来源 SHA 必须与回放一致；类型、匹配、生命周期和位置插值与直接字段分级 |
 | `research-v3/`、`research-v4/` | DuckDB 研究查询、保护量增量表和验证器 | 保留的真实功能，不是因版本号旧就可删除的目录；全量重建需要私有输入 |
@@ -129,12 +132,12 @@ node src/cli.js batch "D:\Replays\HN-example.rofl" "D:\Replays\KR-example.rofl" 
 
 ```powershell
 node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
-  --events hero_minions_killed_snapshot,hero_jungle_minions_killed_snapshot,hero_experience_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_champion_kills_snapshot,hero_deaths_snapshot,hero_assists_snapshot,hero_kill_stats_snapshot,hero_ward_stats_snapshot,hero_damage_totals_snapshot,hero_total_heal_snapshot,hero_vision_score_snapshot,hero_epic_monster_damage_snapshot,hero_crowd_control_time_snapshot,hero_structure_objective_damage_snapshot `
+  --events hero_damage_self_mitigated_snapshot,hero_longest_living_time_snapshot `
   --out-dir "work\16-19-hero-stats-snapshots"
 ```
 
 输出包含每名英雄的候选快照值与原始包引用，并在逐能力结果中列出最后快照到回放尾部的差额。
-它不推导两次 keyframe 之间的补刀、经验、金币、伤害、治疗变动或英雄击杀时间，也不发布为确认事件。
+它不推导两次 keyframe 之间的变化或单次事件，也不发布为确认事件；其他候选快照可由 `capabilities` 查询后加入 `--events`。
 
 读取 HN `0x0420` MapView、`0x03b7` SetItem 与 `0x03ef` Broadcast 包内已观察到的候选槽位和物品键，需提供精确版本的外部运行时镜像：
 
@@ -145,7 +148,7 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
   --out-dir "work\16-19-mapview-candidates"
 ```
 
-每条记录保留原始包来源；这三项候选不要求回放尾部 `statsJson`，也不推导库存状态或交易事件。Broadcast 的十个常规原始参数和已观察到的 `0x400001b1` 可给出参与者候选；其他参数保留空值，映射尚未经独立回放确认。
+每条记录保留原始包来源；这三项候选不要求回放尾部 `statsJson`，也不推导库存状态或交易事件。Broadcast 仅对十个常规原始参数和已观察到的两个变体给出参与者候选；其他参数保留空值。三场回放的尾部对照仍不足以确认包归属。
 
 BuffAdd2 与 BuffRemove2 的包字段候选使用相同的精确镜像参数，可单独或一起运行：
 

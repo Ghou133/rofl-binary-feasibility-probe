@@ -18,6 +18,19 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   All 16 previously exposed HeroStats candidates also returned `CANDIDATE`
   across its 270 participant keyframe snapshots; their field labels remain
   experimental.
+- **Third exact HN Replay:** `HN1-11316024715.rofl` (SHA-256
+  `a4b0f51c4e4b35434d159ac8482582327982110963a5ae0c71be6f7150579fdc`)
+  framed 1,839,904 blocks with zero errors. The first all-capability CLI run
+  returned `PARTIAL`: a repeated level 9, one 63-byte Broadcast packet plus
+  five decoded flag-3 records, and three 41-byte BuffAdd keyframe packets
+  exposed previously unseen shapes. The original failed result remains under
+  `artifacts/16_19_development/third_hn_crosscheck_11316024715/`. The level
+  decoder now retains the distinct repeated packet as an observation (135
+  candidate rows, one repeat), and the exact image fully decodes all 297
+  Broadcast packets into 2,950 candidate records. Selected real CLI reruns
+  returned `CANDIDATE`; flag 3 and participant identity remain unclassified or
+  candidate-only. The 41-byte BuffAdd shape passed the exact-image bounded
+  vector and full-consumption checks described below.
 - **Capability query:** `node src/cli.js capabilities <file.rofl> [--json]`
   reports the exact build's registered capabilities and checks required tail
   `NUM_DEATHS`/`LEVEL` fields without decompressing packet chunks or using a runtime
@@ -119,8 +132,9 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   absolute difference to 29705. These are one-Replay correlation checks,
   not proof of a published gold field. No income event or intermediate value
   is inferred.
-- **Current:** Candidate participant identity, timer and respawn meaning are bounded to
-  one HN Replay; KR uses different death/timer route IDs and reports
+- **Current:** Candidate participant identity, timer and respawn meaning remain
+  unpublished across the available HN Replays; KR uses different death/timer
+  route IDs and reports
   `PROFILE_UNAVAILABLE` for the HN timer profile. Eleven raw KR `0x0357`
   packets remain unclassified without that profile. No confirmed death, timer
   or respawn event is emitted.
@@ -314,6 +328,19 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   individual mitigation event or proof of the runtime field's meaning. Local
   evidence is under `artifacts/16_19_development/next_field_probe/` and
   `artifacts/16_19_development/self_mitigated_buff_pair_cli_smoke/`.
+  On the third Replay, the `0x200` damage-taken and `0x208` mitigated snapshots
+  both decoded as candidates, but neither had an exact final tail match across
+  the ten participants; the last keyframe was 42,142 ms before game end.
+  Their earlier two-Replay evidence grades are unchanged.
+- **Done:** Opt-in `hero_longest_living_time_snapshot` emits the decoded
+  HeroStats f32 at `0x244` and its separate floor with packet provenance.
+  The offset was selected from the first two exact HN Replays before testing
+  the third: final floors match `LONGEST_TIME_SPENT_LIVING` tails 10/10,
+  10/10 and 9/10 across 350, 270 and 290 participant snapshots. The third
+  Replay has one tail-value gap of 1,706 after the last keyframe; a candidate
+  death packet also occurs after that keyframe, without proving an update
+  rule. The selected real CLI run emitted 290 candidate rows with zero framing
+  errors. No individual life span or death duration is inferred.
 - **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
   runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
   observed slot/item-definition-key records as candidates. All 94 game packets
@@ -367,7 +394,11 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   over the other nine. The CLI retains its original raw param and packet ref,
   emits these seven rows as candidate 2 and reports zero unmapped packets.
   The extra `0x100` bit is unclassified; no generic bitmask is applied. This
-  two-Replay evidence does not establish confirmed packet ownership,
+  third-Replay evidence adds one fully consumed 63-byte packet and five
+  records with decoded flag 3. The exact image fully consumed 297 packets
+  and emitted 2,950 records; last-keyframe slots 0–6 matched 56/70 tail
+  values, ahead of nine shifted controls. The three-Replay evidence does not
+  establish confirmed packet ownership, flag meaning,
   transactions or continuous inventory state.
 - **Done:** `npc_buff_remove_packet` is wired as an unpublished exact-image
   candidate for HN game-stream `0x043c` BuffRemove2 packets. The exact callback,
@@ -403,6 +434,18 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   For the high-volume BuffAdd2 and BuffRemove2 outputs, repeated field grades
   and limits are stored once per capability in `semantic_run.json`; each JSONL
   row retains its candidate status, build profile and raw packet provenance.
+- **Third-Replay BuffAdd shape:** Three keyframe `0x03ed` packets of length 41
+  and raw param `0x400000b3` contain one 40-byte polymorphic element in the
+  first runtime object vector. The exact `820.7193` image returned AL=1 and
+  consumed all 41 bytes for each; truncation returned AL=0 and an appended
+  byte remained unconsumed. The decoder checks an allocated emulator-heap
+  pointer, count/capacity 1, pinned vtable, and empty second vector. The
+  element stays opaque, and game-stream or foreign-parameter 41-byte packets
+  remain unsupported. Profile v2 emitted all 27,208 BuffAdd packets as
+  candidates in the third Replay, including these three marked rows; the
+  full 28-capability CLI rerun returned `CANDIDATE` with zero framing errors
+  and exact-image status `MATCHED_USED`. The initial `PARTIAL` artifact is
+  retained. This adds a packet shape, not a buff identity or lifecycle.
 - **Done:** Selecting both Buff packet candidates now adds an unpublished
   `candidate_associations.npc_buff_add_remove_opaque_key` summary in
   `semantic_run.json` and the exact-build API. It compares only the anonymous
@@ -418,9 +461,12 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   buff identity, owner, application, removal, duration or lifecycle. The
   second-Replay ordering and shuffled controls are retained under
   `artifacts/16_19_development/buff_link_probe_second/`.
-- **Next:** Seek a matching KR runtime to resolve its timer field, and further
-  independent HN Replays to test level, HeroStats and inventory candidates. The HN
-  Broadcast participant mapping remains candidate-only after two Replays, and
+  In the third Replay all 3,030 distinct Remove keys appear in Add rows, while
+  3,023 appear in game-stream Adds; row identity remains unresolved.
+- **Next:** Seek an exact `16.19.821.7343` Replay and matching runtime image,
+  or a matching KR runtime for its timer field. Further independent HN Replays
+  can test HeroStats and inventory candidates. The HN
+  Broadcast participant mapping remains candidate-only after three Replays, and
   inventory-state inference needs independent anchors. Movement-route
   research still needs a position-field link.
 - **Path negative control:** The exact HN image identifies `0x03ee` as
@@ -446,7 +492,7 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   yielded HN `CANDIDATE`, KR `PARTIAL`, and aggregate `PARTIAL`, retaining the
   KR death candidate while reporting the HN-only capabilities unavailable.
 - **Blocked proof:** Confirmed timer and candidate victim mapping need broader
-  independent anchors beyond the two HN Replays. The separate Riot client is `16.19.821.7343`
+  independent anchors beyond the three HN Replays. The separate Riot client is `16.19.821.7343`
   and cannot supply a `16.19.820.7193` decoder image.
 
 Research outputs, original replay data, and client binaries remain local and
