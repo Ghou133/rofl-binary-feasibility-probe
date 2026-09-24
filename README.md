@@ -94,6 +94,15 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 列出该回放里没有对应包的等级；它不是完整的升级时间线，也不会写入已确认的
 `level_transition_events`。该候选只绑定完整 build `16.19.820.7193`。
 
+`batch` 可接收回放文件或目录，并逐回放保存能力结果。例如：
+
+```powershell
+node src/cli.js batch "D:\Replays\HN-example.rofl" "D:\Replays\KR-example.rofl" `
+  --events hero_death,hero_respawn,hero_level_state --out-dir "work\16-19-batch"
+```
+
+有能力不可用的回放会保留已成功的候选输出，汇总状态为 `PARTIAL`。
+
 执行 **16.15.801.3452** 的旧版整合语义分析：
 
 ```powershell

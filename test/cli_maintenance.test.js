@@ -87,6 +87,16 @@ test('help explains the Node minimum, CLI version scope and external runtime ima
   assert.match(output, /not bundled/);
   assert.match(output, /deprecated/i);
   assert.match(output, /capabilities <file\.rofl>/);
+  assert.match(output, /batch <file\.rofl\|directory>/);
+});
+
+test('text capability query displays invalid tail fields separately from missing inputs', async (t) => {
+  let output = '';
+  t.mock.method(process.stdout, 'write', (chunk) => { output += String(chunk); return true; });
+  const cli = loadCli();
+  const input = fixture(t, '16.19.820.7193');
+  assert.equal(await cli.main(['capabilities', input]), 0);
+  assert.match(output, /hero_level_state: CANDIDATE; missing inputs: none detected; invalid inputs: replay_tail_LEVEL/);
 });
 
 test('capabilities reports only the 16.19 candidate without packet decoding or a runtime image', async (t) => {

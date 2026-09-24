@@ -68,7 +68,7 @@ Usage:
   node src/cli.js capabilities <file.rofl> [--json]
   node src/cli.js decode <file.rofl> [--out-dir artifacts]
   node src/cli.js analyze <file.rofl> [--out-dir artifacts]
-  node src/cli.js batch <directory> [directory ...] [--out-dir artifacts]
+  node src/cli.js batch <file.rofl|directory> [more inputs ...] [--out-dir artifacts]
   node src/cli.js validate [file.rofl|directory ...] [--out-dir artifacts]
   node src/cli.js ward-events <rows.json|rows.jsonl|file.rofl> [--out-dir artifacts]
 
@@ -1689,8 +1689,10 @@ function runCapabilitiesCommand(parsed) {
     for (const row of result.capabilities) {
       const missing = row.missing_inputs === null ? 'not assessed per capability'
         : row.missing_inputs.length ? row.missing_inputs.join(', ') : 'none detected';
+      const invalid = row.invalid_inputs?.length
+        ? `; invalid inputs: ${row.invalid_inputs.join(', ')}` : '';
       process.stdout.write(`${row.capability}: ${row.status}; missing inputs: ${missing}`
-        + `${row.input_assessment_complete ? '' : ' (some inputs not assessed)'}\n`);
+        + invalid + `${row.input_assessment_complete ? '' : ' (some inputs not assessed)'}\n`);
       if (row.validation_pending.length > 0) {
         process.stdout.write(`  Pending: ${row.validation_pending.join(', ')}\n`);
       }

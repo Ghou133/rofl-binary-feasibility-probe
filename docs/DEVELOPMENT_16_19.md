@@ -52,6 +52,9 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   neither a general KR timer transform nor route `0x0048` identity is claimed.
 - **Next:** Seek a matching KR runtime to resolve its timer field, or independent
   HN Replays to test the candidate level field and participant mapping.
+- **CLI batch:** A two-Replay HN/KR run with death, respawn and level selection
+  yielded HN `CANDIDATE`, KR `PARTIAL`, and aggregate `PARTIAL`, retaining the
+  KR death candidate while reporting the HN-only capabilities unavailable.
 - **Blocked proof:** Broader timer validation and candidate victim mapping need
   independent replay evidence. The separate Riot client is `16.19.821.7343`
   and cannot supply a `16.19.820.7193` decoder image.
