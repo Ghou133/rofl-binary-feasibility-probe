@@ -547,7 +547,7 @@ function parseOne1619(replay, options, started) {
   const is821 = replay.header.version === '16.19.821.7343';
   const selected821 = is821 && options.semantic !== false && Array.isArray(options.events)
     ? [...new Set(options.events.filter((name) => [
-      'hero_death', 'hero_respawn', 'hero_deaths_snapshot',
+      'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_level_state',
     ].includes(name)))] : [];
@@ -1859,6 +1859,12 @@ function capabilityQuery(replay, options = {}) {
           'ten-participant NUM_DEATHS presence and equality');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_death_timer') {
+        validationPending.push('KR matched 0x0259 death core and exact 821 five-byte runtime float transform',
+          'ten-participant NUM_DEATHS equality; isolated timer packets remain excluded',
+          'two observed early return exceptions prohibit respawn-time prediction');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_respawn') {
         validationPending.push('matched 821 death cores and exact 0x0048 route with co-timed 0x018d',
           'ten-participant TOTAL_TIME_SPENT_DEAD aggregate equality and final-death censoring');
@@ -2049,6 +2055,7 @@ function capabilityQuery(replay, options = {}) {
         validation_pending: validationPending,
         output: profile.game_version === '16.19.821.7343'
           ? ({ hero_death: 'hero_death_candidates',
+            hero_death_timer: 'hero_death_timer_candidates',
             hero_respawn: 'hero_respawn_candidates',
             hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
             hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',

@@ -50,8 +50,10 @@ function replay({ unknownLevel = false, runtimeLevel20 = false, observedReturn =
     else row[12] = 0xe5;
     return row;
   });
+  const timerPacket = packet(0x0259, 0x400000ae, 5);
+  timerPacket.set(Buffer.from('121017d7d7', 'hex'), 12);
   const game = { body: Buffer.concat([
-    packet(0x0259, 0x400000ae, 5),
+    timerPacket,
     packet(0x0438, 0x400000ae, 13),
     packet(0x031b, 0, 12),
     packet(0x03d4, 0, 3),
@@ -88,48 +90,62 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_assists_snapshot').status, 'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_level_state').status, 'CANDIDATE');
-  assert.equal(resolveCapability(BUILD, 'hero_death_timer').status, 'UNAVAILABLE');
+  assert.equal(resolveCapability(BUILD, 'hero_death_timer').status, 'CANDIDATE');
   const query = capabilityQuery(input);
   assert.equal(query.profile_release_status, 'EXPERIMENTAL_CANDIDATE');
   assert.equal(query.packet_framing_inspected, false);
   assert.equal(query.semantic_decode_performed, false);
   assert.deepEqual(query.capabilities.map((row) => row.capability),
-    ['hero_death', 'hero_respawn', 'hero_deaths_snapshot',
+    ['hero_death', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_level_state']);
-  assert.equal(query.capabilities[0].runtime_image_requirement, 'NOT_REQUIRED');
-  assert.equal(query.capabilities[0].output, 'hero_death_candidates');
-  assert.deepEqual(query.capabilities[0].missing_inputs, []);
-  assert.equal(query.capabilities[1].runtime_image_requirement, 'NOT_REQUIRED');
-  assert.equal(query.capabilities[1].output, 'hero_respawn_candidates');
-  assert.deepEqual(query.capabilities[1].missing_inputs, []);
-  assert.deepEqual(query.capabilities[1].required_inputs.map((row) => row.name),
+  const queried = Object.fromEntries(query.capabilities.map((row) => [row.capability, row]));
+  assert.equal(queried.hero_death.runtime_image_requirement, 'NOT_REQUIRED');
+  assert.equal(queried.hero_death.output, 'hero_death_candidates');
+  assert.deepEqual(queried.hero_death.missing_inputs, []);
+  assert.equal(queried.hero_death_timer.runtime_image_requirement, 'NOT_REQUIRED');
+  assert.equal(queried.hero_death_timer.output, 'hero_death_timer_candidates');
+  assert.deepEqual(queried.hero_death_timer.missing_inputs, []);
+  assert.equal(queried.hero_respawn.runtime_image_requirement, 'NOT_REQUIRED');
+  assert.equal(queried.hero_respawn.output, 'hero_respawn_candidates');
+  assert.deepEqual(queried.hero_respawn.missing_inputs, []);
+  assert.deepEqual(queried.hero_respawn.required_inputs.map((row) => row.name),
     ['replay', 'replay_tail_statsJson', 'replay_tail_NUM_DEATHS',
       'replay_tail_TOTAL_TIME_SPENT_DEAD',
       'replay_tail_gameLength']);
-  assert.equal(query.capabilities[2].output, 'hero_deaths_snapshot_candidates');
-  assert.deepEqual(query.capabilities[2].missing_inputs, []);
-  assert.equal(query.capabilities[3].output, 'hero_champion_kills_snapshot_candidates');
-  assert.deepEqual(query.capabilities[3].missing_inputs, []);
-  assert.equal(query.capabilities[4].output, 'hero_assists_snapshot_candidates');
-  assert.deepEqual(query.capabilities[4].missing_inputs, []);
-  assert.equal(query.capabilities[5].output, 'hero_level_state_candidates');
-  assert.deepEqual(query.capabilities[5].missing_inputs, []);
+  assert.equal(queried.hero_deaths_snapshot.output, 'hero_deaths_snapshot_candidates');
+  assert.deepEqual(queried.hero_deaths_snapshot.missing_inputs, []);
+  assert.equal(queried.hero_champion_kills_snapshot.output, 'hero_champion_kills_snapshot_candidates');
+  assert.deepEqual(queried.hero_champion_kills_snapshot.missing_inputs, []);
+  assert.equal(queried.hero_assists_snapshot.output, 'hero_assists_snapshot_candidates');
+  assert.deepEqual(queried.hero_assists_snapshot.missing_inputs, []);
+  assert.equal(queried.hero_level_state.output, 'hero_level_state_candidates');
+  assert.deepEqual(queried.hero_level_state.missing_inputs, []);
   input.tail.stats[0].NUM_DEATHS = null;
-  for (const row of capabilityQuery(input).capabilities.slice(0, 3)) {
-    assert.deepEqual(row.missing_inputs, ['replay_tail_NUM_DEATHS']);
+  const afterDeathMissing = Object.fromEntries(capabilityQuery(input).capabilities
+    .map((row) => [row.capability, row]));
+  for (const name of ['hero_death', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot']) {
+    assert.deepEqual(afterDeathMissing[name].missing_inputs, ['replay_tail_NUM_DEATHS']);
   }
   input.tail.stats[0].TOTAL_TIME_SPENT_DEAD = null;
-  assert.deepEqual(capabilityQuery(input).capabilities[1].missing_inputs,
+  const afterDeadTimeMissing = Object.fromEntries(capabilityQuery(input).capabilities
+    .map((row) => [row.capability, row]));
+  assert.deepEqual(afterDeadTimeMissing.hero_respawn.missing_inputs,
     ['replay_tail_NUM_DEATHS', 'replay_tail_TOTAL_TIME_SPENT_DEAD']);
   input.tail.stats[0].LEVEL = null;
-  assert.deepEqual(capabilityQuery(input).capabilities[5].missing_inputs,
+  const afterLevelMissing = Object.fromEntries(capabilityQuery(input).capabilities
+    .map((row) => [row.capability, row]));
+  assert.deepEqual(afterLevelMissing.hero_level_state.missing_inputs,
     ['replay_tail_LEVEL']);
   input.tail.stats[0].CHAMPIONS_KILLED = null;
-  assert.deepEqual(capabilityQuery(input).capabilities[3].missing_inputs,
+  const afterKillsMissing = Object.fromEntries(capabilityQuery(input).capabilities
+    .map((row) => [row.capability, row]));
+  assert.deepEqual(afterKillsMissing.hero_champion_kills_snapshot.missing_inputs,
     ['replay_tail_CHAMPIONS_KILLED']);
   input.tail.stats[0].ASSISTS = null;
-  assert.deepEqual(capabilityQuery(input).capabilities[4].missing_inputs,
+  const afterAssistsMissing = Object.fromEntries(capabilityQuery(input).capabilities
+    .map((row) => [row.capability, row]));
+  assert.deepEqual(afterAssistsMissing.hero_assists_snapshot.missing_inputs,
     ['replay_tail_ASSISTS']);
 });
 
@@ -208,10 +224,11 @@ test('821 API dispatch emits separate candidate records and no confirmed deaths'
   assert.equal(combined.events.hero_level_state_candidates[0].level_after_candidate, 2);
   assert.equal(combined.events.death_events, undefined);
 
-  const unavailable = decodeSemanticReplay(input, { capabilities: ['hero_death_timer'] });
-  assert.equal(unavailable.status, 'UNSUPPORTED');
-  assert.equal(unavailable.events, null);
-  assert.equal(unavailable.capability_results.hero_death_timer.status, 'UNSUPPORTED');
+  const timer = decodeSemanticReplay(input, { capabilities: ['hero_death_timer'] });
+  assert.equal(timer.status, 'EXPERIMENTAL_CANDIDATE');
+  assert.equal(timer.capability_results.hero_death_timer.status, 'CANDIDATE');
+  assert.equal(timer.events.hero_death_timer_candidates.length, 1);
+  assert.equal(timer.events.hero_death_timer_candidates[0].timer_seconds_candidate, 12);
 });
 
 test('exact 821 runtime level 20 reaches the combined API candidate output', () => {

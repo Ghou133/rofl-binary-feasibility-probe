@@ -6,7 +6,7 @@ const { replaySourceError } = require('./replay_source_integrity');
 
 const BUILD = '16.19.821.7343';
 const CAPABILITIES = new Set([
-  'hero_death', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+  'hero_death', 'hero_death_timer', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
   'hero_assists_snapshot', 'hero_level_state', 'hero_respawn',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
@@ -47,6 +47,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const heroStatsRows = [];
   const rows = {
     hero_death: [],
+    hero_death_timer: [],
     hero_respawn: [],
     hero_deaths_snapshot: heroStatsRows,
     hero_champion_kills_snapshot: heroStatsRows,
@@ -58,7 +59,8 @@ function create821ScanCollector(replay, selectedCapabilities) {
     || selected.has('hero_assists_snapshot');
   // A return candidate is only meaningful after validating its death cores.
   // Keep those route packets in the same walk even for respawn-only requests.
-  const selectsDeathRoutes = selected.has('hero_death') || selected.has('hero_respawn');
+  const selectsDeathRoutes = selected.has('hero_death') || selected.has('hero_death_timer')
+    || selected.has('hero_respawn');
   let blockCount = 0;
   let keyframeBlockCount = 0;
   let finished = false;
@@ -69,7 +71,9 @@ function create821ScanCollector(replay, selectedCapabilities) {
       if (chunk.stream_tag === 2 || chunk.stream_tag === 3) keyframeBlockCount += 1;
       if (selectsDeathRoutes && chunk.stream_tag === 1
           && DEATH_ROUTES.has(block.packet_id)) {
-        rows.hero_death.push(copyRow(block, chunk));
+        const row = copyRow(block, chunk);
+        rows.hero_death.push(row);
+        rows.hero_death_timer.push(row);
       }
       if (selected.has('hero_respawn') && chunk.stream_tag === 1
           && RESPAWN_ROUTES.has(block.packet_id)) {
@@ -140,7 +144,8 @@ function rowsFor821Capability(replay, token, capability) {
   if (sourceError) return { error: `Replay source integrity failed: ${sourceError}` };
   if (bound.error) return { error: bound.error };
   const selected = bound.selected.has(capability)
-    || (capability === 'hero_death' && bound.selected.has('hero_respawn'));
+    || (capability === 'hero_death'
+      && (bound.selected.has('hero_respawn') || bound.selected.has('hero_death_timer')));
   if (!selected) {
     return { error: `${capability} was not selected by this 821 route scan` };
   }

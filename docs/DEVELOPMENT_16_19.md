@@ -15,9 +15,9 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   `NUM_DEATHS` counts in all 11 files (655 candidate rows). Two files each
   lack one auxiliary `0x03d4`; one file contains two isolated `0x0259` packets.
   These are retained as negative route evidence and excluded from candidate
-  events. No 820 opcode transform or image is reused for 821; the death-packet
-  payload's killer, assist attribution, death timer, and confirmed respawn
-  semantics remain unclassified.
+  events. No 820 opcode transform or image is reused for 821. Killer and
+  assist attribution remain unclassified; the 821 death-timer candidate is
+  described below, while confirmed death and respawn semantics remain open.
 - **821 observed-return candidate:** `--events hero_respawn` pairs each matched
   death core with a subsequent same-participant `0x0048` and preceding co-timed
   `0x018d`, requiring the ten per-participant sums of elapsed milliseconds,
@@ -27,10 +27,36 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   uses the observed `0x400000ae..b7` full raw-param family and payload lengths
   9 or 13; 33 matched deaths use a different full-param family, so identity is
   joined only through the validated participant candidate. This is a Replay
-  correlation, not a runtime-confirmed respawn or payload decode. No timer is
-  inferred for unpaired final deaths. Each paired event also reports the
-  observed death-to-return millisecond difference as a candidate arithmetic
-  field, with no timer prediction.
+  correlation, not a runtime-confirmed respawn or payload decode. This return
+  route alone does not infer a timer for unpaired final deaths. Each paired
+  event reports the observed death-to-return millisecond difference as a
+  candidate arithmetic field, with no timer prediction.
+- **821 death-timer candidate:** In the captured exact 821 image (SHA-256
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`),
+  factory ID `0x0259` identifies `PKT_S2C_UpdateDeathTimer_s`, constructs at
+  RVA `0xeca430`, and deserializes at RVA `0x10fa910`. Emulating its
+  constructor and deserializer against all 657
+  observed five-byte game packets fully consumed 657/657; truncating or
+  appending one byte rejected full consumption in 657/657 controls each.
+  The exact-image byte transform decodes bytes 1–4 into `f32` seconds,
+  approximately 4.09–60.10 across all 657 packets. The two isolated
+  `0x0259` packets are retained as negative evidence; the candidate is
+  scoped to the 655 matched death cores. Among 607 independently observed
+  `0x0048` returns, 605 death-to-return residuals have absolute magnitude
+  at most 35 ms. Two returns in `KR_8394041123` occur 11.469 and 20.877
+  seconds earlier than the respective timer values, so the timer is not a
+  reliable return-time prediction. The other 48 matched deaths have no
+  observed return before Replay end, and their timer endpoints lie beyond
+  that end. This is a candidate decoded float and route correlation, not a
+  published or callback-confirmed death-timer capability. The probe used a
+  hooked base packet reader; original Replay bytes, runtime image, all
+  exceptions, and negative controls remain local under
+  `artifacts/16_19_development/kr_821_runtime_capture/`.
+  The selected CLI's 11-Replay `hero_death_timer` batch returned 11/11
+  `CANDIDATE` with no framing errors: 657 input packets, 655 candidate timer
+  records, and two excluded isolated packet references. Its per-Replay
+  provenance is under ignored
+  `artifacts/16_19_development/kr_821_runtime_timer_11/`.
 - **821 exact-image count-byte transform:** The captured 821 image's
   `0x0089` object deserializer contains a byte transform with a 256-byte
   lookup table at RVA `0x01ba1560` (SHA-256
@@ -258,8 +284,8 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   stream 1 alone; malformed stream 2 does not suppress its independent result.
   On the exact HN Replay, the six earlier
   death/timer/respawn/level/CS/EXP candidate JSONL files remain byte-identical
-  after game-scan reuse. The KR Replay retains its death candidate and reports
-  `PROFILE_UNAVAILABLE` for the HN-only selections.
+  after game-scan reuse. The 820 KR Replay retains its death candidate and
+  reports `PROFILE_UNAVAILABLE` for the HN-only selections.
 - **Public test entry:** `npm run test:16-19` runs the portable 16.19 candidate
   decoder and CLI/API tests; `npm test` now includes it after maintenance.
   Real HN/KR Replay smoke remains separate evidence.
@@ -277,24 +303,24 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   absolute difference to 29705. These are one-Replay correlation checks,
   not proof of a published gold field. No income event or intermediate value
   is inferred.
-- **Current:** Candidate participant identity, timer and respawn meaning remain
-  unpublished across the available HN Replays; KR uses different death/timer
-  route IDs and reports
+- **820 HN/KR boundary:** Candidate participant identity, timer and respawn
+  meaning remain unpublished across the available HN Replays. The
+  `16.19.820.7193` KR controls use different death/timer route IDs and report
   `PROFILE_UNAVAILABLE` for the HN timer profile. Eleven raw KR `0x0357`
   packets remain unclassified without that profile. No confirmed death, timer
   or respawn event is emitted.
-- **KR lead:** In exact-build `KR_8391528229` and `KR_8391542020`, all 115
+- **820 KR lead:** In exact-build `KR_8391528229` and `KR_8391542020`, all 115
   `0x0259` death-triad packets reject the HN timer transform. All 104 packets
   on route `0x0048` pair with a pending candidate victim and a plausible
-  death-to-reincarnation delay, but the KR timer float transform and route name
-  are unverified. The KR Replay SHA-256 values are
+  death-to-reincarnation delay, but the 820 KR timer float transform and route
+  name are unverified. The KR Replay SHA-256 values are
   `3f29ae2127ef75888baf1f4543d0790cc9c40d9df0197e73b2b16b3c799dd93c`
   and `2d7a53f76e11059ac00a45706d32ca19300d33dabca2d97bde99775c22062e1b`.
-- **KR negative control:** A table learned from the first KR Replay covers only
+- **820 KR negative control:** A table learned from the first KR Replay covers only
   14/58 paired cases there and 22/46 in the second; all covered timing
   residuals are at most 35 ms. The other codewords are unaccounted for, so
-  neither a general KR timer transform nor route `0x0048` identity is claimed.
-- **HeroStats KR control:** One KR Replay has 19,698 keyframe `0x0276` packets
+  neither a general 820 KR timer transform nor route `0x0048` identity is claimed.
+- **HeroStats 820 KR control:** One KR Replay has 19,698 keyframe `0x0276` packets
   of lengths 2–16 bytes and zero HN 1263-byte fingerprints. The HN HeroStats
   candidate reports `PROFILE_UNAVAILABLE`; these raw KR packets are unclassified.
 - **Done:** `hero_gold_spent_snapshot` exposes candidate HN keyframe values

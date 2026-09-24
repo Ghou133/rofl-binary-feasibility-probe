@@ -19,6 +19,8 @@ const {
   decodeHeroInventoryBroadcastCandidates,
 } = require('./decoders/rofl_16_19_820_7193');
 const { decodeHeroDeathCandidates821 } = require('./decoders/rofl_16_19_821_7343');
+const { decodeHeroDeathTimerCandidates821 } =
+  require('./decoders/rofl_16_19_821_death_timer_candidate');
 const { decodeHeroRespawnCandidates821 } =
   require('./decoders/rofl_16_19_821_respawn_candidate');
 const {
@@ -2002,6 +2004,7 @@ function decode1619821(replay, profile, options = {}) {
   const capabilities = [...new Set(requested)];
   const decoders = {
     hero_death: decodeHeroDeathCandidates821,
+    hero_death_timer: decodeHeroDeathTimerCandidates821,
     hero_respawn: decodeHeroRespawnCandidates821,
     hero_deaths_snapshot: decodeHeroDeathsSnapshotCandidates821,
     hero_champion_kills_snapshot: decodeHeroChampionKillsSnapshotCandidates821,
@@ -2010,6 +2013,7 @@ function decode1619821(replay, profile, options = {}) {
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
+    hero_death_timer: 'hero_death_timer_candidates',
     hero_respawn: 'hero_respawn_candidates',
     hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
     hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
@@ -2019,7 +2023,7 @@ function decode1619821(replay, profile, options = {}) {
   const capabilityResults = {};
   const events = {};
   const sharedScanCapabilities = new Set([
-    'hero_death', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+    'hero_death', 'hero_death_timer', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
     'hero_assists_snapshot', 'hero_level_state', 'hero_respawn',
   ]);
   const supported = capabilities.filter((capability) => sharedScanCapabilities.has(capability));

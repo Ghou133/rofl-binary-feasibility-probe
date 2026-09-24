@@ -11,6 +11,8 @@ const heroStatsCandidate1619821 =
   require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const levelCandidate1619821 = require('./decoders/rofl_16_19_821_level_candidate');
 const respawnCandidate1619821 = require('./decoders/rofl_16_19_821_respawn_candidate');
+const deathTimerCandidate1619821 =
+  require('./decoders/rofl_16_19_821_death_timer_candidate');
 const heroStatsCandidate1619 = require('./decoders/rofl_16_19_hero_stats_candidate');
 const buffRemoveCandidate1619 = require('./decoders/rofl_16_19_buff_remove_candidate');
 const buffAddCandidate1619 = require('./decoders/rofl_16_19_buff_add_candidate');
@@ -439,11 +441,12 @@ const BUILD_PROFILES = deepFreeze({
       status: 'FORMAT_VERIFIED_LOCAL_REPLAYS',
     },
     runtime_profile: {
-      status: 'CAPTURED_STATIC_ROUTE_LEVEL_AND_COUNT_BYTE_RESEARCH',
+      status: 'CAPTURED_STATIC_ROUTE_LEVEL_COUNT_AND_TIMER_RESEARCH',
       image_sha256: levelCandidate1619821.RUNTIME_IMAGE_SHA256,
     },
     packet_routes: {
       hero_death: 0x0259,
+      hero_death_timer: 0x0259,
       hero_respawn: 0x0048,
       hero_deaths_snapshot: 0x0089,
       hero_champion_kills_snapshot: 0x0089,
@@ -452,6 +455,7 @@ const BUILD_PROFILES = deepFreeze({
     },
     decoder_profile: {
       hero_death: decoder1619821.HERO_DEATH_CANDIDATE_PROFILE_821,
+      hero_death_timer: deathTimerCandidate1619821.HERO_DEATH_TIMER_CANDIDATE_PROFILE_821,
       hero_respawn: respawnCandidate1619821.HERO_RESPAWN_CANDIDATE_PROFILE_821,
       hero_deaths_snapshot:
         heroStatsCandidate1619821.HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE,
@@ -463,6 +467,7 @@ const BUILD_PROFILES = deepFreeze({
     },
     evidence_grades: {
       hero_death: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_CORRELATION',
+      hero_death_timer: 'CANDIDATE_821_RUNTIME_FLOAT_AND_DEATH_ROUTE_CORRELATION',
       hero_respawn: 'CANDIDATE_821_REPLAY_TAIL_DEAD_TIME_CORRELATION',
       hero_deaths_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_KEYFRAME_TAIL_CORRELATION',
       hero_champion_kills_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_MIRRORED_KEYFRAME_TAIL_CORRELATION',
@@ -471,6 +476,7 @@ const BUILD_PROFILES = deepFreeze({
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, 821 route-profile bounded',
+      death_timer_seconds_candidate: 'exact 821 0x0259 deserializer f32; matched death core only, not a respawn prediction',
       observed_return_time: '0x0048 route uniquely paired with a matched death core and 0x018d support; candidate only',
       keyframe_deaths_snapshot:
         'exact 821 runtime byte transform at 0x0089 raw byte 1182; keyframe carrier binding and death-count label candidate only',
@@ -482,7 +488,7 @@ const BUILD_PROFILES = deepFreeze({
     },
     verified_capabilities: [],
     candidate_capabilities: [
-      'hero_death', 'hero_respawn', 'hero_deaths_snapshot',
+      'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_level_state',
     ],
