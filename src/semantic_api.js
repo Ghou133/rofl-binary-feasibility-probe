@@ -44,6 +44,8 @@ const { decodeHeroInventoryPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_packet_candidate');
 const { decodeCastSpellAnsPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
+const { decodeNpcBuffRemovePacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_buff_remove_packet_candidate');
 const { decodeHeroDamageSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
 const { decodeHeroTimeSnapshotCandidates821 } =
@@ -2084,6 +2086,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    npc_buff_remove_packet: (input, collected) =>
+      decodeNpcBuffRemovePacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -2117,6 +2125,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_level_state: 'hero_level_state_candidates',
     hero_inventory_packet: 'hero_inventory_packet_candidates',
     cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
+    npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
   };
   const capabilityResults = {};
   const events = {};
@@ -2135,6 +2144,7 @@ function decode1619821(replay, profile, options = {}) {
     'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
     'hero_inventory_packet',
     'cast_spell_ans_packet',
+    'npc_buff_remove_packet',
   ]);
   const supported = capabilities.filter((capability) => sharedScanCapabilities.has(capability));
   let candidate821Scan = options.candidate821Scan ?? null;
@@ -2163,7 +2173,8 @@ function decode1619821(replay, profile, options = {}) {
       }
     }
     const { events: candidateEvents, ...result } = outcome;
-    if (capability === 'hero_inventory_packet' || capability === 'cast_spell_ans_packet') {
+    if (capability === 'hero_inventory_packet' || capability === 'cast_spell_ans_packet'
+        || capability === 'npc_buff_remove_packet') {
       result.runtime_image_status ??= options.runtimeImagePath
         ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
       result.runtime_image_used ??= false;

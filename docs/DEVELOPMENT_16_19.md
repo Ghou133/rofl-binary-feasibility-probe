@@ -9,6 +9,11 @@ Current progress (older notes below retain their original research context):
   output. All 11 supplied KR Replays returned `CANDIDATE`: 3,270 damage
   snapshots and 63,496 CastSpellAns packet rows. A source-check cache reduced
   the same 19-snapshot batch from 4.94 to 3.63 seconds with identical event JSON.
+- **Completed:** KR 821 `npc_buff_remove_packet` now selects the independently
+  registered game-stream `0x047c` BuffRemove2 route. All 11 KR Replays returned
+  `CANDIDATE`, with 139,457/139,457 exact-image native packets fully consumed,
+  zero framing errors, and three callback-transformed anonymous fields in
+  CLI/API JSONL. The 820 HN route and decoder remain separate.
 - **Current:** Building versus turret labels, CastSpellAns field meanings, and
   all per-action interpretations remain candidate or unknown; no public
   capability was promoted.
@@ -34,6 +39,26 @@ Current progress (older notes below retain their original research context):
   events. No 820 opcode transform or image is reused for 821. A separately
   gated `0x0438` killer-participant candidate is described below; assist
   attribution and confirmed death/respawn semantics remain open.
+- **821 BuffRemove2 packet candidate:** The exact image independently links
+  `PKT_NPC_BuffRemove2_s` to callback RVA `0x008f2930`, factory route
+  `0x047c`, constructor `0x00e9d240`, and deserializer `0x010dbc20`.
+  The callback transforms object offsets `0x10` (u32), `0x14` (u8), and
+  `0x18` (f32) through exact-image byte helpers. The selected CLI/API
+  capability emits these as opaque packet fields with source references and
+  requires the captured 821 image SHA-256. A strict 11-Replay batch emitted
+  exactly 139,457 candidate rows, matching the independent raw route counts,
+  with `MATCHED_USED` image status for every Replay. Across 41 observed
+  stream/length shapes, one-byte truncation failed and an appended byte was
+  not fully consumed. In one full Replay, every one of 3,833 distinct Remove
+  `(u32, u8)` tuples occurred among independently decoded Add tuples, versus
+  13 overlapping after an Add-token +1 control. That is only an opaque packet
+  compatibility finding; no owner, buff identity, successful removal, duration,
+  or lifecycle is inferred. Ignored evidence is under
+  `artifacts/16_19_development/kr_821_buff_route_probe/` and the real CLI
+  batch under `artifacts/16_19_development/kr_821_buff_remove_cli_11/`.
+  Run the selected capability with `node src/cli.js batch <821-rofl-directory>
+  --events npc_buff_remove_packet --runtime-image <captured-821-image>
+  --event-jsonl-only --out-dir <output-directory>`.
 - **821 observed-return candidate:** `--events hero_respawn` pairs each matched
   death core with a subsequent same-participant `0x0048` and preceding co-timed
   `0x018d`, requiring the ten per-participant sums of elapsed milliseconds,
