@@ -68,7 +68,8 @@ function compressedReplay({ malformed = false } = {}) {
   return replay;
 }
 
-function combinedCompressedReplay({ heroStats = true, malformedGame = false } = {}) {
+function combinedCompressedReplay({ heroStats = true, malformedGame = false,
+  malformedStartKeyframe = false } = {}) {
   const gameBody = Buffer.concat([
     ...Array.from({ length: 10 }, (_, index) => levelPacketFor(index + 1)),
     ...(malformedGame ? [Buffer.from([0x10])] : []),
@@ -77,6 +78,9 @@ function combinedCompressedReplay({ heroStats = true, malformedGame = false } = 
   if (heroStats) chunks.push({ stream: 2, compressed: true, body: Buffer.concat(
     Array.from({ length: 10 }, (_, index) => packetFor(index + 1, index === 0 ? 3 : 0)),
   ) });
+  if (malformedStartKeyframe) {
+    chunks.push({ stream: 3, compressed: true, body: Buffer.from([0x10]) });
+  }
   const replay = replayFromChunks(chunks, BUILD);
   replay.tail.stats = Array.from({ length: 10 }, (_, index) => ({
     LEVEL: '1', NUM_DEATHS: String(index === 0 ? 4 : 0),
@@ -202,6 +206,57 @@ test('mixed 16.19 CLI selection reuses both game and HeroStats compressed chunks
   assert.equal(parsed.analysis.semantic.capability_results.hero_level_state.event_count, 10);
   assert.equal(parsed.analysis.semantic.capability_results[CAPABILITY].event_count, 10);
   assert.equal(decompressions(), 2);
+});
+
+test('mixed standalone 16.19 API decodes both candidates with one walk', (t) => {
+  const replay = combinedCompressedReplay();
+  const decompressions = countDecompressions(t);
+  const capabilities = ['hero_level_state', CAPABILITY];
+  const decoded = decodeSemanticReplay(replay, { capabilities });
+  assert.equal(decompressions(), 2);
+  assert.equal(decoded.capability_results.hero_level_state.status, 'CANDIDATE');
+  assert.equal(decoded.capability_results[CAPABILITY].status, 'CANDIDATE');
+  assert.deepEqual(decoded.events.hero_level_state_candidates,
+    decodeSemanticReplay(replay, { capabilities: ['hero_level_state'] })
+      .events.hero_level_state_candidates);
+  assert.deepEqual(decoded.events[OUTPUT],
+    decodeSemanticReplay(replay, { capabilities: [CAPABILITY] }).events[OUTPUT]);
+});
+
+test('mixed API stream-1 failure leaves HeroStats candidate independent', () => {
+  const replay = combinedCompressedReplay({ malformedGame: true });
+  const decoded = decodeSemanticReplay(replay, {
+    capabilities: ['hero_level_state', CAPABILITY],
+  });
+  assert.equal(decoded.capability_results.hero_level_state.status, 'DECODE_FAILED');
+  assert.equal(decoded.capability_results[CAPABILITY].status, 'CANDIDATE');
+  assert.deepEqual(Object.keys(decoded.events), [OUTPUT]);
+});
+
+test('mixed API stream-3 failure leaves game-route candidate independent', () => {
+  const replay = combinedCompressedReplay({ malformedStartKeyframe: true });
+  const decoded = decodeSemanticReplay(replay, {
+    capabilities: ['hero_level_state', CAPABILITY],
+  });
+  assert.equal(decoded.capability_results.hero_level_state.status, 'CANDIDATE');
+  assert.equal(decoded.capability_results[CAPABILITY].status, 'DECODE_FAILED');
+  assert.deepEqual(Object.keys(decoded.events), ['hero_level_state_candidates']);
+});
+
+test('mixed API rejects changed Replay bytes and chunk layout', () => {
+  for (const mutate of [
+    (replay) => { replay.buffer[replay.chunks[0].body_offset + 15] ^= 1; },
+    (replay) => { replay.chunks[0].offset += 1; },
+  ]) {
+    const replay = combinedCompressedReplay();
+    mutate(replay);
+    const decoded = decodeSemanticReplay(replay, {
+      capabilities: ['hero_level_state', CAPABILITY],
+    });
+    assert.equal(decoded.capability_results.hero_level_state.status, 'DECODE_FAILED');
+    assert.equal(decoded.capability_results[CAPABILITY].status, 'DECODE_FAILED');
+    assert.equal(decoded.events, null);
+  }
 });
 
 test('damaged game framing cannot publish precollected level candidates', (t) => {

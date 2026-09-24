@@ -8,7 +8,10 @@ const path = require('node:path');
 const { analyzeReplay } = require('../analysis');
 const { deathEvent } = require('../events');
 const { walkBlocks } = require('../rofl');
-const { analyzeReplayWithHeroStats } = require('./rofl_16_19_hero_stats_candidate');
+const {
+  analyzeReplayWithHeroStats,
+  collectHeroStatsScanWithObserver,
+} = require('./rofl_16_19_hero_stats_candidate');
 const { replaySourceError } = require('./replay_source_integrity');
 
 const REPLAY_VERSION = '16.19.820.7193';
@@ -355,6 +358,25 @@ function createCandidateRouteScanCollector(replay) {
         error: sourceError }, replay);
     },
   });
+}
+
+function collectCandidateRoutesAndHeroStats(replay) {
+  // Standalone API calls need both streams, but the ordinary route and
+  // HeroStats scans would each decompress stream 2. Keep each collector's
+  // source-bound token and fall back to its own strict scan on framing errors.
+  try {
+    const routeCollector = createCandidateRouteScanCollector(replay);
+    const { heroStatsScan, errors } = collectHeroStatsScanWithObserver(
+      replay, routeCollector.observe);
+    const routeFailed = errors.some((error) => error.stream_tag !== 3);
+    return {
+      candidateRouteScan: routeFailed ? null : routeCollector.finish(),
+      heroStatsScan,
+    };
+  } catch {
+    // Let the two established strict scans report their own error outcomes.
+    return { candidateRouteScan: null, heroStatsScan: null };
+  }
 }
 
 function analyzeReplayWithCandidateRoutes(replay, options = {}, includeHeroStats = false) {
@@ -1685,6 +1707,7 @@ module.exports = {
   HERO_INVENTORY_BROADCAST_CANDIDATE_PROFILE,
   analyzeReplayWithCandidateRoutes,
   collectCandidateRoutes,
+  collectCandidateRoutesAndHeroStats,
   decodeHeroDeathCandidates,
   decodeHeroDeathTimerCandidates,
   decodeHeroRespawnCandidates,

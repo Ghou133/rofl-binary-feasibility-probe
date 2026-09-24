@@ -874,6 +874,26 @@ function analyzeReplayWithHeroStats(replay, options = {}, afterBlock = null) {
   };
 }
 
+function collectHeroStatsScanWithObserver(replay, afterBlock) {
+  if (typeof afterBlock !== 'function') {
+    throw new TypeError('HeroStats additional block observer must be a function');
+  }
+  const scanReplay = replayWithStableChunks(replay);
+  const collector = createHeroStatsScanCollector(replay, scanReplay);
+  const walk = walkBlocks(scanReplay, (block, chunk) => {
+    collector.observe(block, chunk);
+    afterBlock(block, chunk);
+  }, { includeStreams: [1, 2, 3], strict: false });
+  const errors = walk.errors.map((error) => ({
+    ...error, stream_tag: scanReplay.chunks[error.chunk_index]?.stream_tag,
+  }));
+  return {
+    heroStatsScan: errors.some((error) => error.stream_tag !== 1)
+      ? null : collector.finish(),
+    errors,
+  };
+}
+
 function replayBoundHeroStatsScan(replay, token) {
   const source = token && typeof token === 'object'
     ? PRECOLLECTED_SCAN_SOURCE.get(token) : null;
@@ -1809,6 +1829,7 @@ function decodeHeroEpicMonsterDamageSnapshotCandidates(replay) {
 
 module.exports = {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
+  collectHeroStatsScanWithObserver,
   HERO_ASSISTS_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_CHAMPION_KILLS_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_DEATHS_SNAPSHOT_CANDIDATE_PROFILE,

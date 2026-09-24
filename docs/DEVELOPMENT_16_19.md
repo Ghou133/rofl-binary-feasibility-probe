@@ -66,8 +66,11 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   synthetic keyframe now decompresses once instead of twice. It also reuses
   that walk for selected game-route candidates, avoiding a second game-stream
   scan. A mixed compressed game/keyframe test decompresses each chunk once;
-  malformed framing suppresses candidate output. Standalone API calls still
-  perform their own strict walk. Both candidate route collectors check the
+  malformed framing suppresses candidate output. A standalone API request
+  selecting both game-route and HeroStats candidates now shares one walk too:
+  a two-chunk compressed fixture decompresses twice instead of three times.
+  A malformed stream affects only its dependent candidate family, which falls
+  back to the established strict scan for its error result. Both collectors check the
   Replay source bytes and chunk layout before publishing copied packet refs.
   On the exact HN Replay, the six earlier
   death/timer/respawn/level/CS/EXP candidate JSONL files remain byte-identical

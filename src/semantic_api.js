@@ -9,6 +9,7 @@ const path = require('node:path');
 const { resolveBuildProfile } = require('./build_registry');
 const {
   collectCandidateRoutes,
+  collectCandidateRoutesAndHeroStats,
   decodeHeroDeathCandidates,
   decodeHeroDeathTimerCandidates,
   decodeHeroRespawnCandidates,
@@ -1838,8 +1839,15 @@ function decode1619(replay, profile, options = {}) {
     'hero_inventory_mapview', 'hero_inventory_set_item', 'hero_inventory_broadcast',
   ]);
   const heroStatsCapabilities = new Set(HERO_STATS_SNAPSHOT_CAPABILITIES);
-  const collected = capabilities.some((capability) => gameRouteCapabilities.has(capability))
-    ? options.candidateRouteScan ?? collectCandidateRoutes(replay) : null;
+  const selectsGameRoutes = capabilities.some((capability) => gameRouteCapabilities.has(capability));
+  const selectsHeroStats = capabilities.some((capability) => heroStatsCapabilities.has(capability));
+  const sharedScans = selectsGameRoutes && selectsHeroStats
+    && options.candidateRouteScan == null && options.heroStatsScan == null
+    ? collectCandidateRoutesAndHeroStats(replay) : null;
+  const collected = selectsGameRoutes
+    ? options.candidateRouteScan ?? sharedScans?.candidateRouteScan ?? collectCandidateRoutes(replay)
+    : null;
+  const heroStatsScan = options.heroStatsScan ?? sharedScans?.heroStatsScan ?? undefined;
   let timerOutcome = null;
   let heroStatsOutcomes = null;
   for (const capability of capabilities) {
@@ -1859,7 +1867,7 @@ function decode1619(replay, profile, options = {}) {
       } else if (heroStatsCapabilities.has(capability)) {
         heroStatsOutcomes ??= decodeHeroStatsSnapshotCandidateSet(replay,
           capabilities.filter((name) => heroStatsCapabilities.has(name)),
-          options.heroStatsScan);
+          heroStatsScan);
         outcome = heroStatsOutcomes[capability];
       } else if (capability === 'hero_inventory_mapview'
           || capability === 'hero_inventory_set_item'
