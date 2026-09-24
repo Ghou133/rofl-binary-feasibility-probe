@@ -7,12 +7,16 @@ const test = require('node:test');
 const { replayFromChunks } = require('./helpers/synthetic_replay');
 const {
   HERO_EXPERIENCE_SNAPSHOT_CANDIDATE_PROFILE: experienceProfile,
+  HERO_GOLD_EARNED_SNAPSHOT_CANDIDATE_PROFILE: goldEarnedProfile,
   HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE: profile,
   assessHeroExperienceSnapshotTail,
+  assessHeroGoldEarnedSnapshotTail,
   assessHeroMinionsKilledSnapshotTail,
   decodeHeroStatsByte,
   decodeHeroExperiencePayload,
   decodeHeroExperienceSnapshotCandidates,
+  decodeHeroGoldEarnedPayload,
+  decodeHeroGoldEarnedSnapshotCandidates,
   decodeHeroStatsSnapshotCandidateSet,
   decodeHeroMinionsKilledPayload,
   decodeHeroMinionsKilledSnapshotCandidates,
@@ -27,9 +31,10 @@ for (let encoded = 0; encoded < 256; encoded += 1) {
 }
 assert.ok(ENCODE_BYTE.every((value) => value !== null));
 
-function payloadFor(value, experience = 0) {
+function payloadFor(value, experience = 0, goldEarned = 0) {
   const blob = Buffer.alloc(1260);
   blob.writeFloatLE(experience, 0x28);
+  blob.writeFloatLE(goldEarned, 0x38);
   blob.writeFloatLE(value, 0x3c);
   const payload = Buffer.alloc(1263);
   payload.set([0x1c, 0xa6, 0xe8], 0);
@@ -50,7 +55,8 @@ function blockFor(participantId, timeMs, payload = payloadFor(0), packetId = 0x0
 }
 
 function fixture({ times = [0, 1000], values = null, tails = null,
-  experienceValues = null, experienceTails = null, stream = 2,
+  experienceValues = null, experienceTails = null,
+  goldEarnedValues = null, goldEarnedTails = null, stream = 2,
   version = '16.19.820.7193', extraBlocks = [], omitParticipant = null } = {}) {
   const rows = values || times.map((_, timeIndex) =>
     Array.from({ length: 10 }, (__, playerIndex) => timeIndex * (playerIndex + 1)));
@@ -58,14 +64,17 @@ function fixture({ times = [0, 1000], values = null, tails = null,
     ...times.flatMap((time, timeIndex) => rows[timeIndex].flatMap((value, playerIndex) =>
       playerIndex + 1 === omitParticipant && timeIndex === 0 ? []
         : [blockFor(playerIndex + 1, time,
-          payloadFor(value, experienceValues?.[timeIndex]?.[playerIndex] ?? 0))])),
+          payloadFor(value, experienceValues?.[timeIndex]?.[playerIndex] ?? 0,
+            goldEarnedValues?.[timeIndex]?.[playerIndex] ?? 0))])),
     ...extraBlocks,
   ]) }];
   const replay = replayFromChunks(chunks, version);
   replay.tail.stats = (tails || rows.at(-1).map((value) => value + 2))
     .map((value, index) => ({ MINIONS_KILLED: String(value),
       EXP: String(experienceTails?.[index]
-        ?? (Math.floor(experienceValues?.at(-1)?.[index] ?? 0) + 2)) }));
+        ?? (Math.floor(experienceValues?.at(-1)?.[index] ?? 0) + 2)),
+      GOLD_EARNED: String(goldEarnedTails?.[index]
+        ?? (Math.floor(goldEarnedValues?.at(-1)?.[index] ?? 0) + 2)) }));
   return replay;
 }
 
@@ -257,9 +266,11 @@ test('experience snapshots fail closed on broken hero group, decrease, and tail 
     /exceeds Replay tail EXP/);
 });
 
-test('combined HeroStats selection walks keyframe chunks once and returns both candidates', () => {
+test('combined HeroStats selection walks keyframe chunks once and returns three candidates', () => {
   const experienceValues = [Array(10).fill(0.25), Array(10).fill(100.75)];
-  const replay = fixture({ experienceValues, experienceTails: Array(10).fill(102) });
+  const goldEarnedValues = [Array(10).fill(500.25), Array(10).fill(750.75)];
+  const replay = fixture({ experienceValues, experienceTails: Array(10).fill(102),
+    goldEarnedValues, goldEarnedTails: Array(10).fill(752) });
   const chunks = replay.chunks;
   let chunkTraversalCount = 0;
   Object.defineProperty(replay, 'chunks', { get() {
@@ -267,16 +278,103 @@ test('combined HeroStats selection walks keyframe chunks once and returns both c
     return chunks;
   } });
   const results = decodeHeroStatsSnapshotCandidateSet(replay,
-    ['hero_minions_killed_snapshot', 'hero_experience_snapshot']);
+    ['hero_minions_killed_snapshot', 'hero_experience_snapshot', 'hero_gold_earned_snapshot']);
   assert.equal(chunkTraversalCount, 1);
   assert.deepEqual(Object.keys(results),
-    ['hero_minions_killed_snapshot', 'hero_experience_snapshot']);
+    ['hero_minions_killed_snapshot', 'hero_experience_snapshot', 'hero_gold_earned_snapshot']);
   assert.equal(results.hero_minions_killed_snapshot.status, 'CANDIDATE');
   assert.equal(results.hero_experience_snapshot.status, 'CANDIDATE');
+  assert.equal(results.hero_gold_earned_snapshot.status, 'CANDIDATE');
   assert.equal(results.hero_minions_killed_snapshot.event_count, 20);
   assert.equal(results.hero_experience_snapshot.event_count, 20);
+  assert.equal(results.hero_gold_earned_snapshot.event_count, 20);
   assert.equal(results.hero_minions_killed_snapshot.events[0].raw_packet_ref.raw_payload_sha256,
     results.hero_experience_snapshot.events[0].raw_packet_ref.raw_payload_sha256);
+  assert.equal(results.hero_experience_snapshot.events[0].raw_packet_ref.raw_payload_sha256,
+    results.hero_gold_earned_snapshot.events[0].raw_packet_ref.raw_payload_sha256);
+});
+
+test('gold-earned offset is an observed float candidate over the exact HN transform', () => {
+  assert.equal(goldEarnedProfile.replay_version, '16.19.820.7193');
+  assert.equal(goldEarnedProfile.replay_block_packet_id, 0x0276);
+  assert.equal(goldEarnedProfile.gold_earned_f32le_offset_candidate, 0x38);
+  assert.equal(goldEarnedProfile.lookup_table_sha256, profile.lookup_table_sha256);
+  assert.deepEqual(decodeHeroGoldEarnedPayload(payloadFor(7, 10, 1234.75)), {
+    status: 'PASS', gold_earned_candidate: 1234.75,
+  });
+  assert.equal(decodeHeroGoldEarnedPayload(payloadFor(0, 0, -1)).status, 'DECODE_FAILED');
+  assert.equal(decodeHeroGoldEarnedPayload(payloadFor(0, 0, NaN)).status, 'DECODE_FAILED');
+  assert.equal(decodeHeroGoldEarnedPayload(payloadFor(0, 0, Infinity)).status, 'DECODE_FAILED');
+  assert.equal(decodeHeroGoldEarnedPayload(payloadFor(0, 0, 2 ** 54)).status, 'DECODE_FAILED');
+});
+
+test('gold-earned snapshots retain raw floats, refs, and float tail differences', () => {
+  const goldEarnedValues = [
+    Array.from({ length: 10 }, (_, index) => 500 + index + 0.25),
+    Array.from({ length: 10 }, (_, index) => 1000 + index * 100 + 0.75),
+  ];
+  const replay = fixture({ goldEarnedValues,
+    goldEarnedTails: goldEarnedValues.at(-1).map((value) => Math.floor(value) + 2) });
+  const result = decodeHeroGoldEarnedSnapshotCandidates(replay);
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.event_count, 20);
+  assert.equal(result.input_count, 20);
+  assert.equal(result.keyframe_timestamp_count, 2);
+  assert.equal(result.evidence_status, 'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_FIELD_CORRELATION');
+  assert.equal(result.events[0].event_type, 'HERO_GOLD_EARNED_SNAPSHOT_CANDIDATE');
+  assert.equal(result.events[0].gold_earned_candidate, 500.25);
+  assert.equal(result.events.at(-1).gold_earned_candidate, 1900.75);
+  assert.equal(result.events.at(-1).raw_packet_ref.raw_param, 0x400000b7);
+  assert.equal(result.events.at(-1).raw_packet_ref.raw_payload_sha256,
+    crypto.createHash('sha256').update(payloadFor(10, 0, 1900.75)).digest('hex'));
+  assert.deepEqual(result.tail_gaps.map((row) => row.unobserved_tail_difference_candidate),
+    Array(10).fill(1.25));
+  assert.equal(result.tail_gap_total, 12.5);
+  assert.equal(result.events[0].field_confidence.gold_earned_candidate,
+    'CANDIDATE_ONE_REPLAY_TAIL_CORRELATION');
+});
+
+test('gold-earned tail and sequence failures stay independent of CS and XP', () => {
+  const missingGold = fixture();
+  assert.equal(assessHeroGoldEarnedSnapshotTail(missingGold).status, 'PASS');
+  missingGold.tail.stats[0].GOLD_EARNED = undefined;
+  assert.equal(assessHeroGoldEarnedSnapshotTail(missingGold).status, 'MISSING_INPUT');
+  const missing = decodeHeroStatsSnapshotCandidateSet(missingGold,
+    ['hero_minions_killed_snapshot', 'hero_experience_snapshot', 'hero_gold_earned_snapshot']);
+  assert.equal(missing.hero_gold_earned_snapshot.status, 'MISSING_INPUT');
+  assert.equal(missing.hero_minions_killed_snapshot.status, 'CANDIDATE');
+  assert.equal(missing.hero_experience_snapshot.status, 'CANDIDATE');
+  missingGold.tail.stats[0].GOLD_EARNED = '-1';
+  assert.equal(assessHeroGoldEarnedSnapshotTail(missingGold).status, 'UNSUPPORTED');
+
+  const decreasingGold = fixture({
+    goldEarnedValues: [Array(10).fill(503), Array(10).fill(502)],
+    goldEarnedTails: Array(10).fill(505),
+  });
+  const decreasing = decodeHeroStatsSnapshotCandidateSet(decreasingGold,
+    ['hero_gold_earned_snapshot', 'hero_minions_killed_snapshot', 'hero_experience_snapshot']);
+  assert.equal(decreasing.hero_gold_earned_snapshot.status, 'DECODE_FAILED');
+  assert.match(decreasing.hero_gold_earned_snapshot.error, /decreasing observed GOLD_EARNED/);
+  assert.equal(decreasing.hero_minions_killed_snapshot.status, 'CANDIDATE');
+  assert.equal(decreasing.hero_experience_snapshot.status, 'CANDIDATE');
+  const aboveTail = fixture({
+    goldEarnedValues: [Array(10).fill(0), Array(10).fill(3.25)],
+    goldEarnedTails: Array(10).fill(3),
+  });
+  assert.match(decodeHeroGoldEarnedSnapshotCandidates(aboveTail).error,
+    /exceeds Replay tail GOLD_EARNED/);
+});
+
+test('gold-earned profile rejects wrong build and foreign 0x0276 keyframe shape', () => {
+  assert.equal(decodeHeroGoldEarnedSnapshotCandidates(
+    fixture({ version: '16.19.820.7194' })).status, 'UNSUPPORTED');
+  const foreign = replayFromChunks([{ stream: 2, body: Buffer.concat(
+    Array.from({ length: 10 }, (_, index) => blockFor(index + 1, 0, Buffer.from([1, 2]))),
+  ) }], '16.19.820.7193');
+  const result = decodeHeroGoldEarnedSnapshotCandidates(foreign);
+  assert.equal(result.status, 'PROFILE_UNAVAILABLE');
+  assert.equal(result.observed_raw_route_count, 10);
+  assert.equal(result.event_count, null);
 });
 
 test('combined selection isolates field-specific tail and sequence failures', () => {

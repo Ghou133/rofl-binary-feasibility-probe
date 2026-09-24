@@ -1786,6 +1786,7 @@ function decode1619(replay, profile, options = {}) {
     hero_level_state: decodeHeroLevelStateCandidates,
     hero_minions_killed_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_experience_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_gold_earned_snapshot: decodeHeroStatsSnapshotCandidateSet,
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -1794,12 +1795,14 @@ function decode1619(replay, profile, options = {}) {
     hero_level_state: 'hero_level_state_candidates',
     hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
     hero_experience_snapshot: 'hero_experience_snapshot_candidates',
+    hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
   };
   const gameRouteCapabilities = new Set([
     'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
   ]);
   const heroStatsCapabilities = new Set([
     'hero_minions_killed_snapshot', 'hero_experience_snapshot',
+    'hero_gold_earned_snapshot',
   ]);
   const collected = capabilities.some((capability) => gameRouteCapabilities.has(capability))
     ? collectCandidateRoutes(replay) : null;
@@ -1980,6 +1983,10 @@ function getHeroExperienceSnapshotCandidates(decoded) {
   return decoded?.events?.hero_experience_snapshot_candidates ?? null;
 }
 
+function getHeroGoldEarnedSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_gold_earned_snapshot_candidates ?? null;
+}
+
 function getHeroStates(decoded) {
   return decoded?.events?.hero_state_events ?? decoded?.events?.state_update_events ?? [];
 }
@@ -2093,6 +2100,7 @@ module.exports = {
   getHeroLevelStateCandidates,
   getHeroMinionsKilledSnapshotCandidates,
   getHeroExperienceSnapshotCandidates,
+  getHeroGoldEarnedSnapshotCandidates,
   getHeroPaths,
   getHeroRespawns,
   getHeroStates,

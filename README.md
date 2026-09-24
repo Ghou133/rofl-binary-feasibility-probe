@@ -21,6 +21,7 @@
 | `16.19.820.7193 --events hero_level_state` | HN `0x02b3` 包中观察到的候选英雄等级值及原始包来源 | 仅写入 `hero_level_state_candidates`；逐参与者列出未观察到的升级值，不补造事件；KR 路由未适配 |
 | `16.19.820.7193 --events hero_minions_killed_snapshot` | HN `0x0276` HeroStats keyframe 中已观察到的候选 `MINIONS_KILLED` 数值 | 仅写入 `hero_minions_killed_snapshot_candidates`；不是连续补刀事件，尾部差额不插值；KR 同号包不匹配 HN 指纹 |
 | `16.19.820.7193 --events hero_experience_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x28` 浮点候选经验值 | 仅写入 `hero_experience_snapshot_candidates`；小数及尾部差额保留，不推导升级或经验获取时点；KR 的 HN profile 不可用 |
+| `16.19.820.7193 --events hero_gold_earned_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x38` 浮点候选已赚金币值 | 仅写入 `hero_gold_earned_snapshot_candidates`；一场 HN 回放的字段相关性，不推导金币收入事件；KR 的 HN profile 不可用 |
 | `src/semantic_api.js` 与精确 build profiles | `16.16.805.0442` 的 HeroPath、等级、WardSpawn、伤害、死亡、重生、XP/lane-CS keyframe、受限 ItemState 和 gameplay-tail 等 | 独立 API 的逐字段能力；需要外部精确镜像、profiles 或对应已验证输入，不是主 CLI 的完整分析模式 |
 | V2 Ward / Path | 已验证位置、守卫事件及受限派生关联 | 来源 SHA 必须与回放一致；类型、匹配、生命周期和位置插值与直接字段分级 |
 | `research-v3/`、`research-v4/` | DuckDB 研究查询、保护量增量表和验证器 | 保留的真实功能，不是因版本号旧就可删除的目录；全量重建需要私有输入 |
@@ -109,12 +110,12 @@ node src/cli.js batch "D:\Replays\HN-example.rofl" "D:\Replays\KR-example.rofl" 
 
 ```powershell
 node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
-  --events hero_minions_killed_snapshot,hero_experience_snapshot `
+  --events hero_minions_killed_snapshot,hero_experience_snapshot,hero_gold_earned_snapshot `
   --out-dir "work\16-19-hero-stats-snapshots"
 ```
 
 输出包含每名英雄的候选快照值与原始包引用，并在逐能力结果中列出最后快照到回放尾部的差额。
-它不推导两次 keyframe 之间的补刀或经验获取时间，也不发布为确认事件。
+它不推导两次 keyframe 之间的补刀、经验或金币获取时间，也不发布为确认事件。
 
 执行 **16.15.801.3452** 的旧版整合语义分析：
 

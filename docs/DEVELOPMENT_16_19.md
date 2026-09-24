@@ -54,10 +54,24 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   A four-byte-aligned scan found no second offset meeting the same tail and
   monotonic criteria; adjacent gold/CS offsets fail the EXP control. This is
   one-Replay field correlation, not an XP transition or confirmed field.
-- **CLI/API efficiency:** Selecting the CS and EXP HeroStats candidates together
-  now traverses keyframe chunks once while keeping separate field validation
-  and per-capability results. A synthetic traversal-count test and HN/KR
-  combined runs cover the shared path.
+- **CLI/API efficiency:** Selecting the CS, EXP and GOLD_EARNED HeroStats
+  candidates together traverses keyframe chunks once while keeping separate
+  field validation and per-capability results. A synthetic traversal-count
+  test and HN/KR combined runs cover the shared path.
+- **Done:** The same HN HeroStats blob has an unpublished
+  `hero_gold_earned_snapshot` candidate at f32LE offset `0x38`. In one HN
+  Replay, all 350 values are finite, nonnegative and per-hero monotonic; all
+  ten first snapshots are 500, and all final snapshots remain below their
+  matching Replay-tail `GOLD_EARNED`. The ten tail differences total about
+  3217.741 over the unobserved final 36,824 ms. In the captured HN Replay
+  (SHA-256 `50e781de65473f0b5e72cd67bdadbfdb4f30c98a9485c6098f22e2f1df38f846`),
+  an aligned f32 scan of all 315 offsets in each 1,260-byte decoded blob
+  compared the final ten values with tail `GOLD_EARNED`: `0x38` has total
+  absolute difference 3217.741; the adjacent dynamic `0x34` field has
+  15739. Rotating the ten tail participants by shifts 1–9 raises the minimum
+  absolute difference to 29705. These are one-Replay correlation checks,
+  not proof of a published gold field. No income event or intermediate value
+  is inferred.
 - **Current:** Candidate participant identity, timer and respawn meaning are bounded to
   one HN Replay; KR uses different death/timer route IDs and reports
   `PROFILE_UNAVAILABLE` for the HN timer profile. Eleven raw KR `0x0357`
@@ -77,8 +91,12 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
 - **HeroStats KR control:** One KR Replay has 19,698 keyframe `0x0276` packets
   of lengths 2–16 bytes and zero HN 1263-byte fingerprints. The HN HeroStats
   candidate reports `PROFILE_UNAVAILABLE`; these raw KR packets are unclassified.
+- **Further gold lead:** HN f32LE offset `0x34` correlates with tail
+  `GOLD_SPENT` in 350 keyframe observations, but one participant's value
+  decreases by 100. Keep that observation and avoid treating it as a
+  monotonic earned-gold counter or a confirmed refund transaction.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
-  HN Replays to test level and HeroStats CS/EXP candidate fields. Movement-route
+  HN Replays to test level and HeroStats CS/EXP/gold candidates. Movement-route
   research remains blocked on an exact registration-to-position-field link.
 - **CLI batch:** A two-Replay HN/KR run with death, respawn and level selection
   yielded HN `CANDIDATE`, KR `PARTIAL`, and aggregate `PARTIAL`, retaining the
