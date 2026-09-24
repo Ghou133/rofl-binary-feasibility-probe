@@ -333,6 +333,20 @@ Current progress (older notes below retain their original research context):
   The exact-build 11-Replay CLI batch returned 11/11 `CANDIDATE`, 3,270
   records, and zero framing errors. Scans, controls, and local output remain
   ignored under `artifacts/16_19_development/jungle821_field/`.
+- **821 six kill-stat keyframe candidates:** An independent exact-821
+  transformed-vector scan identifies aligned slots `0x58..0x6c` against
+  `LARGEST_KILLING_SPREE`, `KILLING_SPREES`, `LARGEST_MULTI_KILL`,
+  `DOUBLE_KILLS`, `TRIPLE_KILLS`, and `QUADRA_KILLS`. All 110 participant
+  sequences per field start at zero, remain monotone, and stay within their
+  numeric Replay tails. Final matches are 102/106/108/107/110/110 of 110;
+  retained aggregate gaps are 10/4/2/3/0/0. `QUADRA_KILLS` has only one
+  positive participant, so its field label is especially sparse; PENTA and
+  UNREAL are not exposed because this corpus has no positive tails. The
+  selected CLI/API emits only cumulative `CANDIDATE` snapshots, with no
+  individual kill or attribution inference. The 11-Replay CLI batch returned
+  11/11 `CANDIDATE`, 3,270 records, and zero framing errors. Reproducible
+  scan, controls, and local output are ignored under
+  `artifacts/16_19_development/killstats821_field/`.
 - **821 keyframe carrier structure:** A separate strict scan of those 327
   keyframes found 3,270/3,270 hero-family payloads with fixed `67 00 de`
   prefix and length 1,263. With the exact 821 constructor at RVA `0xeadf40`,

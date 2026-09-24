@@ -26,6 +26,14 @@ function write821Float(payload, blobOffset, value) {
   }
 }
 
+function write821Count(payload, blobOffset, value) {
+  const bytes = Buffer.alloc(4);
+  bytes.writeUInt32LE(value);
+  for (let i = 0; i < 4; i += 1) {
+    payload[1262 - blobOffset - i] = ENCODE_821_COUNT.get(bytes[i]);
+  }
+}
+
 function packet(packetId, rawParam, payloadLength, timestampMs = 1000) {
   const header = Buffer.alloc(12);
   header[0] = 0x10;
@@ -56,6 +64,9 @@ function keyframeDeathsPacket(participantId, count, timeMs,
   write821Float(payload, 0x40, count === 0 ? 0 : 2.75);
   write821Float(payload, 0x44, count === 0 ? 0 : 1.5);
   write821Float(payload, 0x48, count === 0 ? 0 : 1.25);
+  for (const offset of [0x58, 0x5c, 0x60, 0x64]) {
+    write821Count(payload, offset, count);
+  }
   const header = Buffer.alloc(15);
   header.writeFloatLE(timeMs / 1000, 1);
   header.writeUInt32LE(payload.length, 5);
@@ -104,6 +115,12 @@ function replay({ unknownLevel = false, runtimeLevel20 = false, observedReturn =
     NEUTRAL_MINIONS_KILLED: index === 0 ? '3' : '0',
     NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE: index === 0 ? '2' : '0',
     NEUTRAL_MINIONS_KILLED_ENEMY_JUNGLE: index === 0 ? '2' : '0',
+    LARGEST_KILLING_SPREE: index === 0 ? '2' : '0',
+    KILLING_SPREES: index === 0 ? '1' : '0',
+    LARGEST_MULTI_KILL: index === 0 ? '2' : '0',
+    DOUBLE_KILLS: index === 0 ? '1' : '0',
+    TRIPLE_KILLS: '0',
+    QUADRA_KILLS: '0',
     WARD_PLACED_DETECTOR: index === 0 ? '1' : '0',
     WARD_KILLED: index === 0 ? '1' : '0',
     WARD_PLACED: index === 0 ? '1' : '0',
@@ -133,6 +150,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'CANDIDATE');
   for (const capability of ['hero_minions_killed_snapshot',
     'hero_jungle_minions_killed_snapshot',
+    'hero_kill_stats_snapshot',
     'hero_experience_snapshot', 'hero_vision_score_snapshot',
     'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot']) {
     assert.equal(resolveCapability(BUILD, capability).status, 'CANDIDATE');
@@ -149,6 +167,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
       'hero_minions_killed_snapshot', 'hero_jungle_minions_killed_snapshot',
+      'hero_kill_stats_snapshot',
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
@@ -217,6 +236,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.deepEqual(queried.hero_missions_cannon_minions_killed_snapshot.missing_inputs, []);
   for (const capability of ['hero_minions_killed_snapshot',
     'hero_jungle_minions_killed_snapshot',
+    'hero_kill_stats_snapshot',
     'hero_experience_snapshot', 'hero_vision_score_snapshot',
     'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot']) {
     assert.equal(queried[capability].output, `${capability}_candidates`);
@@ -265,6 +285,11 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     .map((row) => [row.capability, row]));
   assert.deepEqual(afterJungleMissing.hero_jungle_minions_killed_snapshot.missing_inputs,
     ['replay_tail_NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE']);
+  input.tail.stats[0].TRIPLE_KILLS = null;
+  const afterKillStatsMissing = Object.fromEntries(capabilityQuery(input).capabilities
+    .map((row) => [row.capability, row]));
+  assert.deepEqual(afterKillStatsMissing.hero_kill_stats_snapshot.missing_inputs,
+    ['replay_tail_TRIPLE_KILLS']);
   input.tail.stats[0].WARD_KILLED = null;
   input.tail.stats[0].Missions_CannonMinionsKilled = null;
   const afterAuxMissing = Object.fromEntries(capabilityQuery(input).capabilities
@@ -334,6 +359,7 @@ test('821 API dispatch emits separate candidate records and no confirmed deaths'
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
       'hero_minions_killed_snapshot', 'hero_jungle_minions_killed_snapshot',
+      'hero_kill_stats_snapshot',
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_level_state'],
@@ -368,6 +394,10 @@ test('821 API dispatch emits separate candidate records and no confirmed deaths'
     .jungle_minions_killed_raw_f32_candidate, 2.75);
   assert.equal(combined.capability_results.hero_jungle_minions_killed_snapshot.tail_gaps[0]
     .unobserved_your_jungle_tail_gap, 1);
+  assert.equal(combined.events.hero_kill_stats_snapshot_candidates[10]
+    .largest_killing_spree_candidate, 1);
+  assert.equal(combined.capability_results.hero_kill_stats_snapshot.tail_gap_totals
+    .LARGEST_KILLING_SPREE, 1);
   assert.equal(combined.events.hero_experience_snapshot_candidates[10]
     .experience_raw_f32_candidate, 100.5);
   assert.equal(combined.events.hero_vision_score_snapshot_candidates[10]
@@ -501,6 +531,7 @@ test('821 CLI dispatch reads a replay file and labels selected output candidate'
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_minions_killed_snapshot',
       'hero_jungle_minions_killed_snapshot',
+      'hero_kill_stats_snapshot',
       'hero_level_state'],
     strict: true, timelineLimit: 0,
   });
@@ -514,6 +545,7 @@ test('821 CLI dispatch reads a replay file and labels selected output candidate'
   assert.equal(result.analysis.event_counts.hero_assists_snapshot_candidates, 20);
   assert.equal(result.analysis.event_counts.hero_minions_killed_snapshot_candidates, 20);
   assert.equal(result.analysis.event_counts.hero_jungle_minions_killed_snapshot_candidates, 20);
+  assert.equal(result.analysis.event_counts.hero_kill_stats_snapshot_candidates, 20);
   assert.equal(result.analysis.event_counts.hero_level_state_candidates, 10);
   assert.equal(result.analysis.decoded_packet_count, 31);
   assert.equal(result.analysis.unknown_packet_count, 3);

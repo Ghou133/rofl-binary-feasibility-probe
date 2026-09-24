@@ -10,6 +10,7 @@ const CAPABILITIES = new Set([
   'hero_assists_snapshot', 'hero_missions_minions_killed_snapshot',
   'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
   'hero_minions_killed_snapshot', 'hero_jungle_minions_killed_snapshot',
+  'hero_kill_stats_snapshot',
   'hero_experience_snapshot', 'hero_vision_score_snapshot',
   'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
   'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
@@ -76,6 +77,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     hero_missions_cannon_minions_killed_snapshot: heroStatsRows,
     hero_minions_killed_snapshot: heroStatsRows,
     hero_jungle_minions_killed_snapshot: heroStatsRows,
+    hero_kill_stats_snapshot: heroStatsRows,
     hero_experience_snapshot: heroStatsRows,
     hero_vision_score_snapshot: heroStatsRows,
     hero_gold_earned_snapshot: heroStatsRows,
@@ -100,6 +102,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     || selected.has('hero_missions_cannon_minions_killed_snapshot')
     || selected.has('hero_minions_killed_snapshot')
     || selected.has('hero_jungle_minions_killed_snapshot')
+    || selected.has('hero_kill_stats_snapshot')
     || selected.has('hero_experience_snapshot')
     || selected.has('hero_vision_score_snapshot')
     || selected.has('hero_gold_earned_snapshot')
@@ -257,6 +260,7 @@ function rowsFor821Capability(replay, token, capability) {
       || capability === 'hero_missions_cannon_minions_killed_snapshot'
       || capability === 'hero_minions_killed_snapshot'
       || capability === 'hero_jungle_minions_killed_snapshot'
+      || capability === 'hero_kill_stats_snapshot'
       || capability === 'hero_experience_snapshot'
       || capability === 'hero_vision_score_snapshot'
       || capability === 'hero_gold_earned_snapshot'
