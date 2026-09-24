@@ -294,6 +294,23 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   errors and `MATCHED_USED` image status; local output is under
   `artifacts/16_19_development/buff_remove_hn_cli_smoke/`. Owner, buff identity
   and successful removal are not established.
+- **Done:** `npc_buff_add_packet` is wired as an unpublished exact-image
+  candidate for HN game/keyframe `0x03ed` BuffAdd2 packets. The pinned image
+  links the callback, constructor and deserializer; all 32,434 observed route
+  packets decoded with full consumption, across 24 stream/length shapes.
+  Each shape's one-byte truncation failed; an appended byte remained
+  unconsumed. The callback reads six selected transformed scalars, including
+  f32 offsets `0x14` and `0x1c`. For 6,481 same-opaque-tuple keyframe rows
+  with an observed game counterpart, `0x14 + 0x1c` matched a game `0x14`
+  within 0.05 in 6,223 cases; a 137-row circular shift matched only 563.
+  Restricting the game comparison to values at most 1,000 and tolerance 0.01
+  gives 1,321/1,444 matches versus zero shifted controls. The real HN CLI
+  emitted 32,434 candidate records from 2,035,757 framed blocks with zero
+  errors and `MATCHED_USED` image status; local output is under
+  `artifacts/16_19_development/buff_add_hn_cli_smoke/`.
+  This is a one-Replay correlation between anonymous fields, not proof of
+  duration, elapsed time, owner, buff identity or successful application.
+  Local probe evidence is under `artifacts/16_19_development/buff_add_probe/`.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
   HN Replays to test level, HeroStats and inventory candidates. The HN
   Broadcast participant mapping still needs an independent Replay, and

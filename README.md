@@ -37,6 +37,7 @@
 | `16.19.820.7193 --events hero_inventory_set_item` | 使用精确运行时镜像解码 HN `0x03b7` SetItem 包中的候选槽位与物品键 | 仅写入 `hero_inventory_set_item_candidates`；其中一个非标准 raw param 不映射参与者，不推导买卖或物品变化 |
 | `16.19.820.7193 --events hero_inventory_broadcast` | 使用精确运行时镜像解码 HN `0x03ef` Broadcast 包中的候选槽位、物品键和有界参与者映射 | 仅写入 `hero_inventory_broadcast_candidates`；保留原始参数，参与者仍为单场回放候选，不推导买卖、交换或库存变化 |
 | `16.19.820.7193 --events npc_buff_remove_packet` | 使用精确运行时镜像解码 HN `0x043c` BuffRemove2 包中的候选浮点秒数、槽索引与查找令牌 | 仅写入 `npc_buff_remove_packet_candidates`；保留原始参数与包来源，不推断 Buff 归属、名称或移除成功 |
+| `16.19.820.7193 --events npc_buff_add_packet` | 使用精确运行时镜像解码 HN `0x03ed` BuffAdd2 包中 game/keyframe 均有的候选原始标量 | 仅写入 `npc_buff_add_packet_candidates`；两个浮点字段只按偏移命名，不推断持续时间、Buff 归属或应用成功 |
 | `src/semantic_api.js` 与精确 build profiles | `16.16.805.0442` 的 HeroPath、等级、WardSpawn、伤害、死亡、重生、XP/lane-CS keyframe、受限 ItemState 和 gameplay-tail 等 | 独立 API 的逐字段能力；需要外部精确镜像、profiles 或对应已验证输入，不是主 CLI 的完整分析模式 |
 | V2 Ward / Path | 已验证位置、守卫事件及受限派生关联 | 来源 SHA 必须与回放一致；类型、匹配、生命周期和位置插值与直接字段分级 |
 | `research-v3/`、`research-v4/` | DuckDB 研究查询、保护量增量表和验证器 | 保留的真实功能，不是因版本号旧就可删除的目录；全量重建需要私有输入 |
@@ -144,11 +145,11 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 
 每条记录保留原始包来源；这三项候选不要求回放尾部 `statsJson`，也不推导库存状态或交易事件。Broadcast 的十个常规原始参数和已观察到的 `0x400001b1` 可给出参与者候选；其他参数保留空值，映射尚未经独立回放确认。
 
-BuffRemove2 的包字段候选使用相同的精确镜像参数，可单独运行：
+BuffAdd2 与 BuffRemove2 的包字段候选使用相同的精确镜像参数，可单独或一起运行：
 
 ```powershell
 node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
-  --events npc_buff_remove_packet `
+  --events npc_buff_add_packet,npc_buff_remove_packet `
   --runtime-image "D:\PrivateInputs\league_16.19.820.7193.memory.bin" `
   --out-dir "work\16-19-buff-remove-candidates"
 ```

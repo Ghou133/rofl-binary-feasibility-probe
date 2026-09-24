@@ -1630,7 +1630,8 @@ function capabilityQuery(replay, options = {}) {
       const needs1619RuntimeImage = capability === 'hero_inventory_mapview'
         || capability === 'hero_inventory_set_item'
         || capability === 'hero_inventory_broadcast'
-        || capability === 'npc_buff_remove_packet';
+        || capability === 'npc_buff_remove_packet'
+        || capability === 'npc_buff_add_packet';
       const tailStat = perCapabilityInputsAssessed
         ? capability === 'hero_minions_killed_snapshot'
           ? assessHeroMinionsKilledSnapshotTail(replay)
@@ -1781,7 +1782,9 @@ function capabilityQuery(replay, options = {}) {
               ? 'HN 0x03b7 SetItem route, full packet consumption, and slot/item field provenance'
               : capability === 'hero_inventory_broadcast'
                 ? 'HN 0x03ef Broadcast route, full packet consumption, and record provenance'
-                : 'HN 0x043c BuffRemove2 route, full packet consumption, and raw field provenance');
+                : capability === 'npc_buff_remove_packet'
+                  ? 'HN 0x043c BuffRemove2 route, full packet consumption, and raw field provenance'
+                  : 'HN 0x03ed BuffAdd2 game/keyframe route, full packet consumption, and scalar field provenance');
       }
       const gameLength = replay.tail?.metadata?.gameLength;
       const conditionalInputs = ['hero_death_timer', 'hero_respawn'].includes(capability)
@@ -1838,6 +1841,7 @@ function capabilityQuery(replay, options = {}) {
             hero_inventory_set_item: 'hero_inventory_set_item_candidates',
             hero_inventory_broadcast: 'hero_inventory_broadcast_candidates',
             npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
+            npc_buff_add_packet: 'npc_buff_add_packet_candidates',
           })[capability] ?? null
           : null,
       });
