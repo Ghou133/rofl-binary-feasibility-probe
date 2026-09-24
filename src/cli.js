@@ -598,6 +598,7 @@ function parseOne1619(replay, options, started) {
       'hero_level_state', 'hero_inventory_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
       'direct_input_movement_turn_packet',
+      'set_movement_driver_packet',
     ].includes(name)))] : [];
   const selectsBuffAdd = options.semantic !== false
     && Array.isArray(options.events) && options.events.includes('npc_buff_add_packet');
@@ -1792,7 +1793,8 @@ function capabilityQuery(replay, options = {}) {
         || capability === 'npc_buff_remove_packet'
         || capability === 'npc_buff_add_packet'
         || (profile.game_version === '16.19.821.7343'
-          && capability === 'direct_input_movement_turn_packet');
+          && (capability === 'direct_input_movement_turn_packet'
+            || capability === 'set_movement_driver_packet'));
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
           && capability === 'hero_respawn'
@@ -2063,6 +2065,11 @@ function capabilityQuery(replay, options = {}) {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x00ba full packet consumption',
           'three callback-transformed opaque f32 fields and raw packet provenance; no world-position, general hero-path or participant inference');
       }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'set_movement_driver_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x0335 full packet consumption',
+          'one callback-transformed opaque dispatch byte and raw packet provenance; no driver-state transition, position, path or participant inference');
+      }
       if (profile.game_version === '16.19.820.7193'
           && (capability === 'hero_death_timer' || capability === 'hero_respawn')) {
         validationPending.push('ten-participant NUM_DEATHS presence and equality',
@@ -2255,6 +2262,7 @@ function capabilityQuery(replay, options = {}) {
             npc_buff_add_packet: 'npc_buff_add_packet_candidates',
             direct_input_movement_turn_packet:
               'direct_input_movement_turn_packet_candidates',
+            set_movement_driver_packet: 'set_movement_driver_packet_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
             hero_damage_taken_from_champions_snapshot:
               'hero_damage_taken_from_champions_snapshot_candidates',

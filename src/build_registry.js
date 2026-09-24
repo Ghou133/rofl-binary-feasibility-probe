@@ -31,6 +31,8 @@ const buffAddPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_buff_add_packet_candidate');
 const directInputTurnPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_direct_input_turn_packet_candidate');
+const setMovementDriverPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_set_movement_driver_packet_candidate');
 const damageFloatCandidate1619821 =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
 const timeStatsCandidate1619821 =
@@ -504,6 +506,7 @@ const BUILD_PROFILES = deepFreeze({
       npc_buff_remove_packet: 0x047c,
       npc_buff_add_packet: 0x00ae,
       direct_input_movement_turn_packet: 0x00ba,
+      set_movement_driver_packet: 0x0335,
     },
     decoder_profile: {
       hero_death: decoder1619821.HERO_DEATH_CANDIDATE_PROFILE_821,
@@ -561,6 +564,8 @@ const BUILD_PROFILES = deepFreeze({
         buffAddPacketCandidate1619821.NPC_BUFF_ADD_PACKET_CANDIDATE_PROFILE_821,
       direct_input_movement_turn_packet:
         directInputTurnPacketCandidate1619821.DIRECT_INPUT_MOVEMENT_TURN_PACKET_CANDIDATE_PROFILE_821,
+      set_movement_driver_packet:
+        setMovementDriverPacketCandidate1619821.SET_MOVEMENT_DRIVER_PACKET_CANDIDATE_PROFILE_821,
     },
     evidence_grades: {
       hero_death: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_AND_RUNTIME_DIE_SOURCE',
@@ -603,6 +608,8 @@ const BUILD_PROFILES = deepFreeze({
       npc_buff_add_packet: 'CANDIDATE_821_NATIVE_BUFF_ADD2_OPAQUE_PACKET_FIELDS',
       direct_input_movement_turn_packet:
         'CANDIDATE_821_NATIVE_DIRECT_INPUT_TURN_OPAQUE_PACKET_FIELDS',
+      set_movement_driver_packet:
+        'CANDIDATE_821_NATIVE_SET_MOVEMENT_DRIVER_OPAQUE_DISPATCH_FIELD',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, 821 route-profile bounded',
@@ -640,6 +647,7 @@ const BUILD_PROFILES = deepFreeze({
       npc_buff_remove_packet: 'exact 821 native 0x047c BuffRemove2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14/0x18; no owner, buff identity, target or lifecycle inference',
       npc_buff_add_packet: 'exact 821 native 0x00ae BuffAdd2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14; no owner, buff identity, target or lifecycle inference',
       direct_input_movement_turn_packet: 'exact 821 native 0x00ba DirectInputMovementDriverServerTurnData constructor/deserializer and callback transform for three opaque f32 fields at object offsets 0x10/0x14/0x18; no world-position, hero-path or participant inference',
+      set_movement_driver_packet: 'exact 821 native 0x0335 SetMovementDriver constructor/deserializer and callback transform for opaque byte at object offset 0x2a; no driver-state transition, position, path or participant inference',
     },
     verified_capabilities: [],
     candidate_capabilities: [
@@ -661,6 +669,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_level_state', 'hero_inventory_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
       'direct_input_movement_turn_packet',
+      'set_movement_driver_packet',
     ],
     unsupported_capabilities: [],
     validation_artifacts: [],

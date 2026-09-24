@@ -4,6 +4,19 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `set_movement_driver_packet` is wired as an
+  unpublished selected CLI/API candidate for exact-image route `0x0335`.
+  Native decoding fully consumed all 131 packets in nine of 11 Replays; the
+  other two have no route. The selected CLI batch scanned 18,235,209 blocks
+  with zero framing errors and emitted 131 rows. Aggregate `PARTIAL`/exit 1
+  reflects the two absent routes. It emits only an anonymous callback-transformed
+  dispatch byte at object `+0x2a`, the observed selector and raw packet ref.
+  The emulated base-parameter hook injects Replay framing `raw_param`, so
+  object agreement is only stub consistency. No driver-state transition,
+  path, position or participant is inferred. Ignored evidence is under
+  `artifacts/16_19_development/set_movement_driver_821/`. A combined selected
+  CLI run on `KR_8392938200.rofl` returned 121 direct-input-turn and four
+  SetMovementDriver rows, 125 unique decoded packets, zero framing errors.
 - **Completed:** KR 821 `direct_input_movement_turn_packet` is wired to the
   selected CLI/API using the independently registered `0x00ba` route and
   exact-image native constructor/deserializer. Eight of 11 Replays contain

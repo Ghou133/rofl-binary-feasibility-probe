@@ -178,7 +178,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
       'hero_level_state', 'hero_inventory_packet', 'cast_spell_ans_packet',
       'npc_buff_remove_packet', 'npc_buff_add_packet',
-      'direct_input_movement_turn_packet']);
+      'direct_input_movement_turn_packet', 'set_movement_driver_packet']);
   const queried = Object.fromEntries(query.capabilities.map((row) => [row.capability, row]));
   assert.equal(queried.hero_death.runtime_image_requirement, 'NOT_REQUIRED');
   assert.equal(queried.hero_inventory_packet.runtime_image_requirement,
@@ -201,6 +201,12 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     ['exact_runtime_image']);
   assert.equal(queried.direct_input_movement_turn_packet.output,
     'direct_input_movement_turn_packet_candidates');
+  assert.equal(queried.set_movement_driver_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.deepEqual(queried.set_movement_driver_packet.missing_inputs,
+    ['exact_runtime_image']);
+  assert.equal(queried.set_movement_driver_packet.output,
+    'set_movement_driver_packet_candidates');
   assert.equal(queried.hero_assist.output, 'hero_assist_candidates');
   assert.equal(queried.hero_damage_totals_snapshot.output,
     'hero_damage_totals_snapshot_candidates');
