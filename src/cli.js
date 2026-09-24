@@ -19,8 +19,12 @@ const {
   buildAdcDeathRecords,
   decodeSemanticReplay,
   DEFAULT_DECODER_IMAGE,
+  DEFAULT_SPELL_DICTIONARY,
 } = require('./semantic_pipeline');
-const { decodeSemanticReplay: decodeExactBuildReplay } = require('./semantic_api');
+const {
+  decodeSemanticReplay: decodeExactBuildReplay,
+  DEFAULT_16_16_RUNTIME_IMAGE,
+} = require('./semantic_api');
 const { buildWardOutputs } = require('./ward_pipeline_v2');
 const { buildPathOutputs } = require('./path_pipeline_v2');
 const { buildReplayPacketIndex } = require('./provenance_v2');
@@ -45,7 +49,7 @@ const {
 
 const REPOSITORY_ROOT = path.resolve(__dirname, '..');
 const TEST_COMMAND = 'node --test test/*.test.js';
-const COMMANDS = new Set(['inspect', 'decode', 'analyze', 'batch', 'validate', 'ward-events']);
+const COMMANDS = new Set(['inspect', 'decode', 'analyze', 'batch', 'validate', 'ward-events', 'capabilities']);
 
 function enumerateRepositoryTestFiles() {
   const testRoot = path.join(REPOSITORY_ROOT, 'test');
@@ -60,6 +64,7 @@ function usage() {
 
 Usage:
   node src/cli.js inspect <file.rofl> [--out-dir artifacts]
+  node src/cli.js capabilities <file.rofl> [--json]
   node src/cli.js decode <file.rofl> [--out-dir artifacts]
   node src/cli.js analyze <file.rofl> [--out-dir artifacts]
   node src/cli.js batch <directory> [directory ...] [--out-dir artifacts]
@@ -71,6 +76,7 @@ Legacy semantic CLI scope: exact 16.15.801.3452. The separate 16.16 public API
 is not dispatched by this CLI; see docs/PUBLIC_DEVELOPMENT.md.
 16.19 decode and batch use the exact-build semantic API when --events is selected.
 Inspect reads the container and packet framing without a runtime image.
+Capabilities reads the container/build registry without packet framing or semantic decode.
 
 Options:
   --out-dir <path>              Independent output directory (default: artifacts)
@@ -79,8 +85,9 @@ Options:
   --include-private-metadata     Include Riot ID/PUUID fields in roster output
   --strict                       Stop at the first framing error
   --decoder-image <path>        Exact 16.15 runtime image (external input; not bundled)
-  --runtime-image <path>        Exact 16.19 runtime image (external input; not bundled)
+  --runtime-image <path>        External image path; 16.19 candidate does not use it
   --events <name[,name...]>     Select 16.19 semantic capabilities to decode
+  --json                        Emit only machine-readable JSON (capabilities)
   --python <command>            Python command with Unicorn installed (default: python)
   --details-dir <path>          Validation-only directory for same-game Details matching
   --ward-spawns <jsonl>         Verified current-build WardSpawn decoder rows
@@ -174,7 +181,7 @@ function parseArgs(argv) {
       options.output = '-';
       continue;
     }
-    if (command === 'ward-events' && token === '--json') {
+    if ((command === 'ward-events' || command === 'capabilities') && token === '--json') {
       options.format = 'json';
       continue;
     }
@@ -1481,6 +1488,188 @@ function reserveOutputDirectory(requested, repositoryRoot = REPOSITORY_ROOT) {
   return fs.mkdtempSync(`${resolved}-run-${timestamp}-`);
 }
 
+function fileInputDependency(name, filePath) {
+  if (!filePath) return { name, status: 'NOT_ASSESSED', path: null };
+  const resolved = path.resolve(filePath);
+  try {
+    return {
+      name,
+      status: fs.statSync(resolved).isFile() ? 'PRESENT_UNVERIFIED' : 'MISSING',
+      path: resolved,
+    };
+  } catch (error) {
+    return {
+      name,
+      status: error.code === 'ENOENT' ? 'MISSING' : 'NOT_ASSESSED',
+      path: resolved,
+    };
+  }
+}
+
+function capabilityQuery(replay, options = {}) {
+  const resolved = resolveBuildProfile(replay);
+  const profile = resolved.profile;
+  const document = {
+    schema_version: 1,
+    command: 'capabilities',
+    source_path: replay.source_path,
+    replay_sha256: replay.source_sha256,
+    game_version: replay.header.version,
+    status: profile ? 'PROFILE_RESOLVED' : 'UNSUPPORTED_VERSION',
+    profile_release_status: profile?.release_status ?? null,
+    inspection_scope: 'CONTAINER_HEADER_TAIL_AND_CHUNK_DESCRIPTORS',
+    packet_framing_inspected: false,
+    semantic_decode_performed: false,
+    runtime_image_used: false,
+    runtime_image_requested: options.runtimeImage ? path.resolve(options.runtimeImage) : null,
+    input_assessment_scope: 'PRESENCE_ONLY',
+    runtime_profile_status: profile?.runtime_profile?.status
+      ?? (profile?.runtime_profile?.image_sha256 ? 'EXACT_IMAGE_HASH_REGISTERED' : null),
+    capabilities: [],
+    unlisted_capability_status: 'NOT_REGISTERED_FOR_EXACT_BUILD',
+  };
+  if (!profile) return document;
+
+  let dependencies;
+  let entrypoint;
+  let pendingChecks;
+  if (profile.game_version === '16.19.820.7193') {
+    const statsJson = replay.tail?.metadata?.statsJson;
+    const tailStatus = Array.isArray(replay.tail?.stats) ? 'PRESENT_UNVALIDATED'
+      : typeof statsJson === 'string' && replay.tail?.stats_parse_error
+        ? 'INVALID' : 'MISSING';
+    dependencies = [
+      { name: 'replay', status: 'PRESENT', path: replay.source_path },
+      { name: 'replay_tail_statsJson', status: tailStatus, path: replay.source_path },
+    ];
+    entrypoint = 'SELECTED_CLI_AND_EXACT_BUILD_API';
+    pendingChecks = [
+      'packet framing', 'matching 16.19 route fingerprint',
+      'ten-participant NUM_DEATHS presence and equality',
+    ];
+  } else if (profile.game_version === '16.16.805.0442') {
+    dependencies = [
+      { name: 'replay', status: 'PRESENT', path: replay.source_path },
+      fileInputDependency('exact_runtime_image',
+        options.runtimeImage ?? DEFAULT_16_16_RUNTIME_IMAGE),
+    ];
+    entrypoint = 'EXACT_BUILD_API_ONLY';
+    pendingChecks = ['packet framing', 'runtime image SHA-256', 'runtime decoder execution'];
+  } else {
+    dependencies = [
+      { name: 'replay', status: 'PRESENT', path: replay.source_path },
+      fileInputDependency('exact_runtime_image', options.decoderImage ?? DEFAULT_DECODER_IMAGE),
+      fileInputDependency('spell_dictionary', DEFAULT_SPELL_DICTIONARY),
+    ];
+    entrypoint = 'LEGACY_CLI_FULL_PIPELINE_AND_API';
+    pendingChecks = [
+      'packet framing', 'runtime image and spell dictionary SHA-256',
+      'legacy full-pipeline execution',
+    ];
+  }
+  if (profile.game_version !== '16.19.820.7193') {
+    document.entrypoint_input_precheck = {
+      entrypoint,
+      scope: 'WHOLE_PIPELINE_FILE_PRESENCE_ONLY',
+      inputs: dependencies,
+      missing_inputs: dependencies.filter((input) => input.status === 'MISSING')
+        .map((input) => input.name),
+    };
+  }
+
+  const classifications = [
+    ['verified_capabilities', 'RELEASED_VERIFIED'],
+    ['partial_capabilities', 'RELEASED_PARTIAL'],
+    ['candidate_capabilities', 'CANDIDATE'],
+    ['unverified_capabilities', 'UNVERIFIED'],
+    ['unsupported_capabilities', 'UNSUPPORTED'],
+  ];
+  for (const [profileKey, status] of classifications) {
+    for (const capability of profile[profileKey] ?? []) {
+      const applicable = status !== 'UNSUPPORTED' && status !== 'UNVERIFIED';
+      const perCapabilityInputsAssessed = applicable
+        && profile.game_version === '16.19.820.7193';
+      const inputs = perCapabilityInputsAssessed ? dependencies : [{
+        name: 'replay', status: 'PRESENT', path: replay.source_path,
+      }];
+      const validationPending = applicable ? [...pendingChecks] : [];
+      if (applicable && !perCapabilityInputsAssessed) {
+        validationPending.push('capability-specific input dependencies');
+      }
+      if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_death_timer') {
+        validationPending.push('HN route, timer field, and death-to-respawn invariants');
+      }
+      document.capabilities.push({
+        capability,
+        status,
+        published: status.startsWith('RELEASED_'),
+        entrypoint: applicable ? entrypoint : null,
+        required_inputs: inputs,
+        runtime_image_requirement: applicable
+          ? perCapabilityInputsAssessed ? 'NOT_REQUIRED' : 'NOT_ASSESSED_PER_CAPABILITY'
+          : null,
+        missing_inputs: perCapabilityInputsAssessed
+          ? inputs.filter((input) => input.status === 'MISSING').map((input) => input.name)
+          : null,
+        invalid_inputs: perCapabilityInputsAssessed
+          ? inputs.filter((input) => input.status === 'INVALID').map((input) => input.name)
+          : null,
+        input_assessment_complete: perCapabilityInputsAssessed
+          && !inputs.some((input) => input.status === 'NOT_ASSESSED'),
+        validation_pending: validationPending,
+        output: profile.game_version === '16.19.820.7193'
+          ? ({
+            hero_death: 'hero_death_candidates',
+            hero_death_timer: 'hero_death_timer_candidates',
+          })[capability] ?? null
+          : null,
+      });
+    }
+  }
+  return document;
+}
+
+function runCapabilitiesCommand(parsed) {
+  if (parsed.positionals.length !== 1) {
+    throw new Error('capabilities requires exactly one .rofl file');
+  }
+  const filePath = path.resolve(parsed.positionals[0]);
+  if (path.extname(filePath).toLowerCase() !== '.rofl') {
+    throw new Error(`capabilities requires a .rofl file: ${filePath}`);
+  }
+  const replay = parseReplayFile(filePath);
+  const result = capabilityQuery(replay, parsed.options);
+  if (parsed.options.format === 'json') {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  } else {
+    process.stdout.write(`Replay: ${result.source_path}\nBuild: ${result.game_version}\n`);
+    process.stdout.write(`Profile: ${result.profile_release_status ?? result.status}\n`);
+    process.stdout.write('Scope: container and registry only; packet framing and semantic decode not run.\n');
+    for (const row of result.capabilities) {
+      const missing = row.missing_inputs === null ? 'not assessed per capability'
+        : row.missing_inputs.length ? row.missing_inputs.join(', ') : 'none detected';
+      process.stdout.write(`${row.capability}: ${row.status}; missing inputs: ${missing}`
+        + `${row.input_assessment_complete ? '' : ' (some inputs not assessed)'}\n`);
+      if (row.validation_pending.length > 0) {
+        process.stdout.write(`  Pending: ${row.validation_pending.join(', ')}\n`);
+      }
+    }
+    if (result.entrypoint_input_precheck) {
+      const missing = result.entrypoint_input_precheck.missing_inputs;
+      process.stdout.write(`Whole-pipeline file precheck: ${missing.length
+        ? `missing ${missing.join(', ')}` : 'no missing files detected; hashes not checked'}.\n`);
+    }
+    if (result.profile_release_status === 'EXPERIMENTAL_CANDIDATE') {
+      process.stdout.write('Other semantic capabilities: not registered for this exact build.\n');
+    }
+    if (result.status === 'UNSUPPORTED_VERSION') {
+      process.stdout.write(`No exact build profile is registered for ${result.game_version}.\n`);
+    }
+  }
+  return result.status === 'UNSUPPORTED_VERSION' ? 2 : 0;
+}
+
 async function main(argv = process.argv.slice(2)) {
   const parsed = parseArgs(argv);
   if (parsed.options.help || parsed.command === 'help') {
@@ -1489,6 +1678,7 @@ async function main(argv = process.argv.slice(2)) {
   }
   if (!COMMANDS.has(parsed.command)) throw new Error(`Unknown command: ${parsed.command}`);
   if (parsed.command === 'ward-events') return runWardEventsCommand(parsed);
+  if (parsed.command === 'capabilities') return runCapabilitiesCommand(parsed);
   const inputs = parsed.positionals.length > 0 ? parsed.positionals : ['replay'];
   const files = discoverReplayFiles(inputs);
   if (files.length === 0) throw new Error('No .rofl files found in the supplied input.');
@@ -1552,5 +1742,7 @@ module.exports = {
   inventoryFromAnalysis,
   buildAcceptanceSummary,
   reserveOutputDirectory,
+  capabilityQuery,
+  runCapabilitiesCommand,
   main,
 };

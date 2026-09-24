@@ -19,9 +19,11 @@ function loadCli(decode, decodeExact) {
   const substitutes = {
     './semantic_pipeline': {
       DEFAULT_DECODER_IMAGE: 'synthetic-external-image.bin',
+      DEFAULT_SPELL_DICTIONARY: 'synthetic-spell-dictionary.json',
       decodeSemanticReplay: decode || (() => { throw new Error('semantic decoder must not run'); }),
     },
     './semantic_api': {
+      DEFAULT_16_16_RUNTIME_IMAGE: 'synthetic-16-16-image.bin',
       decodeSemanticReplay: decodeExact || (() => { throw new Error('exact-build decoder must not run'); }),
     },
     './ward_pipeline_v2': { buildWardOutputs() { throw new Error('Ward is outside this unit test'); } },
@@ -84,6 +86,83 @@ test('help explains the Node minimum, CLI version scope and external runtime ima
   assert.match(output, /16\.16/);
   assert.match(output, /not bundled/);
   assert.match(output, /deprecated/i);
+  assert.match(output, /capabilities <file\.rofl>/);
+});
+
+test('capabilities reports only the 16.19 candidate without packet decoding or a runtime image', async (t) => {
+  let output = '';
+  t.mock.method(process.stdout, 'write', (chunk) => { output += String(chunk); return true; });
+  const cli = loadCli();
+  const input = fixture(t, '16.19.820.7193');
+  // A structurally valid chunk with invalid packet framing must remain unread.
+  fs.writeFileSync(input, replayFromChunks([{
+    body: Buffer.from([0]),
+  }], '16.19.820.7193').buffer);
+  const fakeRuntime = path.join(path.dirname(input), 'not-used-runtime.bin');
+  assert.equal(await cli.main(['capabilities', input, '--json', '--runtime-image', fakeRuntime]), 0);
+  const result = JSON.parse(output);
+  assert.equal(result.game_version, '16.19.820.7193');
+  assert.equal(result.status, 'PROFILE_RESOLVED');
+  assert.equal(result.profile_release_status, 'EXPERIMENTAL_CANDIDATE');
+  assert.equal(result.packet_framing_inspected, false);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(result.runtime_image_used, false);
+  assert.equal(result.runtime_image_requested, fakeRuntime);
+  assert.equal(result.input_assessment_scope, 'PRESENCE_ONLY');
+  assert.deepEqual(result.capabilities.map((row) => row.capability),
+    require('../src/build_registry').BUILD_PROFILES['16.19.820.7193'].candidate_capabilities);
+  const heroDeath = result.capabilities.find((row) => row.capability === 'hero_death');
+  assert.equal(heroDeath.status, 'CANDIDATE');
+  assert.equal(heroDeath.published, false);
+  assert.equal(heroDeath.output, 'hero_death_candidates');
+  assert.deepEqual(heroDeath.missing_inputs, []);
+  assert.equal(heroDeath.runtime_image_requirement, 'NOT_REQUIRED');
+  assert.deepEqual(heroDeath.required_inputs.map((row) => row.name),
+    ['replay', 'replay_tail_statsJson']);
+  assert.ok(heroDeath.validation_pending.includes('matching 16.19 route fingerprint'));
+  assert.equal(fs.existsSync(fakeRuntime), false);
+});
+
+test('capabilities exposes missing Replay tail stats without treating it as zero events', (t) => {
+  const cli = loadCli();
+  const input = fixture(t, '16.19.820.7193');
+  const original = fs.readFileSync(input);
+  const metadataLength = original.readUInt32LE(original.length - 4);
+  const metadata = Buffer.from(JSON.stringify({ gameLength: 600000 }));
+  const trailer = Buffer.alloc(4);
+  trailer.writeUInt32LE(metadata.length);
+  fs.writeFileSync(input, Buffer.concat([
+    original.subarray(0, original.length - metadataLength - 4), metadata, trailer,
+  ]));
+  const result = cli.capabilityQuery(require('../src/rofl').parseReplayFile(input));
+  const heroDeath = result.capabilities.find((row) => row.capability === 'hero_death');
+  assert.deepEqual(heroDeath.missing_inputs, ['replay_tail_statsJson']);
+  assert.equal(heroDeath.required_inputs.find((row) => row.name === 'replay_tail_statsJson').status,
+    'MISSING');
+  assert.equal(heroDeath.status, 'CANDIDATE');
+  assert.equal(result.semantic_decode_performed, false);
+});
+
+test('capabilities distinguishes a released exact-build profile and rejects unknown full builds', async (t) => {
+  const cli = loadCli();
+  const supported = fixture(t, '16.16.805.0442');
+  const older = cli.capabilityQuery(require('../src/rofl').parseReplayFile(supported));
+  const death = older.capabilities.find((row) => row.capability === 'hero_death');
+  assert.equal(older.profile_release_status, 'SUPPORTED_VERIFIED_DEEP_SEMANTICS_PARTIAL');
+  assert.equal(death.status, 'RELEASED_VERIFIED');
+  assert.equal(death.published, true);
+  assert.equal(death.entrypoint, 'EXACT_BUILD_API_ONLY');
+  assert.equal(death.missing_inputs, null);
+  assert.equal(death.runtime_image_requirement, 'NOT_ASSESSED_PER_CAPABILITY');
+  assert.deepEqual(older.entrypoint_input_precheck.missing_inputs, ['exact_runtime_image']);
+
+  let output = '';
+  t.mock.method(process.stdout, 'write', (chunk) => { output += String(chunk); return true; });
+  const unsupported = fixture(t, '16.19.9999.9999');
+  assert.equal(await cli.main(['capabilities', unsupported, '--json']), 2);
+  const unknown = JSON.parse(output);
+  assert.equal(unknown.status, 'UNSUPPORTED_VERSION');
+  assert.deepEqual(unknown.capabilities, []);
 });
 
 test('16.19 inspect reports container-only success without invoking a decoder', async (t) => {

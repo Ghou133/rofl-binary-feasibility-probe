@@ -7,6 +7,11 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   select `hero_death` explicitly and write separate candidate victim/time records,
   with 88 HN, 64 KR and 51 KR events on three exact-build replays. Each run
   requires a matching route triad and all ten final death-count invariants.
+- **Capability query:** `node src/cli.js capabilities <file.rofl> [--json]`
+  reports the exact build's registered capabilities and known missing inputs
+  from container metadata without decompressing packet chunks or using a runtime
+  image. It labels 16.19 `hero_death` as unpublished `CANDIDATE` and leaves
+  route and death-count validation pending until decode.
 - **Current:** The captured exact HN runtime identifies candidate route `0x04d9`
   as `PKT_NPC_Hero_Die_s` and `0x02d6` as `PKT_S2C_UpdateDeathTimer_s`.
   Trace the latter's decoded fields against raw replay bytes before using them

@@ -13,6 +13,7 @@
 | 入口 / 层 | 当前提供 | 使用边界 |
 | --- | --- | --- |
 | `inspect` / `src/rofl.js` | RIOT 头、metadata、chunk/Zstd、packet framing、原始清单与锚点 | 容器结构可解析，不代表该版本语义已验证 |
+| `capabilities` | 从回放容器读取完整 build，查询已登记能力、入口及输入存在性 | 不解压 packet、不运行语义解码；候选能力仍需逐回放校验 |
 | `decode` / `analyze` / `batch` / `validate` | `16.15.801.3452` 旧版整合管线；16.19 精确 build 的指定能力实验入口 | 16.19 必须显式传 `--events`；16.16 语义 API 尚未由主 CLI 分发；`validate` 还会运行完整 Node 套件 |
 | `16.19.820.7193 --events hero_death` | HN/KR 结构指纹与回放尾部死亡总数同时匹配时，输出候选受害者和回放时间 | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；无杀手、助攻或重生推断，其他完整 build 不复用 |
 | `src/semantic_api.js` 与精确 build profiles | `16.16.805.0442` 的 HeroPath、等级、WardSpawn、伤害、死亡、重生、XP/lane-CS keyframe、受限 ItemState 和 gameplay-tail 等 | 独立 API 的逐字段能力；需要外部精确镜像、profiles 或对应已验证输入，不是主 CLI 的完整分析模式 |
@@ -50,6 +51,19 @@ npm test
 node src/cli.js inspect "D:\Replays\example.rofl" --out-dir "work\inspect"
 ```
 
+查询该回放完整版本的能力和缺少的输入：
+
+```powershell
+node src/cli.js capabilities "D:\Replays\example-16.19.820.7193.rofl"
+node src/cli.js capabilities "D:\Replays\example-16.19.820.7193.rofl" --json
+```
+
+查询只读容器、metadata、chunk 描述和精确 build 注册表，不遍历 packet；`--json`
+输出逐能力状态、所需输入、已知缺项以及尚待运行的校验。16.19 列出精确
+build 注册表中的候选能力，运行时镜像对这些候选路径不要求；查询不是成功解码证明。
+16.15/16.16 的外部文件仅按完整管线入口做存在性预检；单项能力的依赖和
+镜像哈希仍标记为未核验。
+
 对完整版本为 **16.19.820.7193** 的回放运行实验死亡候选解码：
 
 ```powershell
@@ -83,7 +97,7 @@ node src/cli.js ward-events "D:\Data\ward_events.jsonl" `
 
 ## 命令与输出
 
-`16.15` 的 `decode` 与 `analyze` 共用旧管线。`16.19` 通过精确 build API 执行 `--events` 指定的实验能力；`batch` 逐回放记录成功、候选和失败，不以某项成功掩盖另一项失败。`validate` 额外运行完整 Node 回归，可用 `--details-dir` 做验证对照；Match Details 不进入解码规则。
+`16.15` 的 `decode` 与 `analyze` 共用旧管线。`16.19` 通过精确 build API 执行 `--events` 指定的实验能力；`capabilities` 可先查询精确 build 和外部输入缺项，不会创建输出目录。`batch` 逐回放记录成功、候选和失败，不以某项成功掩盖另一项失败。`validate` 额外运行完整 Node 回归，可用 `--details-dir` 做验证对照；Match Details 不进入解码规则。
 
 默认时间线保留前 `--timeline-limit` 条。`--sample-stride` 仅为兼容旧命令保留，已弃用且不改变输出；不再计算最终会被截掉的间隔样本。
 
