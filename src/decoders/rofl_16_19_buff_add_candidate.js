@@ -15,6 +15,9 @@ const RUNTIME_IMAGE_SHA256 = '7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f7
 const MAX_PACKETS = 50_000;
 const MAX_INPUT_BYTES = 12_000_000;
 const OBSERVED_LENGTHS = new Set([14, 15, ...Array.from({ length: 16 }, (_, index) => index + 17)]);
+const OPAQUE_VECTOR_KEYFRAME_LENGTH = 41;
+const OPAQUE_VECTOR_RAW_PARAM = 0x400000b3;
+const OPAQUE_VECTOR_ELEMENT_VTABLE_RVA = '0x01bae6c8';
 const FIELD_SPECS = Object.freeze([
   ['offset_0x10_u32', 0x10, 4, 'u32'],
   ['offset_0x14_f32', 0x14, 4, 'f32'],
@@ -25,7 +28,7 @@ const FIELD_SPECS = Object.freeze([
 ]);
 
 const NPC_BUFF_ADD_PACKET_CANDIDATE_PROFILE = Object.freeze({
-  id: 'rofl-16.19.820.7193-hn-buff-add2-runtime-candidate-v1',
+  id: 'rofl-16.19.820.7193-hn-buff-add2-runtime-candidate-v2',
   replay_version: REPLAY_VERSION,
   capability: 'npc_buff_add_packet',
   status: 'CANDIDATE',
@@ -35,12 +38,13 @@ const NPC_BUFF_ADD_PACKET_CANDIDATE_PROFILE = Object.freeze({
   packet_name: 'PKT_NPC_BuffAdd2_s',
   evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
   runtime_image_required: true,
-  evidence_scope: 'exact HN callback/constructor/deserializer and 32434 fully consumed packets across game and keyframe streams in one HN Replay',
+  evidence_scope: 'exact HN callback/constructor/deserializer, 32434 empty-vector packets in one Replay, and three fully consumed 41-byte keyframe packets with one opaque vector element in a third Replay',
   known_limits: Object.freeze([
-    'Only callback-transformed scalar positions observed in one exact HN Replay are emitted.',
+    'Only callback-transformed scalar positions observed in exact HN Replays are emitted.',
     'The two floats have a bounded cross-stream additive correlation; no duration, elapsed-time, or lifecycle meaning is assigned.',
     'The four opaque grouping fields and raw param do not establish owner, participant, target, buff identity, or successful application.',
-    'Two object vectors were empty in all observed packets; packets with nonempty vectors are outside this candidate profile.',
+    'Only the observed 41-byte keyframe shape with raw param 0x400000b3 permits one opaque 40-byte element in the first vector; its contents and gameplay effect are unknown.',
+    'The nonempty-vector raw object contains an emulator-local pointer, not a Replay address.',
     'The exact captured runtime image and Python Unicorn are required for decoding.',
   ]),
 });
@@ -64,7 +68,7 @@ function packetRef(replay, block, chunk) {
   };
 }
 
-function fieldsAreValid(result) {
+function fieldsAreValid(result, ref) {
   const values = result?.decoded_scalar_fields;
   const raw = result?.raw_object_scalar_bytes_hex;
   if (!values || typeof values !== 'object' || Array.isArray(values)
@@ -85,10 +89,24 @@ function fieldsAreValid(result) {
       return false;
     }
   }
-  for (const offset of [0x38, 0x48]) {
-    if (result.raw_object_hex.slice(offset * 2, (offset + 16) * 2) !== '00'.repeat(16)) {
+  const objectBytes = Buffer.from(result.raw_object_hex, 'hex');
+  const firstPointer = objectBytes.readBigUInt64LE(0x38);
+  const firstCount = objectBytes.readUInt32LE(0x40);
+  const firstCapacity = objectBytes.readUInt32LE(0x44);
+  const secondVectorEmpty = objectBytes.subarray(0x48, 0x58).every((byte) => byte === 0);
+  if (ref.payload_length === OPAQUE_VECTOR_KEYFRAME_LENGTH) {
+    const opaque = result.opaque_vector_0x38_candidate;
+    if (ref.chunk_stream_tag !== 2 || ref.raw_param !== OPAQUE_VECTOR_RAW_PARAM
+        || firstPointer === 0n
+        || firstCount !== 1 || firstCapacity !== 1 || !secondVectorEmpty
+        || !opaque || opaque.element_count !== 1
+        || opaque.element_size_bytes !== 40
+        || opaque.element_vtable_rva !== OPAQUE_VECTOR_ELEMENT_VTABLE_RVA) {
       return false;
     }
+  } else if (firstPointer !== 0n || firstCount !== 0 || firstCapacity !== 0
+      || !secondVectorEmpty || result.opaque_vector_0x38_candidate != null) {
+    return false;
   }
   return true;
 }
@@ -161,8 +179,11 @@ function decodeNpcBuffAddPacketCandidates(replay, _collected = null, options = {
       runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
     });
   }
-  if (rows.some(({ block }) =>
-    !OBSERVED_LENGTHS.has(block.payload_length))) {
+  if (rows.some(({ block, chunk }) =>
+    !OBSERVED_LENGTHS.has(block.payload_length)
+      && !(chunk.stream_tag === 2
+        && (block.param >>> 0) === OPAQUE_VECTOR_RAW_PARAM
+        && block.payload_length === OPAQUE_VECTOR_KEYFRAME_LENGTH))) {
     return fail('UNSUPPORTED', 'BuffAdd2 route has an unobserved payload length', {
       runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
     });
@@ -250,7 +271,7 @@ function decodeNpcBuffAddPacketCandidates(replay, _collected = null, options = {
     const valid = result.status === 'DECODED'
       && result.deserialize_return_al === 1
       && result.bytes_consumed === rows[index].block.payload_length
-      && fieldsAreValid(result);
+      && fieldsAreValid(result, ref);
     if (!valid) {
       failures.push({
         packet_index: index, raw_packet_ref: ref,
@@ -286,20 +307,25 @@ function decodeNpcBuffAddPacketCandidates(replay, _collected = null, options = {
       raw_object_scalar_bytes_hex: result.raw_object_scalar_bytes_hex,
       raw_object_hex: result.raw_object_hex,
       raw_payload_hex: block.payload.toString('hex'),
+      ...(block.payload_length === OPAQUE_VECTOR_KEYFRAME_LENGTH
+        ? { opaque_vector_0x38_candidate: result.opaque_vector_0x38_candidate } : {}),
       confidence: 'CANDIDATE',
-      semantic_status: 'CANDIDATE_EXACT_RUNTIME_BUFF_ADD2_PACKET_ONE_REPLAY',
+      semantic_status: 'CANDIDATE_EXACT_RUNTIME_BUFF_ADD2_PACKET_SHAPES',
       raw_packet_ref: refs[index],
     };
   });
   return {
     ...base, status: 'CANDIDATE',
-    evidence_status: 'CANDIDATE_EXACT_RUNTIME_BUFF_ADD2_PACKET_ONE_REPLAY',
+    evidence_status: 'CANDIDATE_EXACT_RUNTIME_BUFF_ADD2_PACKET_SHAPES',
     known_limits: [...profile.known_limits],
     event_field_confidence: {
       replay_time_ms: 'VERIFIED_DIRECT', stream_tag: 'VERIFIED_DIRECT',
       raw_param: 'VERIFIED_DIRECT', raw_payload_hex: 'VERIFIED_DIRECT',
       raw_object_hex: 'CANDIDATE_EXACT_RUNTIME_OBJECT_BYTES',
       decoded_scalar_fields_candidate: fieldConfidence,
+      ...(events.some((row) => row.opaque_vector_0x38_candidate)
+        ? { opaque_vector_0x38_candidate:
+            'CANDIDATE_EXACT_RUNTIME_OPAQUE_VECTOR_STRUCTURE' } : {}),
     },
     input_count: inputCount, event_count: events.length,
     scanned_block_count: walk.block_count,

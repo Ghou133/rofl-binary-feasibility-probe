@@ -20,6 +20,8 @@ const IMAGE = path.resolve(__dirname,
   '../artifacts/16_19_development/runtime_capture_820_7193/League_of_Legends_pid29960.bin');
 const KEYFRAME_PAYLOAD = '3c75e675f6d9065b2ebe9141ec01c86bb5a6958a5287';
 const GAME_PAYLOAD = '62756775f6d8065b2ebe91415b1bdc7726adeab6a738';
+const OPAQUE_VECTOR_KEYFRAME_PAYLOAD =
+  'e3d43778d6d95e5b2e690ec9ff04fc7cd21d11722e576e013c9eaf99189e6230cd6091b8d8d8d8d82e';
 
 function packet(packetId, rawParam, payload) {
   const header = Buffer.alloc(15);
@@ -44,6 +46,11 @@ function fixtureReplay() {
     { stream: 2, packetId: 0x03ed, param: 0x400000af,
       payload: Buffer.from(KEYFRAME_PAYLOAD, 'hex') },
   ]);
+}
+
+function opaqueVectorReplay(stream = 2, param = 0x400000b3) {
+  return replayWithPackets([{ stream, packetId: 0x03ed, param,
+    payload: Buffer.from(OPAQUE_VECTOR_KEYFRAME_PAYLOAD, 'hex') }]);
 }
 
 function temporaryImage(t) {
@@ -80,6 +87,86 @@ function mockedRows(request) {
     raw_object_hex: obj,
   }));
 }
+
+function mockedOpaqueVectorRow(request) {
+  const row = mockedRows(request)[0];
+  const obj = Buffer.from(row.raw_object_hex, 'hex');
+  obj.writeBigUInt64LE(0x300000000n, 0x38);
+  obj.writeUInt32LE(1, 0x40);
+  obj.writeUInt32LE(1, 0x44);
+  row.raw_object_hex = obj.toString('hex');
+  row.opaque_vector_0x38_candidate = {
+    element_count: 1, element_size_bytes: 40,
+    element_vtable_rva: '0x01bae6c8',
+  };
+  return row;
+}
+
+test('41-byte keyframe emits only bounded opaque-vector packet fields', (t) => {
+  const image = temporaryImage(t);
+  t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const request = JSON.parse(options.input);
+    assert.equal(request.packets[0].stream_tag, 2);
+    assert.equal(request.packets[0].payload_hex, OPAQUE_VECTOR_KEYFRAME_PAYLOAD);
+    return { status: 0, stderr: '', stdout: JSON.stringify({
+      status: 'PASS', runtime_image_sha256: IMAGE_SHA256,
+      results: [mockedOpaqueVectorRow(request)],
+    }) };
+  });
+  const replay = opaqueVectorReplay();
+  const result = decodeNpcBuffAddPacketCandidates(replay, null,
+    { runtimeImagePath: image });
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.event_count, 1);
+  assert.match(result.profile_id, /-v2$/);
+  assert.equal(result.event_field_confidence.opaque_vector_0x38_candidate,
+    'CANDIDATE_EXACT_RUNTIME_OPAQUE_VECTOR_STRUCTURE');
+  assert.deepEqual(result.events[0].opaque_vector_0x38_candidate,
+    { element_count: 1, element_size_bytes: 40,
+      element_vtable_rva: '0x01bae6c8' });
+  assert.equal(result.events[0].raw_packet_ref.replay_sha256,
+    replay.source_sha256);
+  assert.equal(result.events[0].raw_packet_ref.raw_payload_sha256,
+    crypto.createHash('sha256').update(Buffer.from(OPAQUE_VECTOR_KEYFRAME_PAYLOAD,
+      'hex')).digest('hex'));
+  assert.equal(result.events[0].decoded_scalar_fields_candidate.offset_0x30_u32,
+    654321);
+});
+
+test('41-byte game packet and malformed opaque vector fail closed', (t) => {
+  const image = temporaryImage(t);
+  const unsupported = decodeNpcBuffAddPacketCandidates(opaqueVectorReplay(1), null,
+    { runtimeImagePath: image });
+  assert.equal(unsupported.status, 'UNSUPPORTED');
+  assert.equal(unsupported.events, null);
+  const foreignParam = decodeNpcBuffAddPacketCandidates(
+    opaqueVectorReplay(2, 0x400000b4), null, { runtimeImagePath: image });
+  assert.equal(foreignParam.status, 'UNSUPPORTED');
+  assert.equal(foreignParam.events, null);
+  for (const fault of ['pointer', 'count', 'capacity', 'second', 'vtable', 'marker']) {
+    const mock = t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+      const request = JSON.parse(options.input);
+      const row = mockedOpaqueVectorRow(request);
+      const obj = Buffer.from(row.raw_object_hex, 'hex');
+      if (fault === 'pointer') obj.writeBigUInt64LE(0n, 0x38);
+      if (fault === 'count') obj.writeUInt32LE(2, 0x40);
+      if (fault === 'capacity') obj.writeUInt32LE(2, 0x44);
+      if (fault === 'second') obj.writeUInt32LE(1, 0x50);
+      if (fault === 'vtable') row.opaque_vector_0x38_candidate.element_vtable_rva = '0x01bae6f0';
+      if (fault === 'marker') delete row.opaque_vector_0x38_candidate;
+      row.raw_object_hex = obj.toString('hex');
+      return { status: 0, stderr: '', stdout: JSON.stringify({
+        status: 'PASS', runtime_image_sha256: IMAGE_SHA256, results: [row],
+      }) };
+    });
+    const result = decodeNpcBuffAddPacketCandidates(opaqueVectorReplay(), null,
+      { runtimeImagePath: image });
+    assert.equal(result.status, 'DECODE_FAILED', fault);
+    assert.equal(result.event_count, null, fault);
+    assert.equal(result.first_failed_packet_ref.payload_length, 41, fault);
+    mock.mock.restore();
+  }
+});
 
 test('BuffAdd2 exposes bounded exact-runtime scalars from both streams with raw refs', (t) => {
   const image = temporaryImage(t);
@@ -253,6 +340,69 @@ test('exact helper accepts observed packet and rejects truncation and suffix', (
   assert.equal(result.results[2].deserialize_return_al, 1);
   assert.equal(result.results[2].bytes_consumed, 22);
   assert.equal(result.results[3].stream_tag, 1);
+});
+
+test('exact helper bounds the 41-byte keyframe vector and rejects nearby shapes', (t) => {
+  if (!fs.existsSync(IMAGE)) {
+    t.skip('pinned HN 16.19 runtime image is unavailable');
+    return;
+  }
+  const script = path.resolve(__dirname, '../src/decoders/decode_buff_add_16_19.py');
+  const payload = OPAQUE_VECTOR_KEYFRAME_PAYLOAD;
+  const request = { replay_version: BUILD, packets: [
+    { stream_tag: 2, raw_param: 0x400000b3, payload_hex: payload },
+    { stream_tag: 1, raw_param: 0x400000b3, payload_hex: payload },
+    { stream_tag: 2, raw_param: 0x400000b4, payload_hex: payload },
+    { stream_tag: 2, raw_param: 0x400000b3, payload_hex: payload.slice(0, -2) },
+    { stream_tag: 2, raw_param: 0x400000b3, payload_hex: payload + 'ff' },
+  ] };
+  const run = childProcess.spawnSync(process.env.PYTHON || 'python',
+    ['-B', script, '--image', IMAGE], {
+      input: JSON.stringify(request), encoding: 'utf8', timeout: 30000,
+    });
+  assert.equal(run.status, 0, run.stderr);
+  const result = JSON.parse(run.stdout);
+  assert.equal(result.runtime_image_sha256, IMAGE_SHA256);
+  assert.deepEqual(result.results.map((row) => row.status),
+    ['DECODED', 'FAILED', 'FAILED', 'FAILED', 'FAILED']);
+  assert.deepEqual(result.results[0].opaque_vector_0x38_candidate,
+    { element_count: 1, element_size_bytes: 40,
+      element_vtable_rva: '0x01bae6c8' });
+  assert.equal(result.results[0].bytes_consumed, 41);
+  assert.equal(result.results[0].decoded_scalar_fields.offset_0x30_u32, 130238503);
+  assert.equal(result.results[0].decoded_scalar_fields.offset_0x28_u8, 3);
+  assert.equal(result.results[0].raw_payload_sha256,
+    crypto.createHash('sha256').update(Buffer.from(payload, 'hex')).digest('hex'));
+  for (const index of [1, 2, 3, 4]) {
+    assert.match(result.results[index].error, /outside the observed HN BuffAdd2 shapes/);
+  }
+
+  // Exercise the exact deserializer below the wrapper's length gate.
+  const directProbe = `
+import json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / 'scripts'))
+sys.path.insert(0, str(Path.cwd() / 'src' / 'decoders'))
+from decode_mapview_inventory_16_19 import read_image, make_emulator
+from decode_buff_add_16_19 import PROFILE
+image, digest = read_image(Path(sys.argv[1]))
+raw = bytes.fromhex(sys.argv[2])
+rows = []
+for payload in (raw, raw[:-1], raw + b'\\xff'):
+    emulator, context = make_emulator(image)
+    context['raw_param'] = 0x400000b3
+    decoded = emulator.decode(payload, PROFILE)
+    rows.append([decoded['deserialize_return_al'], decoded['bytes_consumed'], decoded['fully_consumed']])
+print(json.dumps({'image_sha256': digest, 'rows': rows}))
+`;
+  const direct = childProcess.spawnSync(process.env.PYTHON || 'python',
+    ['-B', '-c', directProbe, IMAGE, payload], {
+      encoding: 'utf8', timeout: 30000,
+    });
+  assert.equal(direct.status, 0, direct.stderr);
+  const controls = JSON.parse(direct.stdout);
+  assert.equal(controls.image_sha256, IMAGE_SHA256);
+  assert.deepEqual(controls.rows, [[1, 41, true], [0, 40, true], [1, 41, false]]);
 });
 
 test('selected API and capability query expose image-bound BuffAdd2 candidates only', (t) => {

@@ -28,6 +28,10 @@ REPLAY_VERSION = "16.19.820.7193"
 MAX_INPUT_BYTES = 12_000_000
 MAX_PACKETS = 50_000
 OBSERVED_LENGTHS = frozenset((14, 15, *range(17, 33)))
+OPAQUE_VECTOR_KEYFRAME_LENGTH = 41
+OPAQUE_VECTOR_RAW_PARAM = 0x400000B3
+OPAQUE_VECTOR_ELEMENT_BYTES = 40
+OPAQUE_VECTOR_ELEMENT_VTABLE_RVA = 0x01BAE6C8
 PROFILE = {
     "constructor_rva": 0x00EA0D10,
     "deserialize_rva": 0x010DCCE0,
@@ -74,7 +78,11 @@ def validate_packet(packet):
         raise ValueError("payload_hex must be even-length hexadecimal text")
     if any(char not in string.hexdigits for char in payload_hex):
         raise ValueError("payload_hex contains non-hexadecimal characters")
-    if len(payload_hex) // 2 not in OBSERVED_LENGTHS:
+    payload_length = len(payload_hex) // 2
+    if payload_length not in OBSERVED_LENGTHS and not (
+        stream_tag == 2 and raw_param == OPAQUE_VECTOR_RAW_PARAM
+        and payload_length == OPAQUE_VECTOR_KEYFRAME_LENGTH
+    ):
         raise ValueError("payload length is outside the observed HN BuffAdd2 shapes")
     return stream_tag, raw_param, bytes.fromhex(payload_hex)
 
@@ -87,6 +95,7 @@ def failed(message, return_al=None, consumed=None):
         "decoded_scalar_fields": None,
         "raw_object_scalar_bytes_hex": None,
         "raw_object_hex": None,
+        "opaque_vector_0x38_candidate": None,
         "error": message,
     }
 
@@ -102,7 +111,7 @@ def byte_tables(emulator):
     return tables
 
 
-def decode_packet(emulator, context, tables, raw_param, payload):
+def decode_packet(emulator, context, tables, stream_tag, raw_param, payload):
     context["raw_param"] = raw_param
     decoded = emulator.decode(payload, PROFILE)
     return_al = decoded["deserialize_return_al"]
@@ -113,10 +122,41 @@ def decode_packet(emulator, context, tables, raw_param, payload):
     obj = bytes.fromhex(decoded["object_hex"])
     if len(obj) != PROFILE["object_size"]:
         return failed("runtime object size differs", return_al, consumed)
-    for offset in (0x38, 0x48):
-        pointer, count, capacity = struct.unpack_from("<QII", obj, offset)
-        if pointer or count or capacity:
-            return failed("unobserved nonempty object vector", return_al, consumed)
+    first_pointer, first_count, first_capacity = struct.unpack_from("<QII", obj, 0x38)
+    second_pointer, second_count, second_capacity = struct.unpack_from("<QII", obj, 0x48)
+    opaque_vector = None
+    if (len(payload) == OPAQUE_VECTOR_KEYFRAME_LENGTH and stream_tag == 2
+            and raw_param == OPAQUE_VECTOR_RAW_PARAM):
+        # The pinned deserializer calls 0x010A2CE0 for this vector; that
+        # routine steps through 40-byte polymorphic elements. The three
+        # observed keyframe packets have exactly one. Do not interpret it.
+        from emulate_exact_packet_decoder import HEAP_BASE, HEAP_SIZE, IMAGE_BASE
+
+        if (first_count, first_capacity) != (1, 1) or not first_pointer:
+            return failed("unobserved opaque vector count", return_al, consumed)
+        if (second_pointer, second_count, second_capacity) != (0, 0, 0):
+            return failed("unobserved second object vector", return_al, consumed)
+        if (first_pointer % 8 or first_pointer < HEAP_BASE
+                or first_pointer + OPAQUE_VECTOR_ELEMENT_BYTES > emulator.heap_cursor
+                or emulator.heap_cursor > HEAP_BASE + HEAP_SIZE):
+            return failed("opaque vector pointer is outside allocated emulator heap",
+                          return_al, consumed)
+        element = bytes(emulator.emulator.mem_read(
+            first_pointer, OPAQUE_VECTOR_ELEMENT_BYTES
+        ))
+        element_vtable = struct.unpack_from("<Q", element)[0]
+        if element_vtable != IMAGE_BASE + OPAQUE_VECTOR_ELEMENT_VTABLE_RVA:
+            return failed("opaque vector element has an unobserved vtable",
+                          return_al, consumed)
+        opaque_vector = {
+            "element_count": 1,
+            "element_size_bytes": OPAQUE_VECTOR_ELEMENT_BYTES,
+            "element_vtable_rva": f"0x{OPAQUE_VECTOR_ELEMENT_VTABLE_RVA:08x}",
+        }
+    elif (first_pointer, first_count, first_capacity) != (0, 0, 0) or (
+        second_pointer, second_count, second_capacity
+    ) != (0, 0, 0):
+        return failed("unobserved nonempty object vector", return_al, consumed)
     values = {}
     raw = {}
     for name, offset, kind, helper in SCALARS:
@@ -137,6 +177,7 @@ def decode_packet(emulator, context, tables, raw_param, payload):
         "decoded_scalar_fields": values,
         "raw_object_scalar_bytes_hex": raw,
         "raw_object_hex": obj.hex(),
+        "opaque_vector_0x38_candidate": opaque_vector,
     }
 
 
@@ -167,7 +208,7 @@ def main():
                 "raw_payload_sha256": hashlib.sha256(payload).hexdigest(),
             }
             try:
-                row = decode_packet(emulator, context, tables, raw_param, payload)
+                row = decode_packet(emulator, context, tables, stream_tag, raw_param, payload)
                 row.update(binding)
                 results.append(row)
                 if row["status"] != "DECODED":
