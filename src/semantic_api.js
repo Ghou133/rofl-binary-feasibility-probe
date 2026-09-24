@@ -2207,6 +2207,12 @@ function decode1619821(replay, profile, options = {}) {
   const results = Object.values(capabilityResults);
   const usable = results.filter((result) => result.status === 'CANDIDATE');
   const failed = results.filter((result) => result.status !== 'CANDIDATE');
+  const uniqueDecodedInputCounts = new Map();
+  for (const result of usable) {
+    const packetId = result.input_packet_id;
+    uniqueDecodedInputCounts.set(packetId,
+      Math.max(uniqueDecodedInputCounts.get(packetId) ?? 0, result.input_count));
+  }
   const candidateAssociations = {};
   if (capabilities.includes('npc_buff_add_packet')
       && capabilities.includes('npc_buff_remove_packet')) {
@@ -2243,7 +2249,8 @@ function decode1619821(replay, profile, options = {}) {
     events: usable.length > 0 ? events : null,
     capability_results: capabilityResults,
     candidate_associations: candidateAssociations,
-    decoded_packet_count: usable.reduce((sum, result) => sum + result.input_count, 0),
+    decoded_packet_count: [...uniqueDecodedInputCounts.values()]
+      .reduce((sum, count) => sum + count, 0),
     runtime_image_used: results.some((result) => result.runtime_image_used === true),
     runtime_image_sha256: results.find((result) => result.runtime_image_used === true)
       ?.runtime_image_sha256 ?? null,

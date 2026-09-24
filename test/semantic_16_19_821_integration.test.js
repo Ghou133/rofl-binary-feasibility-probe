@@ -371,6 +371,17 @@ test('821 API dispatch emits separate candidate records and no confirmed deaths'
   assert.equal(timer.events.hero_death_timer_candidates[0].timer_seconds_candidate, 12);
 });
 
+test('821 API counts one decoded keyframe packet across selected snapshot capabilities', () => {
+  const decoded = decodeSemanticReplay(replay(), {
+    capabilities: ['hero_minions_killed_snapshot',
+      'hero_missions_minions_killed_snapshot'],
+  });
+  assert.equal(decoded.status, 'EXPERIMENTAL_CANDIDATE');
+  assert.equal(decoded.capability_results.hero_minions_killed_snapshot.input_count, 20);
+  assert.equal(decoded.capability_results.hero_missions_minions_killed_snapshot.input_count, 20);
+  assert.equal(decoded.decoded_packet_count, 20);
+});
+
 test('exact 821 runtime level 20 reaches the combined API candidate output', () => {
   const decoded = decodeSemanticReplay(replay({ runtimeLevel20: true }), {
     capabilities: ['hero_level_state'],
@@ -485,5 +496,7 @@ test('821 CLI dispatch reads a replay file and labels selected output candidate'
   assert.equal(result.analysis.event_counts.hero_assists_snapshot_candidates, 20);
   assert.equal(result.analysis.event_counts.hero_minions_killed_snapshot_candidates, 20);
   assert.equal(result.analysis.event_counts.hero_level_state_candidates, 10);
+  assert.equal(result.analysis.decoded_packet_count, 31);
+  assert.equal(result.analysis.unknown_packet_count, 3);
   assert.deepEqual(result.analysis.events.death_events, undefined);
 });
