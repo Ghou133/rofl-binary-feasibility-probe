@@ -21,6 +21,7 @@ const {
   assessHeroKillStatsSnapshotTail,
   assessHeroWardStatsSnapshotTail,
   assessHeroDamageTotalsSnapshotTail,
+  assessHeroTotalHealSnapshotTail,
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   analyzeReplayWithHeroStats,
 } = require('./decoders/rofl_16_19_hero_stats_candidate');
@@ -1649,6 +1650,8 @@ function capabilityQuery(replay, options = {}) {
                       ? assessHeroWardStatsSnapshotTail(replay)
                     : capability === 'hero_damage_totals_snapshot'
                       ? assessHeroDamageTotalsSnapshotTail(replay)
+                    : capability === 'hero_total_heal_snapshot'
+                      ? assessHeroTotalHealSnapshotTail(replay)
                   : candidateTailStatAssessment(replay, capability)
         : null;
       const tailStatInput = (tailStat?.required_fields ?? (tailStat ? [tailStat] : []))
@@ -1747,6 +1750,11 @@ function capabilityQuery(replay, options = {}) {
           'HN keyframe 0x0276 f32 offsets 0x1e0/0x1d0/0x1f0 and observed sequences');
       }
       if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_total_heal_snapshot') {
+        validationPending.push('ten-participant TOTAL_HEAL tail values',
+          'HN keyframe 0x0276 u32 offset 0x234 and observed sequences');
+      }
+      if (profile.game_version === '16.19.820.7193'
           && needs1619InventoryImage) {
         validationPending.push('exact runtime image SHA-256 and decoder execution',
           capability === 'hero_inventory_mapview'
@@ -1801,6 +1809,7 @@ function capabilityQuery(replay, options = {}) {
             hero_kill_stats_snapshot: 'hero_kill_stats_snapshot_candidates',
             hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
+            hero_total_heal_snapshot: 'hero_total_heal_snapshot_candidates',
             hero_inventory_mapview: 'hero_inventory_mapview_candidates',
             hero_inventory_set_item: 'hero_inventory_set_item_candidates',
           })[capability] ?? null

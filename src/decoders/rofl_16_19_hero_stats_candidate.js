@@ -22,6 +22,7 @@ const ENEMY_JUNGLE_MINIONS_KILLED_OFFSET = 0x48;
 const CHAMPION_KILLS_OFFSET = 0x4c;
 const DEATHS_OFFSET = 0x50;
 const ASSISTS_OFFSET = 0x54;
+const TOTAL_HEAL_OFFSET = 0x234;
 const KILL_STATS_FIELDS = Object.freeze([
   Object.freeze({ tailField: 'LARGEST_KILLING_SPREE', candidateKey: 'largest_killing_spree_candidate', offset: 0x58 }),
   Object.freeze({ tailField: 'KILLING_SPREES', candidateKey: 'killing_sprees_candidate', offset: 0x5c }),
@@ -55,6 +56,7 @@ const HERO_STATS_SNAPSHOT_CAPABILITIES = Object.freeze([
   'hero_kill_stats_snapshot',
   'hero_ward_stats_snapshot',
   'hero_damage_totals_snapshot',
+  'hero_total_heal_snapshot',
 ]);
 const HERO_STATS_SNAPSHOT_CAPABILITY_SET = new Set(HERO_STATS_SNAPSHOT_CAPABILITIES);
 const PRECOLLECTED_SCAN_SOURCE = new WeakMap();
@@ -347,6 +349,30 @@ const HERO_DAMAGE_TOTALS_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-hero-total-heal-keyframe-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_total_heal_snapshot',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: PACKET_ID,
+  stream_tags: Object.freeze([2, 3]),
+  hero_raw_param_first: HERO_PARAM_FIRST,
+  hero_raw_param_last: HERO_PARAM_LAST,
+  payload_length: PAYLOAD_LENGTH,
+  decoded_blob_length: BLOB_LENGTH,
+  total_heal_u32le_offset_candidate: TOTAL_HEAL_OFFSET,
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  evidence_scope: 'exact HN HeroStats route and transform; u32 offset 0x234 correlates with participant-aligned TOTAL_HEAL Replay tails across 350 snapshots from 35 keyframes in one HN Replay',
+  known_limits: Object.freeze([
+    'Only observed keyframe 0x0276 snapshots are emitted; no individual heal event, recipient, HP change, or intervening value is inferred.',
+    'The offset 0x234 interpretation and hero participant mapping remain candidates from one HN Replay, not exact-runtime field semantics.',
+    'A Replay-tail TOTAL_HEAL correlation does not establish effective healing, post-clamp amount, or overheal.',
+    'The last keyframe precedes game end, so Replay-tail gaps are retained without interpolation.',
+  ]),
+});
+
 function decodeHeroStatsByte(encoded) {
   const x = LOOKUP_TABLE[encoded];
   let y = (((x & 0xd5) << 1) | ((x >>> 1) & 0x55)) & 0xff;
@@ -493,6 +519,12 @@ function decodeHeroDamageTotalsPayload(payload) {
       [floorKey, Math.floor(values[candidateKey])])) };
 }
 
+function decodeHeroTotalHealPayload(payload) {
+  const decoded = decodeHeroStatsBlob(payload);
+  if (decoded.status !== 'PASS') return decoded;
+  return { status: 'PASS', total_heal_candidate: decoded.blob.readUInt32LE(TOTAL_HEAL_OFFSET) };
+}
+
 function assessHeroStatsTail(replay, field) {
   const stats = replay?.tail?.stats;
   if (!Array.isArray(stats)) {
@@ -594,6 +626,10 @@ function assessHeroDamageTotalsSnapshotTail(replay) {
   if (failure) return { ...failure, required_fields: assessments };
   return { ...assessments[0], required_fields: assessments,
     valuesByField: Object.fromEntries(assessments.map(({ field, values }) => [field, values])) };
+}
+
+function assessHeroTotalHealSnapshotTail(replay) {
+  return assessHeroStatsUInt32Tail(replay, 'TOTAL_HEAL');
 }
 
 function packetRef(replay, block, chunk) {
@@ -1466,6 +1502,41 @@ function decodeHeroDamageTotalsFromScan(replay, scan) {
   };
 }
 
+function decodeHeroTotalHealFromScan(replay, scan) {
+  const profile = HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE;
+  const collected = collectHeroStatsSnapshotCandidates(replay, {
+    profile,
+    assessTail: assessHeroTotalHealSnapshotTail,
+    decodePayload: decodeHeroTotalHealPayload,
+    valueKey: 'total_heal_candidate',
+    tailProjection: (value) => value,
+  }, scan);
+  if (collected.status !== 'CANDIDATE') return collected;
+  const { observations, observedDeclines, previous, lastTimes, tailValues, gameLengthMs, ...base } = collected;
+  const tailGaps = tailValues.map((finalValue, index) => ({
+    participant_id_candidate: index + 1,
+    last_snapshot_replay_time_ms: lastTimes[index],
+    last_snapshot_total_heal_candidate: previous[index],
+    final_total_heal_tail: finalValue,
+    unobserved_tail_gap: finalValue - previous[index],
+    unobserved_tail_time_ms: gameLengthMs === null ? null : gameLengthMs - lastTimes[index],
+  }));
+  return {
+    ...base,
+    evidence_status: 'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_TOTAL_HEAL_TAIL_CORRELATION',
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    final_total_heal_tail: tailValues,
+    observed_last_total_heal_candidate: previous,
+    tail_gaps: tailGaps,
+    tail_gap_total: tailGaps.reduce((sum, gap) => sum + gap.unobserved_tail_gap, 0),
+    events: observations.map((observation) => snapshotEvent(replay, profile, observation,
+      'HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE',
+      'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_TOTAL_HEAL_TAIL_CORRELATION',
+      { total_heal_candidate: observation.value },
+      { total_heal_candidate: 'CANDIDATE_ONE_REPLAY_TAIL_CORRELATION' })),
+  };
+}
+
 function decodeHeroStatsSnapshotCandidateSet(replay, capabilities, precollectedScan) {
   if (!Array.isArray(capabilities) && !(capabilities instanceof Set)) {
     throw new TypeError('HeroStats candidate capabilities must be an array or Set');
@@ -1512,6 +1583,9 @@ function decodeHeroStatsSnapshotCandidateSet(replay, capabilities, precollectedS
   }
   if (selected.has('hero_damage_totals_snapshot')) {
     outcomes.hero_damage_totals_snapshot = decodeHeroDamageTotalsFromScan(replay, scan);
+  }
+  if (selected.has('hero_total_heal_snapshot')) {
+    outcomes.hero_total_heal_snapshot = decodeHeroTotalHealFromScan(replay, scan);
   }
   return outcomes;
 }
@@ -1571,6 +1645,11 @@ function decodeHeroDamageTotalsSnapshotCandidates(replay) {
     ['hero_damage_totals_snapshot']).hero_damage_totals_snapshot;
 }
 
+function decodeHeroTotalHealSnapshotCandidates(replay) {
+  return decodeHeroStatsSnapshotCandidateSet(replay,
+    ['hero_total_heal_snapshot']).hero_total_heal_snapshot;
+}
+
 module.exports = {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   HERO_ASSISTS_SNAPSHOT_CANDIDATE_PROFILE,
@@ -1582,6 +1661,7 @@ module.exports = {
   HERO_KILL_STATS_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_WARD_STATS_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_DAMAGE_TOTALS_SNAPSHOT_CANDIDATE_PROFILE,
+  HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_JUNGLE_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
   assessHeroAssistsSnapshotTail,
@@ -1594,6 +1674,7 @@ module.exports = {
   assessHeroKillStatsSnapshotTail,
   assessHeroWardStatsSnapshotTail,
   assessHeroDamageTotalsSnapshotTail,
+  assessHeroTotalHealSnapshotTail,
   assessHeroMinionsKilledSnapshotTail,
   analyzeReplayWithHeroStats,
   decodeHeroStatsByte,
@@ -1617,6 +1698,8 @@ module.exports = {
   decodeHeroWardStatsSnapshotCandidates,
   decodeHeroDamageTotalsPayload,
   decodeHeroDamageTotalsSnapshotCandidates,
+  decodeHeroTotalHealPayload,
+  decodeHeroTotalHealSnapshotCandidates,
   decodeHeroStatsSnapshotCandidateSet,
   decodeHeroMinionsKilledPayload,
   decodeHeroMinionsKilledSnapshotCandidates,

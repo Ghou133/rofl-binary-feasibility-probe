@@ -202,6 +202,19 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   and `artifacts/16_19_development/damage_totals_hn_cli_smoke/`. These
   correlations do not establish individual damage events, source, target,
   mitigation, or an exact published field meaning.
+- **Done:** `hero_total_heal_snapshot` emits decoded HN
+  HeroStats u32 offset `0x234`. In the same 35 keyframes, its 350 values
+  start at zero per participant, rise 273 times, never decline, and stay
+  within each participant's Replay-tail `TOTAL_HEAL`. The last values match
+  5/10 tails, with five nonzero gaps totalling 6,335 after a 36,824 ms
+  keyframe-to-tail interval. This sequence is unique among 315 aligned u32
+  offsets; nine circular participant shifts match no final tails. The local
+  probe is retained under `artifacts/16_19_development/heal_stats_probe/`.
+  The real HN CLI smoke emitted 350 candidate snapshots, 35 keyframes,
+  ten participants and a 6,335 unobserved tail gap with zero framing errors;
+  its local output is `artifacts/16_19_development/total_heal_hn_cli_smoke/`.
+  These one-Replay correlations support only a candidate accumulated value,
+  not individual heal events, effective healing, or overheal.
 - **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
   runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
   observed slot/item-definition-key records as candidates. All 94 game packets
