@@ -5,7 +5,11 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 - **New exact KR build:** The user supplied 11 `16.19.821.7343` Replays under
   `kr-rofl-batch-collector/data/KR/16.19/builds/16.19.821.7343/rofl/`.
   Their complete header build is distinct from the HN/KR `820.7193` inputs;
-  no matching 821 runtime image is available. An independent 821 profile now
+  an exact Riot client module was captured locally from a running 821 replay
+  with 48,488,448/48,488,448 readable bytes (SHA-256
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`).
+  The protected on-disk EXE is not a substitute for this mapped image. The
+  image and replay data remain ignored under `artifacts/`. An independent 821 profile now
   offers CLI/API `--events hero_death` as `CANDIDATE` only. The game-stream
   `0x0259/0x0438/0x031b` co-timed core maps to all ten Replay-tail
   `NUM_DEATHS` counts in all 11 files (655 candidate rows). Two files each
@@ -94,15 +98,21 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   per-byte substitution checks for direct float seconds/milliseconds or
   integer milliseconds/seconds already contradict the first two Replays.
   This is a strong raw structural clue, not a numeric dead-time snapshot.
-- **821 level observation candidate:** KR game route `0x0197` with exact
-  `0x400000ae..b7` or `0x400001ae..b7` params has a bounded payload codebook
-  for observed levels 1–19. The first two Replays supplied 304/304 decoded
-  training rows; nine others had 1,308/1,309 recognized rows. Ten Replays
-  yield 1,463 candidate level observations. One Replay contains unclassified
-  `fa4d` at tail level 20 and returns `DECODE_FAILED` for this capability,
-  retaining the raw ref without candidate level rows. A single adjacent
-  `0x400002ae` level-10 lead remains excluded. Repeats and gaps are reported;
-  neither a complete upgrade timeline nor an exact runtime transform is claimed.
+- **821 level observation candidate:** The captured 821 factory, constructor,
+  deserializer, and callback registration bind game route `0x0197` to
+  `PKT_NPC_LevelUp_s`. Its `+0x11` object byte has an exact-image transform
+  using the 256-byte table at RVA `0x01ba1560` (SHA-256
+  `328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b`).
+  That transform maps the observed byte codes to levels 1–20, including the
+  former unknown `fa4d` as 20. The exact deserializer fully consumed all 76
+  distinct selected-hero payload shapes across 1,613 game-stream packets in
+  the 11 Replays; 74 two-byte shapes rejected a one-byte truncation and an
+  appended byte at the full-consumption gate. CLI/API now emit 1,613 level
+  candidates in 11/11 Replays with zero framing errors; one Replay retains a
+  missing intermediate level observation. The runtime image is not required
+  at CLI execution because the pinned transform table is embedded and checked.
+  Participant assignment remains a Replay-tail candidate, and the one
+  `0x400002ae` lead stays excluded despite structural full consumption.
 - **821 scan reuse:** Selected 821 CLI capabilities now retain only their
   required route packets during the container analyzer's single full block
   walk. Standalone combined API calls share one strict walk. On the same
@@ -604,8 +614,9 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   `artifacts/16_19_development/buff_link_probe_second/`.
   In the third Replay all 3,030 distinct Remove keys appear in Add rows, while
   3,023 appear in game-stream Adds; row identity remains unresolved.
-- **Next:** Seek independent 821 runtime evidence for the unclassified level
-  code and payload semantics; continue bounded KR route research.
+- **Next:** Use the exact 821 image to seek independent payload and participant
+  evidence for the death/return and HeroStats candidates; continue bounded KR
+  route research.
   Further independent HN Replays
   can test HeroStats and inventory candidates. The HN
   Broadcast participant mapping remains candidate-only after three Replays, and
@@ -619,6 +630,18 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   opcode `0x00f6` has a 16.19 factory object size `0x18`, not the old `0x2c`
   layout. A path candidate still needs an exact observed receive/field-write
   link and independent position anchors; no old profile is reused.
+- **821 path negative control:** A strict scan of all 11 KR Replays found no
+  defensible ordinary hero coordinate or path field. `0x038e` had 69/607
+  same-participant packets near matched returns versus 39/607 rotated-ID
+  controls, a weak lead. `0x023c` co-times with other routes, `0x0113` forms
+  short repeated trains, and `0x0194` appears during observed death intervals.
+  None is emitted as a path candidate.
+- **821 HeroStats route boundary:** The exact image registers
+  `PKT_S2C_HeroStats_s` and its factory constructor at numeric ID `0x0089`,
+  but running that deserializer on two real 1,263-byte KR keyframe `0x0089`
+  payloads consumed only 5 bytes and left 1,258 unread. Numeric ID equality
+  does not bind this keyframe carrier to that runtime object. The existing
+  raw-byte snapshot candidates remain independent Replay correlations.
 - **Ward negative control:** Old 16.16 WardSpawn opcode `0x049a` is not an HN
   16.19 factory case and has no packets in this Replay. The HN `0x0400` case
   has 6,627 packets and a distinct exact-image runtime deserializer. Its

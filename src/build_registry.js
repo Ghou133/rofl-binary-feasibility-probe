@@ -439,8 +439,8 @@ const BUILD_PROFILES = deepFreeze({
       status: 'FORMAT_VERIFIED_LOCAL_REPLAYS',
     },
     runtime_profile: {
-      status: 'UNPROFILED',
-      image_sha256: null,
+      status: 'CAPTURED_STATIC_ROUTE_AND_LEVEL_BYTE_RESEARCH',
+      image_sha256: levelCandidate1619821.RUNTIME_IMAGE_SHA256,
     },
     packet_routes: {
       hero_death: 0x0259,
@@ -467,7 +467,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_deaths_snapshot: 'CANDIDATE_821_RAW_BYTE_KEYFRAME_TAIL_CORRELATION',
       hero_champion_kills_snapshot: 'CANDIDATE_821_MIRRORED_RAW_BYTE_KEYFRAME_TAIL_CORRELATION',
       hero_assists_snapshot: 'CANDIDATE_821_RAW_BYTE_KEYFRAME_TAIL_CORRELATION',
-      hero_level_state: 'CANDIDATE_821_LEVEL_ROUTE_TAIL_CODEBOOK',
+      hero_level_state: 'CANDIDATE_821_RUNTIME_LEVEL_BYTE_AND_REPLAY_TAIL',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, 821 route-profile bounded',
@@ -478,7 +478,7 @@ const BUILD_PROFILES = deepFreeze({
         'exact 0x0089 mirrored raw bytes 434/1186 finite codebook, 821 KR keyframe candidate only',
       keyframe_assists_snapshot:
         'exact 0x0089 raw byte 1178 finite codebook, 821 KR keyframe candidate only',
-      level_state: 'exact 0x0197 full-param families and finite payload codebook, candidate only',
+      level_state: 'exact 821 PKT_NPC_LevelUp_s route and +0x11 byte transform; participant alignment and event interpretation candidate only',
     },
     verified_capabilities: [],
     candidate_capabilities: [

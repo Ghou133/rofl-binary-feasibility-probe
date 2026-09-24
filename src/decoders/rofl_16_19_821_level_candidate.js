@@ -7,14 +7,34 @@ const { replaySourceError } = require('./replay_source_integrity');
 const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
 
 const REPLAY_VERSION_821 = '16.19.821.7343';
+const RUNTIME_IMAGE_SHA256 = '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325';
+const LOOKUP_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b';
 
-// The level-byte codebook was calibrated on two exact-build KR Replays and
-// checked against nine others. First-byte shape includes all eleven observed
-// Replays. This is a byte-to-tail correlation, not a runtime field transform.
+// Independently read from RVA 0x01ba1560 of the captured 821 runtime image.
+// The exact 0x0197 PKT_NPC_LevelUp_s deserializer stores its +0x11 field in
+// this byte representation. The embedded table lets the CLI decode that field
+// without distributing the client image; the image itself is not run here.
+const LOOKUP_TABLE = Buffer.from([
+  'd75682dc83028f2935042171799e927fcb976a5105c76fe640637e345b470778',
+  '5a96b8b92c995e6ed1754161245f4aaa4bcf0ed4865dba1d3f2bdf62f0330055',
+  'cafc19acf3662369bceb46f89c50874d6d108e88be1bb5da4e1a13cc2209ada4',
+  '9d30a6e57dfac91712c2fde1bbe70b98bfbd1137c07cf795b6dd49f4812a9f1c',
+  'fb8d9a727b577a43b3a953e459202fa8f67436a085f1a7147031840cb2a5dbe8',
+  '16ae3d25b1cd9b0367155cea1f39a1440a8b76de606593f264d5c1c84c064fb7',
+  'edfee0f9a2184891ce1e3cb46c425494e328e90127ec0d45ff26efe28aabd9f5',
+  '08c4af32c56b80c6c358eea33e2d0f893ab0d2d33873d8d08c7790523bd62e68',
+].join(''), 'hex');
+if (LOOKUP_TABLE.length !== 256
+  || crypto.createHash('sha256').update(LOOKUP_TABLE).digest('hex') !== LOOKUP_TABLE_SHA256) {
+  throw new Error('exact 821 level lookup table identity mismatch');
+}
+
+// Retained as an observed-code reference for consumers of this module. The
+// decoder below uses the exact 821 runtime byte transform, not this codebook.
 const LEVEL_BY_LAST_PAYLOAD_BYTE = Object.freeze({
   0x75: 3, 0x80: 4, 0x0b: 5, 0x46: 6, 0x16: 7, 0xd4: 8,
   0xb6: 9, 0xfc: 10, 0x1e: 11, 0x4b: 12, 0xed: 13,
-  0x3c: 14, 0xd1: 15, 0xac: 16, 0x1c: 17, 0x11: 18, 0x28: 19,
+  0x3c: 14, 0xd1: 15, 0xac: 16, 0x1c: 17, 0x11: 18, 0x28: 19, 0x4d: 20,
 });
 const OBSERVED_TWO_BYTE_PREFIXES = new Set([0xe1, 0xe2, 0xe4, 0xe7, 0xf9, 0xfa, 0xfc, 0xff]);
 
@@ -27,12 +47,14 @@ const HERO_LEVEL_CANDIDATE_PROFILE_821 = Object.freeze({
   stream_tag: 1,
   replay_block_packet_id: 0x0197,
   participant_mapping: 'only 0x400000ae..b7 and 0x400001ae..b7; low byte aligns to Replay tail participant 1..10',
-  evidence_scope: 'two calibration and nine independent KR exact-build Replays; observed payload codebook 1..19',
-  evidence_runtime_image_sha256: null,
+  evidence_scope: 'exact 821 PKT_NPC_LevelUp_s factory/deserializer and field byte transform; eleven KR Replays with ten participant LEVEL tails',
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  exact_deserializer_rva: 0x00f1d8a0,
   known_limits: Object.freeze([
     'Experimental exact-build Replay-tail candidate, not a published level capability.',
-    'Level 1..19 values use an observed raw-payload codebook, not an 821 runtime field transform.',
-    'Level 20 code 0x4d in one Replay is unclassified; that Replay fails closed without candidate events.',
+    'The 821 runtime confirms the LevelUp route and byte transform for observed levels 1..20; participant alignment and event interpretation remain candidate.',
+    'Only the observed one- and two-byte packet shapes are accepted; unobserved selectors and levels outside 1..20 fail closed.',
     'An adjacent 0x400002ae packet in one Replay is retained as an unclassified route lead, not a mapped hero packet.',
     'Repeated packets are observations, not extra level transitions; gaps are reported without reconstruction.',
     'No experience, level-before, complete level timeline, or level causation is inferred.',
@@ -98,15 +120,29 @@ function packetRef(replay, source) {
   };
 }
 
+function rotateRight8(value, bits) {
+  return ((value >>> bits) | (value << (8 - bits))) & 0xff;
+}
+
+function decodeRuntimeLevelByte(encoded) {
+  const rotated = rotateRight8(encoded, 6) ^ 0x18;
+  const index = rotateRight8((rotated + 0x3b) & 0xff, 1) ^ 0xa3;
+  return LOOKUP_TABLE[index];
+}
+
 function decodeLevelCode(payload) {
+  let encodedField;
   if (payload.length === 1) {
-    if (payload[0] === 0xde) return { level: 1, code: 0xde };
-    if (payload[0] === 0xe5) return { level: 2, code: 0xe5 };
-    return null;
+    // The exact deserializer stores these constants at object byte +0x11.
+    if (payload[0] === 0xde) encodedField = 0x6f;
+    else if (payload[0] === 0xe5) encodedField = 0x82;
+    else return null;
+  } else {
+    if (payload.length !== 2 || !OBSERVED_TWO_BYTE_PREFIXES.has(payload[0])) return null;
+    encodedField = payload[1];
   }
-  if (payload.length !== 2 || !OBSERVED_TWO_BYTE_PREFIXES.has(payload[0])) return null;
-  const level = LEVEL_BY_LAST_PAYLOAD_BYTE[payload[1]];
-  return level === undefined ? null : { level, code: payload[1] };
+  const level = decodeRuntimeLevelByte(encodedField);
+  return level >= 1 && level <= 20 ? { level, code: payload[payload.length - 1] } : null;
 }
 
 function decodeHeroLevelCandidates821(replay, precollected = null) {
@@ -115,8 +151,8 @@ function decodeHeroLevelCandidates821(replay, precollected = null) {
     profile_id: profile.id,
     input_packet_id: profile.replay_block_packet_id,
     runtime_image_used: false,
-    runtime_image_status: 'NOT_REQUIRED_ROUTE_TAIL_CANDIDATE',
-    evidence_runtime_image_sha256: null,
+    runtime_image_status: 'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED',
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
     known_limits: [...profile.known_limits],
   };
   if (replay?.header?.version !== REPLAY_VERSION_821) {
@@ -225,12 +261,12 @@ function decodeHeroLevelCandidates821(replay, precollected = null) {
       : payload.level === 1 ? 'LEVEL_ONE_OBSERVATION' : 'HIGHER_LEVEL_OBSERVATION',
     raw_payload_code_hex: `0x${payload.code.toString(16).padStart(2, '0')}`,
     confidence: 'CANDIDATE',
-    semantic_status: 'CANDIDATE_821_REPLAY_TAIL_LEVEL_CODEBOOK',
+    semantic_status: 'CANDIDATE_821_RUNTIME_LEVEL_BYTE_AND_REPLAY_TAIL',
     field_confidence: {
       replay_time_ms: 'VERIFIED_DIRECT',
       hero_raw_param: 'VERIFIED_DIRECT',
       participant_id_candidate: 'CANDIDATE_REPLAY_TAIL_ALIGNMENT',
-      level_after_candidate: 'CANDIDATE_REPLAY_TAIL_CODEBOOK',
+      level_after_candidate: 'CANDIDATE_EXACT_821_RUNTIME_BYTE_AND_REPLAY_TAIL',
     },
     raw_packet_ref: packetRef(replay, row),
     known_limits: [...profile.known_limits],
@@ -238,7 +274,7 @@ function decodeHeroLevelCandidates821(replay, precollected = null) {
   return {
     ...common,
     status: 'CANDIDATE',
-    evidence_status: 'CANDIDATE_821_REPLAY_TAIL_LEVEL_CODEBOOK',
+    evidence_status: 'CANDIDATE_821_RUNTIME_LEVEL_BYTE_AND_REPLAY_TAIL',
     event_count: events.length,
     final_levels: tail.levels,
     observed_max_levels: lastLevel,
@@ -252,8 +288,10 @@ function decodeHeroLevelCandidates821(replay, precollected = null) {
 
 module.exports = {
   REPLAY_VERSION_821,
+  RUNTIME_IMAGE_SHA256,
   HERO_LEVEL_CANDIDATE_PROFILE_821,
   LEVEL_BY_LAST_PAYLOAD_BYTE,
+  decodeRuntimeLevelByte,
   assessHeroLevelTail821,
   decodeHeroLevelCandidates821,
 };

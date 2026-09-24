@@ -1880,8 +1880,8 @@ function capabilityQuery(replay, options = {}) {
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_level_state') {
-        validationPending.push('KR game 0x0197 full-param families and finite payload codebook',
-          'ten-participant LEVEL sequence and tail equality; unknown codes fail closed');
+        validationPending.push('exact 821 LevelUp route, observed payload shapes, and pinned runtime byte transform',
+          'ten-participant LEVEL sequence and tail equality; out-of-range values fail closed');
       }
       if (profile.game_version === '16.19.820.7193'
           && (capability === 'hero_death_timer' || capability === 'hero_respawn')) {

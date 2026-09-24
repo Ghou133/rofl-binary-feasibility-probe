@@ -40,12 +40,13 @@ function keyframeDeathsPacket(participantId, count, timeMs,
   return Buffer.concat([header, payload]);
 }
 
-function replay({ unknownLevel = false, observedReturn = false,
+function replay({ unknownLevel = false, runtimeLevel20 = false, observedReturn = false,
   unknownKill = false, unknownAssist = false } = {}) {
   const levelPackets = Array.from({ length: 10 }, (_, index) => {
     const row = packet(0x0197, 0x400000ae + index,
-      unknownLevel && index === 0 ? 2 : 1);
-    if (unknownLevel && index === 0) row.set([0xfa, 0x4d], 12);
+      (unknownLevel || runtimeLevel20) && index === 0 ? 2 : 1);
+    if (unknownLevel && index === 0) row.set([0xfa, 0x70], 12);
+    else if (runtimeLevel20 && index === 0) row.set([0xfa, 0x4d], 12);
     else row[12] = 0xe5;
     return row;
   });
@@ -72,7 +73,7 @@ function replay({ unknownLevel = false, observedReturn = false,
     TOTAL_TIME_SPENT_DEAD: observedReturn && index === 0 ? '9' : '0',
     CHAMPIONS_KILLED: index === 0 ? unknownKill ? '28' : '1' : '0',
     ASSISTS: index === 0 ? unknownAssist ? '28' : '1' : '0',
-    LEVEL: unknownLevel && index === 0 ? '20' : '2',
+    LEVEL: (unknownLevel || runtimeLevel20) && index === 0 ? '20' : '2',
   }));
   return input;
 }
@@ -213,7 +214,17 @@ test('821 API dispatch emits separate candidate records and no confirmed deaths'
   assert.equal(unavailable.capability_results.hero_death_timer.status, 'UNSUPPORTED');
 });
 
-test('unknown 821 level code leaves independent death candidates available', () => {
+test('exact 821 runtime level 20 reaches the combined API candidate output', () => {
+  const decoded = decodeSemanticReplay(replay({ runtimeLevel20: true }), {
+    capabilities: ['hero_level_state'],
+  });
+  assert.equal(decoded.status, 'EXPERIMENTAL_CANDIDATE');
+  assert.equal(decoded.capability_results.hero_level_state.status, 'CANDIDATE');
+  assert.equal(decoded.events.hero_level_state_candidates[0].level_after_candidate, 20);
+  assert.equal(decoded.events.hero_level_state_candidates[0].raw_packet_ref.raw_payload_hex, 'fa4d');
+});
+
+test('out-of-range 821 level code leaves independent death candidates available', () => {
   const decoded = decodeSemanticReplay(replay({ unknownLevel: true }), {
     capabilities: ['hero_death', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
@@ -227,7 +238,7 @@ test('unknown 821 level code leaves independent death candidates available', () 
   assert.equal(decoded.capability_results.hero_level_state.status, 'DECODE_FAILED');
   assert.equal(decoded.capability_results.hero_level_state.event_count, null);
   assert.equal(decoded.capability_results.hero_level_state.rejected_packet_ref.raw_payload_hex,
-    'fa4d');
+    'fa70');
   assert.equal(decoded.events.hero_death_candidates.length, 1);
   assert.equal(decoded.events.hero_deaths_snapshot_candidates.length, 20);
   assert.equal(decoded.events.hero_champion_kills_snapshot_candidates.length, 20);

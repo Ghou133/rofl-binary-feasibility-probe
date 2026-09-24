@@ -7,6 +7,7 @@ const { replayFromChunks } = require('./helpers/synthetic_replay');
 const {
   REPLAY_VERSION_821,
   HERO_LEVEL_CANDIDATE_PROFILE_821,
+  decodeRuntimeLevelByte,
   assessHeroLevelTail821,
   decodeHeroLevelCandidates821,
 } = require('../src/decoders/rofl_16_19_821_level_candidate');
@@ -26,7 +27,8 @@ function replayWithObservedRoute(options = {}) {
   const rows = [packet(0, 0x400000ae, [0xde])];
   for (let id = 1; id <= 10; id += 1) rows.push(packet(1000, 0x400000ad + id, [0xe5]));
   rows.push(packet(2000, 0x400000ae, [0xe2, 0x75]));
-  rows.push(packet(4000, 0x400000ae, options.unknownCode ? [0xfa, 0x4d] : [0xe2, 0x0b]));
+  rows.push(packet(4000, 0x400000ae, options.level20 ? [0xfa, 0x4d]
+    : options.badLevelCode ? [0xfa, 0x70] : [0xe2, 0x0b]));
   rows.push(packet(2000, 0x400000b1, [0xe1, 0x75]));
   rows.push(packet(3000, 0x400001b1, [0xe4, 0x75]));
   // This distinct family has one real Replay lead; it is deliberately excluded.
@@ -36,7 +38,7 @@ function replayWithObservedRoute(options = {}) {
   if (options.badPrefix) rows.push(packet(5000, 0x400000b2, [0xe3, 0x75]));
   const replay = replayFromChunks([{ body: Buffer.concat(rows) }], options.version ?? REPLAY_VERSION_821);
   replay.tail.stats = Array.from({ length: 10 }, (_, index) => ({
-    LEVEL: String(index === 0 ? options.firstTailLevel ?? (options.unknownCode ? 20 : 5)
+    LEVEL: String(index === 0 ? options.firstTailLevel ?? (options.level20 || options.badLevelCode ? 20 : 5)
       : index === 3 ? 3 : 2),
   }));
   return replay;
@@ -44,7 +46,10 @@ function replayWithObservedRoute(options = {}) {
 
 test('821 level tail assessment and profile require the exact build and ten valid levels', () => {
   assert.equal(HERO_LEVEL_CANDIDATE_PROFILE_821.replay_version, REPLAY_VERSION_821);
-  assert.equal(HERO_LEVEL_CANDIDATE_PROFILE_821.evidence_runtime_image_sha256, null);
+  assert.equal(HERO_LEVEL_CANDIDATE_PROFILE_821.evidence_runtime_image_sha256,
+    '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325');
+  assert.equal(HERO_LEVEL_CANDIDATE_PROFILE_821.lookup_table_sha256,
+    '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b');
   const replay = replayWithObservedRoute();
   assert.deepEqual(assessHeroLevelTail821(replay), {
     status: 'PASS', levels: [5, 2, 2, 3, 2, 2, 2, 2, 2, 2],
@@ -88,12 +93,24 @@ test('821 level route emits observed values, repeats and gaps with exact raw pac
     && event.confidence === 'CANDIDATE'));
 });
 
-test('821 candidate fails closed on uncalibrated code, malformed shape and sequence conflicts', () => {
-  const unknown = decodeHeroLevelCandidates821(replayWithObservedRoute({ unknownCode: true }));
+test('821 exact runtime byte transform recovers observed level 20', () => {
+  const observed = [0x6f, 0x82, 0x75, 0x80, 0x0b, 0x46, 0x16, 0xd4, 0xb6,
+    0xfc, 0x1e, 0x4b, 0xed, 0x3c, 0xd1, 0xac, 0x1c, 0x11, 0x28, 0x4d];
+  assert.deepEqual(observed.map(decodeRuntimeLevelByte),
+    Array.from({ length: 20 }, (_, index) => index + 1));
+  const decoded = decodeHeroLevelCandidates821(replayWithObservedRoute({ level20: true }));
+  assert.equal(decoded.status, 'CANDIDATE');
+  assert.equal(decoded.observed_max_levels[0], 20);
+  assert.equal(decoded.events.find((event) => event.raw_payload_code_hex === '0x4d')
+    .level_after_candidate, 20);
+});
+
+test('821 candidate fails closed on out-of-range runtime value, malformed shape and sequence conflicts', () => {
+  const unknown = decodeHeroLevelCandidates821(replayWithObservedRoute({ badLevelCode: true }));
   assert.equal(unknown.status, 'DECODE_FAILED');
   assert.equal(unknown.events, null);
-  assert.match(unknown.error, /unclassified 821 level payload fa4d/);
-  assert.equal(unknown.rejected_packet_ref.raw_payload_hex, 'fa4d');
+  assert.match(unknown.error, /unclassified 821 level payload fa70/);
+  assert.equal(unknown.rejected_packet_ref.raw_payload_hex, 'fa70');
   for (const options of [
     { badShape: true },
     { badPrefix: true },

@@ -47,7 +47,7 @@ function fixture({ unknownLevel = false, damagedStart = false, damagedGame = fal
     shortPacket(0x03d4, 0, Buffer.alloc(3)),
     ...Array.from({ length: 10 }, (_, index) => shortPacket(
       0x0197, 0x400000ae + index,
-      unknownLevel && index === 0 ? Buffer.from([0xfa, 0x4d]) : Buffer.from([0xe5]))),
+      unknownLevel && index === 0 ? Buffer.from([0xfa, 0x70]) : Buffer.from([0xe5]))),
   ]);
   const chunks = [
     { stream: 1, compressed: true, body: game },
@@ -155,7 +155,7 @@ test('821 selected-only token stays bound to its Replay and copied packet rows',
   assert.match(rejected.error, /Replay source integrity failed/);
 });
 
-test('821 unknown level retains independent results and a bad start chunk blocks all', (t) => {
+test('821 out-of-range level retains independent results and a bad start chunk blocks all', (t) => {
   const unknown = fixture({ unknownLevel: true });
   const decompressions = countDecompressions(t);
   const partial = decodeSemanticReplay(unknown, { capabilities: CAPABILITIES });
@@ -165,7 +165,7 @@ test('821 unknown level retains independent results and a bad start chunk blocks
   assert.equal(partial.capability_results.hero_deaths_snapshot.status, 'CANDIDATE');
   assert.equal(partial.capability_results.hero_level_state.status, 'DECODE_FAILED');
   assert.equal(partial.capability_results.hero_level_state.rejected_packet_ref.raw_payload_hex,
-    'fa4d');
+    'fa70');
 
   const damaged = fixture({ damagedStart: true });
   const failed = decodeSemanticReplay(damaged, { capabilities: CAPABILITIES });
