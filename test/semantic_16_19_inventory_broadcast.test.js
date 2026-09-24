@@ -119,6 +119,19 @@ test('Broadcast wrong image hash fails closed', (t) => {
   assert.equal(result.runtime_image_status, 'HASH_MISMATCH');
 });
 
+test('Broadcast helper verifies image identity before loading Unicorn', (t) => {
+  const image = temporaryImage(t);
+  const script = path.resolve(__dirname, '../src/decoders/decode_broadcast_inventory_16_19.py');
+  const run = childProcess.spawnSync(process.env.PYTHON || 'python',
+    ['-S', '-B', script, '--image', image], {
+      input: JSON.stringify({ replay_version: BUILD, packets: [] }),
+      encoding: 'utf8',
+    });
+  assert.equal(run.status, 1);
+  assert.match(run.stderr, /runtime image SHA-256 mismatch/);
+  assert.doesNotMatch(run.stderr, /unicorn/i);
+});
+
 test('Broadcast failure conserves raw packet ref and suppresses every record', (t) => {
   const image = temporaryImage(t);
   t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {

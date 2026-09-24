@@ -13,8 +13,6 @@ import struct
 import sys
 from pathlib import Path
 
-from unicorn.x86_const import UC_X86_REG_GS_BASE
-
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from decode_mapview_inventory_16_19 import (  # noqa: E402
@@ -22,8 +20,6 @@ from decode_mapview_inventory_16_19 import (  # noqa: E402
     SLOT_OFFSET, SLOT_BYTE_HELPER_RVA, FLAG_OFFSET, FLAG_BYTE_HELPER_RVA,
     ITEM_ID_OFFSET, ITEM_ID_BYTE_HELPER_RVA,
 )
-from emulate_exact_packet_decoder import IMAGE_BASE, OBJECT_ADDRESS  # noqa: E402
-
 PACKET_LIMIT = 512
 INPUT_BYTE_LIMIT = 2_000_000
 MAX_RECORDS = 10
@@ -57,6 +53,12 @@ def read_request():
 
 
 def make_broadcast_emulator(image):
+    try:
+        from unicorn.x86_const import UC_X86_REG_GS_BASE
+    except ImportError as exc:
+        raise RuntimeError(
+            "exact-runtime decoder requires the installed unicorn dependency"
+        ) from exc
     # The reused HN MapView emulator provides the exact allocator and base
     # packet raw_param bridge. Both routes use the same 0xEC14A0 embedded
     # vector constructor and 0x10643F0 record deserializer in this image.
@@ -80,6 +82,8 @@ def make_broadcast_emulator(image):
 
 
 def decode_packet(emulator, context, raw_param, payload):
+    from emulate_exact_packet_decoder import IMAGE_BASE, OBJECT_ADDRESS
+
     context["raw_param"] = raw_param
     profile = {"constructor_rva": CONSTRUCTOR_RVA,
         "deserialize_rva": DESERIALIZER_RVA, "object_size": OBJECT_SIZE,
