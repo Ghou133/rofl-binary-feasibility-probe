@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 const childProcess = require('node:child_process');
+const { once } = require('node:events');
 const fs = require('node:fs');
 const path = require('node:path');
+const { finished } = require('node:stream/promises');
 const { rawAnchorChainStatus, renderAcceptanceReport } = require('./cli_report');
 const { resolveBuildProfile } = require('./build_registry');
 const {
@@ -72,10 +74,11 @@ const {
   writeJson,
   writeJsonl,
 } = require('./io');
+const { EventQueryError, prepareEventQuery, streamEventQuery } = require('./event_query');
 
 const REPOSITORY_ROOT = path.resolve(__dirname, '..');
 const TEST_COMMAND = 'node --test test/*.test.js';
-const COMMANDS = new Set(['inspect', 'decode', 'analyze', 'batch', 'validate', 'ward-events', 'capabilities']);
+const COMMANDS = new Set(['inspect', 'decode', 'analyze', 'batch', 'validate', 'ward-events', 'capabilities', 'query-events']);
 
 function enumerateRepositoryTestFiles() {
   const testRoot = path.join(REPOSITORY_ROOT, 'test');
@@ -96,6 +99,7 @@ Usage:
   node src/cli.js batch <file.rofl|directory> [more inputs ...] [--out-dir artifacts]
   node src/cli.js validate [file.rofl|directory ...] [--out-dir artifacts]
   node src/cli.js ward-events <rows.json|rows.jsonl|file.rofl> [--out-dir artifacts]
+  node src/cli.js query-events <replay-artifact-directory> --event <exact-event-key> [filters]
 
 Runtime: Node >=22.15.0 with native Zstd.
 Legacy semantic CLI scope: exact 16.15.801.3452. The separate 16.16 public API
@@ -114,12 +118,19 @@ Options:
   --runtime-image <path>        Exact external image for 16.16 or 16.19 inventory candidates
   --events <name[,name...]>     Select 16.19 semantic capabilities to decode
   --event-jsonl-only            Store 16.19 event rows only in JSONL (decode/batch with --events)
+  --event <key>                 Exact 16.19 candidate JSONL key (query-events)
   --json                        Emit only machine-readable JSON (capabilities)
   --python <command>            Python command with Unicorn installed (default: python)
   --details-dir <path>          Validation-only directory for same-game Details matching
   --ward-spawns <jsonl>         Verified current-build WardSpawn decoder rows
   --ward-lifecycles <jsonl>     Derived current-build Ward corpse lifecycle rows
   --hero-positions <jsonl>      Verified one-second PathPacket position rows
+  Query event filters (query-events, 16.19 default or --event-jsonl-only artifacts):
+  --from-ms/--to-ms <number>    Inclusive Replay millisecond bounds
+  --participant <1..10>        Candidate subject participant; unknown rows do not match
+  --limit <number>              Maximum rows emitted; all rows are still checked and counted
+  --output <path|->            Write unmodified JSONL rows (default: stdout)
+                                Query summary is JSON on stderr when output is stdout
   Ward event filters (ward-events):
   --output <path>               Write filtered rows (extension selects jsonl/json/csv)
   --format <jsonl|json|csv>     Output format (default: jsonl)
@@ -153,7 +164,10 @@ function parseArgs(argv) {
     decoderImage: DEFAULT_DECODER_IMAGE,
     runtimeImage: null,
     events: null,
+    event: null,
     eventJsonlOnly: false,
+    participant: null,
+    limit: null,
     python: null,
     wardSpawns: null,
     wardLifecycles: null,
@@ -238,11 +252,17 @@ function parseArgs(argv) {
       else if (key === 'decoder-image') options.decoderImage = value;
       else if (key === 'runtime-image') options.runtimeImage = value;
       else if (key === 'events') options.events = parseEventNames(value);
+      else if (command === 'query-events' && key === 'event') options.event = value;
       else if (key === 'python') options.python = value;
       else if (key === 'ward-spawns') options.wardSpawns = value;
       else if (key === 'ward-lifecycles') options.wardLifecycles = value;
       else if (key === 'hero-positions') options.heroPositions = value;
       else if (command === 'ward-events' && key === 'output') options.output = value;
+      else if (command === 'query-events' && key === 'output') options.output = value;
+      else if (command === 'query-events' && key === 'from-ms') options.fromMs = queryInteger(value, key, true);
+      else if (command === 'query-events' && key === 'to-ms') options.toMs = queryInteger(value, key, true);
+      else if (command === 'query-events' && key === 'participant') options.participant = queryInteger(value, key);
+      else if (command === 'query-events' && key === 'limit') options.limit = queryInteger(value, key);
       else if (command === 'ward-events' && key === 'format') options.format = String(value).toLowerCase();
       else if (command === 'ward-events' && key === 'collection') options.collection = value;
       else if (command === 'ward-events' && key === 'input') options.inputs.push(value);
@@ -274,7 +294,31 @@ function parseArgs(argv) {
   if (command === 'ward-events') {
     positionals.push(...options.inputs);
   }
+  if (command === 'query-events') {
+    if (positionals.length !== 1 || !options.event) {
+      throw new Error('query-events requires one Replay artifact directory and --event');
+    }
+    if (options.participant !== null && options.participant > 10) {
+      throw new Error('--participant must be in 1..10');
+    }
+    if (options.fromMs !== null && options.toMs !== null && options.fromMs > options.toMs) {
+      throw new Error('--from-ms must not exceed --to-ms');
+    }
+    if (options.output === '') throw new Error('--output must be a path or -');
+  }
   return { command, positionals, options };
+}
+
+function queryInteger(value, label, allowZero = false) {
+  const literal = String(value);
+  if (!/^(0|[1-9][0-9]*)$/.test(literal)) {
+    throw new Error(`--${label} must be a ${allowZero ? 'nonnegative' : 'positive'} integer`);
+  }
+  const number = Number(literal);
+  if (!Number.isSafeInteger(number) || (!allowZero && number === 0)) {
+    throw new Error(`--${label} must be a ${allowZero ? 'nonnegative' : 'positive'} safe integer`);
+  }
+  return number;
 }
 
 function parseEventNames(value) {
@@ -1969,6 +2013,68 @@ function runCapabilitiesCommand(parsed) {
   return result.status === 'UNSUPPORTED_VERSION' ? 2 : 0;
 }
 
+async function runQueryEventsCommand(parsed) {
+  const { options, positionals } = parsed;
+  let outputPath = null;
+  let writer = process.stdout;
+  let createdOutput = false;
+  try {
+    const prepared = prepareEventQuery(positionals[0], options.event);
+    if (options.output && options.output !== '-') {
+      outputPath = path.resolve(options.output);
+      const protectedPaths = [prepared.inputPath,
+        path.join(prepared.artifactDirectory, 'semantic_run.json'),
+        path.join(prepared.artifactDirectory, 'replay_analysis.json')];
+      const normalize = (filename) => process.platform === 'win32'
+        ? filename.toLowerCase() : filename;
+      if (protectedPaths.some((filename) => normalize(filename) === normalize(outputPath))) {
+        throw new EventQueryError('UNSAFE_OUTPUT',
+          'Query output must not replace its event JSONL or Replay metadata.');
+      }
+      await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
+      let handle;
+      try {
+        handle = await fs.promises.open(outputPath, 'wx');
+      } catch (error) {
+        if (error.code === 'EEXIST') {
+          throw new EventQueryError('OUTPUT_EXISTS',
+            `Query output already exists: ${outputPath}`);
+        }
+        throw error;
+      }
+      writer = handle.createWriteStream();
+      createdOutput = true;
+    }
+    const summary = await streamEventQuery(prepared, {
+      fromMs: options.fromMs,
+      toMs: options.toMs,
+      participant: options.participant,
+      limit: options.limit,
+    }, async (line) => {
+      if (!writer.write(line)) await once(writer, 'drain');
+    });
+    if (createdOutput) {
+      writer.end();
+      await finished(writer);
+    }
+    summary.output = outputPath ?? '-';
+    (outputPath ? process.stdout : process.stderr).write(`${JSON.stringify(summary)}\n`);
+    return 0;
+  } catch (error) {
+    if (createdOutput) {
+      writer.destroy();
+      await finished(writer).catch(() => {});
+      await fs.promises.rm(outputPath, { force: true });
+    }
+    if (error instanceof EventQueryError) {
+      process.stderr.write(`${JSON.stringify({ query_status: 'FAILED', code: error.code,
+        error: error.message, ...error.details })}\n`);
+      return 2;
+    }
+    throw error;
+  }
+}
+
 async function main(argv = process.argv.slice(2)) {
   const parsed = parseArgs(argv);
   if (parsed.options.help || parsed.command === 'help') {
@@ -1978,6 +2084,7 @@ async function main(argv = process.argv.slice(2)) {
   if (!COMMANDS.has(parsed.command)) throw new Error(`Unknown command: ${parsed.command}`);
   if (parsed.command === 'ward-events') return runWardEventsCommand(parsed);
   if (parsed.command === 'capabilities') return runCapabilitiesCommand(parsed);
+  if (parsed.command === 'query-events') return runQueryEventsCommand(parsed);
   const inputs = parsed.positionals.length > 0 ? parsed.positionals : ['replay'];
   const files = discoverReplayFiles(inputs);
   if (files.length === 0) throw new Error('No .rofl files found in the supplied input.');
@@ -2044,5 +2151,6 @@ module.exports = {
   reserveOutputDirectory,
   capabilityQuery,
   runCapabilitiesCommand,
+  runQueryEventsCommand,
   main,
 };
