@@ -90,6 +90,72 @@ test('16.19 MapView uses a bound runtime result and preserves independent level 
   assert.equal(requests[0].request.packets[0].raw_param, HERO_PARAM);
 });
 
+test('observed 0x400001ae MapView variant decodes records without inventing participant identity', (t) => {
+  const image = temporaryImage(t);
+  const canonicalPayload = Buffer.from('010203', 'hex');
+  const variantPayload = Buffer.from('040506', 'hex');
+  const replay = replayFromChunks([{ body: Buffer.concat([
+    packet(0x0420, HERO_PARAM, canonicalPayload),
+    packet(0x0420, 0x400001ae, variantPayload),
+    packet(0x02b3, HERO_PARAM, Buffer.from('5b', 'hex')),
+  ]) }], BUILD);
+  replay.tail.stats = Array.from({ length: 10 }, () => ({ LEVEL: '1' }));
+  t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const request = JSON.parse(options.input);
+    return { status: 0, stderr: '', stdout: JSON.stringify({
+      status: 'PASS', runtime_image_sha256: IMAGE_SHA256,
+      results: request.packets.map((row, index) => ({
+        status: 'DECODED', input_index: index, raw_param: row.raw_param,
+        raw_payload_sha256: crypto.createHash('sha256')
+          .update(Buffer.from(row.payload_hex, 'hex')).digest('hex'),
+        deserialize_return_al: 1, bytes_consumed: row.payload_hex.length / 2,
+        record_count: 1, records: [{ record_index: 0, slot: index, item_id: 1102,
+          flag: 1, raw_slot_byte_hex: '2f', raw_item_id_bytes_hex: '6186fcfc' }],
+      })),
+    }) };
+  });
+  const decoded = decodeSemanticReplay(replay, {
+    capabilities: ['hero_inventory_mapview', 'hero_level_state'],
+    runtimeImagePath: image,
+  });
+  const result = decoded.capability_results.hero_inventory_mapview;
+  assert.equal(decoded.status, 'EXPERIMENTAL_CANDIDATE');
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.input_count, 2);
+  assert.equal(result.event_count, 2);
+  assert.equal(result.unmapped_raw_param_count, 1);
+  assert.equal(result.unmapped_raw_packet_refs[0].raw_param, 0x400001ae);
+  const rows = getHeroInventoryMapViewCandidates(decoded);
+  assert.equal(rows[0].participant_id_candidate, 1);
+  assert.equal(rows[1].participant_id_candidate, null);
+  assert.equal(rows[1].field_confidence.participant_id_candidate, 'UNAVAILABLE');
+  assert.equal(rows[1].raw_packet_ref.raw_param, 0x400001ae);
+  assert.equal(rows[1].raw_packet_ref.raw_payload_sha256,
+    crypto.createHash('sha256').update(variantPayload).digest('hex'));
+  assert.equal(decoded.capability_results.hero_level_state.status, 'CANDIDATE');
+});
+
+test('unobserved MapView variant fails before runtime while retaining raw packet ref', (t) => {
+  const invoke = t.mock.method(childProcess, 'spawnSync', () => {
+    throw new Error('runtime must not run for an unobserved parameter');
+  });
+  const replay = replayFromChunks([{ body: Buffer.concat([
+    packet(0x0420, HERO_PARAM, Buffer.from('010203', 'hex')),
+    packet(0x0420, 0x400001af, Buffer.from('040506', 'hex')),
+  ]) }], BUILD);
+  const decoded = decodeSemanticReplay(replay, {
+    capabilities: ['hero_inventory_mapview'],
+  });
+  const result = decoded.capability_results.hero_inventory_mapview;
+  assert.equal(result.status, 'DECODE_FAILED');
+  assert.equal(result.matching_hero_param_count, 1);
+  assert.equal(result.matching_variant_param_count, 0);
+  assert.equal(result.first_unrecognized_packet_ref.raw_param, 0x400001af);
+  assert.equal(result.event_count, null);
+  assert.equal(getHeroInventoryMapViewCandidates(decoded), null);
+  assert.equal(invoke.mock.callCount(), 0);
+});
+
 test('missing runtime image affects only the selected MapView capability', () => {
   const decoded = decodeSemanticReplay(replayWithMapView(), {
     capabilities: ['hero_inventory_mapview', 'hero_level_state'],

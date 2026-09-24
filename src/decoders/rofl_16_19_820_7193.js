@@ -110,7 +110,7 @@ const HERO_LEVEL_STATE_CANDIDATE_PROFILE = Object.freeze({
 });
 
 const HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE = Object.freeze({
-  id: 'rofl-16.19.820.7193-hn-inventory-mapview-runtime-candidate-v1',
+  id: 'rofl-16.19.820.7193-hn-inventory-mapview-runtime-candidate-v2',
   replay_version: REPLAY_VERSION,
   capability: 'hero_inventory_mapview',
   status: 'CANDIDATE',
@@ -120,10 +120,12 @@ const HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE = Object.freeze({
   packet_name: 'PKT_S2C_SetInventory_MapView_s',
   evidence_runtime_image_sha256: '7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f780af11ed6df76d',
   runtime_image_required: true,
-  evidence_scope: 'exact HN runtime constructor/deserializer and 94 fully consumed packets in one HN Replay',
+  evidence_scope: 'exact HN runtime constructor/deserializer; 94 and 68 fully consumed packets in two HN Replays',
   known_limits: Object.freeze([
     'Only observed MapView records are emitted; no unseen slot contents are reconstructed.',
-    'Slot, item-definition key, and hero participant mapping remain candidates from one HN Replay.',
+    'Slot and item-definition key remain unpublished exact-runtime candidates from two HN Replays.',
+    'Canonical hero raw-param mapping remains candidate-only; the observed 0x400001ae variant has no assigned participant.',
+    'The extra 0x100 bit in the variant is unclassified; no general raw-param masking rule is inferred.',
     'No purchase, sale, swap, replacement, or complete inventory lifecycle is inferred.',
     'The exact captured runtime image and Python Unicorn are required for decoding.',
   ]),
@@ -1149,11 +1151,18 @@ function decodeHeroInventoryMapViewCandidates(replay, collected = null, options 
   const isHeroParam = (row) => row.block.param >= 0x400000ae
     && row.block.param <= 0x400000b7;
   const heroParamCount = rows.filter(isHeroParam).length;
-  if (heroParamCount !== inputCount) {
-    return fail(heroParamCount === 0 ? 'PROFILE_UNAVAILABLE' : 'DECODE_FAILED',
-      '0x0420 raw params do not consistently match the observed HN hero range',
-      { ...(heroParamCount === 0 ? { input_count: null } : {}),
+  const observedVariantRows = rows.filter((row) => row.block.param === 0x400001ae);
+  const recognizedParamCount = heroParamCount + observedVariantRows.length;
+  if (recognizedParamCount !== inputCount) {
+    const firstUnrecognized = rows.find((row) => !isHeroParam(row)
+      && row.block.param !== 0x400001ae);
+    return fail(recognizedParamCount === 0 ? 'PROFILE_UNAVAILABLE' : 'DECODE_FAILED',
+      '0x0420 raw params do not match the observed HN canonical range or exact variant',
+      { ...(recognizedParamCount === 0 ? { input_count: null } : {}),
         observed_raw_route_count: inputCount, matching_hero_param_count: heroParamCount,
+        matching_variant_param_count: observedVariantRows.length,
+        first_unrecognized_packet_ref: packetRef(replay, firstUnrecognized.block,
+          firstUnrecognized.chunk),
         runtime_image_status: 'NOT_CHECKED', runtime_image_used: false });
   }
   const imagePath = options.runtimeImagePath;
@@ -1302,7 +1311,8 @@ function decodeHeroInventoryMapViewCandidates(replay, collected = null, options 
         replay_sha256: replay.source_sha256 ?? null,
         replay_time_ms: source.block.timestamp_ms,
         hero_raw_param: source.block.param >>> 0,
-        participant_id_candidate: participantIdFromDeathParam(source.block.param),
+        participant_id_candidate: isHeroParam(source)
+          ? participantIdFromDeathParam(source.block.param) : null,
         packet_record_index: recordIndex,
         packet_record_count: result.record_count,
         slot_candidate: record.slot,
@@ -1311,11 +1321,11 @@ function decodeHeroInventoryMapViewCandidates(replay, collected = null, options 
         emulated_object_slot_byte_hex: record.raw_slot_byte_hex,
         emulated_object_item_id_bytes_hex: record.raw_item_id_bytes_hex,
         confidence: 'CANDIDATE',
-        semantic_status: 'CANDIDATE_EXACT_RUNTIME_MAPVIEW_ONE_REPLAY',
+        semantic_status: 'CANDIDATE_EXACT_RUNTIME_MAPVIEW_PACKET_FIELDS',
         field_confidence: {
           replay_time_ms: 'VERIFIED_DIRECT',
           hero_raw_param: 'VERIFIED_DIRECT',
-          participant_id_candidate: 'CANDIDATE',
+          participant_id_candidate: isHeroParam(source) ? 'CANDIDATE' : 'UNAVAILABLE',
           slot_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD',
           item_id_candidate: 'CANDIDATE_EXACT_RUNTIME_ITEM_DEFINITION_KEY',
           emulated_flag_code: 'UNCLASSIFIED_RUNTIME_FIELD',
@@ -1328,10 +1338,13 @@ function decodeHeroInventoryMapViewCandidates(replay, collected = null, options 
   return {
     ...base,
     status: 'CANDIDATE',
-    evidence_status: 'CANDIDATE_EXACT_RUNTIME_MAPVIEW_ONE_REPLAY',
+    evidence_status: 'CANDIDATE_EXACT_RUNTIME_MAPVIEW_PACKET_FIELDS',
     input_count: inputCount,
     event_count: events.length,
     decoded_record_count: events.length,
+    unmapped_raw_param_count: observedVariantRows.length,
+    unmapped_raw_packet_refs: observedVariantRows.map((row) =>
+      packetRef(replay, row.block, row.chunk)),
     scanned_block_count: scan.walk.block_count,
     runtime_image_status: 'MATCHED_USED',
     runtime_image_used: true,
