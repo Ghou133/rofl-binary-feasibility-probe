@@ -95,6 +95,65 @@ test('query-events keeps stdout as JSONL and puts its query summary on stderr', 
   assert.equal(summary.output, '-');
 });
 
+test('query-events filters recorded raw packet parameters without resolving participants', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, confidence: 'CANDIDATE',
+      raw_param: 0x400000ae, raw_packet_ref: { replay_sha256: SHA, raw_param: 0x400000ae } },
+    { replay_sha256: SHA, replay_time_ms: 20, confidence: 'CANDIDATE',
+      raw_packet_refs: [{ replay_sha256: SHA, raw_param: 0x400000af }] },
+    { replay_sha256: SHA, replay_time_ms: 30, confidence: 'CANDIDATE' },
+  ];
+  const fixture = artifact(t, rows);
+  const result = run(fixture.replayDirectory, '--event', EVENT,
+    '--raw-param', '0x400000af', '--limit', '1');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${fixture.lines[1]}\n`);
+  const summary = JSON.parse(result.stderr);
+  assert.equal(summary.scanned_count, 3);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.raw_param_unavailable_count, 1);
+  assert.equal(summary.filters.raw_param, 0x400000af);
+  assert.equal(summary.filters.participant_id, null);
+
+  const decimal = run(fixture.replayDirectory, '--event', EVENT,
+    '--raw-param', String(0x400000ae));
+  assert.equal(decimal.status, 0, decimal.stderr);
+  assert.equal(decimal.stdout, `${fixture.lines[0]}\n`);
+});
+
+test('query-events distinguishes absent raw parameters from zero matches', (t) => {
+  const fixture = artifact(t);
+  const output = path.join(fixture.root, 'missing-raw-param.jsonl');
+  const unavailable = run(fixture.replayDirectory, '--event', EVENT,
+    '--raw-param', '0', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'RAW_PARAM_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const rows = [{ replay_sha256: SHA, replay_time_ms: 10,
+    raw_param: 0, raw_packet_ref: { replay_sha256: SHA, raw_param: 0 } }];
+  const withParam = artifact(t, rows);
+  const zeroMatch = run(withParam.replayDirectory, '--event', EVENT,
+    '--raw-param', '1');
+  assert.equal(zeroMatch.status, 0, zeroMatch.stderr);
+  assert.equal(zeroMatch.stdout, '');
+  assert.equal(JSON.parse(zeroMatch.stderr).matched_count, 0);
+});
+
+test('query-events rejects invalid recorded raw parameters and removes partial output', (t) => {
+  const fixture = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 1, raw_param: 7 },
+    { replay_sha256: SHA, replay_time_ms: 2, raw_param: -1 },
+  ]);
+  const output = path.join(fixture.root, 'invalid-raw-param.jsonl');
+  const result = run(fixture.replayDirectory, '--event', EVENT,
+    '--raw-param', '7', '--output', output);
+  assert.equal(result.status, 2);
+  assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
+});
+
 test('query-events reads default 16.19 artifacts with embedded arrays and existing JSONL', (t) => {
   const fixture = artifact(t, undefined, false);
   const result = run(fixture.replayDirectory, '--event', EVENT,
@@ -176,6 +235,8 @@ test('query-events rejects malformed numeric filters before scanning', (t) => {
   for (const args of [
     ['--from-ms', '-1'], ['--to-ms', '2.5'], ['--participant', '11'],
     ['--participant', '0'], ['--limit', '0'], ['--from-ms', '2', '--to-ms', '1'],
+    ['--raw-param', '-1'], ['--raw-param', '0x100000000'],
+    ['--raw-param', '4294967296'], ['--raw-param', '0xgg'],
   ]) {
     const result = run(fixture.replayDirectory, '--event', EVENT, ...args);
     assert.equal(result.status, 1, args.join(' '));

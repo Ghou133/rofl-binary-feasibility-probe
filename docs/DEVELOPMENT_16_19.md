@@ -417,11 +417,15 @@ Current progress (older notes below retain their original research context):
   `CANDIDATE` and leaves route and death-count validation pending until decode.
 - **Artifact event query:** `node src/cli.js query-events <replay-artifact-directory>
   --event <exact-event-key> [--from-ms n] [--to-ms n] [--participant 1..10]
-  [--limit n] [--output path|-]` streams unchanged candidate JSONL rows from
+  [--raw-param uint32|0xhex] [--limit n] [--output path|-]` streams unchanged
+  candidate JSONL rows from
   either default or `--event-jsonl-only` 16.19 CLI artifacts. It checks Replay
   identity and declared row counts, reports the original capability status and
   separate scanned/matched/emitted counts, and leaves unknown participants
-  unselected by the participant filter. Real HN queries scanned 270 JSONL-only
+  unselected by the participant filter. The raw-parameter filter matches an
+  exact recorded packet parameter without treating it as an actor identity;
+  streams without recorded parameters report `RAW_PARAM_UNAVAILABLE`. Real HN
+  queries scanned 270 JSONL-only
   rows (27 participant-1 matches, two emitted by the limit) and 350 default
   rows (35 participant-2 matches, one emitted). This reads existing artifacts;
   it does not execute or promote the decoder.

@@ -160,6 +160,7 @@ Options:
   Query event filters (query-events, 16.19 default or --event-jsonl-only artifacts):
   --from-ms/--to-ms <number>    Inclusive Replay millisecond bounds
   --participant <1..10>        Candidate subject participant; unknown rows do not match
+  --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
   --output <path|->            Write unmodified JSONL rows (default: stdout)
                                 Query summary is JSON on stderr when output is stdout
@@ -199,6 +200,7 @@ function parseArgs(argv) {
     event: null,
     eventJsonlOnly: false,
     participant: null,
+    rawParam: null,
     limit: null,
     python: null,
     wardSpawns: null,
@@ -294,6 +296,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'from-ms') options.fromMs = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'to-ms') options.toMs = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'participant') options.participant = queryInteger(value, key);
+      else if (command === 'query-events' && key === 'raw-param') options.rawParam = queryRawParam(value);
       else if (command === 'query-events' && key === 'limit') options.limit = queryInteger(value, key);
       else if (command === 'ward-events' && key === 'format') options.format = String(value).toLowerCase();
       else if (command === 'ward-events' && key === 'collection') options.collection = value;
@@ -349,6 +352,18 @@ function queryInteger(value, label, allowZero = false) {
   const number = Number(literal);
   if (!Number.isSafeInteger(number) || (!allowZero && number === 0)) {
     throw new Error(`--${label} must be a ${allowZero ? 'nonnegative' : 'positive'} safe integer`);
+  }
+  return number;
+}
+
+function queryRawParam(value) {
+  const literal = String(value);
+  if (!/^(?:0|[1-9][0-9]*|0[xX][0-9a-fA-F]{1,8})$/.test(literal)) {
+    throw new Error('--raw-param must be a decimal or 0x hexadecimal uint32');
+  }
+  const number = Number(literal);
+  if (!Number.isSafeInteger(number) || number > 0xffffffff) {
+    throw new Error('--raw-param must be a decimal or 0x hexadecimal uint32');
   }
   return number;
 }
@@ -2339,6 +2354,7 @@ async function runQueryEventsCommand(parsed) {
       fromMs: options.fromMs,
       toMs: options.toMs,
       participant: options.participant,
+      rawParam: options.rawParam,
       limit: options.limit,
     }, async (line) => {
       if (!writer.write(line)) await once(writer, 'drain');

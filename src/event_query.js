@@ -196,12 +196,33 @@ function rowReplayTime(row, lineNumber) {
   return value;
 }
 
+function rawPacketParams(row, lineNumber) {
+  const values = [];
+  const add = (value, label) => {
+    if (value == null) return;
+    if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        `Invalid ${label} at JSONL line ${lineNumber}.`, { line_number: lineNumber });
+    }
+    values.push(value);
+  };
+  add(row.raw_param, 'raw_param');
+  add(row.hero_raw_param, 'hero_raw_param');
+  add(row.raw_packet_ref?.raw_param, 'raw_packet_ref.raw_param');
+  for (const [index, ref] of (row.raw_packet_refs ?? []).entries()) {
+    add(ref?.raw_param, `raw_packet_refs[${index}].raw_param`);
+  }
+  return values;
+}
+
 function validateFilters(options) {
-  const { fromMs = null, toMs = null, participant = null, limit = null } = options;
+  const { fromMs = null, toMs = null, participant = null, rawParam = null,
+    limit = null } = options;
   for (const [name, value, minimum, maximum] of [
     ['fromMs', fromMs, 0, Number.MAX_SAFE_INTEGER],
     ['toMs', toMs, 0, Number.MAX_SAFE_INTEGER],
     ['participant', participant, 1, 10],
+    ['rawParam', rawParam, 0, 0xffffffff],
     ['limit', limit, 1, Number.MAX_SAFE_INTEGER],
   ]) {
     if (value != null && (!Number.isSafeInteger(value) || value < minimum || value > maximum)) {
@@ -215,11 +236,13 @@ function validateFilters(options) {
 
 async function streamEventQuery(prepared, options, emitLine) {
   validateFilters(options);
-  const { fromMs = null, toMs = null, participant = null, limit = null } = options;
+  const { fromMs = null, toMs = null, participant = null, rawParam = null,
+    limit = null } = options;
   let scannedCount = 0;
   let matchedCount = 0;
   let emittedCount = 0;
   let participantUnavailableCount = 0;
+  let rawParamUnavailableCount = 0;
   const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
   try {
@@ -248,10 +271,13 @@ async function streamEventQuery(prepared, options, emitLine) {
           `Event JSONL line ${lineNumber} has a different Replay SHA-256.`,
           { line_number: lineNumber });
       }
+      const params = rawParam == null ? null : rawPacketParams(row, lineNumber);
       if (participant != null && subject.value == null) participantUnavailableCount += 1;
+      if (rawParam != null && params.length === 0) rawParamUnavailableCount += 1;
       if ((fromMs != null && replayTime < fromMs)
           || (toMs != null && replayTime > toMs)
-          || (participant != null && subject.value !== participant)) continue;
+          || (participant != null && subject.value !== participant)
+          || (rawParam != null && !params.includes(rawParam))) continue;
       matchedCount += 1;
       if (limit == null || emittedCount < limit) {
         // Reuse the original line so candidate grades, provenance, and field order survive.
@@ -274,6 +300,12 @@ async function streamEventQuery(prepared, options, emitLine) {
       { scanned_count: scannedCount, participant_unavailable_count: participantUnavailableCount,
         capability_status: prepared.capabilityStatus });
   }
+  if (rawParam != null && scannedCount > 0 && rawParamUnavailableCount === scannedCount) {
+    throw new EventQueryError('RAW_PARAM_UNAVAILABLE',
+      'This event stream has no recorded raw packet parameter for filtering.',
+      { scanned_count: scannedCount, raw_param_unavailable_count: rawParamUnavailableCount,
+        capability_status: prepared.capabilityStatus });
+  }
   return {
     schema_version: 1,
     command: 'query-events',
@@ -293,7 +325,9 @@ async function streamEventQuery(prepared, options, emitLine) {
     matched_count: matchedCount,
     emitted_count: emittedCount,
     participant_unavailable_count: participantUnavailableCount,
-    filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit },
+    ...(rawParam == null ? {} : { raw_param_unavailable_count: rawParamUnavailableCount }),
+    filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit,
+      ...(rawParam == null ? {} : { raw_param: rawParam }) },
     rows_unmodified: true,
   };
 }
