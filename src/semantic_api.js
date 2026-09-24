@@ -27,6 +27,7 @@ const {
   decodeHeroDeathsSnapshotCandidates821,
   decodeHeroChampionKillsSnapshotCandidates821,
   decodeHeroAssistsSnapshotCandidates821,
+  decodeHeroMissionsMinionsKilledSnapshotCandidates821,
 } =
   require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const { decodeHeroLevelCandidates821 } =
@@ -2009,6 +2010,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_deaths_snapshot: decodeHeroDeathsSnapshotCandidates821,
     hero_champion_kills_snapshot: decodeHeroChampionKillsSnapshotCandidates821,
     hero_assists_snapshot: decodeHeroAssistsSnapshotCandidates821,
+    hero_missions_minions_killed_snapshot: decodeHeroMissionsMinionsKilledSnapshotCandidates821,
     hero_level_state: decodeHeroLevelCandidates821,
   };
   const outputKeys = {
@@ -2018,6 +2020,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
     hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
     hero_assists_snapshot: 'hero_assists_snapshot_candidates',
+    hero_missions_minions_killed_snapshot: 'hero_missions_minions_killed_snapshot_candidates',
     hero_level_state: 'hero_level_state_candidates',
   };
   const capabilityResults = {};
@@ -2025,6 +2028,7 @@ function decode1619821(replay, profile, options = {}) {
   const sharedScanCapabilities = new Set([
     'hero_death', 'hero_death_timer', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
     'hero_assists_snapshot', 'hero_level_state', 'hero_respawn',
+    'hero_missions_minions_killed_snapshot',
   ]);
   const supported = capabilities.filter((capability) => sharedScanCapabilities.has(capability));
   let candidate821Scan = options.candidate821Scan ?? null;

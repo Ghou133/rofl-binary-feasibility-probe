@@ -451,6 +451,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_deaths_snapshot: 0x0089,
       hero_champion_kills_snapshot: 0x0089,
       hero_assists_snapshot: 0x0089,
+      hero_missions_minions_killed_snapshot: 0x0089,
       hero_level_state: 0x0197,
     },
     decoder_profile: {
@@ -463,6 +464,8 @@ const BUILD_PROFILES = deepFreeze({
         heroStatsCandidate1619821.HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE,
       hero_assists_snapshot:
         heroStatsCandidate1619821.HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE,
+      hero_missions_minions_killed_snapshot:
+        heroStatsCandidate1619821.HERO_MISSIONS_MINIONS_KILLED_SNAPSHOT_821_CANDIDATE_PROFILE,
       hero_level_state: levelCandidate1619821.HERO_LEVEL_CANDIDATE_PROFILE_821,
     },
     evidence_grades: {
@@ -472,6 +475,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_deaths_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_KEYFRAME_TAIL_CORRELATION',
       hero_champion_kills_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_MIRRORED_KEYFRAME_TAIL_CORRELATION',
       hero_assists_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_KEYFRAME_TAIL_CORRELATION',
+      hero_missions_minions_killed_snapshot:
+        'CANDIDATE_821_RUNTIME_TWO_BYTE_MISSIONS_TAIL_CORRELATION',
       hero_level_state: 'CANDIDATE_821_RUNTIME_LEVEL_BYTE_AND_REPLAY_TAIL',
     },
     semantic_mappings: {
@@ -484,12 +489,15 @@ const BUILD_PROFILES = deepFreeze({
         'exact 821 runtime byte transform at 0x0089 mirrored raw bytes 434/1186; keyframe carrier binding and kill-count label candidate only',
       keyframe_assists_snapshot:
         'exact 821 runtime byte transform at 0x0089 raw byte 1178; keyframe carrier binding and assist-count label candidate only',
+      keyframe_missions_minions_killed_snapshot:
+        'exact 821 runtime byte transform at 0x0089 raw bytes 374/373; Missions_MinionsKilled tail correlation only, distinct from MINIONS_KILLED',
       level_state: 'exact 821 PKT_NPC_LevelUp_s route and +0x11 byte transform; participant alignment and event interpretation candidate only',
     },
     verified_capabilities: [],
     candidate_capabilities: [
       'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
+      'hero_missions_minions_killed_snapshot',
       'hero_level_state',
     ],
     unsupported_capabilities: [],

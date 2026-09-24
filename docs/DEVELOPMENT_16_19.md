@@ -108,17 +108,36 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   this batch command did not itself run the Node test suite. The ignored
   `artifacts/16_19_development/kr_821_runtime_count_11/acceptance_summary.json`
   retains per-Replay status, input hashes, and output provenance. `CANDIDATE`
-  is an experimental evidence grade, not semantic verification.
-- **821 minion-count unresolved lead:** The earlier bounded scan of all 3,270
-  exact `0x0089` hero packets found no defensible numeric `MINIONS_KILLED`
-  field. Raw byte 374 had an ordered structural signal for some participants,
-  but only 30/110 final values fit the then-known finite count codebook, and
-  rotating participant tails passed the same weak check. The exact-image
-  count transform now requires a fresh check of this particular byte; the
-  earlier finite-codebook rejection is retained as history, not used as a
-  current exclusion proof. Other variable byte windows had ordering
-  contradictions. No minion-count capability is registered without stronger
-  field and participant evidence.
+  is an experimental evidence grade, not semantic verification. This batch
+  preceded the separate `Missions_MinionsKilled` batch below.
+- **821 `Missions_MinionsKilled` keyframe candidate:** The pinned 821 runtime
+  count-byte transform decodes byte 374 as the low byte and 373 as the high
+  byte of a candidate cumulative value in exact-shape `0x0089` keyframes;
+  decoded upper bytes 372 and 371 are zero across all 3,270 selected packets.
+  In 11 KR Replays, all 110 participant sequences start at zero, remain
+  monotone, and stay at or below the numeric Replay-tail
+  `Missions_MinionsKilled` value. The final keyframe equals that tail for
+  77/110 participants, with a maximum unobserved tail gap of 18; both games
+  with a near-end keyframe match 20/20 final tails. Rotating participant
+  assignments yields at most one exact final match, versus 77 for the aligned
+  mapping. Alternative byte offsets reached only one match in the first two
+  calibration Replays and zero in the other nine checked Replays; these nine
+  were part of this exploratory corpus, not a protected holdout. Against the
+  distinct standard `MINIONS_KILLED` tail,
+  the same final values match 0/110 participants. This supports a bounded
+  `hero_missions_minions_killed_snapshot` candidate, without relabeling it as
+  standard minion kills or inferring individual last-hit events. The earlier
+  finite-codebook scan of byte 374 alone fit only 30/110 final standard
+  `MINIONS_KILLED` values and remains negative historical evidence for that
+  label. A separate 11-Replay CLI batch returned 11/11 `CANDIDATE`, with
+  3,270 input packets and 3,270 candidate snapshots, a total retained tail
+  gap of 159, zero errors, and zero framing errors; it retained the same two
+  game-ID and test-suite warnings described above. Its ignored per-Replay
+  evidence is under
+  `artifacts/16_19_development/kr_821_missions_minions_11/acceptance_summary.json`.
+  The exact `0x0089` factory object still consumed only 5/1263 bytes of real
+  keyframe payloads, so full runtime carrier binding and published semantics
+  remain unproven.
 - **821 gold snapshot negative lead:** The same 3,270 keyframe hero packets
   did not yield a defensible `GOLD_EARNED` or `GOLD_SPENT` numeric candidate.
   Raw integer-window survivors from the first two Replays reversed or lost

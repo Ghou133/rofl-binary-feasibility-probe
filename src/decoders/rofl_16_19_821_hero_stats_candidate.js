@@ -18,6 +18,9 @@ const RAW_DEATHS_BYTE_INDEX = 1182;
 const RAW_CHAMPION_KILLS_BYTE_INDEX = 1186;
 const RAW_CHAMPION_KILLS_MIRROR_BYTE_INDEX = 434;
 const RAW_ASSISTS_BYTE_INDEX = 1178;
+const RAW_MISSIONS_MINIONS_LOW_BYTE_INDEX = 374;
+const RAW_MISSIONS_MINIONS_HIGH_BYTE_INDEX = 373;
+const RAW_MISSIONS_MINIONS_UPPER_BYTE_INDICES = Object.freeze([372, 371]);
 const PAYLOAD_PREFIX_HEX = '6700de';
 const ENCODED_BYTE_FOR_DEATH_COUNT = Object.freeze([
   0x97, 0xcc, 0x55, 0xf1, 0x6f, 0x8d, 0x58,
@@ -35,6 +38,8 @@ const ENCODED_BYTE_FOR_ASSIST_COUNT = Object.freeze([
 ]);
 const ASSISTS_EVIDENCE_STATUS =
   'CANDIDATE_EXACT_KR_821_RUNTIME_BYTE_ASSIST_COUNT_TAIL_CORRELATION';
+const MISSIONS_MINIONS_EVIDENCE_STATUS =
+  'CANDIDATE_EXACT_KR_821_RUNTIME_TWO_BYTE_MISSIONS_MINIONS_TAIL_CORRELATION';
 
 // These arrays preserve the original Replay-observed byte evidence. Decoding
 // uses the independently captured 821 runtime transform, not these codebooks.
@@ -119,6 +124,35 @@ const HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_MISSIONS_MINIONS_KILLED_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.821.7343-kr-hero-missions-minions-killed-keyframe-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_missions_minions_killed_snapshot',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: PACKET_ID,
+  stream_tags: Object.freeze([2]),
+  hero_raw_param_first: HERO_PARAM_FIRST,
+  hero_raw_param_last: HERO_PARAM_LAST,
+  payload_length: PAYLOAD_LENGTH,
+  payload_prefix_hex: PAYLOAD_PREFIX_HEX,
+  raw_low_byte_index: RAW_MISSIONS_MINIONS_LOW_BYTE_INDEX,
+  raw_high_byte_index: RAW_MISSIONS_MINIONS_HIGH_BYTE_INDEX,
+  raw_upper_zero_byte_indices: RAW_MISSIONS_MINIONS_UPPER_BYTE_INDICES,
+  replay_tail_field: 'Missions_MinionsKilled',
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  evidence_scope: '11 exact-build KR Replays; 327 keyframes, 3270 0x0089 hero packets; 110 zero-start monotone sequences; 77 final values equal Missions_MinionsKilled tails',
+  known_limits: Object.freeze([
+    'This is correlated with Replay tail Missions_MinionsKilled, a distinct mission field; it is not MINIONS_KILLED.',
+    'Against standard MINIONS_KILLED, zero of 110 final keyframe values matched across the observed 11 Replays.',
+    'Factory 0x0089 consumes only 5 of 1263 observed keyframe bytes; carrier-to-object and field-offset binding is unconfirmed.',
+    'The embedded exact 821 runtime byte transform decodes bytes, but does not itself prove the semantic field label.',
+    'Keyframe values are candidate snapshots, not individual minion kill events, targets, lanes, or causes.',
+    'Final Replay-tail gaps are retained without interpolation or a hard upper bound.',
+  ]),
+});
+
 function assessHeroStatsTail821(replay, field) {
   if (replay?.header?.version !== REPLAY_VERSION) {
     return { field, status: 'UNSUPPORTED',
@@ -162,6 +196,10 @@ function assessHeroChampionKillsSnapshotTail821(replay) {
 
 function assessHeroAssistsSnapshotTail821(replay) {
   return assessHeroStatsTail821(replay, 'ASSISTS');
+}
+
+function assessHeroMissionsMinionsKilledSnapshotTail821(replay) {
+  return assessHeroStatsTail821(replay, 'Missions_MinionsKilled');
 }
 
 function packetRef(replay, block, chunk) {
@@ -624,14 +662,140 @@ function decodeHeroAssistsSnapshotCandidates821(replay, precollected = null) {
   };
 }
 
+function decodeHeroMissionsMinionsKilledSnapshotCandidates821(replay, precollected = null) {
+  const profile = HERO_MISSIONS_MINIONS_KILLED_SNAPSHOT_821_CANDIDATE_PROFILE;
+  const base = {
+    profile_id: profile.id,
+    input_packet_id: PACKET_ID,
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    lookup_table_sha256: LOOKUP_TABLE_SHA256,
+    runtime_image_used: false,
+    runtime_image_status: 'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED',
+    known_limits: [...profile.known_limits],
+  };
+  const fail = (status, error, details = {}) => ({
+    ...base, status, event_count: null, events: null, error, ...details,
+  });
+  if (replay?.header?.version !== REPLAY_VERSION) {
+    return fail('UNSUPPORTED',
+      `hero_missions_minions_killed_snapshot candidate supports only ${REPLAY_VERSION}`);
+  }
+  const sourceError = standaloneSourceError821(replay, precollected);
+  if (sourceError) return fail('DECODE_FAILED', `Replay source failed: ${sourceError}`);
+  const tail = assessHeroMissionsMinionsKilledSnapshotTail821(replay);
+  if (tail.status !== 'PASS') return fail(tail.status, tail.error);
+  const collected = scanHeroStatsPackets821(replay, precollected,
+    'hero_missions_minions_killed_snapshot');
+  if (collected.status !== 'PASS') {
+    return fail(collected.status, collected.error, collected.details);
+  }
+  const { frames, scan } = collected;
+  const previous = Array(10).fill(null);
+  const previousTimes = Array(10).fill(null);
+  const previousRefs = Array(10).fill(null);
+  const observations = [];
+  for (const frame of frames) {
+    for (const row of frame) {
+      const { block, rawParam, participantId, ref } = row;
+      const mismatch = (error) => fail('DECODE_FAILED', error, {
+        ...scan, first_unmatched_packet_ref: ref,
+      });
+      const upperBytes = RAW_MISSIONS_MINIONS_UPPER_BYTE_INDICES
+        .map((offset) => decodeRuntimeCountByte(block.payload[offset]));
+      if (upperBytes.some((value) => value !== 0)) {
+        return mismatch('0x0089 missions-minions upper count bytes are nonzero; observed two-byte scope exceeded');
+      }
+      const rawLowByte = block.payload[RAW_MISSIONS_MINIONS_LOW_BYTE_INDEX];
+      const rawHighByte = block.payload[RAW_MISSIONS_MINIONS_HIGH_BYTE_INDEX];
+      const decodedLowByte = decodeRuntimeCountByte(rawLowByte);
+      const decodedHighByte = decodeRuntimeCountByte(rawHighByte);
+      const value = decodedLowByte + 256 * decodedHighByte;
+      const index = participantId - 1;
+      if (previous[index] === null && value !== 0) {
+        return mismatch(`participant ${participantId} first observed missions-minions count is not zero`);
+      }
+      if (previous[index] !== null && value < previous[index]) {
+        return mismatch(`participant ${participantId} has decreasing observed missions-minions count`);
+      }
+      if (value > tail.values[index]) {
+        return mismatch(`participant ${participantId} exceeds Replay tail Missions_MinionsKilled`);
+      }
+      previous[index] = value;
+      previousTimes[index] = block.timestamp_ms;
+      previousRefs[index] = ref;
+      observations.push({ ...row, rawLowByte, rawHighByte,
+        decodedLowByte, decodedHighByte, value });
+    }
+  }
+  const rawGameLength = replay?.tail?.metadata?.gameLength;
+  const gameLengthMs = Number.isSafeInteger(rawGameLength) && rawGameLength >= 0
+    ? rawGameLength : null;
+  if (gameLengthMs !== null && previousTimes.some((time) => time > gameLengthMs)) {
+    return fail('DECODE_FAILED', '0x0089 keyframe timestamp exceeds Replay tail gameLength', scan);
+  }
+  const tailGaps = tail.values.map((finalValue, index) => ({
+    participant_id_candidate: index + 1,
+    last_snapshot_replay_time_ms: previousTimes[index],
+    last_snapshot_missions_minions_killed_candidate: previous[index],
+    final_missions_minions_killed_tail: finalValue,
+    unobserved_tail_gap: finalValue - previous[index],
+    unobserved_tail_time_ms: gameLengthMs === null ? null : gameLengthMs - previousTimes[index],
+    last_raw_packet_ref: previousRefs[index],
+  }));
+  const events = observations.map((row) => ({
+    event_type: 'HERO_MISSIONS_MINIONS_KILLED_SNAPSHOT_CANDIDATE',
+    game_version: REPLAY_VERSION,
+    patch: '16.19',
+    build_profile: profile.id,
+    replay_sha256: replay.source_sha256,
+    replay_time_ms: row.block.timestamp_ms,
+    hero_raw_param: row.rawParam,
+    participant_id_candidate: row.participantId,
+    raw_missions_minions_low_byte: row.rawLowByte,
+    raw_missions_minions_high_byte: row.rawHighByte,
+    decoded_missions_minions_low_byte: row.decodedLowByte,
+    decoded_missions_minions_high_byte: row.decodedHighByte,
+    missions_minions_killed_candidate: row.value,
+    observation_kind: 'KEYFRAME_SNAPSHOT',
+    confidence: 'CANDIDATE',
+    semantic_status: MISSIONS_MINIONS_EVIDENCE_STATUS,
+    field_confidence: {
+      replay_time_ms: 'VERIFIED_DIRECT',
+      hero_raw_param: 'VERIFIED_DIRECT',
+      raw_missions_minions_low_byte: 'VERIFIED_DIRECT',
+      raw_missions_minions_high_byte: 'VERIFIED_DIRECT',
+      participant_id_candidate: 'CANDIDATE_KR_821_RAW_PARAM_TAIL_ALIGNMENT',
+      missions_minions_killed_candidate: MISSIONS_MINIONS_EVIDENCE_STATUS,
+    },
+    raw_packet_ref: row.ref,
+    known_limits: [...profile.known_limits],
+  }));
+  return {
+    ...base,
+    status: 'CANDIDATE',
+    evidence_status: MISSIONS_MINIONS_EVIDENCE_STATUS,
+    ...scan,
+    event_count: events.length,
+    observed_participant_count: 10,
+    final_missions_minions_killed: tail.values,
+    observed_max_missions_minions_killed: previous,
+    tail_gaps: tailGaps,
+    tail_gap_total: tailGaps.reduce((sum, gap) => sum + gap.unobserved_tail_gap, 0),
+    events,
+  };
+}
+
 module.exports = {
   HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE,
   HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE,
   HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE,
+  HERO_MISSIONS_MINIONS_KILLED_SNAPSHOT_821_CANDIDATE_PROFILE,
   assessHeroDeathsSnapshotTail821,
   assessHeroChampionKillsSnapshotTail821,
   assessHeroAssistsSnapshotTail821,
+  assessHeroMissionsMinionsKilledSnapshotTail821,
   decodeHeroDeathsSnapshotCandidates821,
   decodeHeroChampionKillsSnapshotCandidates821,
   decodeHeroAssistsSnapshotCandidates821,
+  decodeHeroMissionsMinionsKilledSnapshotCandidates821,
 };

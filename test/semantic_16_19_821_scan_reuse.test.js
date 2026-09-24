@@ -31,6 +31,7 @@ function snapshotPacket(participant, deaths, timeMs) {
   const payload = Buffer.alloc(1263, 0x97);
   payload.set([0x67, 0x00, 0xde]);
   payload[1182] = deaths === 0 ? 0x97 : 0xcc;
+  payload[374] = deaths === 0 ? 0x97 : 0xcc;
   const header = Buffer.alloc(15);
   header.writeFloatLE(timeMs / 1000, 1);
   header.writeUInt32LE(payload.length, 5);
@@ -41,7 +42,7 @@ function snapshotPacket(participant, deaths, timeMs) {
 
 function fixture({ unknownLevel = false, damagedStart = false, damagedGame = false } = {}) {
   const game = Buffer.concat([
-    shortPacket(0x0259, 0x400000ae, Buffer.alloc(5)),
+    shortPacket(0x0259, 0x400000ae, Buffer.from('121017d7d7', 'hex')),
     shortPacket(0x0438, 0x400000ae, Buffer.alloc(13)),
     shortPacket(0x031b, 0, Buffer.alloc(12)),
     shortPacket(0x03d4, 0, Buffer.alloc(3)),
@@ -62,6 +63,7 @@ function fixture({ unknownLevel = false, damagedStart = false, damagedGame = fal
   const replay = replayFromChunks(chunks, BUILD);
   replay.tail.stats = Array.from({ length: 10 }, (_, index) => ({
     NUM_DEATHS: index === 0 ? '1' : '0',
+    Missions_MinionsKilled: index === 0 ? '1' : '0',
     LEVEL: unknownLevel && index === 0 ? '20' : '2',
   }));
   return replay;
@@ -105,6 +107,21 @@ test('821 standalone combined API scans each compressed chunk once', (t) => {
   assert.equal(decoded.events.hero_deaths_snapshot_candidates[10].deaths_candidate, 1);
 });
 
+test('821 timer and mission snapshots reuse the same bounded route scan', (t) => {
+  const replay = fixture();
+  const decompressions = countDecompressions(t);
+  const selected = ['hero_death', 'hero_death_timer',
+    'hero_deaths_snapshot', 'hero_missions_minions_killed_snapshot'];
+  const decoded = decodeSemanticReplay(replay, { capabilities: selected });
+  assert.equal(decompressions(), 3);
+  assert.equal(decoded.status, 'EXPERIMENTAL_CANDIDATE');
+  assert.deepEqual(selected.map((name) => decoded.capability_results[name].event_count),
+    [1, 1, 20, 20]);
+  assert.equal(decoded.events.hero_death_timer_candidates[0].timer_seconds_candidate, 12);
+  assert.equal(decoded.events.hero_missions_minions_killed_snapshot_candidates[10]
+    .missions_minions_killed_candidate, 1);
+});
+
 test('821 CLI reuses its analyzer walk for all selected candidates', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-821-scan-reuse-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -141,8 +158,10 @@ test('821 selected-only token stays bound to its Replay and copied packet rows',
   const token = collect821Routes(replay, ['hero_death']);
   const first = rowsFor821Capability(replay, token, 'hero_death');
   assert.equal(first.rows.length, 4);
+  const originalByte = first.rows[0].block.payload[0];
   first.rows[0].block.payload[0] ^= 1;
-  assert.equal(rowsFor821Capability(replay, token, 'hero_death').rows[0].block.payload[0], 0);
+  assert.equal(rowsFor821Capability(replay, token, 'hero_death').rows[0].block.payload[0],
+    originalByte);
   assert.match(rowsFor821Capability(replay, token, 'hero_deaths_snapshot').error,
     /not selected/);
   assert.match(rowsFor821Capability(fixture(), token, 'hero_death').error,

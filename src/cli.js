@@ -18,6 +18,7 @@ const {
   assessHeroDeathsSnapshotTail821,
   assessHeroChampionKillsSnapshotTail821,
   assessHeroAssistsSnapshotTail821,
+  assessHeroMissionsMinionsKilledSnapshotTail821,
 } =
   require('./decoders/rofl_16_19_821_hero_stats_candidate');
 const { assessHeroLevelTail821 } =
@@ -549,6 +550,7 @@ function parseOne1619(replay, options, started) {
     ? [...new Set(options.events.filter((name) => [
       'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
+      'hero_missions_minions_killed_snapshot',
       'hero_level_state',
     ].includes(name)))] : [];
   const selectsBuffAdd = options.semantic !== false
@@ -1769,7 +1771,11 @@ function capabilityQuery(replay, options = {}) {
         : profile.game_version === '16.19.821.7343'
           && capability === 'hero_assists_snapshot'
           ? assessHeroAssistsSnapshotTail821(replay)
-        : profile.game_version === '16.19.821.7343' && capability === 'hero_death'
+        : profile.game_version === '16.19.821.7343'
+          && capability === 'hero_missions_minions_killed_snapshot'
+          ? assessHeroMissionsMinionsKilledSnapshotTail821(replay)
+        : profile.game_version === '16.19.821.7343'
+          && (capability === 'hero_death' || capability === 'hero_death_timer')
           ? (() => {
             const assessment = assessHeroDeathTail821(replay);
             return { required_fields: [{ field: 'NUM_DEATHS',
@@ -1883,6 +1889,11 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_assists_snapshot') {
         validationPending.push('KR keyframe 0x0089 structure, raw byte 1178, and pinned 821 runtime byte transform',
           'monotone snapshots and ten ASSISTS tails');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_missions_minions_killed_snapshot') {
+        validationPending.push('KR keyframe 0x0089 structure, raw bytes 374/373, upper-zero scope, and pinned 821 runtime byte transform',
+          'monotone snapshots and ten Missions_MinionsKilled tails; distinct from MINIONS_KILLED');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_level_state') {
@@ -2060,6 +2071,8 @@ function capabilityQuery(replay, options = {}) {
             hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
             hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
             hero_assists_snapshot: 'hero_assists_snapshot_candidates',
+            hero_missions_minions_killed_snapshot:
+              'hero_missions_minions_killed_snapshot_candidates',
             hero_level_state: 'hero_level_state_candidates' })[capability] ?? null
           : profile.game_version === '16.19.820.7193'
           ? ({
