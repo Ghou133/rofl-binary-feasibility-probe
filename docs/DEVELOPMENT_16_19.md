@@ -54,6 +54,10 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   A four-byte-aligned scan found no second offset meeting the same tail and
   monotonic criteria; adjacent gold/CS offsets fail the EXP control. This is
   one-Replay field correlation, not an XP transition or confirmed field.
+- **CLI/API efficiency:** Selecting the CS and EXP HeroStats candidates together
+  now traverses keyframe chunks once while keeping separate field validation
+  and per-capability results. A synthetic traversal-count test and HN/KR
+  combined runs cover the shared path.
 - **Current:** Candidate participant identity, timer and respawn meaning are bounded to
   one HN Replay; KR uses different death/timer route IDs and reports
   `PROFILE_UNAVAILABLE` for the HN timer profile. Eleven raw KR `0x0357`

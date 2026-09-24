@@ -13,6 +13,7 @@ const {
   decodeHeroStatsByte,
   decodeHeroExperiencePayload,
   decodeHeroExperienceSnapshotCandidates,
+  decodeHeroStatsSnapshotCandidateSet,
   decodeHeroMinionsKilledPayload,
   decodeHeroMinionsKilledSnapshotCandidates,
 } = require('../src/decoders/rofl_16_19_hero_stats_candidate');
@@ -254,4 +255,52 @@ test('experience snapshots fail closed on broken hero group, decrease, and tail 
   });
   assert.match(decodeHeroExperienceSnapshotCandidates(aboveTail).error,
     /exceeds Replay tail EXP/);
+});
+
+test('combined HeroStats selection walks keyframe chunks once and returns both candidates', () => {
+  const experienceValues = [Array(10).fill(0.25), Array(10).fill(100.75)];
+  const replay = fixture({ experienceValues, experienceTails: Array(10).fill(102) });
+  const chunks = replay.chunks;
+  let chunkTraversalCount = 0;
+  Object.defineProperty(replay, 'chunks', { get() {
+    chunkTraversalCount += 1;
+    return chunks;
+  } });
+  const results = decodeHeroStatsSnapshotCandidateSet(replay,
+    ['hero_minions_killed_snapshot', 'hero_experience_snapshot']);
+  assert.equal(chunkTraversalCount, 1);
+  assert.deepEqual(Object.keys(results),
+    ['hero_minions_killed_snapshot', 'hero_experience_snapshot']);
+  assert.equal(results.hero_minions_killed_snapshot.status, 'CANDIDATE');
+  assert.equal(results.hero_experience_snapshot.status, 'CANDIDATE');
+  assert.equal(results.hero_minions_killed_snapshot.event_count, 20);
+  assert.equal(results.hero_experience_snapshot.event_count, 20);
+  assert.equal(results.hero_minions_killed_snapshot.events[0].raw_packet_ref.raw_payload_sha256,
+    results.hero_experience_snapshot.events[0].raw_packet_ref.raw_payload_sha256);
+});
+
+test('combined selection isolates field-specific tail and sequence failures', () => {
+  const decreasingXp = fixture({
+    experienceValues: [Array(10).fill(3), Array(10).fill(2)],
+    experienceTails: Array(10).fill(5),
+  });
+  const chunks = decreasingXp.chunks;
+  let chunkTraversalCount = 0;
+  Object.defineProperty(decreasingXp, 'chunks', { get() {
+    chunkTraversalCount += 1;
+    return chunks;
+  } });
+  const first = decodeHeroStatsSnapshotCandidateSet(decreasingXp,
+    new Set(['hero_experience_snapshot', 'hero_minions_killed_snapshot']));
+  assert.equal(chunkTraversalCount, 1);
+  assert.equal(first.hero_minions_killed_snapshot.status, 'CANDIDATE');
+  assert.equal(first.hero_experience_snapshot.status, 'DECODE_FAILED');
+  assert.match(first.hero_experience_snapshot.error, /decreasing observed EXP/);
+
+  const missingCs = fixture();
+  missingCs.tail.stats[0].MINIONS_KILLED = undefined;
+  const second = decodeHeroStatsSnapshotCandidateSet(missingCs,
+    ['hero_minions_killed_snapshot', 'hero_experience_snapshot']);
+  assert.equal(second.hero_minions_killed_snapshot.status, 'MISSING_INPUT');
+  assert.equal(second.hero_experience_snapshot.status, 'CANDIDATE');
 });

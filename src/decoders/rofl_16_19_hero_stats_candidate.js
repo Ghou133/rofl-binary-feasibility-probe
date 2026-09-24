@@ -183,13 +183,9 @@ function packetRef(replay, block, chunk) {
   };
 }
 
-function collectHeroStatsSnapshotCandidates(replay, spec) {
-  const { profile } = spec;
-  const base = { profile_id: profile.id, input_packet_id: PACKET_ID };
+function scanHeroStatsRows(replay) {
   if (replay?.header?.version !== REPLAY_VERSION) {
-    return { ...base, status: 'UNSUPPORTED', event_count: null, input_count: null,
-      scanned_block_count: null, events: null,
-      error: `${profile.capability} candidate supports only ${REPLAY_VERSION}` };
+    return { status: 'UNSUPPORTED', scanned_block_count: null };
   }
   const rows = [];
   let walk;
@@ -198,32 +194,47 @@ function collectHeroStatsSnapshotCandidates(replay, spec) {
       if (block.packet_id === PACKET_ID) rows.push({ block, chunk });
     }, { includeStreams: [2, 3], strict: true });
   } catch (error) {
-    return { ...base, status: 'DECODE_FAILED', event_count: null, input_count: null,
-      scanned_block_count: null, events: null, error: `Replay keyframe framing failed: ${error.message}` };
+    return { status: 'DECODE_FAILED', scanned_block_count: null,
+      error: `Replay keyframe framing failed: ${error.message}` };
   }
   if (rows.length === 0) {
-    return { ...base, status: 'PROFILE_UNAVAILABLE', event_count: null, input_count: null,
-      scanned_block_count: walk.block_count, events: null,
+    return { status: 'PROFILE_UNAVAILABLE', scanned_block_count: walk.block_count,
       error: 'HN HeroStats 0x0276 keyframe route is absent from this Replay' };
   }
   const hasHnFingerprint = rows.some(({ block }) => block.payload_length === PAYLOAD_LENGTH
     && block.payload[0] === 0x1c && block.payload[1] === 0xa6 && block.payload[2] === 0xe8);
   if (!hasHnFingerprint) {
-    return { ...base, status: 'PROFILE_UNAVAILABLE', event_count: null, input_count: null,
-      scanned_block_count: walk.block_count, observed_raw_route_count: rows.length, events: null,
+    return { status: 'PROFILE_UNAVAILABLE', scanned_block_count: walk.block_count,
+      observed_raw_route_count: rows.length,
       error: '0x0276 keyframe route is present, but no packet matches the exact HN HeroStats payload fingerprint' };
-  }
-  const inputCount = rows.length;
-  const fail = (error) => ({ ...base, status: 'DECODE_FAILED', event_count: null,
-    input_count: inputCount, scanned_block_count: walk.block_count, events: null, error });
-  const tail = spec.assessTail(replay);
-  if (tail.status !== 'PASS') {
-    return { ...base, status: tail.status, event_count: null, input_count: inputCount,
-      scanned_block_count: walk.block_count, events: null, error: tail.error };
   }
   rows.sort((left, right) => left.block.timestamp_ms - right.block.timestamp_ms
     || (left.block.param >>> 0) - (right.block.param >>> 0)
     || left.chunk.index - right.chunk.index || left.block.offset - right.block.offset);
+  return { status: 'PASS', scanned_block_count: walk.block_count, rows };
+}
+
+function collectHeroStatsSnapshotCandidates(replay, spec, scan) {
+  const { profile } = spec;
+  const base = { profile_id: profile.id, input_packet_id: PACKET_ID };
+  if (scan.status !== 'PASS') {
+    return { ...base, status: scan.status, event_count: null, input_count: null,
+      scanned_block_count: scan.scanned_block_count,
+      ...(scan.observed_raw_route_count === undefined ? {}
+        : { observed_raw_route_count: scan.observed_raw_route_count }),
+      events: null,
+      error: scan.status === 'UNSUPPORTED'
+        ? `${profile.capability} candidate supports only ${REPLAY_VERSION}` : scan.error };
+  }
+  const { rows } = scan;
+  const inputCount = rows.length;
+  const fail = (error) => ({ ...base, status: 'DECODE_FAILED', event_count: null,
+    input_count: inputCount, scanned_block_count: scan.scanned_block_count, events: null, error });
+  const tail = spec.assessTail(replay);
+  if (tail.status !== 'PASS') {
+    return { ...base, status: tail.status, event_count: null, input_count: inputCount,
+      scanned_block_count: scan.scanned_block_count, events: null, error: tail.error };
+  }
   const previous = Array(10).fill(null);
   const lastTimes = Array(10).fill(null);
   const observations = [];
@@ -280,7 +291,7 @@ function collectHeroStatsSnapshotCandidates(replay, spec) {
     status: 'CANDIDATE',
     event_count: observations.length,
     input_count: inputCount,
-    scanned_block_count: walk.block_count,
+    scanned_block_count: scan.scanned_block_count,
     keyframe_timestamp_count: keyframeTimestampCount,
     observed_participant_count: previous.filter((value) => value !== null).length,
     observations,
@@ -316,7 +327,7 @@ function snapshotEvent(replay, profile, observation, semanticStatus, valueFields
   };
 }
 
-function decodeHeroMinionsKilledSnapshotCandidates(replay) {
+function decodeHeroMinionsKilledFromScan(replay, scan) {
   const profile = HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE;
   const collected = collectHeroStatsSnapshotCandidates(replay, {
     profile,
@@ -324,7 +335,7 @@ function decodeHeroMinionsKilledSnapshotCandidates(replay) {
     decodePayload: decodeHeroMinionsKilledPayload,
     valueKey: 'minions_killed_candidate',
     tailProjection: (value) => value,
-  });
+  }, scan);
   if (collected.status !== 'CANDIDATE') return collected;
   const { observations, previous, lastTimes, tailValues, gameLengthMs, ...base } = collected;
   const tailGaps = tailValues.map((finalValue, index) => ({
@@ -350,7 +361,7 @@ function decodeHeroMinionsKilledSnapshotCandidates(replay) {
   };
 }
 
-function decodeHeroExperienceSnapshotCandidates(replay) {
+function decodeHeroExperienceFromScan(replay, scan) {
   const profile = HERO_EXPERIENCE_SNAPSHOT_CANDIDATE_PROFILE;
   const collected = collectHeroStatsSnapshotCandidates(replay, {
     profile,
@@ -358,7 +369,7 @@ function decodeHeroExperienceSnapshotCandidates(replay) {
     decodePayload: decodeHeroExperiencePayload,
     valueKey: 'experience_points_candidate',
     tailProjection: Math.floor,
-  });
+  }, scan);
   if (collected.status !== 'CANDIDATE') return collected;
   const { observations, previous, lastTimes, tailValues, gameLengthMs, ...base } = collected;
   const tailGaps = tailValues.map((finalValue, index) => ({
@@ -388,6 +399,39 @@ function decodeHeroExperienceSnapshotCandidates(replay) {
   };
 }
 
+function decodeHeroStatsSnapshotCandidateSet(replay, capabilities) {
+  if (!Array.isArray(capabilities) && !(capabilities instanceof Set)) {
+    throw new TypeError('HeroStats candidate capabilities must be an array or Set');
+  }
+  const selected = new Set(capabilities);
+  for (const capability of selected) {
+    if (capability !== 'hero_minions_killed_snapshot'
+      && capability !== 'hero_experience_snapshot') {
+      throw new RangeError(`unsupported HeroStats candidate capability: ${String(capability)}`);
+    }
+  }
+  if (selected.size === 0) return {};
+  const scan = scanHeroStatsRows(replay);
+  const outcomes = {};
+  if (selected.has('hero_minions_killed_snapshot')) {
+    outcomes.hero_minions_killed_snapshot = decodeHeroMinionsKilledFromScan(replay, scan);
+  }
+  if (selected.has('hero_experience_snapshot')) {
+    outcomes.hero_experience_snapshot = decodeHeroExperienceFromScan(replay, scan);
+  }
+  return outcomes;
+}
+
+function decodeHeroMinionsKilledSnapshotCandidates(replay) {
+  return decodeHeroStatsSnapshotCandidateSet(replay,
+    ['hero_minions_killed_snapshot']).hero_minions_killed_snapshot;
+}
+
+function decodeHeroExperienceSnapshotCandidates(replay) {
+  return decodeHeroStatsSnapshotCandidateSet(replay,
+    ['hero_experience_snapshot']).hero_experience_snapshot;
+}
+
 module.exports = {
   HERO_EXPERIENCE_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
@@ -396,6 +440,7 @@ module.exports = {
   decodeHeroStatsByte,
   decodeHeroExperiencePayload,
   decodeHeroExperienceSnapshotCandidates,
+  decodeHeroStatsSnapshotCandidateSet,
   decodeHeroMinionsKilledPayload,
   decodeHeroMinionsKilledSnapshotCandidates,
 };

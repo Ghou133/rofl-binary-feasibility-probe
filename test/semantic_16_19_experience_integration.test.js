@@ -111,6 +111,25 @@ test('selected API returns observed XP snapshots without confirmed XP transition
   assert.equal(decoded.events.level_transition_events, undefined);
 });
 
+test('selecting CS and XP together traverses keyframes once and keeps both outputs', () => {
+  const replay = replayWithKeyframe();
+  for (const row of replay.tail.stats) row.MINIONS_KILLED = '0';
+  const chunks = replay.chunks;
+  let chunkTraversalCount = 0;
+  Object.defineProperty(replay, 'chunks', { get() {
+    chunkTraversalCount += 1;
+    return chunks;
+  } });
+  const decoded = decodeSemanticReplay(replay, {
+    capabilities: ['hero_minions_killed_snapshot', CAPABILITY],
+  });
+  assert.equal(chunkTraversalCount, 1);
+  assert.equal(decoded.capability_results.hero_minions_killed_snapshot.status, 'CANDIDATE');
+  assert.equal(decoded.capability_results[CAPABILITY].status, 'CANDIDATE');
+  assert.equal(decoded.events.hero_minions_killed_snapshot_candidates.length, 10);
+  assert.equal(decoded.events[OUTPUT].length, 10);
+});
+
 test('CLI capabilities preflights tail EXP without decoding packets', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-experience-capabilities-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

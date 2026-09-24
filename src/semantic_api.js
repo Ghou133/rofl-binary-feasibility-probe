@@ -15,8 +15,7 @@ const {
   decodeHeroLevelStateCandidates,
 } = require('./decoders/rofl_16_19_820_7193');
 const {
-  decodeHeroMinionsKilledSnapshotCandidates,
-  decodeHeroExperienceSnapshotCandidates,
+  decodeHeroStatsSnapshotCandidateSet,
 } = require('./decoders/rofl_16_19_hero_stats_candidate');
 const {
   createSweeperCapabilityExport,
@@ -1785,8 +1784,8 @@ function decode1619(replay, profile, options = {}) {
     hero_death_timer: decodeHeroDeathTimerCandidates,
     hero_respawn: decodeHeroRespawnCandidates,
     hero_level_state: decodeHeroLevelStateCandidates,
-    hero_minions_killed_snapshot: decodeHeroMinionsKilledSnapshotCandidates,
-    hero_experience_snapshot: decodeHeroExperienceSnapshotCandidates,
+    hero_minions_killed_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_experience_snapshot: decodeHeroStatsSnapshotCandidateSet,
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -1799,9 +1798,13 @@ function decode1619(replay, profile, options = {}) {
   const gameRouteCapabilities = new Set([
     'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
   ]);
+  const heroStatsCapabilities = new Set([
+    'hero_minions_killed_snapshot', 'hero_experience_snapshot',
+  ]);
   const collected = capabilities.some((capability) => gameRouteCapabilities.has(capability))
     ? collectCandidateRoutes(replay) : null;
   let timerOutcome = null;
+  let heroStatsOutcomes = null;
   for (const capability of capabilities) {
     if (!Object.hasOwn(decoders, capability)) {
       capabilityResults[capability] = {
@@ -1815,10 +1818,12 @@ function decode1619(replay, profile, options = {}) {
       timerOutcome ??= decodeHeroDeathTimerCandidates(replay, collected);
       outcome = capability === 'hero_respawn'
         ? decodeHeroRespawnCandidates(replay, collected, timerOutcome) : timerOutcome;
+    } else if (heroStatsCapabilities.has(capability)) {
+      heroStatsOutcomes ??= decodeHeroStatsSnapshotCandidateSet(replay,
+        capabilities.filter((name) => heroStatsCapabilities.has(name)));
+      outcome = heroStatsOutcomes[capability];
     } else {
-      outcome = capability === 'hero_minions_killed_snapshot'
-        || capability === 'hero_experience_snapshot'
-        ? decoders[capability](replay) : decoders[capability](replay, collected);
+      outcome = decoders[capability](replay, collected);
     }
     const { events: candidateEvents, ...result } = outcome;
     result.runtime_image_status = options.runtimeImagePath
