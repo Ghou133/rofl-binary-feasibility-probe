@@ -24,7 +24,15 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
 - **Current:** Candidate participant identity and timer meaning are bounded to
   one HN Replay; KR uses different route IDs and reports `PROFILE_UNAVAILABLE`
   for the HN timer profile. No confirmed death, timer or respawn event is emitted.
-- **Next:** Profile the KR timer route or resolve the HN hero level-up payload.
+- **KR lead:** In exact-build `KR_8391528229` and `KR_8391542020`, all 115
+  `0x0259` death-triad packets reject the HN timer transform. All 104 packets
+  on route `0x0048` pair with a pending candidate victim and a plausible
+  death-to-reincarnation delay, but the KR timer float transform and route name
+  are unverified. The KR Replay SHA-256 values are
+  `3f29ae2127ef75888baf1f4543d0790cc9c40d9df0197e73b2b16b3c799dd93c`
+  and `2d7a53f76e11059ac00a45706d32ca19300d33dabca2d97bde99775c22062e1b`.
+- **Next:** Recover the KR timer transform from a matching runtime or resolve
+  the HN hero level-up payload.
   Exact-image `PKT_NPC_LevelUp_s` route `0x02b3` has 159 hero-parameter packets,
   but four heroes' counts are below their final `LEVEL-1` totals; the level
   value transform is not established.
