@@ -6,6 +6,7 @@ const path = require('node:path');
 const oldDecoder = require('./decoders/rofl_16_15_801_3452');
 const newDecoder = require('./decoders/rofl_16_16_805_0442');
 const decoder1619 = require('./decoders/rofl_16_19_820_7193');
+const decoder1619821 = require('./decoders/rofl_16_19_821_7343');
 const heroStatsCandidate1619 = require('./decoders/rofl_16_19_hero_stats_candidate');
 const buffRemoveCandidate1619 = require('./decoders/rofl_16_19_buff_remove_candidate');
 const buffAddCandidate1619 = require('./decoders/rofl_16_19_buff_add_candidate');
@@ -418,6 +419,37 @@ const BUILD_PROFILES = deepFreeze({
       'npc_buff_remove_packet',
       'npc_buff_add_packet',
     ],
+    unsupported_capabilities: [],
+    validation_artifacts: [],
+    regression_fixture_set: null,
+  },
+  '16.19.821.7343': {
+    schema_version: 1,
+    game_version: '16.19.821.7343',
+    patch: '16.19',
+    support_level: 'CORE_READY',
+    release_status: 'EXPERIMENTAL_CANDIDATE',
+    downstream_release_gate: null,
+    format_profile: {
+      implementation: 'src/rofl.js',
+      status: 'FORMAT_VERIFIED_LOCAL_REPLAYS',
+    },
+    runtime_profile: {
+      status: 'UNPROFILED',
+      image_sha256: null,
+    },
+    packet_routes: { hero_death: 0x0259 },
+    decoder_profile: {
+      hero_death: decoder1619821.HERO_DEATH_CANDIDATE_PROFILE_821,
+    },
+    evidence_grades: {
+      hero_death: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_CORRELATION',
+    },
+    semantic_mappings: {
+      victim_participant: '(raw_param & 0xff) - 0xad, 821 route-profile bounded',
+    },
+    verified_capabilities: [],
+    candidate_capabilities: ['hero_death'],
     unsupported_capabilities: [],
     validation_artifacts: [],
     regression_fixture_set: null,

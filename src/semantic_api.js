@@ -18,6 +18,7 @@ const {
   decodeHeroInventorySetItemCandidates,
   decodeHeroInventoryBroadcastCandidates,
 } = require('./decoders/rofl_16_19_820_7193');
+const { decodeHeroDeathCandidates821 } = require('./decoders/rofl_16_19_821_7343');
 const { decodeNpcBuffRemovePacketCandidates } =
   require('./decoders/rofl_16_19_buff_remove_candidate');
 const { decodeNpcBuffAddPacketCandidates } =
@@ -1981,6 +1982,55 @@ function decode1619(replay, profile, options = {}) {
   };
 }
 
+function decode1619821(replay, profile, options = {}) {
+  const requested = options.capabilities ?? [];
+  if (!Array.isArray(requested)
+      || requested.some((capability) => typeof capability !== 'string' || !capability)) {
+    throw new TypeError('16.19 capabilities must be an array of nonempty names');
+  }
+  const capabilities = [...new Set(requested)];
+  const capabilityResults = {};
+  const events = {};
+  for (const capability of capabilities) {
+    let outcome;
+    if (capability !== 'hero_death') {
+      outcome = { status: 'UNSUPPORTED', input_count: null, event_count: null,
+        error: `16.19.821.7343 has no decoder for ${capability}`, events: null };
+    } else {
+      try {
+        outcome = decodeHeroDeathCandidates821(replay);
+      } catch (error) {
+        outcome = { status: 'DECODE_FAILED', input_count: null, event_count: null,
+          error: error.message || String(error), events: null };
+      }
+    }
+    const { events: candidateEvents, ...result } = outcome;
+    result.runtime_image_status = options.runtimeImagePath
+      ? 'PROVIDED_NOT_USED' : result.runtime_image_status ?? 'NOT_REQUIRED';
+    result.runtime_image_used = false;
+    capabilityResults[capability] = result;
+    if (result.status === 'CANDIDATE') {
+      events.hero_death_candidates = candidateEvents;
+    }
+  }
+  const results = Object.values(capabilityResults);
+  const usable = results.filter((result) => result.status === 'CANDIDATE');
+  const failed = results.filter((result) => result.status !== 'CANDIDATE');
+  return {
+    status: results.length === 0 ? 'PROFILE_RESOLVED'
+      : failed.length > 0 ? (usable.length > 0 ? 'PARTIAL' : failed[0].status)
+        : 'EXPERIMENTAL_CANDIDATE',
+    game_version: profile.game_version,
+    profile,
+    events: usable.length > 0 ? events : null,
+    capability_results: capabilityResults,
+    decoded_packet_count: usable.reduce((sum, result) => sum + result.input_count, 0),
+    runtime_image_used: false,
+    runtime_image_sha256: null,
+    sweeper_capability: createSweeperCapabilityExport(profile.game_version),
+  };
+}
+
 function decodeSemanticReplay(input, options = {}) {
   const { replay, status, profile, game_version: gameVersion } = profileResolution(input);
   if (!profile) {
@@ -2006,6 +2056,7 @@ function decodeSemanticReplay(input, options = {}) {
     };
   }
   if (gameVersion === '16.19.820.7193') return decode1619(replay, profile, options);
+  if (gameVersion === '16.19.821.7343') return decode1619821(replay, profile, options);
   if (gameVersion === '16.16.805.0442') return decode1616(replay, profile, options);
   const legacy = require('./semantic_pipeline').decodeSemanticReplay(replay, options);
   return {

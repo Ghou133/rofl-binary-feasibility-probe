@@ -51,7 +51,9 @@ test('16.19 build and candidate capability are exact-build bound', () => {
   assert.equal(resolveBuildProfile(BUILD).profile.release_status, 'EXPERIMENTAL_CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_death').status, 'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_path').status, 'UNAVAILABLE');
-  assert.equal(resolveBuildProfile('16.19.821.7343').status, 'UNSUPPORTED_VERSION');
+  assert.equal(resolveBuildProfile('16.19.821.7343').status, 'SUPPORTED');
+  assert.equal(resolveCapability('16.19.821.7343', 'hero_death').status, 'CANDIDATE');
+  assert.equal(resolveBuildProfile('16.19.822.0000').status, 'UNSUPPORTED_VERSION');
 });
 
 for (const kind of ['HN', 'KR']) {

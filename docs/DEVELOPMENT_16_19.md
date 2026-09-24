@@ -1,6 +1,18 @@
 # 16.19 development progress
 
-Updated: 2026-09-24. Branch: `codex/16-19-development`.
+Updated: 2026-09-25. Branch: `codex/16-19-development`.
+
+- **New exact KR build:** The user supplied 11 `16.19.821.7343` Replays under
+  `kr-rofl-batch-collector/data/KR/16.19/builds/16.19.821.7343/rofl/`.
+  Their complete header build is distinct from the HN/KR `820.7193` inputs;
+  no matching 821 runtime image is available. An independent 821 profile now
+  offers CLI/API `--events hero_death` as `CANDIDATE` only. The game-stream
+  `0x0259/0x0438/0x031b` co-timed core maps to all ten Replay-tail
+  `NUM_DEATHS` counts in all 11 files (655 candidate rows). Two files each
+  lack one auxiliary `0x03d4`; one file contains two isolated `0x0259` packets.
+  These are retained as negative route evidence and excluded from candidate
+  events. No 820 opcode transform or image is reused for 821; payloads,
+  killer, assists, death timer, and respawn remain unclassified.
 
 - **Done:** The HN `16.19.820.7193` replay's 107 chunks and 2,035,757 blocks
   pass strict container/framing inspection with zero errors. The main CLI/API now
@@ -488,8 +500,9 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   `artifacts/16_19_development/buff_link_probe_second/`.
   In the third Replay all 3,030 distinct Remove keys appear in Add rows, while
   3,023 appear in game-stream Adds; row identity remains unresolved.
-- **Next:** Seek an exact `16.19.821.7343` Replay and matching runtime image,
-  or a matching KR runtime for its timer field. Further independent HN Replays
+- **Next:** Finish the independent 821 raw HeroStats deaths-snapshot candidate,
+  and obtain a matching 821 runtime image if payload semantics are needed.
+  Further independent HN Replays
   can test HeroStats and inventory candidates. The HN
   Broadcast participant mapping remains candidate-only after three Replays, and
   inventory-state inference needs independent anchors. Movement-route

@@ -11,6 +11,7 @@ const {
   analyzeReplayWithCandidateRoutes,
   candidateTailStatAssessment,
 } = require('./decoders/rofl_16_19_820_7193');
+const { assessHeroDeathTail821 } = require('./decoders/rofl_16_19_821_7343');
 const {
   assessHeroMinionsKilledSnapshotTail,
   assessHeroJungleMinionsKilledSnapshotTail,
@@ -531,6 +532,7 @@ function summarizeCapabilityResults(requested, decoded) {
 }
 
 function parseOne1619(replay, options, started) {
+  const is820 = replay.header.version === '16.19.820.7193';
   const selectsBuffAdd = options.semantic !== false
     && Array.isArray(options.events) && options.events.includes('npc_buff_add_packet');
   const selectsBuffRemove = options.semantic !== false
@@ -541,7 +543,7 @@ function parseOne1619(replay, options, started) {
       'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
       'hero_inventory_mapview', 'hero_inventory_set_item', 'hero_inventory_broadcast',
     ].includes(name)));
-  const selectsHeroStats = options.semantic !== false
+  const selectsHeroStats = is820 && options.semantic !== false
     && Array.isArray(options.events)
     && options.events.some((name) => HERO_STATS_SNAPSHOT_CAPABILITIES.includes(name));
   const analysisOptions = {
@@ -549,7 +551,7 @@ function parseOne1619(replay, options, started) {
     includePrivateMetadata: options.includePrivateMetadata,
     strict: options.strict,
   };
-  const { analysis, heroStatsScan, candidateRouteScan } = selectsGameRoutes
+  const { analysis, heroStatsScan, candidateRouteScan } = is820 && selectsGameRoutes
     ? analyzeReplayWithCandidateRoutes(replay, analysisOptions, selectsHeroStats,
       { includeBuffAdd: selectsBuffAdd, includeBuffRemove: selectsBuffRemove })
     : selectsHeroStats ? analyzeReplayWithHeroStats(replay, analysisOptions)
@@ -1647,7 +1649,7 @@ function capabilityQuery(replay, options = {}) {
     semantic_decode_performed: false,
     runtime_image_used: false,
     runtime_image_requested: options.runtimeImage ? path.resolve(options.runtimeImage) : null,
-    input_assessment_scope: replay.header.version === '16.19.820.7193'
+    input_assessment_scope: ['16.19.820.7193', '16.19.821.7343'].includes(replay.header.version)
       ? 'CONTAINER_TAIL_FIELD_PREFLIGHT' : 'PRESENCE_ONLY',
     runtime_profile_status: profile?.runtime_profile?.status
       ?? (profile?.runtime_profile?.image_sha256 ? 'EXACT_IMAGE_HASH_REGISTERED' : null),
@@ -1659,7 +1661,7 @@ function capabilityQuery(replay, options = {}) {
   let dependencies;
   let entrypoint;
   let pendingChecks;
-  if (profile.game_version === '16.19.820.7193') {
+  if (['16.19.820.7193', '16.19.821.7343'].includes(profile.game_version)) {
     const statsJson = replay.tail?.metadata?.statsJson;
     const tailStatus = Array.isArray(replay.tail?.stats) ? 'PRESENT_UNVALIDATED'
       : typeof statsJson === 'string' && replay.tail?.stats_parse_error
@@ -1690,7 +1692,7 @@ function capabilityQuery(replay, options = {}) {
       'legacy full-pipeline execution',
     ];
   }
-  if (profile.game_version !== '16.19.820.7193') {
+  if (!['16.19.820.7193', '16.19.821.7343'].includes(profile.game_version)) {
     document.entrypoint_input_precheck = {
       entrypoint,
       scope: 'WHOLE_PIPELINE_FILE_PRESENCE_ONLY',
@@ -1711,14 +1713,21 @@ function capabilityQuery(replay, options = {}) {
     for (const capability of profile[profileKey] ?? []) {
       const applicable = status !== 'UNSUPPORTED' && status !== 'UNVERIFIED';
       const perCapabilityInputsAssessed = applicable
-        && profile.game_version === '16.19.820.7193';
+        && ['16.19.820.7193', '16.19.821.7343'].includes(profile.game_version);
       const needs1619RuntimeImage = capability === 'hero_inventory_mapview'
         || capability === 'hero_inventory_set_item'
         || capability === 'hero_inventory_broadcast'
         || capability === 'npc_buff_remove_packet'
         || capability === 'npc_buff_add_packet';
       const tailStat = perCapabilityInputsAssessed
-        ? capability === 'hero_minions_killed_snapshot'
+        ? profile.game_version === '16.19.821.7343' && capability === 'hero_death'
+          ? (() => {
+            const assessment = assessHeroDeathTail821(replay);
+            return { required_fields: [{ field: 'NUM_DEATHS',
+              status: assessment.status,
+              error: assessment.error ?? assessment.missing_input ?? null }] };
+          })()
+        : capability === 'hero_minions_killed_snapshot'
           ? assessHeroMinionsKilledSnapshotTail(replay)
           : capability === 'hero_jungle_minions_killed_snapshot'
             ? assessHeroJungleMinionsKilledSnapshotTail(replay)
@@ -1785,6 +1794,11 @@ function capabilityQuery(replay, options = {}) {
       if (profile.game_version === '16.19.820.7193'
           && capability === 'hero_death') {
         validationPending.push('matching 16.19 route fingerprint',
+          'ten-participant NUM_DEATHS presence and equality');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_death') {
+        validationPending.push('KR 0x0259/0x0438/0x031b/0x03d4 co-timed route fingerprint',
           'ten-participant NUM_DEATHS presence and equality');
       }
       if (profile.game_version === '16.19.820.7193'
@@ -1951,7 +1965,9 @@ function capabilityQuery(replay, options = {}) {
         input_assessment_complete: perCapabilityInputsAssessed
           && !inputs.some((input) => input.status === 'NOT_ASSESSED'),
         validation_pending: validationPending,
-        output: profile.game_version === '16.19.820.7193'
+        output: profile.game_version === '16.19.821.7343'
+          ? capability === 'hero_death' ? 'hero_death_candidates' : null
+          : profile.game_version === '16.19.820.7193'
           ? ({
             hero_death: 'hero_death_candidates',
             hero_death_timer: 'hero_death_timer_candidates',

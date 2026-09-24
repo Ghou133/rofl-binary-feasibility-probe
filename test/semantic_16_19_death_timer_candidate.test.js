@@ -72,7 +72,7 @@ test('exact-runtime float decoding is bounded to the observed 5-byte shape', () 
 test('HN timer capability runs independently and keeps candidate and raw provenance', () => {
   assert.equal(resolveCapability(BUILD, 'hero_death_timer').status, 'CANDIDATE');
   assert.equal(resolveCapability('16.19.821.7343', 'hero_death_timer').status,
-    'UNSUPPORTED_VERSION');
+    'UNAVAILABLE');
   const replay = candidateReplay({ lowByteFallback: true });
   const decoded = decodeSemanticReplay(replay, { capabilities: ['hero_death_timer'] });
   assert.equal(decoded.status, 'EXPERIMENTAL_CANDIDATE');
