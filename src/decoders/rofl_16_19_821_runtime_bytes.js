@@ -28,6 +28,10 @@ function rotateRight8(value, bits) {
   return ((value >>> bits) | (value << (8 - bits))) & 0xff;
 }
 
+function rotateLeft8(value, bits) {
+  return ((value << bits) | (value >>> (8 - bits))) & 0xff;
+}
+
 function decodeRuntimeLevelByte(encoded) {
   const rotated = rotateRight8(encoded, 6) ^ 0x18;
   const index = rotateRight8((rotated + 0x3b) & 0xff, 1) ^ 0xa3;
@@ -57,10 +61,42 @@ function decodeHeroDieSourceId821(payload) {
   return (value & 0xffffff) === 0 ? value : (value ^ 0x40000000);
 }
 
+// Exact 821 PKT_HeroReincarnateAlive_s constructor and callback byte inverses.
+// Field meanings remain unknown; the callback reads two f32 and one optional
+// f32 from these object positions before calling actor virtual functions.
+function decodeHeroReincarnateAlivePayload821(payload) {
+  if (!Buffer.isBuffer(payload) || ![9, 13].includes(payload.length)) return null;
+  const pair = Buffer.alloc(8);
+  for (let field = 0; field < 2; field += 1) {
+    for (let byte = 0; byte < 4; byte += 1) {
+      const encoded = payload[1 + field * 4 + (3 - byte)];
+      const swapped = (((encoded ^ 0xa6) & 0x55) << 1)
+        | (((encoded ^ 0xa6) & 0xaa) >>> 1);
+      pair[field * 4 + byte] = ((swapped ^ 0x9c) - 0x72) & 0xff;
+    }
+  }
+  const optional = Buffer.alloc(4);
+  for (let byte = 0; byte < 4; byte += 1) {
+    const encoded = payload.length === 13 ? payload[9 + byte] : 0x1e;
+    optional[byte] = rotateLeft8(
+      (LOOKUP_TABLE[(encoded - 0x3d) & 0xff] + 0x3c) & 0xff, 3);
+  }
+  const first = pair.readFloatLE(0);
+  const second = pair.readFloatLE(4);
+  const scalar = optional.readFloatLE(0);
+  if (![first, second, scalar].every(Number.isFinite)) return null;
+  return {
+    pair_f32: [first, second],
+    optional_f32: scalar,
+    optional_field_present: payload.length === 13,
+  };
+}
+
 module.exports = {
   RUNTIME_IMAGE_SHA256,
   LOOKUP_TABLE_SHA256,
   decodeRuntimeLevelByte,
   decodeRuntimeCountByte,
   decodeHeroDieSourceId821,
+  decodeHeroReincarnateAlivePayload821,
 };

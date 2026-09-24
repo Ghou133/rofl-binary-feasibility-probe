@@ -1871,7 +1871,8 @@ function capabilityQuery(replay, options = {}) {
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_death') {
         validationPending.push('KR 0x0259/0x0438/0x031b co-timed core and optional 0x03d4',
-          'ten-participant NUM_DEATHS presence and equality');
+          'ten-participant NUM_DEATHS presence and equality',
+          '0x0438 source ID runtime wire decode and optional CHAMPIONS_KILLED tail alignment for killer participant');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_death_timer') {
@@ -1881,7 +1882,8 @@ function capabilityQuery(replay, options = {}) {
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_respawn') {
-        validationPending.push('matched 821 death cores and exact 0x0048 route with co-timed 0x018d',
+        validationPending.push('matched 821 death cores and exact 0x0048 ReincarnateAlive route/f32 decode',
+          'co-timed 0x018d inventory MapView packet as structural fingerprint only',
           'ten-participant TOTAL_TIME_SPENT_DEAD aggregate equality and final-death censoring');
       }
       if (profile.game_version === '16.19.821.7343'

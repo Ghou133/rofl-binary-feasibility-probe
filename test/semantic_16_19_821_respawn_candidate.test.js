@@ -9,8 +9,22 @@ const {
   assessHeroRespawnTail821,
   decodeHeroRespawnCandidates821,
 } = require('../src/decoders/rofl_16_19_821_respawn_candidate');
+const { RUNTIME_IMAGE_SHA256, decodeHeroReincarnateAlivePayload821 } =
+  require('../src/decoders/rofl_16_19_821_runtime_bytes');
 
 const BUILD = '16.19.821.7343';
+
+test('exact 821 ReincarnateAlive wire decodes both observed payload shapes', () => {
+  assert.deepEqual(decodeHeroReincarnateAlivePayload821(
+    Buffer.from('64b0f17b7bb06e3b7b1e3aaaf9', 'hex')), {
+    pair_f32: [394, 461], optional_f32: 614.25, optional_field_present: true,
+  });
+  assert.deepEqual(decodeHeroReincarnateAlivePayload821(
+    Buffer.from('66be2b8b7bbe2b477b', 'hex')), {
+    pair_f32: [14340, 14391], optional_f32: 0, optional_field_present: false,
+  });
+  assert.equal(decodeHeroReincarnateAlivePayload821(Buffer.alloc(10)), null);
+});
 
 function packet(packetId, timestampMs, rawParam, payloadLength) {
   const header = Buffer.alloc(12);
@@ -78,7 +92,8 @@ function replayWithRoutes(options = {}) {
 
 test('821 return route remains exact-build and requires tail dead-time input', () => {
   assert.equal(HERO_RESPAWN_CANDIDATE_PROFILE_821.replay_version, BUILD);
-  assert.equal(HERO_RESPAWN_CANDIDATE_PROFILE_821.evidence_runtime_image_sha256, null);
+  assert.equal(HERO_RESPAWN_CANDIDATE_PROFILE_821.evidence_runtime_image_sha256,
+    RUNTIME_IMAGE_SHA256);
   const replay = replayWithRoutes();
   assert.deepEqual(assessHeroRespawnTail821(replay), {
     status: 'PASS', seconds: [22, 0, 0, 33, 0, 0, 0, 0, 0, 0],

@@ -477,9 +477,9 @@ const BUILD_PROFILES = deepFreeze({
       hero_level_state: levelCandidate1619821.HERO_LEVEL_CANDIDATE_PROFILE_821,
     },
     evidence_grades: {
-      hero_death: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_CORRELATION',
+      hero_death: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_AND_RUNTIME_DIE_SOURCE',
       hero_death_timer: 'CANDIDATE_821_RUNTIME_FLOAT_AND_DEATH_ROUTE_CORRELATION',
-      hero_respawn: 'CANDIDATE_821_REPLAY_TAIL_DEAD_TIME_CORRELATION',
+      hero_respawn: 'CANDIDATE_821_RUNTIME_RETURN_FIELDS_AND_DEAD_TIME_CORRELATION',
       hero_deaths_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_KEYFRAME_TAIL_CORRELATION',
       hero_champion_kills_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_MIRRORED_KEYFRAME_TAIL_CORRELATION',
       hero_assists_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_KEYFRAME_TAIL_CORRELATION',
@@ -492,8 +492,9 @@ const BUILD_PROFILES = deepFreeze({
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, 821 route-profile bounded',
+      die_source_network_id_candidate: 'exact 821 0x0438 terminal two-byte source field, 655/655 runtime match; killer participant requires all ten CHAMPIONS_KILLED tails',
       death_timer_seconds_candidate: 'exact 821 0x0259 deserializer f32; matched death core only, not a respawn prediction',
-      observed_return_time: '0x0048 route uniquely paired with a matched death core and 0x018d support; candidate only',
+      observed_return_time: 'exact 821 0x0048 ReincarnateAlive route/f32 decode paired with death core and dead-time tail; co-timed 0x018d is inventory MapView fingerprint only',
       keyframe_deaths_snapshot:
         'exact 821 runtime byte transform at 0x0089 raw byte 1182; keyframe carrier binding and death-count label candidate only',
       keyframe_champion_kills_snapshot:

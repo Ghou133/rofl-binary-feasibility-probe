@@ -9,9 +9,12 @@ const {
   decodeHeroDeathCandidates821,
 } = require('./rofl_16_19_821_7343');
 const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
+const { RUNTIME_IMAGE_SHA256, decodeHeroReincarnateAlivePayload821 } =
+  require('./rofl_16_19_821_runtime_bytes');
 
-// The route and its timing are Replay observations. There is no 821 runtime
-// image or payload interpretation behind this candidate.
+// The 0x0048 runtime route/callback is proven for this exact image. Return
+// timing and participant joins remain Replay-tail candidates. Co-timed 0x018d
+// is an inventory MapView fingerprint, not independent respawn semantics.
 const HERO_RESPAWN_CANDIDATE_PROFILE_821 = Object.freeze({
   id: 'rofl-16.19.821.7343-kr-return-route-tail-candidate-v1',
   replay_version: REPLAY_VERSION_821,
@@ -21,14 +24,16 @@ const HERO_RESPAWN_CANDIDATE_PROFILE_821 = Object.freeze({
   stream_tag: 1,
   replay_block_packet_id: 0x0048,
   corroborating_replay_block_packet_id: 0x018d,
-  evidence_scope: 'eleven KR exact-build 821.7343 Replays; 607 observed route pairs and 110 participant dead-time tail checks',
-  evidence_runtime_image_sha256: null,
+  evidence_scope: 'eleven KR exact-build 821.7343 Replays; 607 runtime-full-consumed 0x0048 packets, 607 observed route pairs and 110 participant dead-time tail checks',
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
   known_limits: Object.freeze([
     'Experimental exact-build Replay-tail route candidate, not a published respawn capability.',
-    '0x0048 is correlated with a prior matched death and aggregate TOTAL_TIME_SPENT_DEAD; no 821 runtime deserializer was available.',
-    '0x0048 and 0x018d payload bytes are retained as raw evidence; their fields are unclassified.',
+    'Exact 821 runtime registers 0x0048 as PKT_HeroReincarnateAlive_s on AIHeroClient; 607/607 real payloads fully deserialize, but callback state effects are not fully resolved.',
+    'The exact callback reads two f32 values and an optional f32; the CLI exposes decoded numbers without naming their gameplay effect.',
+    '0x0048 is correlated with a prior matched death and aggregate TOTAL_TIME_SPENT_DEAD; return timing and participant identity remain candidates.',
+    'Co-timed 0x018d is PKT_S2C_SetInventory_MapView_s; its presence is a structural fingerprint, not independent respawn evidence.',
     'Unpaired final deaths have no observed return time; no return or timer is predicted.',
-    'The 0x018d route has additional packets and cannot independently select returns.',
+    'The 0x018d inventory route has 64 additional packets and cannot independently select returns.',
     'No death-timer, killer, assist, health, or behavior semantics are inferred.',
   ]),
 });
@@ -99,9 +104,9 @@ function decodeHeroRespawnCandidates821(replay, precollected = null) {
     profile_id: profile.id,
     depends_on: 'hero_death',
     input_packet_id: profile.replay_block_packet_id,
-    evidence_runtime_image_sha256: null,
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
     runtime_image_used: false,
-    runtime_image_status: 'NOT_REQUIRED_ROUTE_TAIL_CANDIDATE',
+    runtime_image_status: 'EXACT_821_ROUTE_CALLBACK_PROVEN_STATIC',
     known_limits: [...profile.known_limits],
   };
   const unavailable = (status, error, missingInput = null) => ({
@@ -215,7 +220,8 @@ function decodeHeroRespawnCandidates821(replay, precollected = null) {
     if (!Number.isSafeInteger(sumsMs[person - 1])) {
       return fail('candidate elapsed-time sum exceeds safe integer range');
     }
-    matched.push({ row, coTimed: coTimed[0], death: death.event, intervalMs });
+    matched.push({ row, coTimed: coTimed[0], death: death.event, intervalMs,
+      decodedReturn: decodeHeroReincarnateAlivePayload821(row.block.payload) });
   }
 
   const terminalDeaths = deaths.filter(({ event }) => !usedDeaths.has(event));
@@ -230,7 +236,7 @@ function decodeHeroRespawnCandidates821(replay, precollected = null) {
     return fail('floor of paired death-to-0x0048 elapsed milliseconds does not match Replay tail TOTAL_TIME_SPENT_DEAD');
   }
 
-  const events = matched.map(({ row, coTimed, death, intervalMs }) => {
+  const events = matched.map(({ row, coTimed, death, intervalMs, decodedReturn }) => {
     const refs = [
       packetRef(replay, row, 'candidate_observed_0x0048_return'),
       packetRef(replay, coTimed, 'co_timed_0x018d_support'),
@@ -247,6 +253,11 @@ function decodeHeroRespawnCandidates821(replay, precollected = null) {
       return_raw_param: row.block.param >>> 0,
       matched_death_replay_time_ms_candidate: death.replay_time_ms,
       observed_death_to_return_ms_candidate: intervalMs,
+      decoded_0x0048_pair_f32: decodedReturn?.pair_f32 ?? null,
+      decoded_0x0048_scalar_f32: decodedReturn?.optional_f32 ?? null,
+      decoded_0x0048_optional_field_present: decodedReturn?.optional_field_present ?? null,
+      decoded_0x0048_status: decodedReturn === null
+        ? 'UNAVAILABLE_FIELD_DECODE' : 'EXACT_821_RUNTIME_F32_DECODE',
       confidence: 'CANDIDATE',
       semantic_status: 'CANDIDATE_821_REPLAY_TAIL_DEAD_TIME_CORRELATION',
       field_confidence: {
@@ -255,6 +266,12 @@ function decodeHeroRespawnCandidates821(replay, precollected = null) {
         participant_id_candidate: 'CANDIDATE_REPLAY_TAIL_COUNTS_AND_DEAD_TIME',
         matched_death_replay_time_ms_candidate: 'CANDIDATE_MATCHED_DEATH_CORE',
         observed_death_to_return_ms_candidate: 'CANDIDATE_DIFFERENCE_OF_PAIRED_REPLAY_TIMES',
+        decoded_0x0048_pair_f32: decodedReturn === null ? 'UNAVAILABLE'
+          : 'VERIFIED_EXACT_821_RUNTIME_F32_DECODE_SEMANTICS_UNKNOWN',
+        decoded_0x0048_scalar_f32: decodedReturn === null ? 'UNAVAILABLE'
+          : 'VERIFIED_EXACT_821_RUNTIME_F32_DECODE_SEMANTICS_UNKNOWN',
+        decoded_0x0048_optional_field_present: decodedReturn === null ? 'UNAVAILABLE'
+          : 'VERIFIED_EXACT_821_RUNTIME_WIRE_SHAPE',
       },
       raw_packet_ref: refs[0],
       raw_packet_refs: refs,
@@ -266,6 +283,11 @@ function decodeHeroRespawnCandidates821(replay, precollected = null) {
     status: 'CANDIDATE',
     evidence_status: 'CANDIDATE_821_REPLAY_TAIL_DEAD_TIME_CORRELATION',
     event_count: events.length,
+    return_runtime_decoded_count: matched.filter(({ decodedReturn }) =>
+      decodedReturn !== null).length,
+    return_runtime_decode_failure_refs: matched.filter(({ decodedReturn }) =>
+      decodedReturn === null).map(({ row }) =>
+      packetRef(replay, row, '0x0048_f32_decode_unavailable')),
     co_timed_0x018d_count: usedSupport.size,
     extra_0x018d_count: support.length - usedSupport.size,
     extra_0x018d_packet_refs: support.filter((row) => !usedSupport.has(row)).map((row) =>

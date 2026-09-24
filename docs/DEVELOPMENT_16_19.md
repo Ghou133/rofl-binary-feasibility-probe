@@ -26,11 +26,33 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   64 extra `0x018d` packets retained as negative evidence. Return `0x0048`
   uses the observed `0x400000ae..b7` full raw-param family and payload lengths
   9 or 13; 33 matched deaths use a different full-param family, so identity is
-  joined only through the validated participant candidate. This is a Replay
-  correlation, not a runtime-confirmed respawn or payload decode. This return
-  route alone does not infer a timer for unpaired final deaths. Each paired
-  event reports the observed death-to-return millisecond difference as a
-  candidate arithmetic field, with no timer prediction.
+  joined only through the validated participant candidate. The exact-image
+  route and payload decode are described below; the death-to-return join and
+  callback's gameplay effect remain candidates. This return route alone does
+  not infer a timer for unpaired final deaths. Each paired event reports the
+  observed death-to-return millisecond difference as a candidate arithmetic
+  field, with no timer prediction.
+- **821 return packet runtime fields and route boundary:** The exact image
+  registers `0x0048` as `PKT_HeroReincarnateAlive_s` on `AIHeroClient`.
+  Its constructor and deserializer fully consumed all 607 observed game
+  packets (512 length 13, 95 length 9); all one-byte truncations failed and
+  all appended bytes remained unread. A static wire inverse matched the
+  runtime object's two `f32` values at `+0x10` and optional `f32` at `+0x18`
+  for 607/607. The callback passes the pair as the first/third components of
+  a three-component vector and the scalar to an actor virtual call; its
+  concrete state effect is still unresolved. `hero_respawn` CLI/API output
+  now exposes `decoded_0x0048_pair_f32`, `decoded_0x0048_scalar_f32`, and
+  whether the optional wire field is present, without assigning a map or
+  health meaning. The 11-Replay CLI batch returned 607 decoded candidates,
+  11/11 `CANDIDATE`, zero errors, and exact numeric agreement with all 607
+  native probe rows. The co-timed `0x018d` route is independently registered
+  as `PKT_S2C_SetInventory_MapView_s` on `HeroInventoryClient`; it serves only
+  as a structural fingerprint in the existing candidate gate. Its 64 extra
+  packets remain explicit. The two early returns relative to death timers
+  remain negative evidence against timer-based return prediction. Ignored
+  runtime and CLI evidence is under
+  `artifacts/16_19_development/kr_821_runtime_capture/` and
+  `artifacts/16_19_development/kr_821_return_runtime_11/`.
 - **821 death-timer candidate:** In the captured exact 821 image (SHA-256
   `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`),
   factory ID `0x0259` identifies `PKT_S2C_UpdateDeathTimer_s`, constructs at
@@ -734,9 +756,9 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   `artifacts/16_19_development/buff_link_probe_second/`.
   In the third Replay all 3,030 distinct Remove keys appear in Add rows, while
   3,023 appear in game-stream Adds; row identity remains unresolved.
-- **Next:** Use the exact 821 image to seek independent payload and participant
-  evidence for the death/return and HeroStats candidates; continue bounded KR
-  route research.
+- **Next:** Seek an exact 821 native binding for the full `0x0089` keyframe
+  carrier and independent assist/other combat-field evidence; continue bounded
+  KR route research.
   Further independent HN Replays
   can test HeroStats and inventory candidates. The HN
   Broadcast participant mapping remains candidate-only after three Replays, and
