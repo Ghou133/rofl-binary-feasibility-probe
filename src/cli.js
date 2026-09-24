@@ -583,6 +583,7 @@ function parseOne1619(replay, options, started) {
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
+      'hero_minions_killed_snapshot',
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
@@ -1852,7 +1853,7 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_missions_cannon_minions_killed_snapshot'
           ? assessHeroMissionsCannonMinionsTail821(replay)
         : profile.game_version === '16.19.821.7343'
-          && ['hero_experience_snapshot', 'hero_vision_score_snapshot',
+          && ['hero_minions_killed_snapshot', 'hero_experience_snapshot', 'hero_vision_score_snapshot',
             'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot'].includes(capability)
           ? assessHeroFloatSnapshotTail821(replay, capability)
         : profile.game_version === '16.19.821.7343'
@@ -1995,7 +1996,7 @@ function capabilityQuery(replay, options = {}) {
           'monotone snapshots and ten Missions_CannonMinionsKilled tails');
       }
       if (profile.game_version === '16.19.821.7343'
-          && ['hero_experience_snapshot', 'hero_vision_score_snapshot',
+          && ['hero_minions_killed_snapshot', 'hero_experience_snapshot', 'hero_vision_score_snapshot',
             'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot'].includes(capability)) {
         validationPending.push('KR keyframe 0x0089 structure and pinned 821 reversed-byte f32 transform',
           'ten numeric Replay tails, first-value scope, and per-participant snapshots');
@@ -2212,6 +2213,7 @@ function capabilityQuery(replay, options = {}) {
             hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
             hero_missions_cannon_minions_killed_snapshot:
               'hero_missions_cannon_minions_killed_snapshot_candidates',
+            hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
             hero_experience_snapshot: 'hero_experience_snapshot_candidates',
             hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
             hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',

@@ -271,6 +271,25 @@ Current progress (older notes below retain their original research context):
   records for each, and had zero errors. Input hashes, per-field gaps, and
   raw refs remain under ignored
   `artifacts/16_19_development/kr_821_ward_cannon_11/`.
+- **821 standard `MINIONS_KILLED` keyframe candidate:** The exact 821 native
+  `0x0089` vector has an integral `f32LE` field at offset `0x3c` across all
+  3,270 hero packets from 327 keyframes in 11 KR Replays. All 110 participant
+  sequences start at zero, are nonnegative and monotone, and stay at or below
+  their own numeric Replay-tail `MINIONS_KILLED`. Last snapshots equal 73/110
+  matching tails; the retained aggregate gap is 164 and the largest gap is 18.
+  An aligned scan of 1,260 `u32LE`/`u16LE`/`f32LE` offset-type combinations
+  places this field first among zero-start, monotone, tail-bounded nonconstant
+  candidates (mean final gap 1.49 versus 11.5 for the next candidate). Nine
+  participant rotations yield at most 4 exact matches. As a negative control,
+  the same `0x3c` value matches the distinct `Missions_MinionsKilled` tail for
+  only 2/110 and exceeds it for 104/110; conversely the mission field at
+  `0x378` matches standard `MINIONS_KILLED` for 0/110. This is an exploratory
+  corpus, not a protected holdout. `--events hero_minions_killed_snapshot`
+  now emits cumulative `CANDIDATE` snapshots and retains final tail gaps,
+  without inferring individual last hits. The combined standard/mission
+  11-Replay CLI batch returned 11/11 `CANDIDATE`, 3,270 events for each,
+  zero errors and zero framing errors. Reproducible ignored evidence is under
+  `artifacts/16_19_development/minions821_tail_field/`.
 - **821 keyframe carrier structure:** A separate strict scan of those 327
   keyframes found 3,270/3,270 hero-family payloads with fixed `67 00 de`
   prefix and length 1,263. With the exact 821 constructor at RVA `0xeadf40`,

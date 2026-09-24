@@ -52,6 +52,7 @@ function keyframeDeathsPacket(participantId, count, timeMs,
   write821Float(payload, 0x1b0, count === 0 ? 0 : 3.75);
   write821Float(payload, 0x38, count === 0 ? 500 : 600.5);
   write821Float(payload, 0x34, count === 0 ? 0 : 150);
+  write821Float(payload, 0x3c, count);
   const header = Buffer.alloc(15);
   header.writeFloatLE(timeMs / 1000, 1);
   header.writeUInt32LE(payload.length, 5);
@@ -124,7 +125,8 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.equal(resolveCapability(BUILD, 'hero_ward_stats_snapshot').status, 'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_missions_cannon_minions_killed_snapshot').status,
     'CANDIDATE');
-  for (const capability of ['hero_experience_snapshot', 'hero_vision_score_snapshot',
+  for (const capability of ['hero_minions_killed_snapshot',
+    'hero_experience_snapshot', 'hero_vision_score_snapshot',
     'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot']) {
     assert.equal(resolveCapability(BUILD, capability).status, 'CANDIDATE');
   }
@@ -139,6 +141,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
+      'hero_minions_killed_snapshot',
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
@@ -205,7 +208,8 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.equal(queried.hero_missions_cannon_minions_killed_snapshot.output,
     'hero_missions_cannon_minions_killed_snapshot_candidates');
   assert.deepEqual(queried.hero_missions_cannon_minions_killed_snapshot.missing_inputs, []);
-  for (const capability of ['hero_experience_snapshot', 'hero_vision_score_snapshot',
+  for (const capability of ['hero_minions_killed_snapshot',
+    'hero_experience_snapshot', 'hero_vision_score_snapshot',
     'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot']) {
     assert.equal(queried[capability].output, `${capability}_candidates`);
     assert.deepEqual(queried[capability].missing_inputs, []);
@@ -243,6 +247,11 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     .map((row) => [row.capability, row]));
   assert.deepEqual(afterMissionsMissing.hero_missions_minions_killed_snapshot.missing_inputs,
     ['replay_tail_Missions_MinionsKilled']);
+  input.tail.stats[0].MINIONS_KILLED = null;
+  const afterStandardMinionsMissing = Object.fromEntries(capabilityQuery(input).capabilities
+    .map((row) => [row.capability, row]));
+  assert.deepEqual(afterStandardMinionsMissing.hero_minions_killed_snapshot.missing_inputs,
+    ['replay_tail_MINIONS_KILLED']);
   input.tail.stats[0].WARD_KILLED = null;
   input.tail.stats[0].Missions_CannonMinionsKilled = null;
   const afterAuxMissing = Object.fromEntries(capabilityQuery(input).capabilities
@@ -311,6 +320,7 @@ test('821 API dispatch emits separate candidate records and no confirmed deaths'
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
+      'hero_minions_killed_snapshot',
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_level_state'],
@@ -337,6 +347,10 @@ test('821 API dispatch emits separate candidate records and no confirmed deaths'
     'CANDIDATE');
   assert.equal(combined.events.hero_missions_cannon_minions_killed_snapshot_candidates[10]
     .missions_cannon_minions_killed_candidate, 1);
+  assert.equal(combined.events.hero_minions_killed_snapshot_candidates[10]
+    .minions_killed_raw_f32_candidate, 1);
+  assert.equal(combined.capability_results.hero_minions_killed_snapshot.tail_gaps[0]
+    .unobserved_tail_gap, 1);
   assert.equal(combined.events.hero_experience_snapshot_candidates[10]
     .experience_raw_f32_candidate, 100.5);
   assert.equal(combined.events.hero_vision_score_snapshot_candidates[10]
@@ -457,6 +471,7 @@ test('821 CLI dispatch reads a replay file and labels selected output candidate'
   const result = parseOne(file, {
     semantic: true, events: ['hero_death', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
+      'hero_minions_killed_snapshot',
       'hero_level_state'],
     strict: true, timelineLimit: 0,
   });
@@ -468,6 +483,7 @@ test('821 CLI dispatch reads a replay file and labels selected output candidate'
   assert.equal(result.analysis.event_counts.hero_deaths_snapshot_candidates, 20);
   assert.equal(result.analysis.event_counts.hero_champion_kills_snapshot_candidates, 20);
   assert.equal(result.analysis.event_counts.hero_assists_snapshot_candidates, 20);
+  assert.equal(result.analysis.event_counts.hero_minions_killed_snapshot_candidates, 20);
   assert.equal(result.analysis.event_counts.hero_level_state_candidates, 10);
   assert.deepEqual(result.analysis.events.death_events, undefined);
 });

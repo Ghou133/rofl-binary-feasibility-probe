@@ -2039,6 +2039,8 @@ function decode1619821(replay, profile, options = {}) {
     hero_ward_stats_snapshot: decodeHeroWardStatsSnapshotCandidates821,
     hero_missions_cannon_minions_killed_snapshot:
       decodeHeroMissionsCannonMinionsKilledSnapshotCandidates821,
+    hero_minions_killed_snapshot: (input, collected) =>
+      decodeHeroFloatSnapshotCandidates821(input, 'hero_minions_killed_snapshot', collected),
     hero_experience_snapshot: (input, collected) =>
       decodeHeroFloatSnapshotCandidates821(input, 'hero_experience_snapshot', collected),
     hero_vision_score_snapshot: (input, collected) =>
@@ -2113,6 +2115,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
     hero_missions_cannon_minions_killed_snapshot:
       'hero_missions_cannon_minions_killed_snapshot_candidates',
+    hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
     hero_experience_snapshot: 'hero_experience_snapshot_candidates',
     hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
     hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
@@ -2143,6 +2146,7 @@ function decode1619821(replay, profile, options = {}) {
     'hero_assists_snapshot', 'hero_level_state', 'hero_respawn',
     'hero_missions_minions_killed_snapshot',
     'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
+    'hero_minions_killed_snapshot',
     'hero_experience_snapshot', 'hero_vision_score_snapshot',
     'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
     'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',

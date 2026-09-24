@@ -10,13 +10,13 @@ const {
 const BUILD = '16.19.821.7343';
 const EVIDENCE_STATUS = 'CANDIDATE_821_RUNTIME_BYTE_KEYFRAME_F32_AND_REPLAY_TAIL';
 const COMMON_LIMITS = Object.freeze([
-  'Experimental cumulative keyframe snapshots; no individual gain, spend, vision, or level event is inferred.',
+  'Experimental cumulative keyframe snapshots; no individual event, target, or cause is inferred.',
   'Exact 821 native 0x0089 decoding fully consumes all 3270 observed bodies into a 1260-byte transformed vector; these float field labels remain Replay-tail candidates.',
   'Decoded f32 values and their floors remain candidates tied to numeric Replay tails; final gaps are retained without interpolation.',
 ]);
 
 function profile(capability, suffix, blobOffset, tailField, valueKey, floorKey,
-  firstValue, allowDecrease, exactFinalMatches, extraLimit) {
+  firstValue, allowDecrease, exactFinalMatches, extraLimit, requireInteger = false) {
   return Object.freeze({
     id: `rofl-16.19.821.7343-kr-${suffix}-keyframe-f32-candidate-v1`,
     replay_version: BUILD,
@@ -35,6 +35,7 @@ function profile(capability, suffix, blobOffset, tailField, valueKey, floorKey,
     floor_key: floorKey,
     first_value: firstValue,
     allow_decrease: allowDecrease,
+    require_integer: requireInteger,
     evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
     lookup_table_sha256: LOOKUP_TABLE_SHA256,
     evidence_scope: `11 KR exact-build Replays, 327 keyframes, 3270 hero packets; 110 finite, first-value, tail-bound sequences; ${exactFinalMatches}/110 final floor matches`,
@@ -43,6 +44,10 @@ function profile(capability, suffix, blobOffset, tailField, valueKey, floorKey,
 }
 
 const PROFILES = Object.freeze({
+  hero_minions_killed_snapshot: profile('hero_minions_killed_snapshot', 'minions-killed',
+    0x3c, 'MINIONS_KILLED', 'minions_killed_raw_f32_candidate',
+    'minions_killed_floor_candidate', 0, false, 73,
+    'All 3270 observed f32 values are integral; this standard MINIONS_KILLED candidate is distinct from the Missions_MinionsKilled count at 0x378 and does not identify individual last hits.', true),
   hero_experience_snapshot: profile('hero_experience_snapshot', 'experience',
     0x28, 'EXP', 'experience_raw_f32_candidate', 'experience_floor_candidate',
     0, false, 52, 'EXP is a candidate cumulative value; no experience source or level threshold is inferred.'),
@@ -117,6 +122,9 @@ function decodeHeroFloatSnapshotCandidates821(replay, capability, precollected =
       });
       if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(floor)) {
         return mismatch(`${selected.replay_tail_field} f32 is not finite, nonnegative, and safely bounded`);
+      }
+      if (selected.require_integer && !Number.isInteger(value)) {
+        return mismatch(`${selected.replay_tail_field} f32 is not integral in the observed profile`);
       }
       if (previous[index] === null && value !== selected.first_value) {
         return mismatch(`participant ${participantId} first ${selected.replay_tail_field} f32 differs from observed profile`);
