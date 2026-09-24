@@ -471,12 +471,16 @@ function summarizeCapabilityResults(requested, decoded) {
 }
 
 function parseOne1619(replay, options, started) {
+  const selectsBuffAdd = options.semantic !== false
+    && Array.isArray(options.events) && options.events.includes('npc_buff_add_packet');
+  const selectsBuffRemove = options.semantic !== false
+    && Array.isArray(options.events) && options.events.includes('npc_buff_remove_packet');
   const selectsGameRoutes = options.semantic !== false
     && Array.isArray(options.events)
-    && options.events.some((name) => [
+    && (selectsBuffAdd || selectsBuffRemove || options.events.some((name) => [
       'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
       'hero_inventory_mapview', 'hero_inventory_set_item', 'hero_inventory_broadcast',
-    ].includes(name));
+    ].includes(name)));
   const selectsHeroStats = options.semantic !== false
     && Array.isArray(options.events)
     && options.events.some((name) => HERO_STATS_SNAPSHOT_CAPABILITIES.includes(name));
@@ -486,7 +490,8 @@ function parseOne1619(replay, options, started) {
     strict: options.strict,
   };
   const { analysis, heroStatsScan, candidateRouteScan } = selectsGameRoutes
-    ? analyzeReplayWithCandidateRoutes(replay, analysisOptions, selectsHeroStats)
+    ? analyzeReplayWithCandidateRoutes(replay, analysisOptions, selectsHeroStats,
+      { includeBuffAdd: selectsBuffAdd, includeBuffRemove: selectsBuffRemove })
     : selectsHeroStats ? analyzeReplayWithHeroStats(replay, analysisOptions)
       : { analysis: analyzeReplay(replay, analysisOptions), heroStatsScan: null,
         candidateRouteScan: null };

@@ -1845,12 +1845,20 @@ function decode1619(replay, profile, options = {}) {
   const heroStatsCapabilities = new Set(HERO_STATS_SNAPSHOT_CAPABILITIES);
   const selectsGameRoutes = capabilities.some((capability) => gameRouteCapabilities.has(capability));
   const selectsHeroStats = capabilities.some((capability) => heroStatsCapabilities.has(capability));
-  const sharedScans = selectsGameRoutes && selectsHeroStats
+  const selectsBuffAdd = capabilities.includes('npc_buff_add_packet');
+  const selectsBuffRemove = capabilities.includes('npc_buff_remove_packet');
+  const routeOptions = { includeBuffAdd: selectsBuffAdd, includeBuffRemove: selectsBuffRemove };
+  // Single Buff requests retain their original narrow walks. Share the route
+  // scan when both Buffs or another selected capability can use it.
+  const selectsRouteScan = selectsGameRoutes
+    || (selectsBuffAdd && selectsBuffRemove)
+    || ((selectsBuffAdd || selectsBuffRemove) && selectsHeroStats);
+  const sharedScans = selectsRouteScan && selectsHeroStats
     && options.candidateRouteScan == null && options.heroStatsScan == null
-    ? collectCandidateRoutesAndHeroStats(replay) : null;
-  const collected = selectsGameRoutes
-    ? options.candidateRouteScan ?? sharedScans?.candidateRouteScan ?? collectCandidateRoutes(replay)
-    : null;
+    ? collectCandidateRoutesAndHeroStats(replay, routeOptions) : null;
+  const collected = options.candidateRouteScan != null ? options.candidateRouteScan
+    : sharedScans !== null ? sharedScans.candidateRouteScan
+      : selectsRouteScan ? collectCandidateRoutes(replay, routeOptions) : null;
   const heroStatsScan = options.heroStatsScan ?? sharedScans?.heroStatsScan ?? undefined;
   let timerOutcome = null;
   let heroStatsOutcomes = null;
@@ -1878,7 +1886,11 @@ function decode1619(replay, profile, options = {}) {
           || capability === 'hero_inventory_broadcast'
           || capability === 'npc_buff_remove_packet'
           || capability === 'npc_buff_add_packet') {
-        outcome = decoders[capability](replay, collected, options);
+        // A stream-2 framing error invalidates the shared route token, but a
+        // game-stream-only BuffRemove candidate may still decode independently.
+        const packetScan = capability === 'npc_buff_remove_packet' && collected?.error
+          ? null : collected;
+        outcome = decoders[capability](replay, packetScan, options);
       } else {
         outcome = decoders[capability](replay, collected);
       }

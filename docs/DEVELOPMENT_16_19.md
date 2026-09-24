@@ -72,6 +72,11 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   A malformed stream affects only its dependent candidate family, which falls
   back to the established strict scan for its error result. Both collectors check the
   Replay source bytes and chunk layout before publishing copied packet refs.
+  Selected BuffAdd2 and BuffRemove2 packet rows now use the same route token;
+  ordinary route scans do not retain Buff rows. A synthetic two-chunk mixed
+  API request decompresses twice instead of five times, and Buff-only CLI
+  decoding reuses its analyzer walk. BuffRemove-only standalone API still scans
+  stream 1 alone; malformed stream 2 does not suppress its independent result.
   On the exact HN Replay, the six earlier
   death/timer/respawn/level/CS/EXP candidate JSONL files remain byte-identical
   after game-scan reuse. The KR Replay retains its death candidate and reports

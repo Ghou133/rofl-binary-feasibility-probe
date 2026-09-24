@@ -6,6 +6,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { walkBlocks } = require('../rofl');
+const { NPC_BUFF_REMOVE_PACKET_ID, candidateBuffPacketRowsForReplay } =
+  require('./rofl_16_19_820_7193');
 const { replaySourceError } = require('./replay_source_integrity');
 
 const REPLAY_VERSION = '16.19.820.7193';
@@ -21,7 +23,7 @@ const NPC_BUFF_REMOVE_PACKET_CANDIDATE_PROFILE = Object.freeze({
   status: 'CANDIDATE',
   enabled: true,
   stream_tag: 1,
-  replay_block_packet_id: 0x043c,
+  replay_block_packet_id: NPC_BUFF_REMOVE_PACKET_ID,
   packet_name: 'PKT_NPC_BuffRemove2_s',
   evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
   runtime_image_required: true,
@@ -65,25 +67,44 @@ function decodeNpcBuffRemovePacketCandidates(replay, _collected = null, options 
     return { ...base, status: 'DECODE_FAILED', input_count: null, event_count: null,
       events: null, error: `Replay source integrity failed: ${sourceError}` };
   }
-  const rows = [];
-  const packetLimitError = new Error('BuffRemove2 packet limit reached');
+  let rows = [];
   let walk;
-  try {
-    walk = walkBlocks(replay, (block, chunk) => {
-      if (block.packet_id !== profile.replay_block_packet_id) return;
-      if (rows.length === MAX_PACKETS) throw packetLimitError;
-      rows.push({ block, chunk: { ...chunk } });
-    }, { includeStreams: [profile.stream_tag], strict: true });
-  } catch (error) {
-    if (error === packetLimitError) {
+  if (_collected !== null) {
+    const selected = candidateBuffPacketRowsForReplay(replay, _collected,
+      profile.replay_block_packet_id);
+    if (selected.error) {
+      return { ...base, status: 'DECODE_FAILED', input_count: null,
+        event_count: null, events: null,
+        error: `BuffRemove2 precollected scan failed: ${selected.error}` };
+    }
+    if (selected.observed_packet_count_minimum) {
       return { ...base, status: 'UNSUPPORTED', input_count: null,
-        observed_packet_count_minimum: MAX_PACKETS + 1,
+        observed_packet_count_minimum: selected.observed_packet_count_minimum,
         event_count: null, events: null, scanned_block_count: null,
         runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
         error: `BuffRemove2 route exceeds ${MAX_PACKETS} packets` };
     }
-    return { ...base, status: 'DECODE_FAILED', input_count: null, event_count: null,
-      events: null, error: `Replay framing failed: ${error.message}` };
+    rows = selected.rows;
+    walk = { block_count: selected.scanned_block_count };
+  } else {
+    const packetLimitError = new Error('BuffRemove2 packet limit reached');
+    try {
+      walk = walkBlocks(replay, (block, chunk) => {
+        if (block.packet_id !== profile.replay_block_packet_id) return;
+        if (rows.length === MAX_PACKETS) throw packetLimitError;
+        rows.push({ block, chunk: { ...chunk } });
+      }, { includeStreams: [profile.stream_tag], strict: true });
+    } catch (error) {
+      if (error === packetLimitError) {
+        return { ...base, status: 'UNSUPPORTED', input_count: null,
+          observed_packet_count_minimum: MAX_PACKETS + 1,
+          event_count: null, events: null, scanned_block_count: null,
+          runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
+          error: `BuffRemove2 route exceeds ${MAX_PACKETS} packets` };
+      }
+      return { ...base, status: 'DECODE_FAILED', input_count: null, event_count: null,
+        events: null, error: `Replay framing failed: ${error.message}` };
+    }
   }
   const walkedSourceError = replaySourceError(replay);
   if (walkedSourceError) {

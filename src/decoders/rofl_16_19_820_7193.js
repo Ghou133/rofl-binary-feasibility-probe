@@ -295,77 +295,101 @@ const CANDIDATE_ROUTE_PACKET_IDS = new Set([
   HERO_INVENTORY_SET_ITEM_CANDIDATE_PROFILE.replay_block_packet_id,
   HERO_INVENTORY_BROADCAST_CANDIDATE_PROFILE.replay_block_packet_id,
 ]);
+const NPC_BUFF_ADD_PACKET_ID = 0x03ed;
+const NPC_BUFF_REMOVE_PACKET_ID = 0x043c;
+const MAX_NPC_BUFF_ROUTE_PACKETS = 50_000;
 
-function emptyCandidateRoutes() {
-  return new Map([...CANDIDATE_ROUTE_PACKET_IDS].map((packetId) => [packetId, []]));
+function emptyCandidateRoutes(options = {}) {
+  const packetIds = new Set(CANDIDATE_ROUTE_PACKET_IDS);
+  if (options.includeBuffAdd === true) packetIds.add(NPC_BUFF_ADD_PACKET_ID);
+  if (options.includeBuffRemove === true) packetIds.add(NPC_BUFF_REMOVE_PACKET_ID);
+  return new Map([...packetIds].map((packetId) => [packetId, []]));
 }
 
-function retainCandidateRoute(routes, block, chunk) {
+function retainCandidateRoute(routes, block, chunk, overflowPacketIds) {
   if (!routes.has(block.packet_id)) return;
   if (chunk.stream_tag !== 1
       && !(chunk.stream_tag === 2
-        && block.packet_id === HERO_INVENTORY_BROADCAST_CANDIDATE_PROFILE.replay_block_packet_id)) return;
+        && (block.packet_id === HERO_INVENTORY_BROADCAST_CANDIDATE_PROFILE.replay_block_packet_id
+          || block.packet_id === NPC_BUFF_ADD_PACKET_ID))) return;
   if (!Buffer.isBuffer(block.payload) || block.payload.length !== block.payload_length) {
     throw new TypeError('candidate route observed block payload is invalid');
+  }
+  const rows = routes.get(block.packet_id);
+  if ((block.packet_id === NPC_BUFF_ADD_PACKET_ID
+      || block.packet_id === NPC_BUFF_REMOVE_PACKET_ID)
+      && rows.length >= MAX_NPC_BUFF_ROUTE_PACKETS) {
+    overflowPacketIds.add(block.packet_id);
+    return;
   }
   // The standalone walk can alias an uncompressed Replay buffer. Copy both
   // payload and chunk metadata so a later Replay mutation cannot rewrite a
   // route scan that was bound to the original source hash.
-  routes.get(block.packet_id).push({
+  rows.push({
     block: { ...block, payload: Buffer.from(block.payload) },
     chunk: { ...chunk },
   });
 }
 
-function collectCandidateRoutes(replay) {
+function collectCandidateRoutes(replay, options = {}) {
   const sourceError = replaySourceError(replay);
   if (sourceError) {
     return bindRouteScan({ routes: null, walk: null, error: sourceError }, replay);
   }
-  const routes = emptyCandidateRoutes();
+  const routes = emptyCandidateRoutes(options);
+  const overflowPacketIds = new Set();
   try {
     let gameBlockCount = 0;
+    let keyframeBlockCount = 0;
     const walk = walkBlocks(replay, (block, chunk) => {
       if (chunk.stream_tag === 1) gameBlockCount += 1;
-      retainCandidateRoute(routes, block, chunk);
+      if (chunk.stream_tag === 2) keyframeBlockCount += 1;
+      retainCandidateRoute(routes, block, chunk, overflowPacketIds);
     }, { includeStreams: [1, 2], strict: true });
-    return bindRouteScan({ routes, walk: { ...walk, block_count: gameBlockCount },
-      error: null }, replay);
+    const walkedSourceError = replaySourceError(replay);
+    return bindRouteScan({ routes: walkedSourceError ? null : routes,
+      overflowPacketIds, walk: walkedSourceError ? null : {
+        ...walk, block_count: gameBlockCount,
+        game_keyframe_block_count: gameBlockCount + keyframeBlockCount,
+      }, error: walkedSourceError }, replay);
   } catch (error) {
     return bindRouteScan({ routes: null, walk: null, error: error.message }, replay);
   }
 }
 
-function createCandidateRouteScanCollector(replay) {
-  const routes = emptyCandidateRoutes();
+function createCandidateRouteScanCollector(replay, options = {}) {
+  const routes = emptyCandidateRoutes(options);
+  const overflowPacketIds = new Set();
   let gameBlockCount = 0;
+  let keyframeBlockCount = 0;
   let finished = false;
   return Object.freeze({
     observe(block, chunk) {
       if (finished) throw new Error('candidate route scan collector is already finished');
-      if (chunk?.stream_tag !== 1
-          && !(chunk?.stream_tag === 2
-            && block?.packet_id === HERO_INVENTORY_BROADCAST_CANDIDATE_PROFILE.replay_block_packet_id)) return;
       if (chunk.stream_tag === 1) gameBlockCount += 1;
-      retainCandidateRoute(routes, block, chunk);
+      if (chunk.stream_tag === 2) keyframeBlockCount += 1;
+      retainCandidateRoute(routes, block, chunk, overflowPacketIds);
     },
     finish() {
       if (finished) throw new Error('candidate route scan collector is already finished');
       finished = true;
       const sourceError = replaySourceError(replay);
-      return bindRouteScan({ routes: sourceError ? null : routes,
-        walk: sourceError ? null : { block_count: gameBlockCount },
+      return bindRouteScan({ routes: sourceError ? null : routes, overflowPacketIds,
+        walk: sourceError ? null : {
+          block_count: gameBlockCount,
+          game_keyframe_block_count: gameBlockCount + keyframeBlockCount,
+        },
         error: sourceError }, replay);
     },
   });
 }
 
-function collectCandidateRoutesAndHeroStats(replay) {
+function collectCandidateRoutesAndHeroStats(replay, options = {}) {
   // Standalone API calls need both streams, but the ordinary route and
   // HeroStats scans would each decompress stream 2. Keep each collector's
   // source-bound token and fall back to its own strict scan on framing errors.
   try {
-    const routeCollector = createCandidateRouteScanCollector(replay);
+    const routeCollector = createCandidateRouteScanCollector(replay, options);
     const { heroStatsScan, errors } = collectHeroStatsScanWithObserver(
       replay, routeCollector.observe);
     const routeFailed = errors.some((error) => error.stream_tag !== 3);
@@ -379,8 +403,9 @@ function collectCandidateRoutesAndHeroStats(replay) {
   }
 }
 
-function analyzeReplayWithCandidateRoutes(replay, options = {}, includeHeroStats = false) {
-  const collector = createCandidateRouteScanCollector(replay);
+function analyzeReplayWithCandidateRoutes(replay, options = {}, includeHeroStats = false,
+  routeOptions = {}) {
+  const collector = createCandidateRouteScanCollector(replay, routeOptions);
   const inspected = includeHeroStats
     ? analyzeReplayWithHeroStats(replay, options, collector.observe)
     : { analysis: analyzeReplay(replay, {
@@ -400,6 +425,29 @@ function candidateRoutesForReplay(replay, collected) {
   }
   return { routes: null, walk: null,
     error: 'candidate route scan belongs to a different Replay' };
+}
+
+function candidateBuffPacketRowsForReplay(replay, collected, packetId) {
+  if (packetId !== NPC_BUFF_ADD_PACKET_ID && packetId !== NPC_BUFF_REMOVE_PACKET_ID) {
+    throw new RangeError('only the exact 16.19 Buff packet routes can use this accessor');
+  }
+  const scan = candidateRoutesForReplay(replay, collected);
+  if (scan.error) return { rows: null, scanned_block_count: null, error: scan.error };
+  if (!scan.routes.has(packetId)) {
+    return { rows: null, scanned_block_count: null,
+      error: `Buff route 0x${packetId.toString(16)} was not selected by this scan` };
+  }
+  if (scan.overflowPacketIds?.has(packetId)) {
+    return { rows: null, scanned_block_count: null,
+      observed_packet_count_minimum: MAX_NPC_BUFF_ROUTE_PACKETS + 1 };
+  }
+  // The token's rows stay private. Callers receive independent copies and
+  // cannot mutate a later decode using the same source-bound token.
+  const rows = scan.routes.get(packetId).map(({ block, chunk }) => ({
+    block: { ...block, payload: Buffer.from(block.payload) }, chunk: { ...chunk },
+  }));
+  return { rows, scanned_block_count: packetId === NPC_BUFF_ADD_PACKET_ID
+    ? scan.walk.game_keyframe_block_count : scan.walk.block_count };
 }
 
 function decodeHeroDeathCandidates(replay, collected = null) {
@@ -1705,9 +1753,12 @@ module.exports = {
   HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE,
   HERO_INVENTORY_SET_ITEM_CANDIDATE_PROFILE,
   HERO_INVENTORY_BROADCAST_CANDIDATE_PROFILE,
+  NPC_BUFF_ADD_PACKET_ID,
+  NPC_BUFF_REMOVE_PACKET_ID,
   analyzeReplayWithCandidateRoutes,
   collectCandidateRoutes,
   collectCandidateRoutesAndHeroStats,
+  candidateBuffPacketRowsForReplay,
   decodeHeroDeathCandidates,
   decodeHeroDeathTimerCandidates,
   decodeHeroRespawnCandidates,
