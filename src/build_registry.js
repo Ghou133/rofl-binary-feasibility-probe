@@ -447,6 +447,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_respawn: 0x0048,
       hero_deaths_snapshot: 0x0089,
       hero_champion_kills_snapshot: 0x0089,
+      hero_assists_snapshot: 0x0089,
       hero_level_state: 0x0197,
     },
     decoder_profile: {
@@ -456,6 +457,8 @@ const BUILD_PROFILES = deepFreeze({
         heroStatsCandidate1619821.HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE,
       hero_champion_kills_snapshot:
         heroStatsCandidate1619821.HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE,
+      hero_assists_snapshot:
+        heroStatsCandidate1619821.HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE,
       hero_level_state: levelCandidate1619821.HERO_LEVEL_CANDIDATE_PROFILE_821,
     },
     evidence_grades: {
@@ -463,6 +466,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_respawn: 'CANDIDATE_821_REPLAY_TAIL_DEAD_TIME_CORRELATION',
       hero_deaths_snapshot: 'CANDIDATE_821_RAW_BYTE_KEYFRAME_TAIL_CORRELATION',
       hero_champion_kills_snapshot: 'CANDIDATE_821_MIRRORED_RAW_BYTE_KEYFRAME_TAIL_CORRELATION',
+      hero_assists_snapshot: 'CANDIDATE_821_RAW_BYTE_KEYFRAME_TAIL_CORRELATION',
       hero_level_state: 'CANDIDATE_821_LEVEL_ROUTE_TAIL_CODEBOOK',
     },
     semantic_mappings: {
@@ -472,12 +476,15 @@ const BUILD_PROFILES = deepFreeze({
         'exact 0x0089 raw byte 1182 finite codebook, 821 KR keyframe candidate only',
       keyframe_champion_kills_snapshot:
         'exact 0x0089 mirrored raw bytes 434/1186 finite codebook, 821 KR keyframe candidate only',
+      keyframe_assists_snapshot:
+        'exact 0x0089 raw byte 1178 finite codebook, 821 KR keyframe candidate only',
       level_state: 'exact 0x0197 full-param families and finite payload codebook, candidate only',
     },
     verified_capabilities: [],
     candidate_capabilities: [
       'hero_death', 'hero_respawn', 'hero_deaths_snapshot',
-      'hero_champion_kills_snapshot', 'hero_level_state',
+      'hero_champion_kills_snapshot', 'hero_assists_snapshot',
+      'hero_level_state',
     ],
     unsupported_capabilities: [],
     validation_artifacts: [],

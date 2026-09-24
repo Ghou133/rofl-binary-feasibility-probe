@@ -7,7 +7,7 @@ const { replaySourceError } = require('./replay_source_integrity');
 const BUILD = '16.19.821.7343';
 const CAPABILITIES = new Set([
   'hero_death', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
-  'hero_level_state', 'hero_respawn',
+  'hero_assists_snapshot', 'hero_level_state', 'hero_respawn',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
 const RESPAWN_ROUTES = new Set([0x0048, 0x018d]);
@@ -50,10 +50,12 @@ function create821ScanCollector(replay, selectedCapabilities) {
     hero_respawn: [],
     hero_deaths_snapshot: heroStatsRows,
     hero_champion_kills_snapshot: heroStatsRows,
+    hero_assists_snapshot: heroStatsRows,
     hero_level_state: [],
   };
   const selectsHeroStats = selected.has('hero_deaths_snapshot')
-    || selected.has('hero_champion_kills_snapshot');
+    || selected.has('hero_champion_kills_snapshot')
+    || selected.has('hero_assists_snapshot');
   // A return candidate is only meaningful after validating its death cores.
   // Keep those route packets in the same walk even for respawn-only requests.
   const selectsDeathRoutes = selected.has('hero_death') || selected.has('hero_respawn');
@@ -146,6 +148,7 @@ function rowsFor821Capability(replay, token, capability) {
     rows: bound.rows[capability].map((row) => copyRow(row.block, row.chunk)),
     scanned_block_count: capability === 'hero_deaths_snapshot'
       || capability === 'hero_champion_kills_snapshot'
+      || capability === 'hero_assists_snapshot'
       ? bound.keyframeBlockCount : bound.blockCount,
   };
 }

@@ -46,6 +46,20 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   `CANDIDATE` results and two `PARTIAL` results (one unknown level code, one
   unknown kill-count code). Existing four-capability candidate JSONL files
   remain byte-identical after adding this scanner consumer.
+- **821 assist keyframe candidate:** Raw byte 1178 of the same exact KR
+  `0x0089` packet has a finite observed 0–17 mapping against Replay-tail
+  `ASSISTS`. In the first two Replays, it is the only payload byte satisfying
+  the 16 participants with final assists <=17 and at least 15 changes. Nine
+  held-out Replays preserve zero starts, monotone known values, and no known
+  value above its own tail. Six of eleven Replays have no unknown code (177
+  keyframes, 1,770 candidate snapshots); five contain 49 unknown-code packets
+  across ten participants and must fail this whole capability while retaining
+  the first offending raw ref. No mirror byte, high-value code map, runtime
+  transform, individual assist event, or attribution is asserted. Measured
+  final tail gaps are retained without inventing intermediate events. The
+  six-capability 11-Replay CLI batch yields six `CANDIDATE` and five `PARTIAL`
+  Replay statuses; the five prior candidate JSONL families are byte-identical
+  to the preceding five-capability run.
 - **821 level observation candidate:** KR game route `0x0197` with exact
   `0x400000ae..b7` or `0x400001ae..b7` params has a bounded payload codebook
   for observed levels 1–19. The first two Replays supplied 304/304 decoded

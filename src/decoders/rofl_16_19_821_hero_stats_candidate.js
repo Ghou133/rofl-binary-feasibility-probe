@@ -14,6 +14,7 @@ const PAYLOAD_LENGTH = 1263;
 const RAW_DEATHS_BYTE_INDEX = 1182;
 const RAW_CHAMPION_KILLS_BYTE_INDEX = 1186;
 const RAW_CHAMPION_KILLS_MIRROR_BYTE_INDEX = 434;
+const RAW_ASSISTS_BYTE_INDEX = 1178;
 const PAYLOAD_PREFIX_HEX = '6700de';
 const ENCODED_BYTE_FOR_DEATH_COUNT = Object.freeze([
   0x97, 0xcc, 0x55, 0xf1, 0x6f, 0x8d, 0x58,
@@ -30,6 +31,13 @@ const CHAMPION_KILL_COUNT_BY_ENCODED_BYTE = new Map(
   ENCODED_BYTE_FOR_CHAMPION_KILL_COUNT.map((encoded, count) => [encoded, count]));
 const CHAMPION_KILLS_EVIDENCE_STATUS =
   'CANDIDATE_EXACT_KR_821_MIRRORED_RAW_BYTE_KILL_COUNT_TAIL_AND_ROUTE_CORRELATION';
+const ENCODED_BYTE_FOR_ASSIST_COUNT = Object.freeze([
+  ...ENCODED_BYTE_FOR_CHAMPION_KILL_COUNT,
+]);
+const ASSIST_COUNT_BY_ENCODED_BYTE = new Map(
+  ENCODED_BYTE_FOR_ASSIST_COUNT.map((encoded, count) => [encoded, count]));
+const ASSISTS_EVIDENCE_STATUS =
+  'CANDIDATE_EXACT_KR_821_RAW_BYTE_ASSIST_COUNT_TAIL_CORRELATION';
 
 // This profile decodes one observed raw byte. It does not decode the 1260-byte
 // HeroStats blob or reuse the 16.19.820.7193 runtime lookup table.
@@ -84,6 +92,31 @@ const HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.821.7343-kr-hero-assists-raw-byte-keyframe-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_assists_snapshot',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: PACKET_ID,
+  stream_tags: Object.freeze([2]),
+  hero_raw_param_first: HERO_PARAM_FIRST,
+  hero_raw_param_last: HERO_PARAM_LAST,
+  payload_length: PAYLOAD_LENGTH,
+  payload_prefix_hex: PAYLOAD_PREFIX_HEX,
+  raw_assists_byte_index: RAW_ASSISTS_BYTE_INDEX,
+  encoded_byte_for_assist_count_candidate: ENCODED_BYTE_FOR_ASSIST_COUNT,
+  evidence_runtime_image_sha256: null,
+  evidence_scope: 'first two exact-build KR Replays calibrated raw byte 1178; nine heldout KR Replays checked; six of eleven Replays fully codeable with the observed 0..17 codebook',
+  known_limits: Object.freeze([
+    'The finite 0..17 codebook is inferred from exact-build Replay observations and ASSISTS tail comparisons; no exact-build runtime transform is available.',
+    'Five of eleven observed KR Replays contain higher-count unknown bytes and fail the whole capability without partial event output.',
+    'Byte 1178 has no exact mirror in the observed 0x0089 payloads.',
+    'Keyframe values are candidate snapshots, not individual assist events, exact assist times, or participant attribution for a kill.',
+    'The measured final Replay-tail gap is retained without interpolation or a hard upper bound.',
+  ]),
+});
+
 function assessHeroStatsTail821(replay, field) {
   if (replay?.header?.version !== REPLAY_VERSION) {
     return { field, status: 'UNSUPPORTED',
@@ -123,6 +156,10 @@ function assessHeroDeathsSnapshotTail821(replay) {
 
 function assessHeroChampionKillsSnapshotTail821(replay) {
   return assessHeroStatsTail821(replay, 'CHAMPIONS_KILLED');
+}
+
+function assessHeroAssistsSnapshotTail821(replay) {
+  return assessHeroStatsTail821(replay, 'ASSISTS');
 }
 
 function packetRef(replay, block, chunk) {
@@ -478,11 +515,124 @@ function decodeHeroChampionKillsSnapshotCandidates821(replay, precollected = nul
   };
 }
 
+function decodeHeroAssistsSnapshotCandidates821(replay, precollected = null) {
+  const profile = HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE;
+  const base = {
+    profile_id: profile.id,
+    input_packet_id: PACKET_ID,
+    evidence_runtime_image_sha256: null,
+    runtime_image_used: false,
+    runtime_image_status: 'NOT_REQUIRED_ROUTE_TAIL_CANDIDATE',
+    known_limits: [...profile.known_limits],
+  };
+  const fail = (status, error, details = {}) => ({
+    ...base, status, event_count: null, events: null, error, ...details,
+  });
+  if (replay?.header?.version !== REPLAY_VERSION) {
+    return fail('UNSUPPORTED', `hero_assists_snapshot candidate supports only ${REPLAY_VERSION}`);
+  }
+  const sourceError = standaloneSourceError821(replay, precollected);
+  if (sourceError) return fail('DECODE_FAILED', `Replay source failed: ${sourceError}`);
+  const tail = assessHeroAssistsSnapshotTail821(replay);
+  if (tail.status !== 'PASS') return fail(tail.status, tail.error);
+  const collected = scanHeroStatsPackets821(replay, precollected, 'hero_assists_snapshot');
+  if (collected.status !== 'PASS') {
+    return fail(collected.status, collected.error, collected.details);
+  }
+  const { frames, scan } = collected;
+  const previous = Array(10).fill(null);
+  const previousTimes = Array(10).fill(null);
+  const previousRefs = Array(10).fill(null);
+  const observations = [];
+  for (const frame of frames) {
+    for (const row of frame) {
+      const { block, rawParam, participantId, ref } = row;
+      const rawByte = block.payload[RAW_ASSISTS_BYTE_INDEX];
+      const mismatch = (error) => fail('DECODE_FAILED', error, {
+        ...scan, first_unmatched_packet_ref: ref,
+      });
+      if (!ASSIST_COUNT_BY_ENCODED_BYTE.has(rawByte)) {
+        return mismatch(`0x0089 assists byte ${RAW_ASSISTS_BYTE_INDEX} has unknown code 0x${rawByte.toString(16).padStart(2, '0')}`);
+      }
+      const value = ASSIST_COUNT_BY_ENCODED_BYTE.get(rawByte);
+      const index = participantId - 1;
+      if (previous[index] === null && value !== 0) {
+        return mismatch(`participant ${participantId} first observed assist count is not zero`);
+      }
+      if (previous[index] !== null && value < previous[index]) {
+        return mismatch(`participant ${participantId} has decreasing observed assist count`);
+      }
+      if (value > tail.values[index]) {
+        return mismatch(`participant ${participantId} exceeds Replay tail ASSISTS`);
+      }
+      previous[index] = value;
+      previousTimes[index] = block.timestamp_ms;
+      previousRefs[index] = ref;
+      observations.push({ ...row, rawByte, value });
+    }
+  }
+  const rawGameLength = replay?.tail?.metadata?.gameLength;
+  const gameLengthMs = Number.isSafeInteger(rawGameLength) && rawGameLength >= 0
+    ? rawGameLength : null;
+  if (gameLengthMs !== null && previousTimes.some((time) => time > gameLengthMs)) {
+    return fail('DECODE_FAILED', '0x0089 keyframe timestamp exceeds Replay tail gameLength', scan);
+  }
+  const tailGaps = tail.values.map((finalValue, index) => ({
+    participant_id_candidate: index + 1,
+    last_snapshot_replay_time_ms: previousTimes[index],
+    last_snapshot_assists_candidate: previous[index],
+    final_assists_tail: finalValue,
+    unobserved_tail_gap: finalValue - previous[index],
+    unobserved_tail_time_ms: gameLengthMs === null ? null : gameLengthMs - previousTimes[index],
+    last_raw_packet_ref: previousRefs[index],
+  }));
+  const events = observations.map((row) => ({
+    event_type: 'HERO_ASSISTS_SNAPSHOT_CANDIDATE',
+    game_version: REPLAY_VERSION,
+    patch: '16.19',
+    build_profile: profile.id,
+    replay_sha256: replay.source_sha256,
+    replay_time_ms: row.block.timestamp_ms,
+    hero_raw_param: row.rawParam,
+    participant_id_candidate: row.participantId,
+    raw_assists_byte: row.rawByte,
+    assists_candidate: row.value,
+    observation_kind: 'KEYFRAME_SNAPSHOT',
+    confidence: 'CANDIDATE',
+    semantic_status: ASSISTS_EVIDENCE_STATUS,
+    field_confidence: {
+      replay_time_ms: 'VERIFIED_DIRECT',
+      hero_raw_param: 'VERIFIED_DIRECT',
+      raw_assists_byte: 'VERIFIED_DIRECT',
+      participant_id_candidate: 'CANDIDATE_KR_821_RAW_PARAM_TAIL_ALIGNMENT',
+      assists_candidate: ASSISTS_EVIDENCE_STATUS,
+    },
+    raw_packet_ref: row.ref,
+    known_limits: [...profile.known_limits],
+  }));
+  return {
+    ...base,
+    status: 'CANDIDATE',
+    evidence_status: ASSISTS_EVIDENCE_STATUS,
+    ...scan,
+    event_count: events.length,
+    observed_participant_count: 10,
+    final_assists: tail.values,
+    observed_max_assists: previous,
+    tail_gaps: tailGaps,
+    tail_gap_total: tailGaps.reduce((sum, gap) => sum + gap.unobserved_tail_gap, 0),
+    events,
+  };
+}
+
 module.exports = {
   HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE,
   HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE,
+  HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE,
   assessHeroDeathsSnapshotTail821,
   assessHeroChampionKillsSnapshotTail821,
+  assessHeroAssistsSnapshotTail821,
   decodeHeroDeathsSnapshotCandidates821,
   decodeHeroChampionKillsSnapshotCandidates821,
+  decodeHeroAssistsSnapshotCandidates821,
 };

@@ -20,6 +20,7 @@
 | `16.19.821.7343 --events hero_respawn` | KR `0x0048` 与已验证死亡核心唯一配对、同刻前序 `0x018d` 支持，且每名参与者的已配对死亡到返回时长之和取整等于结算 `TOTAL_TIME_SPENT_DEAD` | 仅写入 `hero_respawn_candidates`，状态为 `CANDIDATE`；保留未观察到返回的末次死亡及额外 `0x018d`，不解释载荷或推断计时器；无 821 运行时镜像 |
 | `16.19.821.7343 --events hero_deaths_snapshot` | KR `0x0089` 关键帧中一个原始字节的有限编码表，输出候选累计死亡次数快照 | 仅写入 `hero_deaths_snapshot_candidates`；末帧与结算可差 1 并保留差值；不是逐次死亡事件，也没有完整 HeroStats 变换或 821 镜像证明 |
 | `16.19.821.7343 --events hero_champion_kills_snapshot` | KR `0x0089` 关键帧的原始字节 434/1186 镜像与有限 0–17 编码表，输出候选累计英雄击杀数快照 | 仅写入 `hero_champion_kills_snapshot_candidates`；尾部差值原样保留；一份高击杀回放含未知编码，该能力失败但其他能力可继续；不推断击杀时点、击杀者或助攻 |
+| `16.19.821.7343 --events hero_assists_snapshot` | KR `0x0089` 关键帧原始字节 1178 的有限 0–17 编码表，输出候选累计助攻数快照 | 仅写入 `hero_assists_snapshot_candidates`；五份含未知高值编码的回放会使该能力失败，其他能力继续；无 821 运行时变换证明，不推断单次助攻或参与者关系 |
 | `16.19.821.7343 --events hero_level_state` | KR `0x0197` 两组精确原始参数上的有限载荷编码表，输出已观察到的候选等级值 | 仅写入 `hero_level_state_candidates`；重复观测与等级缺口保留。一个回放含未分类的等级 20 编码，该能力在该回放失败并不输出候选等级；不补造升级事件 |
 | `16.19.820.7193 --events hero_death_timer` | HN 路由的计时 float、同刻 Hero_Die 和后续复活时间相互校验时，输出候选计时秒数 | 仅写入 `hero_death_timer_candidates`；目前只覆盖 HN 路由，KR 回放会报 `PROFILE_UNAVAILABLE`，不产生确认的死亡或重生事件 |
 | `16.19.820.7193 --events hero_respawn` | 将 HN 已观察且与计时包唯一配对的 `0x0357` 包输出为候选复活时点 | 仅写入 `hero_respawn_candidates`；依赖完整的 HN 计时候选校验，不补造回放结束后的复活 |
@@ -119,7 +120,7 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events hero_death --out-dir "work\16-19-821-death-candidate"
 ```
 
-821 的候选死亡记录保留原始包来源及未配对路由的负例计数；没有该 build 的运行时镜像时，不解释 payload 中的杀手、助攻或死亡计时。可追加 `hero_respawn,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_level_state` 到 `--events`；各能力独立报告执行状态。含未知等级或击杀数编码的回放会保留其他已通过能力的候选输出，并明确标出失败项。
+821 的候选死亡记录保留原始包来源及未配对路由的负例计数；没有该 build 的运行时镜像时，不解释 payload 中的杀手、助攻或死亡计时。可追加 `hero_respawn,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_assists_snapshot,hero_level_state` 到 `--events`；各能力独立报告执行状态。含未知等级、击杀数或助攻数编码的回放会保留其他已通过能力的候选输出，并明确标出失败项。
 
 对 HN 路由的同一完整 build，可单独选择计时候选，或用
 `--events hero_death,hero_death_timer` 一起运行。计时输出包含原始包引用、
