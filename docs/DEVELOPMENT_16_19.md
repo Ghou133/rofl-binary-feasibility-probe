@@ -60,7 +60,7 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   were excluded. This cross-route check strengthens the one-Replay candidate,
   but does not establish a runtime semantic label or a confirmed XP field.
 - **CLI/API efficiency:** Selecting the lane-CS, jungle-CS, EXP, GOLD_EARNED, GOLD_SPENT,
-  CHAMPIONS_KILLED, NUM_DEATHS and ASSISTS HeroStats candidates together shares one
+  CHAMPIONS_KILLED, NUM_DEATHS, ASSISTS and kill-stat HeroStats candidates together shares one
   keyframe collection and retains separate field validation and results. The
   16.19 CLI reuses its raw-analysis walk for that collection; a compressed
   synthetic keyframe now decompresses once instead of twice. It also reuses
@@ -161,6 +161,20 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   field correlation, not a confirmed integer field or a neutral-minion event.
   The last keyframe precedes game end by 36,824 ms, so zero integer tail gaps
   do not exclude later fractional changes.
+- **Done:** `hero_kill_stats_snapshot` emits six observed u32 HeroStats values
+  at offsets `0x58` through `0x6c`: largest killing spree, killing sprees,
+  largest multi-kill, and double/triple/quadra kills. In the same 35 HN
+  keyframes (350 participant snapshots), all six start at zero, do not decline,
+  and remain within their matching Replay-tail values. Five final vectors
+  match their tails 10/10; killing sprees match 9/10 with one unobserved gap
+  after the last keyframe. The full 350-value sequences for the five exact-tail
+  fields are unique among 315 aligned u32 offsets in this Replay; the quadra
+  final vector alone also occurs at `0x2bc`. Participant-shift and cross-field
+  checks support the cluster but do not establish a published field or any
+  individual kill event, time, or killer attribution. The local-only record is
+  `artifacts/16_19_development/kill_stats_hn_cli_smoke/analysis.json`, generated
+  by `analyze_kill_stats.js` in that directory from the pinned Replay SHA above;
+  the CLI candidate output is retained beside it. Neither is packaged.
 - **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
   runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
   observed slot/item-definition-key records as candidates. All 94 game packets
