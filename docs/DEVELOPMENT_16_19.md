@@ -108,6 +108,19 @@ Current progress (older notes below retain their original research context):
   combined exact-image CLI batch also returned 11/11 `CANDIDATE` associations,
   11/11 `MATCHED_USED` image outcomes, and zero framing errors; its ignored
   output is `artifacts/16_19_development/kr_821_buff_pair_cli_11/`.
+- **821 CastSpellAns dispatch key boundary:** In the pinned 821 mapped image,
+  receive-side RVA `0x6ff3e0` reads native packet `+0x0c` (Replay `raw_param`)
+  as an outer callback-registry lookup key, then uses packet `+0x08` for the
+  inner route lookup. This is the same outer map populated by the `0x01da`
+  `AIBaseClient` registration through RVA `0x711e90`; the registered key is
+  read from the bound object's `this+0xbc`. The trace establishes the
+  conditional registry lookup, not an observed hit for each Replay packet.
+  The captured image contains the client module but not the heap registry,
+  and capture metadata does not name the playing Replay. Registered keys,
+  per-packet bound receivers, caster and participant identity remain
+  `UNKNOWN`; no CastSpellAns actor field was added. Exact-image assembly,
+  scripts, Replay controls, and the negative boundary are retained under
+  ignored `artifacts/16_19_development/kr_821_cast_identity_probe/`.
 - **821 observed-return candidate:** `--events hero_respawn` pairs each matched
   death core with a subsequent same-participant `0x0048` and preceding co-timed
   `0x018d`, requiring the ten per-participant sums of elapsed milliseconds,
