@@ -11,6 +11,7 @@ const {
   collectCandidateRoutes,
   decodeHeroDeathCandidates,
   decodeHeroDeathTimerCandidates,
+  decodeHeroRespawnCandidates,
   decodeHeroLevelStateCandidates,
 } = require('./decoders/rofl_16_19_820_7193');
 const {
@@ -1778,15 +1779,18 @@ function decode1619(replay, profile, options = {}) {
   const decoders = {
     hero_death: decodeHeroDeathCandidates,
     hero_death_timer: decodeHeroDeathTimerCandidates,
+    hero_respawn: decodeHeroRespawnCandidates,
     hero_level_state: decodeHeroLevelStateCandidates,
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
     hero_death_timer: 'hero_death_timer_candidates',
+    hero_respawn: 'hero_respawn_candidates',
     hero_level_state: 'hero_level_state_candidates',
   };
   const collected = capabilities.some((capability) => Object.hasOwn(decoders, capability))
     ? collectCandidateRoutes(replay) : null;
+  let timerOutcome = null;
   for (const capability of capabilities) {
     if (!Object.hasOwn(decoders, capability)) {
       capabilityResults[capability] = {
@@ -1795,7 +1799,14 @@ function decode1619(replay, profile, options = {}) {
       };
       continue;
     }
-    const outcome = decoders[capability](replay, collected);
+    let outcome;
+    if (capability === 'hero_death_timer' || capability === 'hero_respawn') {
+      timerOutcome ??= decodeHeroDeathTimerCandidates(replay, collected);
+      outcome = capability === 'hero_respawn'
+        ? decodeHeroRespawnCandidates(replay, collected, timerOutcome) : timerOutcome;
+    } else {
+      outcome = decoders[capability](replay, collected);
+    }
     const { events: candidateEvents, ...result } = outcome;
     result.runtime_image_status = options.runtimeImagePath
       ? 'PROVIDED_NOT_USED'
@@ -1935,6 +1946,10 @@ function getHeroDeathTimerCandidates(decoded) {
   return decoded?.events?.hero_death_timer_candidates ?? null;
 }
 
+function getHeroRespawnCandidates(decoded) {
+  return decoded?.events?.hero_respawn_candidates ?? null;
+}
+
 function getHeroLevelStateCandidates(decoded) {
   return decoded?.events?.hero_level_state_candidates ?? null;
 }
@@ -2048,6 +2063,7 @@ module.exports = {
   getHeroDeaths,
   getHeroDeathCandidates,
   getHeroDeathTimerCandidates,
+  getHeroRespawnCandidates,
   getHeroLevelStateCandidates,
   getHeroPaths,
   getHeroRespawns,

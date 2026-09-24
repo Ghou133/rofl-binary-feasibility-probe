@@ -1613,10 +1613,14 @@ function capabilityQuery(replay, options = {}) {
           'ten-participant NUM_DEATHS presence and equality');
       }
       if (profile.game_version === '16.19.820.7193'
-          && capability === 'hero_death_timer') {
+          && (capability === 'hero_death_timer' || capability === 'hero_respawn')) {
         validationPending.push('ten-participant NUM_DEATHS presence and equality',
           'HN route, timer field, and death-to-respawn invariants',
           'Replay tail gameLength if a timer has no observed reincarnation');
+      }
+      if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_respawn') {
+        validationPending.push('unique observed reincarnation packet per matched death timer');
       }
       if (profile.game_version === '16.19.820.7193'
           && capability === 'hero_level_state') {
@@ -1624,7 +1628,7 @@ function capabilityQuery(replay, options = {}) {
           'HN level route, payload, and observed sequence against final LEVEL');
       }
       const gameLength = replay.tail?.metadata?.gameLength;
-      const conditionalInputs = capability === 'hero_death_timer'
+      const conditionalInputs = ['hero_death_timer', 'hero_respawn'].includes(capability)
         && profile.game_version === '16.19.820.7193'
         ? [{
           name: 'replay_tail_gameLength',
@@ -1656,6 +1660,7 @@ function capabilityQuery(replay, options = {}) {
           ? ({
             hero_death: 'hero_death_candidates',
             hero_death_timer: 'hero_death_timer_candidates',
+            hero_respawn: 'hero_respawn_candidates',
             hero_level_state: 'hero_level_state_candidates',
           })[capability] ?? null
           : null,

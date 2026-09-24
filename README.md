@@ -17,6 +17,7 @@
 | `decode` / `analyze` / `batch` / `validate` | `16.15.801.3452` 旧版整合管线；16.19 精确 build 的指定能力实验入口 | 16.19 必须显式传 `--events`；16.16 语义 API 尚未由主 CLI 分发；`validate` 还会运行完整 Node 套件 |
 | `16.19.820.7193 --events hero_death` | HN/KR 结构指纹与回放尾部死亡总数同时匹配时，输出候选受害者和回放时间 | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；无杀手、助攻或重生推断，其他完整 build 不复用 |
 | `16.19.820.7193 --events hero_death_timer` | HN 路由的计时 float、同刻 Hero_Die 和后续复活时间相互校验时，输出候选计时秒数 | 仅写入 `hero_death_timer_candidates`；目前只覆盖 HN 路由，KR 回放会报 `PROFILE_UNAVAILABLE`，不产生确认的死亡或重生事件 |
+| `16.19.820.7193 --events hero_respawn` | 将 HN 已观察且与计时包唯一配对的 `0x0357` 包输出为候选复活时点 | 仅写入 `hero_respawn_candidates`；依赖完整的 HN 计时候选校验，不补造回放结束后的复活 |
 | `16.19.820.7193 --events hero_level_state` | HN `0x02b3` 包中观察到的候选英雄等级值及原始包来源 | 仅写入 `hero_level_state_candidates`；逐参与者列出未观察到的升级值，不补造事件；KR 路由未适配 |
 | `src/semantic_api.js` 与精确 build profiles | `16.16.805.0442` 的 HeroPath、等级、WardSpawn、伤害、死亡、重生、XP/lane-CS keyframe、受限 ItemState 和 gameplay-tail 等 | 独立 API 的逐字段能力；需要外部精确镜像、profiles 或对应已验证输入，不是主 CLI 的完整分析模式 |
 | V2 Ward / Path | 已验证位置、守卫事件及受限派生关联 | 来源 SHA 必须与回放一致；类型、匹配、生命周期和位置插值与直接字段分级 |
@@ -83,6 +84,10 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 候选参与者、解出的秒数，以及存在匹配时的复活包引用；它要求十名参与者的死亡总数、
 同刻 Hero_Die 配对及复活时序都通过校验。未执行的旧版事件汇总计数为
 `null`，不会把未解码误写成零事件。
+
+`--events hero_respawn` 可单独查询已观察到的候选复活时点，也可与计时候选
+同时选择。输出按复活包时间排序，保留复活、计时和 Hero_Die 的原始包引用；
+它复用计时能力的配对校验，不产生已确认的 `respawn_events`。
 
 对 HN 路由可单独运行 `--events hero_level_state`，也可与上述候选能力组合。
 输出中的 `level_after_candidate` 是已观察到的等级字段，`missing_level_updates`

@@ -21,6 +21,11 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   The captured image SHA-256 is
   `7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f780af11ed6df76d`;
   the decoder uses the recovered transform but does not read the image at run time.
+- **Done:** `--events hero_respawn` projects only observed HN `0x0357`
+  reincarnate-alive packets that uniquely match a validated death timer. It
+  emits 85 candidate respawn times in the HN Replay and leaves three terminally
+  censored timers without invented respawns. It can be selected independently
+  or alongside the timer capability, sharing the Replay packet scan.
 - **Done:** The same HN image identifies route `0x02b3` as a level-up packet and
   supplies the field transform. `--events hero_level_state` now emits only the
   159 observed HN hero-parameter packets as `hero_level_state_candidates`:
@@ -29,9 +34,11 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   have six missing update values in total, recorded as gaps rather than
   reconstructed events. KR has no corresponding `0x02b3` route in the two
   checked replays and reports `PROFILE_UNAVAILABLE`.
-- **Current:** Candidate participant identity and timer meaning are bounded to
-  one HN Replay; KR uses different route IDs and reports `PROFILE_UNAVAILABLE`
-  for the HN timer profile. No confirmed death, timer or respawn event is emitted.
+- **Current:** Candidate participant identity, timer and respawn meaning are bounded to
+  one HN Replay; KR uses different death/timer route IDs and reports
+  `PROFILE_UNAVAILABLE` for the HN timer profile. Eleven raw KR `0x0357`
+  packets remain unclassified without that profile. No confirmed death, timer
+  or respawn event is emitted.
 - **KR lead:** In exact-build `KR_8391528229` and `KR_8391542020`, all 115
   `0x0259` death-triad packets reject the HN timer transform. All 104 packets
   on route `0x0048` pair with a pending candidate victim and a plausible

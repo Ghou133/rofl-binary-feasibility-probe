@@ -66,6 +66,22 @@ const HERO_DEATH_TIMER_CANDIDATE_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_RESPAWN_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-hero-respawn-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_respawn',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: 0x0357,
+  evidence_runtime_image_sha256: HERO_DEATH_TIMER_CANDIDATE_PROFILE.evidence_runtime_image_sha256,
+  evidence_scope: 'exact HN reincarnate-alive route and one HN Replay with 85 timer-matched packets',
+  known_limits: Object.freeze([
+    'Only observed HN reincarnate-alive packets matched to a validated death timer are emitted.',
+    'Participant identity and respawn semantics remain candidates from one Replay.',
+    'Terminally censored deaths do not create synthetic respawn events.',
+  ]),
+});
+
 const HERO_LEVEL_STATE_CANDIDATE_PROFILE = Object.freeze({
   id: 'rofl-16.19.820.7193-hn-hero-level-state-candidate-v1',
   replay_version: REPLAY_VERSION,
@@ -85,6 +101,26 @@ const HERO_LEVEL_STATE_CANDIDATE_PROFILE = Object.freeze({
 });
 
 const TIMER_FLOAT_CODES = new Set([1, 2, 4, 6]);
+const ROUTE_SCAN_SOURCE = new WeakMap();
+const TIMER_OUTCOME_SOURCE = new WeakMap();
+
+function bindReplaySource(store, result, replay) {
+  store.set(result, {
+    replay,
+    source_path: replay?.source_path ?? null,
+    source_sha256: replay?.source_sha256 ?? null,
+    version: replay?.header?.version ?? null,
+  });
+  return result;
+}
+
+function hasReplaySource(store, result, replay) {
+  const source = result && typeof result === 'object' ? store.get(result) : null;
+  return source?.replay === replay
+    && source.source_path === (replay?.source_path ?? null)
+    && source.source_sha256 === (replay?.source_sha256 ?? null)
+    && source.version === (replay?.header?.version ?? null);
+}
 
 function packetRef(replay, block, chunk) {
   return {
@@ -157,10 +193,18 @@ function collectCandidateRoutes(replay) {
     const walk = walkBlocks(replay, (block, chunk) => {
       if (routes.has(block.packet_id)) routes.get(block.packet_id).push({ block, chunk });
     }, { includeStreams: [1], strict: true });
-    return { routes, walk, error: null };
+    return bindReplaySource(ROUTE_SCAN_SOURCE, { routes, walk, error: null }, replay);
   } catch (error) {
-    return { routes: null, walk: null, error: error.message };
+    return bindReplaySource(ROUTE_SCAN_SOURCE,
+      { routes: null, walk: null, error: error.message }, replay);
   }
+}
+
+function candidateRoutesForReplay(replay, collected) {
+  if (collected === null || collected === undefined) return collectCandidateRoutes(replay);
+  if (hasReplaySource(ROUTE_SCAN_SOURCE, collected, replay)) return collected;
+  return { routes: null, walk: null,
+    error: 'candidate route scan belongs to a different Replay' };
 }
 
 function decodeHeroDeathCandidates(replay, collected = null) {
@@ -168,7 +212,7 @@ function decodeHeroDeathCandidates(replay, collected = null) {
     return { status: 'UNSUPPORTED', event_count: null, input_count: null,
       error: `hero_death candidate supports only ${REPLAY_VERSION}` };
   }
-  const scan = collected ?? collectCandidateRoutes(replay);
+  const scan = candidateRoutesForReplay(replay, collected);
   if (scan.error) {
     return { status: 'DECODE_FAILED', event_count: null, input_count: null,
       error: `Replay framing failed: ${scan.error}`, events: null };
@@ -369,7 +413,7 @@ function decodeHeroDeathTimerCandidates(replay, collected = null) {
     return { status: 'UNSUPPORTED', event_count: null, input_count: null, events: null,
       error: `hero_death_timer candidate supports only ${REPLAY_VERSION}` };
   }
-  const scan = collected ?? collectCandidateRoutes(replay);
+  const scan = candidateRoutesForReplay(replay, collected);
   if (scan.error) {
     return { status: 'DECODE_FAILED', event_count: null, input_count: null, events: null,
       error: `Replay framing failed: ${scan.error}` };
@@ -544,7 +588,7 @@ function decodeHeroDeathTimerCandidates(replay, collected = null) {
       known_limits: [...profile.known_limits],
     };
   });
-  return {
+  return bindReplaySource(TIMER_OUTCOME_SOURCE, {
     status: 'CANDIDATE',
     evidence_status: 'CANDIDATE_EXACT_RUNTIME_FLOAT_AND_REPLAY_TIMING',
     profile_id: profile.id,
@@ -561,6 +605,117 @@ function decodeHeroDeathTimerCandidates(replay, collected = null) {
     unique_low_byte_respawn_match_count: matchKinds.unique_low_byte,
     unobserved_after_replay_end_count: unmatched.length,
     maximum_respawn_residual_ms: maximumResidualMs,
+    events,
+  }, replay);
+}
+
+function decodeHeroRespawnCandidates(replay, collected = null, timerOutcome = null) {
+  const profile = HERO_RESPAWN_CANDIDATE_PROFILE;
+  const scan = candidateRoutesForReplay(replay, collected);
+  if (scan.error) {
+    return { status: 'DECODE_FAILED', profile_id: profile.id,
+      event_count: null, input_count: null,
+      input_packet_id: profile.replay_block_packet_id, events: null,
+      error: `Replay framing or route source failed: ${scan.error}` };
+  }
+  const observedRawRouteCount = scan.routes.get(profile.replay_block_packet_id).length;
+  if (timerOutcome?.status === 'CANDIDATE'
+      && !hasReplaySource(TIMER_OUTCOME_SOURCE, timerOutcome, replay)) {
+    return { status: 'DECODE_FAILED', profile_id: profile.id,
+      event_count: null, input_count: observedRawRouteCount,
+      input_packet_id: profile.replay_block_packet_id, events: null,
+      error: 'death timer outcome belongs to a different Replay' };
+  }
+  const timer = timerOutcome?.status === 'CANDIDATE'
+    ? timerOutcome : decodeHeroDeathTimerCandidates(replay, scan);
+  if (timer.status !== 'CANDIDATE') {
+    const unclassified = observedRawRouteCount > 0
+      ? `${observedRawRouteCount} raw 0x0357 packets remain unclassified` : null;
+    return {
+      status: timer.status,
+      profile_id: profile.id,
+      depends_on: 'hero_death_timer',
+      dependency_profile_id: timer.profile_id ?? null,
+      event_count: null,
+      input_count: observedRawRouteCount,
+      input_packet_id: profile.replay_block_packet_id,
+      raw_unclassified_packet_count: observedRawRouteCount,
+      events: null,
+      scanned_block_count: timer.scanned_block_count ?? null,
+      error: [timer.error ? `HN respawn requires a valid death timer: ${timer.error}` : null,
+        unclassified].filter(Boolean).join('; ') || undefined,
+      missing_input: timer.missing_input ?? undefined,
+    };
+  }
+  const events = [];
+  for (const deathTimer of timer.events) {
+    if (deathTimer.respawn_replay_time_ms_candidate === null) continue;
+    const respawnRefs = deathTimer.raw_packet_refs.filter((ref) =>
+      ref.role === 'hero_reincarnate_alive' && ref.packet_id === profile.replay_block_packet_id);
+    if (respawnRefs.length !== 1
+        || respawnRefs[0].replay_time_ms !== deathTimer.respawn_replay_time_ms_candidate) {
+      return {
+        status: 'DECODE_FAILED', profile_id: profile.id, depends_on: 'hero_death_timer',
+        event_count: null, input_count: observedRawRouteCount,
+        input_packet_id: profile.replay_block_packet_id, events: null,
+        error: 'validated death timer is missing its unique observed reincarnation packet',
+      };
+    }
+    const respawnRef = respawnRefs[0];
+    events.push({
+      event_type: 'HERO_RESPAWN_CANDIDATE',
+      game_version: REPLAY_VERSION,
+      patch: '16.19',
+      build_profile: profile.id,
+      replay_sha256: replay.source_sha256 ?? null,
+      replay_time_ms: respawnRef.replay_time_ms,
+      respawn_raw_param: respawnRef.raw_param,
+      participant_id_candidate: deathTimer.victim_participant_id_candidate,
+      death_timer_replay_time_ms_candidate: deathTimer.replay_time_ms,
+      timer_seconds_candidate: deathTimer.timer_seconds_candidate,
+      respawn_match_kind: deathTimer.respawn_match_kind,
+      respawn_timer_residual_ms: deathTimer.respawn_timer_residual_ms,
+      confidence: 'CANDIDATE',
+      semantic_status: 'CANDIDATE_EXACT_RUNTIME_ROUTE_AND_TIMER_MATCH',
+      field_confidence: {
+        replay_time_ms: 'VERIFIED_DIRECT',
+        respawn_raw_param: 'VERIFIED_DIRECT',
+        participant_id_candidate: 'CANDIDATE',
+        death_timer_replay_time_ms_candidate: 'CANDIDATE_CORROBORATION',
+        timer_seconds_candidate: 'CANDIDATE_EXACT_RUNTIME_FLOAT',
+      },
+      raw_packet_ref: respawnRef,
+      raw_packet_refs: [respawnRef, ...deathTimer.raw_packet_refs.filter((ref) =>
+        ref.role !== 'hero_reincarnate_alive')],
+      known_limits: [...profile.known_limits],
+    });
+  }
+  if (events.length !== timer.respawn_match_count
+      || events.length !== observedRawRouteCount) {
+    return {
+      status: 'DECODE_FAILED', profile_id: profile.id, depends_on: 'hero_death_timer',
+      event_count: null, input_count: observedRawRouteCount,
+      input_packet_id: profile.replay_block_packet_id, events: null,
+      error: 'validated death timer and observed reincarnation counts differ',
+    };
+  }
+  events.sort((left, right) => left.replay_time_ms - right.replay_time_ms
+    || left.raw_packet_ref.chunk_index - right.raw_packet_ref.chunk_index
+    || left.raw_packet_ref.decompressed_block_offset
+      - right.raw_packet_ref.decompressed_block_offset);
+  return {
+    status: 'CANDIDATE',
+    evidence_status: 'CANDIDATE_EXACT_RUNTIME_ROUTE_AND_TIMER_MATCH',
+    profile_id: profile.id,
+    evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+    depends_on: 'hero_death_timer',
+    dependency_profile_id: timer.profile_id,
+    event_count: events.length,
+    input_count: observedRawRouteCount,
+    input_packet_id: profile.replay_block_packet_id,
+    scanned_block_count: timer.scanned_block_count,
+    unobserved_after_replay_end_count: timer.unobserved_after_replay_end_count,
+    maximum_respawn_residual_ms: timer.maximum_respawn_residual_ms,
     events,
   };
 }
@@ -611,7 +766,7 @@ function finalLevelValues(replay) {
 
 function candidateTailStatAssessment(replay, capability) {
   const field = capability === 'hero_level_state' ? 'LEVEL'
-    : ['hero_death', 'hero_death_timer'].includes(capability) ? 'NUM_DEATHS' : null;
+    : ['hero_death', 'hero_death_timer', 'hero_respawn'].includes(capability) ? 'NUM_DEATHS' : null;
   if (!field) return null;
   const result = field === 'LEVEL' ? finalLevelValues(replay) : finalDeathCounts(replay);
   return { field, status: result.status, error: result.error ?? result.missing_input ?? null };
@@ -622,7 +777,7 @@ function decodeHeroLevelStateCandidates(replay, collected = null) {
     return { status: 'UNSUPPORTED', event_count: null, input_count: null, events: null,
       error: `hero_level_state candidate supports only ${REPLAY_VERSION}` };
   }
-  const scan = collected ?? collectCandidateRoutes(replay);
+  const scan = candidateRoutesForReplay(replay, collected);
   if (scan.error) {
     return { status: 'DECODE_FAILED', event_count: null, input_count: null, events: null,
       error: `Replay framing failed: ${scan.error}` };
@@ -726,10 +881,12 @@ module.exports = {
   REPLAY_VERSION,
   HERO_DEATH_CANDIDATE_PROFILES,
   HERO_DEATH_TIMER_CANDIDATE_PROFILE,
+  HERO_RESPAWN_CANDIDATE_PROFILE,
   HERO_LEVEL_STATE_CANDIDATE_PROFILE,
   collectCandidateRoutes,
   decodeHeroDeathCandidates,
   decodeHeroDeathTimerCandidates,
+  decodeHeroRespawnCandidates,
   decodeHeroDeathTimerPayload,
   decodeHeroLevelStateCandidates,
   decodeHeroLevelPayload,
