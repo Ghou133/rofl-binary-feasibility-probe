@@ -110,6 +110,14 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
   HN Replays to test level and HeroStats CS/EXP/gold candidates. Movement-route
   research remains blocked on an exact registration-to-position-field link.
+- **Path negative control:** The exact HN image identifies `0x03ee` as
+  DirectInputMovementDriverServerTurnData (84 HN packets in one short interval),
+  `0x0160` as SetMovementDriver (4), `0x04dd` as AddFollowTargetPosition (0),
+  and `0x00d2` as SyncCircularMovementRestriction (7,023; 7,013 one-byte).
+  None establishes an ordinary hero-coordinate stream. The old 16.16 path
+  opcode `0x00f6` has a 16.19 factory object size `0x18`, not the old `0x2c`
+  layout. A path candidate still needs an exact observed receive/field-write
+  link and independent position anchors; no old profile is reused.
 - **CLI batch:** A two-Replay HN/KR run with death, respawn and level selection
   yielded HN `CANDIDATE`, KR `PARTIAL`, and aggregate `PARTIAL`, retaining the
   KR death candidate while reporting the HN-only capabilities unavailable.
