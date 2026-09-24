@@ -28,6 +28,7 @@ const {
   assessHeroLongestLivingTimeSnapshotTail,
   assessHeroTotalTimeSpentDeadSnapshotTail,
   assessHeroTotalHealSnapshotTail,
+  assessHeroTotalUnitsHealedSnapshotTail,
   assessHeroVisionScoreSnapshotTail,
   assessHeroEpicMonsterDamageSnapshotTail,
   assessHeroCrowdControlTimeSnapshotTail,
@@ -1749,6 +1750,8 @@ function capabilityQuery(replay, options = {}) {
                       ? assessHeroTotalTimeSpentDeadSnapshotTail(replay)
                     : capability === 'hero_total_heal_snapshot'
                       ? assessHeroTotalHealSnapshotTail(replay)
+                    : capability === 'hero_total_units_healed_snapshot'
+                      ? assessHeroTotalUnitsHealedSnapshotTail(replay)
                     : capability === 'hero_vision_score_snapshot'
                       ? assessHeroVisionScoreSnapshotTail(replay)
                     : capability === 'hero_epic_monster_damage_snapshot'
@@ -1880,6 +1883,11 @@ function capabilityQuery(replay, options = {}) {
           'HN keyframe 0x0276 u32 offset 0x234 and observed sequences');
       }
       if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_total_units_healed_snapshot') {
+        validationPending.push('ten-participant TOTAL_UNITS_HEALED tail values',
+          'HN keyframe 0x0276 u32 offset 0x23c and observed sequences');
+      }
+      if (profile.game_version === '16.19.820.7193'
           && capability === 'hero_vision_score_snapshot') {
         validationPending.push('ten-participant VISION_SCORE tail values',
           'HN keyframe 0x0276 f32 offset 0x1b0 and observed sequences');
@@ -1969,6 +1977,8 @@ function capabilityQuery(replay, options = {}) {
             hero_total_time_spent_dead_snapshot:
               'hero_total_time_spent_dead_snapshot_candidates',
             hero_total_heal_snapshot: 'hero_total_heal_snapshot_candidates',
+            hero_total_units_healed_snapshot:
+              'hero_total_units_healed_snapshot_candidates',
             hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
             hero_epic_monster_damage_snapshot: 'hero_epic_monster_damage_snapshot_candidates',
             hero_crowd_control_time_snapshot: 'hero_crowd_control_time_snapshot_candidates',

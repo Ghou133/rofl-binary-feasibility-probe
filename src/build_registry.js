@@ -250,6 +250,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_longest_living_time_snapshot: 0x0276,
       hero_total_time_spent_dead_snapshot: 0x0276,
       hero_total_heal_snapshot: 0x0276,
+      hero_total_units_healed_snapshot: 0x0276,
       hero_vision_score_snapshot: 0x0276,
       hero_epic_monster_damage_snapshot: 0x0276,
       hero_crowd_control_time_snapshot: 0x0276,
@@ -303,6 +304,8 @@ const BUILD_PROFILES = deepFreeze({
         heroStatsCandidate1619.HERO_TOTAL_TIME_SPENT_DEAD_SNAPSHOT_CANDIDATE_PROFILE,
       hero_total_heal_snapshot:
         heroStatsCandidate1619.HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE,
+      hero_total_units_healed_snapshot:
+        heroStatsCandidate1619.HERO_TOTAL_UNITS_HEALED_SNAPSHOT_CANDIDATE_PROFILE,
       hero_vision_score_snapshot:
         heroStatsCandidate1619.HERO_VISION_SCORE_SNAPSHOT_CANDIDATE_PROFILE,
       hero_epic_monster_damage_snapshot:
@@ -342,6 +345,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_total_time_spent_dead_snapshot:
         'CANDIDATE_KEYFRAME_TOTAL_TIME_SPENT_DEAD_TAIL_CORRELATION',
       hero_total_heal_snapshot: 'CANDIDATE_KEYFRAME_TOTAL_HEAL_TAIL_CORRELATION',
+      hero_total_units_healed_snapshot: 'CANDIDATE_KEYFRAME_TOTAL_UNITS_HEALED_TAIL_CORRELATION',
       hero_vision_score_snapshot: 'CANDIDATE_KEYFRAME_VISION_SCORE_TAIL_CORRELATION',
       hero_epic_monster_damage_snapshot: 'CANDIDATE_KEYFRAME_EPIC_MONSTER_DAMAGE_TAIL_CORRELATION',
       hero_crowd_control_time_snapshot: 'CANDIDATE_KEYFRAME_CROWD_CONTROL_TIME_TAIL_CORRELATION',
@@ -373,6 +377,7 @@ const BUILD_PROFILES = deepFreeze({
       longest_living_time_candidate: '0x0276 keyframe HeroStats f32 offset 0x244; floors correlate with LONGEST_TIME_SPENT_LIVING tails in three HN Replays, with one post-keyframe tail gap; no individual life-span event',
       total_time_spent_dead_candidate: '0x0276 keyframe HeroStats f32 offset 0x248; floors correlate with TOTAL_TIME_SPENT_DEAD tails in three HN Replays; no individual death-duration event',
       total_heal_candidate: '0x0276 keyframe HeroStats u32 offset 0x234; observed values correlate with TOTAL_HEAL tail in one HN Replay',
+      total_units_healed_candidate: '0x0276 keyframe HeroStats u32 offset 0x23c; observed values correlate with TOTAL_UNITS_HEALED tails in three HN Replays; no individual heal event',
       vision_score_candidate: '0x0276 keyframe HeroStats f32 offset 0x1b0; floors correlate with VISION_SCORE tail in one HN Replay',
       epic_monster_damage_candidate: '0x0276 keyframe HeroStats f32 offset 0x21c; floors correlate with TOTAL_DAMAGE_DEALT_TO_EPIC_MONSTERS tail in one HN Replay',
       crowd_control_time_candidate: '0x0276 keyframe HeroStats f32 offset 0x230; floors correlate with TOTAL_TIME_CROWD_CONTROL_DEALT_TO_CHAMPIONS tail in one HN Replay; no individual crowd-control events or targets',
@@ -402,6 +407,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_longest_living_time_snapshot',
       'hero_total_time_spent_dead_snapshot',
       'hero_total_heal_snapshot',
+      'hero_total_units_healed_snapshot',
       'hero_vision_score_snapshot',
       'hero_epic_monster_damage_snapshot',
       'hero_crowd_control_time_snapshot',

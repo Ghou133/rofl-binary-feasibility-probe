@@ -1816,6 +1816,7 @@ function decode1619(replay, profile, options = {}) {
     hero_longest_living_time_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_total_time_spent_dead_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_total_heal_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_total_units_healed_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_vision_score_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_epic_monster_damage_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_crowd_control_time_snapshot: decodeHeroStatsSnapshotCandidateSet,
@@ -1851,6 +1852,7 @@ function decode1619(replay, profile, options = {}) {
     hero_total_time_spent_dead_snapshot:
       'hero_total_time_spent_dead_snapshot_candidates',
     hero_total_heal_snapshot: 'hero_total_heal_snapshot_candidates',
+    hero_total_units_healed_snapshot: 'hero_total_units_healed_snapshot_candidates',
     hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
     hero_epic_monster_damage_snapshot: 'hero_epic_monster_damage_snapshot_candidates',
     hero_crowd_control_time_snapshot: 'hero_crowd_control_time_snapshot_candidates',
@@ -2175,6 +2177,10 @@ function getHeroTotalHealSnapshotCandidates(decoded) {
   return decoded?.events?.hero_total_heal_snapshot_candidates ?? null;
 }
 
+function getHeroTotalUnitsHealedSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_total_units_healed_snapshot_candidates ?? null;
+}
+
 function getHeroVisionScoreSnapshotCandidates(decoded) {
   return decoded?.events?.hero_vision_score_snapshot_candidates ?? null;
 }
@@ -2323,6 +2329,7 @@ module.exports = {
   getHeroLongestLivingTimeSnapshotCandidates,
   getHeroTotalTimeSpentDeadSnapshotCandidates,
   getHeroTotalHealSnapshotCandidates,
+  getHeroTotalUnitsHealedSnapshotCandidates,
   getHeroVisionScoreSnapshotCandidates,
   getHeroEpicMonsterDamageSnapshotCandidates,
   getHeroCrowdControlTimeSnapshotCandidates,

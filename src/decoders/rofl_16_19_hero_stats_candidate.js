@@ -33,6 +33,7 @@ const OBJECTIVE_DAMAGE_OFFSET = 0x218;
 const EPIC_MONSTER_DAMAGE_OFFSET = 0x21c;
 const CROWD_CONTROL_TIME_OFFSET = 0x230;
 const TOTAL_HEAL_OFFSET = 0x234;
+const TOTAL_UNITS_HEALED_OFFSET = 0x23c;
 const KILL_STATS_FIELDS = Object.freeze([
   Object.freeze({ tailField: 'LARGEST_KILLING_SPREE', candidateKey: 'largest_killing_spree_candidate', offset: 0x58 }),
   Object.freeze({ tailField: 'KILLING_SPREES', candidateKey: 'killing_sprees_candidate', offset: 0x5c }),
@@ -71,6 +72,7 @@ const HERO_STATS_SNAPSHOT_CAPABILITIES = Object.freeze([
   'hero_longest_living_time_snapshot',
   'hero_total_time_spent_dead_snapshot',
   'hero_total_heal_snapshot',
+  'hero_total_units_healed_snapshot',
   'hero_vision_score_snapshot',
   'hero_epic_monster_damage_snapshot',
   'hero_crowd_control_time_snapshot',
@@ -489,6 +491,30 @@ const HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_TOTAL_UNITS_HEALED_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-hero-total-units-healed-keyframe-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_total_units_healed_snapshot',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: PACKET_ID,
+  stream_tags: Object.freeze([2, 3]),
+  hero_raw_param_first: HERO_PARAM_FIRST,
+  hero_raw_param_last: HERO_PARAM_LAST,
+  payload_length: PAYLOAD_LENGTH,
+  decoded_blob_length: BLOB_LENGTH,
+  total_units_healed_u32le_offset_candidate: TOTAL_UNITS_HEALED_OFFSET,
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  evidence_scope: 'exact HN HeroStats route and transform; decoded u32 offset 0x23c matches participant-aligned TOTAL_UNITS_HEALED Replay tails across 910 snapshots in three HN Replays (35, 27 and 29 keyframes); final values match 10/10 in each',
+  known_limits: Object.freeze([
+    'Only observed keyframe 0x0276 snapshots are emitted; no individual healing event, recipient, or intervening value is inferred.',
+    'The offset 0x23c interpretation and hero participant mapping remain candidates, not exact-runtime field semantics.',
+    'Most Replay-tail values are one; the third Replay also has a ten-of-ten match under participant shift five, so final-tail equality alone does not prove participant identity.',
+    'The last keyframe precedes game end; any tail gap is retained without interpolation.',
+  ]),
+});
+
 const HERO_VISION_SCORE_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
   id: 'rofl-16.19.820.7193-hn-hero-vision-score-keyframe-candidate-v1',
   replay_version: REPLAY_VERSION,
@@ -765,6 +791,13 @@ function decodeHeroTotalHealPayload(payload) {
   return { status: 'PASS', total_heal_candidate: decoded.blob.readUInt32LE(TOTAL_HEAL_OFFSET) };
 }
 
+function decodeHeroTotalUnitsHealedPayload(payload) {
+  const decoded = decodeHeroStatsBlob(payload);
+  if (decoded.status !== 'PASS') return decoded;
+  return { status: 'PASS', total_units_healed_candidate:
+    decoded.blob.readUInt32LE(TOTAL_UNITS_HEALED_OFFSET) };
+}
+
 function decodeHeroFloatTailPayload(payload, offset, rawKey, floorKey, label) {
   const decoded = decodeHeroStatsBlob(payload);
   if (decoded.status !== 'PASS') return decoded;
@@ -940,6 +973,10 @@ function assessHeroTotalTimeSpentDeadSnapshotTail(replay) {
 
 function assessHeroTotalHealSnapshotTail(replay) {
   return assessHeroStatsUInt32Tail(replay, 'TOTAL_HEAL');
+}
+
+function assessHeroTotalUnitsHealedSnapshotTail(replay) {
+  return assessHeroStatsUInt32Tail(replay, 'TOTAL_UNITS_HEALED');
 }
 
 function assessHeroVisionScoreSnapshotTail(replay) {
@@ -1890,6 +1927,41 @@ function decodeHeroTotalHealFromScan(replay, scan) {
   };
 }
 
+function decodeHeroTotalUnitsHealedFromScan(replay, scan) {
+  const profile = HERO_TOTAL_UNITS_HEALED_SNAPSHOT_CANDIDATE_PROFILE;
+  const collected = collectHeroStatsSnapshotCandidates(replay, {
+    profile,
+    assessTail: assessHeroTotalUnitsHealedSnapshotTail,
+    decodePayload: decodeHeroTotalUnitsHealedPayload,
+    valueKey: 'total_units_healed_candidate',
+    tailProjection: (value) => value,
+  }, scan);
+  if (collected.status !== 'CANDIDATE') return collected;
+  const { observations, observedDeclines, previous, lastTimes, tailValues, gameLengthMs, ...base } = collected;
+  const tailGaps = tailValues.map((finalValue, index) => ({
+    participant_id_candidate: index + 1,
+    last_snapshot_replay_time_ms: lastTimes[index],
+    last_snapshot_total_units_healed_candidate: previous[index],
+    final_total_units_healed_tail: finalValue,
+    unobserved_tail_gap: finalValue - previous[index],
+    unobserved_tail_time_ms: gameLengthMs === null ? null : gameLengthMs - lastTimes[index],
+  }));
+  return {
+    ...base,
+    evidence_status: 'CANDIDATE_EXACT_ROUTE_THREE_REPLAY_TOTAL_UNITS_HEALED_TAIL_CORRELATION',
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    final_total_units_healed_tail: tailValues,
+    observed_last_total_units_healed_candidate: previous,
+    tail_gaps: tailGaps,
+    tail_gap_total: tailGaps.reduce((sum, gap) => sum + gap.unobserved_tail_gap, 0),
+    events: observations.map((observation) => snapshotEvent(replay, profile, observation,
+      'HERO_TOTAL_UNITS_HEALED_SNAPSHOT_CANDIDATE',
+      'CANDIDATE_EXACT_ROUTE_THREE_REPLAY_TOTAL_UNITS_HEALED_TAIL_CORRELATION',
+      { total_units_healed_candidate: observation.value },
+      { total_units_healed_candidate: 'CANDIDATE_THREE_REPLAY_TAIL_CORRELATION' })),
+  };
+}
+
 function decodeHeroFloatTailFromScan(replay, scan, spec) {
   const { profile, assessTail, decodePayload, rawKey, floorKey, eventType,
     evidenceStatus, rawFieldConfidence = 'CANDIDATE_ONE_REPLAY_TAIL_CORRELATION' } = spec;
@@ -2170,6 +2242,9 @@ function decodeHeroStatsSnapshotCandidateSet(replay, capabilities, precollectedS
   if (selected.has('hero_total_heal_snapshot')) {
     outcomes.hero_total_heal_snapshot = decodeHeroTotalHealFromScan(replay, scan);
   }
+  if (selected.has('hero_total_units_healed_snapshot')) {
+    outcomes.hero_total_units_healed_snapshot = decodeHeroTotalUnitsHealedFromScan(replay, scan);
+  }
   if (selected.has('hero_vision_score_snapshot')) {
     outcomes.hero_vision_score_snapshot = decodeHeroVisionScoreFromScan(replay, scan);
   }
@@ -2266,6 +2341,11 @@ function decodeHeroTotalHealSnapshotCandidates(replay) {
     ['hero_total_heal_snapshot']).hero_total_heal_snapshot;
 }
 
+function decodeHeroTotalUnitsHealedSnapshotCandidates(replay) {
+  return decodeHeroStatsSnapshotCandidateSet(replay,
+    ['hero_total_units_healed_snapshot']).hero_total_units_healed_snapshot;
+}
+
 function decodeHeroVisionScoreSnapshotCandidates(replay) {
   return decodeHeroStatsSnapshotCandidateSet(replay,
     ['hero_vision_score_snapshot']).hero_vision_score_snapshot;
@@ -2303,6 +2383,7 @@ module.exports = {
   HERO_LONGEST_LIVING_TIME_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_TOTAL_TIME_SPENT_DEAD_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE,
+  HERO_TOTAL_UNITS_HEALED_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_VISION_SCORE_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_EPIC_MONSTER_DAMAGE_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_CROWD_CONTROL_TIME_SNAPSHOT_CANDIDATE_PROFILE,
@@ -2324,6 +2405,7 @@ module.exports = {
   assessHeroLongestLivingTimeSnapshotTail,
   assessHeroTotalTimeSpentDeadSnapshotTail,
   assessHeroTotalHealSnapshotTail,
+  assessHeroTotalUnitsHealedSnapshotTail,
   assessHeroVisionScoreSnapshotTail,
   assessHeroEpicMonsterDamageSnapshotTail,
   assessHeroCrowdControlTimeSnapshotTail,
@@ -2361,6 +2443,8 @@ module.exports = {
   decodeHeroTotalTimeSpentDeadSnapshotCandidates,
   decodeHeroTotalHealPayload,
   decodeHeroTotalHealSnapshotCandidates,
+  decodeHeroTotalUnitsHealedPayload,
+  decodeHeroTotalUnitsHealedSnapshotCandidates,
   decodeHeroVisionScorePayload,
   decodeHeroVisionScoreSnapshotCandidates,
   decodeHeroEpicMonsterDamagePayload,
