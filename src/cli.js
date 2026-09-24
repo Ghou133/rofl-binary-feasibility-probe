@@ -25,6 +25,7 @@ const {
   assessHeroVisionScoreSnapshotTail,
   assessHeroEpicMonsterDamageSnapshotTail,
   assessHeroCrowdControlTimeSnapshotTail,
+  assessHeroStructureObjectiveDamageSnapshotTail,
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   analyzeReplayWithHeroStats,
 } = require('./decoders/rofl_16_19_hero_stats_candidate');
@@ -1695,6 +1696,8 @@ function capabilityQuery(replay, options = {}) {
                       ? assessHeroEpicMonsterDamageSnapshotTail(replay)
                     : capability === 'hero_crowd_control_time_snapshot'
                       ? assessHeroCrowdControlTimeSnapshotTail(replay)
+                    : capability === 'hero_structure_objective_damage_snapshot'
+                      ? assessHeroStructureObjectiveDamageSnapshotTail(replay)
                   : candidateTailStatAssessment(replay, capability)
         : null;
       const tailStatInput = (tailStat?.required_fields ?? (tailStat ? [tailStat] : []))
@@ -1813,6 +1816,11 @@ function capabilityQuery(replay, options = {}) {
           'HN keyframe 0x0276 f32 offset 0x230 and observed sequences');
       }
       if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_structure_objective_damage_snapshot') {
+        validationPending.push('ten-participant TOTAL_DAMAGE_DEALT_TO_BUILDINGS and TOTAL_DAMAGE_DEALT_TO_OBJECTIVES tail values',
+          'HN keyframe 0x0276 f32 offsets 0x210/0x214/0x218 and observed sequences');
+      }
+      if (profile.game_version === '16.19.820.7193'
           && needs1619RuntimeImage) {
         validationPending.push('exact runtime image SHA-256 and decoder execution',
           capability === 'hero_inventory_mapview'
@@ -1877,6 +1885,8 @@ function capabilityQuery(replay, options = {}) {
             hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
             hero_epic_monster_damage_snapshot: 'hero_epic_monster_damage_snapshot_candidates',
             hero_crowd_control_time_snapshot: 'hero_crowd_control_time_snapshot_candidates',
+            hero_structure_objective_damage_snapshot:
+              'hero_structure_objective_damage_snapshot_candidates',
             hero_inventory_mapview: 'hero_inventory_mapview_candidates',
             hero_inventory_set_item: 'hero_inventory_set_item_candidates',
             hero_inventory_broadcast: 'hero_inventory_broadcast_candidates',

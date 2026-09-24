@@ -252,6 +252,19 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   `artifacts/16_19_development/crowd_control_time_hn_cli_smoke/`. The offset
   interpretation and participant mapping remain one-Replay candidates; no
   individual crowd-control event, target or source is inferred.
+- **Done:** `hero_structure_objective_damage_snapshot` emits decoded HN
+  HeroStats f32 offsets `0x210/0x214` and `0x218` as one candidate snapshot.
+  Across 350 observations, the first pair is equal, changes 41 times, never
+  declines and stays floor-bounded by the Replay-tail BUILDINGS value. The
+  `0x218` value changes 66 times, never declines and stays floor-bounded by
+  OBJECTIVES. Last floors match 6/10 tails for each; both gap totals are
+  8,678, with the final keyframe 36,824 ms before the tail. `0x218` is read
+  directly but its floor equals the floor of `0x210 + 0x21c` in all 350
+  observations. BUILDINGS and TURRETS tails are identical in this Replay,
+  so neither turret identity nor independent objective attribution is
+  established. The real HN CLI emitted 350 candidate rows with 2,035,757
+  blocks and zero framing errors under
+  `artifacts/16_19_development/structure_objective_hn_cli_smoke/`.
 - **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
   runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
   observed slot/item-definition-key records as candidates. All 94 game packets
