@@ -351,7 +351,21 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   at `0x248`, failed the same bounds or final-value controls. This supports
   a candidate snapshot, not individual death duration. The selected CLI on
   the third Replay emitted 290 candidate rows over 29 keyframes with ten
-  observed participants, zero tail-value gap and zero framing errors.
+  observed participants, zero tail-value gap and zero framing errors. A later
+  JSONL-only combined run selected all 29 registered candidates on that
+  Replay: every capability returned `CANDIDATE` over 1,839,904 framed blocks
+  with zero framing errors; the BuffAdd exact image was `MATCHED_USED`.
+- **Current:** A first-two-Replay hypothesis places `TOTAL_UNITS_HEALED` at
+  decoded HeroStats u32 `0x23c`. Three strict exact-build scans contain
+  350/270/290 snapshots with zero framing errors; this is the only one of 315
+  aligned u32 offsets whose last snapshots equal all 30 participant tail
+  values. Its observed sequences never decrease or exceed tail values, and
+  change 11/13/15 times. The separate f32 `0x238` is positive exactly when
+  this u32 exceeds one in all 910 snapshots. Most tails equal one, however,
+  and the third Replay has a participant rotation with the same 10/10 final
+  matches. The field and participant mapping remain candidates; no healing
+  event or target is inferred. The selected real CLI returned `CANDIDATE` with
+  290 rows, zero tail gap and zero framing errors on the third Replay.
 - **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
   runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
   observed slot/item-definition-key records as candidates. All 94 game packets
