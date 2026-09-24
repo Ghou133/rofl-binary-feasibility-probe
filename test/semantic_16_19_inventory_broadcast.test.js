@@ -97,6 +97,56 @@ test('Broadcast retains keyframe and game packet refs with bounded participant c
   assert.match(calls[0].args[1], /decode_broadcast_inventory_16_19\.py$/);
 });
 
+test('observed 63-byte Broadcast shape reaches runtime while shorter input stays unavailable', (t) => {
+  const image = temporaryImage(t);
+  const invoke = t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const request = JSON.parse(options.input);
+    assert.deepEqual(request.packets.map((row) => row.payload_hex.length / 2), [63]);
+    return { status: 0, stderr: '', stdout: JSON.stringify({
+      status: 'PASS', runtime_image_sha256: IMAGE_SHA256,
+      results: mockResults(request),
+    }) };
+  });
+  const exact = decodeHeroInventoryBroadcastCandidates(replayWithBroadcast([
+    { stream: 1, param: 0x400000b4, payload: Buffer.alloc(63) },
+  ]), null, { runtimeImagePath: image });
+  assert.equal(exact.status, 'CANDIDATE');
+  assert.equal(exact.event_count, 2);
+  const tooShort = decodeHeroInventoryBroadcastCandidates(replayWithBroadcast([
+    { stream: 1, param: 0x400000b4, payload: Buffer.alloc(62) },
+  ]), null, { runtimeImagePath: image });
+  assert.equal(tooShort.status, 'PROFILE_UNAVAILABLE');
+  assert.equal(tooShort.first_unmatched_packet_ref.payload_length, 62);
+  assert.equal(invoke.mock.callCount(), 1);
+});
+
+test('observed Broadcast flag 3 stays unclassified and higher flags fail closed', (t) => {
+  const image = temporaryImage(t);
+  let decodedFlag = 3;
+  t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const request = JSON.parse(options.input);
+    const results = mockResults(request);
+    results[0].records[1].flag = decodedFlag;
+    results[0].records[1].item_key_u32 = 2010;
+    return { status: 0, stderr: '', stdout: JSON.stringify({
+      status: 'PASS', runtime_image_sha256: IMAGE_SHA256, results,
+    }) };
+  });
+  const replay = replayWithBroadcast([{ stream: 2, param: 0x400000b3 }]);
+  const observed = decodeHeroInventoryBroadcastCandidates(replay, null,
+    { runtimeImagePath: image });
+  assert.equal(observed.status, 'CANDIDATE');
+  assert.equal(observed.events[1].emulated_flag_code, 3);
+  assert.equal(observed.events[1].field_confidence.emulated_flag_code,
+    'UNCLASSIFIED_RUNTIME_FIELD');
+  decodedFlag = 4;
+  const foreign = decodeHeroInventoryBroadcastCandidates(replay, null,
+    { runtimeImagePath: image });
+  assert.equal(foreign.status, 'DECODE_FAILED');
+  assert.equal(foreign.event_count, null);
+  assert.equal(foreign.failed_packet_count, 1);
+});
+
 test('Broadcast missing image and foreign param fail before runtime', (t) => {
   const invoke = t.mock.method(childProcess, 'spawnSync', () => {
     throw new Error('runtime must not run');

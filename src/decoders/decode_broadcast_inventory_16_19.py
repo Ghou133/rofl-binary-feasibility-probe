@@ -113,9 +113,10 @@ def decode_packet(emulator, context, raw_param, payload):
         flag = emulator.decode_bytes(raw_flag, FLAG_BYTE_HELPER_RVA)[0]
         item_key = struct.unpack("<I", emulator.decode_bytes(
             raw_item, ITEM_ID_BYTE_HELPER_RVA))[0]
-        if (slot > 9 or slot in slots or flag not in (0, 1, 2)
+        if (slot > 9 or slot in slots or flag not in (0, 1, 2, 3)
                 or (item_key == 0) != (flag == 0)):
-            return failed("record fields outside observed HN Broadcast bounds",
+            return failed(f"record {index} fields outside observed HN Broadcast bounds: "
+                f"slot={slot} flag={flag} item_key_u32={item_key}",
                 deserialize_return_al=al, bytes_consumed=consumed)
         slots.add(slot)
         records.append({"record_index": index, "slot": slot,

@@ -153,7 +153,7 @@ const HERO_INVENTORY_SET_ITEM_CANDIDATE_PROFILE = Object.freeze({
 });
 
 const HERO_INVENTORY_BROADCAST_CANDIDATE_PROFILE = Object.freeze({
-  id: 'rofl-16.19.820.7193-hn-inventory-broadcast-runtime-candidate-v3',
+  id: 'rofl-16.19.820.7193-hn-inventory-broadcast-runtime-candidate-v4',
   replay_version: REPLAY_VERSION,
   capability: 'hero_inventory_broadcast',
   status: 'CANDIDATE',
@@ -163,12 +163,13 @@ const HERO_INVENTORY_BROADCAST_CANDIDATE_PROFILE = Object.freeze({
   packet_name: 'PKT_S2C_SetInventory_Broadcast_s',
   evidence_runtime_image_sha256: HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE.evidence_runtime_image_sha256,
   runtime_image_required: true,
-  evidence_scope: 'exact HN constructor, vector and record deserializers; 634 fully consumed packets and 6303 records across two Replays; candidate participant mapping supported by final ITEM0–ITEM6 tail matches and shifted controls in both Replays',
+  evidence_scope: 'exact HN constructor, vector and record deserializers; 931 fully consumed packets and 9253 records across three Replays; candidate canonical participant mapping supported by final ITEM0–ITEM6 tail matches and shifted controls in all three',
   known_limits: Object.freeze([
-    'The 634 observed packets across two HN Replays contain 6303 record rows; record rows are observations only.',
+    'The 931 observed packets across three HN Replays contain 9253 record rows; record rows are observations only.',
     'Participant mapping is candidate-only for ten canonical raw params and exact observed variants 0x400001b1 and 0x400001af; other raw params remain unavailable.',
     'The 0x100 difference in the observed variants is unclassified; no generic masking rule or confirmed inventory ownership is asserted.',
-    'Slot and item-key labels remain exact-runtime candidates from two HN Replays; zero is a decoded key value.',
+    'Slot and item-key labels remain exact-runtime candidates from three HN Replays; zero is a decoded key value.',
+    'The third Replay includes one fully consumed 63-byte packet and five records with decoded flag 3; flag meaning is unclassified.',
     'The mapped TLS epoch selects initialized static data in the captured image; a live thread epoch was not captured.',
     'No purchase, sale, swap, replacement, transaction, or complete inventory lifecycle is inferred.',
     'The exact captured runtime image and Python Unicorn are required for decoding.',
@@ -1383,13 +1384,16 @@ function decodeHeroInventoryBroadcastCandidates(replay, collected = null, option
     (chunk.stream_tag === 1 || chunk.stream_tag === 2)
     && (block.param >>> 16) === 0x4000
     && (block.param & 0xff) >= 0xae && (block.param & 0xff) <= 0xb7
-    && block.payload_length >= 75 && block.payload_length <= 156;
-  const matchingPacketCount = rows.filter(observedShape).length;
+    && block.payload_length >= 63 && block.payload_length <= 156;
+  const unmatchedRows = rows.filter((row) => !observedShape(row));
+  const matchingPacketCount = inputCount - unmatchedRows.length;
   if (matchingPacketCount !== inputCount) {
     return fail(matchingPacketCount === 0 ? 'PROFILE_UNAVAILABLE' : 'DECODE_FAILED',
       '0x03ef packets do not match the observed HN Broadcast framing', {
         ...(matchingPacketCount === 0 ? { input_count: null } : {}),
         observed_raw_route_count: inputCount, matching_packet_count: matchingPacketCount,
+        first_unmatched_packet_ref: packetRef(replay, unmatchedRows[0].block,
+          unmatchedRows[0].chunk),
         runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
       });
   }
@@ -1487,7 +1491,7 @@ function decodeHeroInventoryBroadcastCandidates(replay, collected = null, option
         && !slots.has(record.slot)
         && Number.isSafeInteger(record.item_key_u32)
         && record.item_key_u32 >= 0 && record.item_key_u32 <= 0xffffffff
-        && Number.isSafeInteger(record.flag) && record.flag >= 0 && record.flag <= 2
+        && Number.isSafeInteger(record.flag) && record.flag >= 0 && record.flag <= 3
         && (record.item_key_u32 === 0) === (record.flag === 0)
         && /^[0-9a-f]{2}$/.test(record.raw_slot_byte_hex)
         && /^[0-9a-f]{2}$/.test(record.raw_flag_byte_hex)
@@ -1539,7 +1543,7 @@ function decodeHeroInventoryBroadcastCandidates(replay, collected = null, option
         emulated_object_flag_byte_hex: record.raw_flag_byte_hex,
         emulated_object_item_key_bytes_hex: record.raw_item_key_bytes_hex,
         confidence: 'CANDIDATE',
-        semantic_status: 'CANDIDATE_EXACT_RUNTIME_BROADCAST_TWO_REPLAYS',
+        semantic_status: 'CANDIDATE_EXACT_RUNTIME_BROADCAST_THREE_REPLAYS',
         field_confidence: {
           replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
           participant_id_candidate: participantId === null ? 'UNAVAILABLE' : 'CANDIDATE',
@@ -1554,7 +1558,7 @@ function decodeHeroInventoryBroadcastCandidates(replay, collected = null, option
   }
   return {
     ...base, status: 'CANDIDATE',
-    evidence_status: 'CANDIDATE_EXACT_RUNTIME_BROADCAST_TWO_REPLAYS',
+    evidence_status: 'CANDIDATE_EXACT_RUNTIME_BROADCAST_THREE_REPLAYS',
     input_count: inputCount, event_count: events.length,
     decoded_record_count: totalRecords,
     observed_keyframe_packet_count: rows.filter(({ chunk }) => chunk.stream_tag === 2).length,
