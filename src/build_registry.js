@@ -439,7 +439,7 @@ const BUILD_PROFILES = deepFreeze({
       status: 'FORMAT_VERIFIED_LOCAL_REPLAYS',
     },
     runtime_profile: {
-      status: 'CAPTURED_STATIC_ROUTE_AND_LEVEL_BYTE_RESEARCH',
+      status: 'CAPTURED_STATIC_ROUTE_LEVEL_AND_COUNT_BYTE_RESEARCH',
       image_sha256: levelCandidate1619821.RUNTIME_IMAGE_SHA256,
     },
     packet_routes: {
@@ -464,20 +464,20 @@ const BUILD_PROFILES = deepFreeze({
     evidence_grades: {
       hero_death: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_CORRELATION',
       hero_respawn: 'CANDIDATE_821_REPLAY_TAIL_DEAD_TIME_CORRELATION',
-      hero_deaths_snapshot: 'CANDIDATE_821_RAW_BYTE_KEYFRAME_TAIL_CORRELATION',
-      hero_champion_kills_snapshot: 'CANDIDATE_821_MIRRORED_RAW_BYTE_KEYFRAME_TAIL_CORRELATION',
-      hero_assists_snapshot: 'CANDIDATE_821_RAW_BYTE_KEYFRAME_TAIL_CORRELATION',
+      hero_deaths_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_KEYFRAME_TAIL_CORRELATION',
+      hero_champion_kills_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_MIRRORED_KEYFRAME_TAIL_CORRELATION',
+      hero_assists_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_KEYFRAME_TAIL_CORRELATION',
       hero_level_state: 'CANDIDATE_821_RUNTIME_LEVEL_BYTE_AND_REPLAY_TAIL',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, 821 route-profile bounded',
       observed_return_time: '0x0048 route uniquely paired with a matched death core and 0x018d support; candidate only',
       keyframe_deaths_snapshot:
-        'exact 0x0089 raw byte 1182 finite codebook, 821 KR keyframe candidate only',
+        'exact 821 runtime byte transform at 0x0089 raw byte 1182; keyframe carrier binding and death-count label candidate only',
       keyframe_champion_kills_snapshot:
-        'exact 0x0089 mirrored raw bytes 434/1186 finite codebook, 821 KR keyframe candidate only',
+        'exact 821 runtime byte transform at 0x0089 mirrored raw bytes 434/1186; keyframe carrier binding and kill-count label candidate only',
       keyframe_assists_snapshot:
-        'exact 0x0089 raw byte 1178 finite codebook, 821 KR keyframe candidate only',
+        'exact 821 runtime byte transform at 0x0089 raw byte 1178; keyframe carrier binding and assist-count label candidate only',
       level_state: 'exact 821 PKT_NPC_LevelUp_s route and +0x11 byte transform; participant alignment and event interpretation candidate only',
     },
     verified_capabilities: [],

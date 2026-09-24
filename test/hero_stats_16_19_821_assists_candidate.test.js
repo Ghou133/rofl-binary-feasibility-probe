@@ -56,11 +56,13 @@ function fixture({
   return replay;
 }
 
-test('821 assists finite raw-byte candidate reports snapshots and an unbounded measured tail gap', () => {
+test('821 assists runtime raw-byte candidate reports snapshots and an unbounded measured tail gap', () => {
   const profile = HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE;
   assert.equal(profile.replay_version, BUILD);
   assert.equal(profile.raw_assists_byte_index, 1178);
-  assert.equal(profile.evidence_runtime_image_sha256, null);
+  assert.equal(profile.id, 'rofl-16.19.821.7343-kr-hero-assists-raw-byte-keyframe-candidate-v2');
+  assert.equal(profile.evidence_runtime_image_sha256,
+    '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325');
   assert.deepEqual(profile.encoded_byte_for_assist_count_candidate, CODES);
   const replay = fixture();
   assert.equal(assessHeroAssistsSnapshotTail821(replay).status, 'PASS');
@@ -81,6 +83,20 @@ test('821 assists finite raw-byte candidate reports snapshots and an unbounded m
   assert.equal(result.events[10].field_confidence.assists_candidate,
     result.evidence_status);
   assert.equal(result.runtime_image_used, false);
+  assert.equal(result.runtime_image_status, 'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED');
+});
+
+test('821 runtime transform admits an assist count beyond the observed codebook', () => {
+  const replay = fixture({
+    mutate(item, frame, index) {
+      if (frame === 1 && index === 0) item.payload[1178] = 0x9d;
+    },
+  });
+  const result = decodeHeroAssistsSnapshotCandidates821(replay);
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.events[10].raw_assists_byte, 0x9d);
+  assert.equal(result.events[10].assists_candidate, 19);
+  assert.equal(result.tail_gaps[0].unobserved_tail_gap, 2);
 });
 
 test('821 assists rejects wrong build, missing or invalid tail, and source mutation', () => {
@@ -101,9 +117,9 @@ test('821 assists rejects wrong build, missing or invalid tail, and source mutat
   assert.match(result.error, /Replay source failed/);
 });
 
-test('821 assists fails closed on unknown code, foreign packet shape, and foreign start route', () => {
+test('821 assists fails closed above tail, on foreign packet shape, and foreign start route', () => {
   const cases = [
-    [(item) => { item.payload[1178] = 0x9d; }, /unknown code/],
+    [(item) => { item.payload[1178] = 0x3d; }, /exceeds Replay tail ASSISTS/],
     [(item) => { item.param = 0x400000bd; }, /unsupported raw param/],
     [(item) => { item.payload[0] ^= 1; }, /length or prefix/],
   ];

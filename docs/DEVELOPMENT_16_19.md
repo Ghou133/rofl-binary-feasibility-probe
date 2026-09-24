@@ -15,8 +15,9 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   `NUM_DEATHS` counts in all 11 files (655 candidate rows). Two files each
   lack one auxiliary `0x03d4`; one file contains two isolated `0x0259` packets.
   These are retained as negative route evidence and excluded from candidate
-  events. No 820 opcode transform or image is reused for 821; payloads,
-  killer, assists, death timer, and confirmed respawn semantics remain unclassified.
+  events. No 820 opcode transform or image is reused for 821; the death-packet
+  payload's killer, assist attribution, death timer, and confirmed respawn
+  semantics remain unclassified.
 - **821 observed-return candidate:** `--events hero_respawn` pairs each matched
   death core with a subsequent same-participant `0x0048` and preceding co-timed
   `0x018d`, requiring the ten per-participant sums of elapsed milliseconds,
@@ -30,50 +31,68 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   inferred for unpaired final deaths. Each paired event also reports the
   observed death-to-return millisecond difference as a candidate arithmetic
   field, with no timer prediction.
-- **821 keyframe candidate:** `--events hero_deaths_snapshot` now reads only
-  raw byte 1182 from exact KR `0x0089` keyframes of length 1263 and prefix
-  `6700de`. A finite, locally derived codebook covers counts 0–12; 327
-  keyframes yield 3,270 candidate snapshots across all 11 Replays. All 110
-  participant sequences start at zero and remain monotone. The last snapshot
-  equals tail `NUM_DEATHS` for 82 participants and trails by one for 28; the
-  gap is retained. This is not a full HeroStats decode or a death event.
+- **821 exact-image count-byte transform:** The captured 821 image's
+  `0x0089` object deserializer contains a byte transform with a 256-byte
+  lookup table at RVA `0x01ba1560` (SHA-256
+  `328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b`).
+  Its complete input-to-output mapping is bijective. It maps every byte in
+  the earlier Replay-derived 0–17 codebook to the same value and decodes the
+  former high-count unknowns: champion kills 18–20 and 24–26, assists 18–28
+  and 30. An independent Replay-side probe of all 327 keyframes and 3,270
+  exact-shape hero-family packets in the 11 KR Replays found zero count-order
+  or tail-bound contradictions. This is an exact-build byte-transform match;
+  the whole `0x0089` keyframe carrier is not proven to be that runtime object
+  (see the route boundary below).
+- **821 death-count keyframe candidate:** `--events hero_deaths_snapshot`
+  reads raw byte 1182 from exact KR `0x0089` keyframes of length 1263 and
+  prefix `6700de`, using the pinned 821 count-byte transform. The Replay-side
+  probe found 110/110 zero starts, monotone sequences, and values bounded by
+  each participant's `NUM_DEATHS` tail. The last snapshot equals the tail for
+  82 participants and trails by one for 28; the gap is retained. It remains
+  a candidate snapshot, not a full HeroStats decode or individual death event.
 - **821 champion-kill keyframe candidate:** `--events
-  hero_champion_kills_snapshot` reads mirrored raw bytes 434 and 1186 from
-  the same exact `0x0089` keyframe. A finite 0–17 codebook derived from the
-  first two KR Replays is gated by ten `CHAMPIONS_KILLED` tail values, zero
-  starts, and monotone per-participant snapshots. Ten of eleven Replays yield
-  candidate output; KR_8394000013 contains an unknown higher-count code and
-  returns `DECODE_FAILED` for this capability with a raw packet reference.
-  The other selected capabilities remain available. Mirrored bytes are one
-  packet observation, not independent confirmation. Tail gaps are measured
-  and retained without a fixed upper bound or invented kill events; there is
-  no 821 runtime transform or killer attribution. The five-capability 11-file
-  CLI run yields 2,960 kill snapshots across ten Replays, nine whole-Replay
-  `CANDIDATE` results and two `PARTIAL` results (one unknown level code, one
-  unknown kill-count code). Existing four-capability candidate JSONL files
-  remain byte-identical after adding this scanner consumer.
-- **821 assist keyframe candidate:** Raw byte 1178 of the same exact KR
-  `0x0089` packet has a finite observed 0–17 mapping against Replay-tail
-  `ASSISTS`. In the first two Replays, it is the only payload byte satisfying
-  the 16 participants with final assists <=17 and at least 15 changes. Nine
-  held-out Replays preserve zero starts, monotone known values, and no known
-  value above its own tail. Six of eleven Replays have no unknown code (177
-  keyframes, 1,770 candidate snapshots); five contain 49 unknown-code packets
-  across ten participants and must fail this whole capability while retaining
-  the first offending raw ref. No mirror byte, high-value code map, runtime
-  transform, individual assist event, or attribution is asserted. Measured
-  final tail gaps are retained without inventing intermediate events. The
-  six-capability 11-Replay CLI batch yields six `CANDIDATE` and five `PARTIAL`
-  Replay statuses; the five prior candidate JSONL families are byte-identical
-  to the preceding five-capability run.
-- **821 minion-count negative lead:** A bounded search over all 3,270 exact
-  `0x0089` hero packets found no defensible numeric `MINIONS_KILLED` field.
-  Raw byte 374 has an ordered structural signal for some participants, but
-  only 30/110 final values fit the known finite codebook, and rotating the
-  participant tails passes the same weak check. Other variable byte windows
-  have ordering contradictions. It remains raw evidence, not a registered
-  candidate, until an exact 821 runtime transform or independent intermediate
-  count can discriminate the interpretations.
+  hero_champion_kills_snapshot` reads mirrored raw bytes 434 and 1186 in the
+  same `0x0089` keyframe. The exact-image transform resolves the six higher
+  codes formerly outside the 0–17 codebook in `KR_8394000013`. The probe
+  found 110/110 zero starts, monotone sequences, and values bounded by
+  `CHAMPIONS_KILLED` tails; 87 final snapshots equal their tails. Bytes 434
+  and 1186 mirror within one packet, not independent semantic evidence. Tail
+  gaps remain measured and uninterpolated; no kill event, time, or killer
+  attribution follows from this candidate.
+- **821 assist keyframe candidate:** `--events hero_assists_snapshot` reads
+  raw byte 1178 in the same `0x0089` keyframe. The exact-image transform
+  resolves the 49 packets in five Replays that exceeded the former 0–17
+  codebook. The probe found 110/110 zero starts, monotone sequences, and
+  values bounded by `ASSISTS` tails; 77 final snapshots equal their tails.
+  Byte 1178 has no exact mirror in these payloads. This remains a candidate
+  cumulative snapshot, without individual assist events or attribution.
+- **Earlier finite-codebook run:** Before the exact image was captured, the
+  finite codebook gave ten of eleven complete kill-snapshot Replays and six
+  of eleven complete assist-snapshot Replays; unknown high bytes caused
+  explicit `DECODE_FAILED` results with raw references. Those failures remain
+  historical evidence under `artifacts/`, superseded for these bytes by the
+  exact-image transform. No prior output is treated as proof of the runtime
+  keyframe carrier or a published semantic capability.
+- **821 six-capability CLI batch:** With the pinned 821 transforms, all 11
+  exact-build KR Replays returned `CANDIDATE`, with no framing errors across
+  18,235,209 scanned blocks. The run emitted 3,270 snapshots each for deaths,
+  champion kills, and assists; 1,613 level observations, 655 death candidates,
+  and 607 return candidates. Its two warnings state that game IDs could not
+  be recovered from the containers (filename IDs remain inferred), and that
+  this batch command did not itself run the Node test suite. The ignored
+  `artifacts/16_19_development/kr_821_runtime_count_11/acceptance_summary.json`
+  retains per-Replay status, input hashes, and output provenance. `CANDIDATE`
+  is an experimental evidence grade, not semantic verification.
+- **821 minion-count unresolved lead:** The earlier bounded scan of all 3,270
+  exact `0x0089` hero packets found no defensible numeric `MINIONS_KILLED`
+  field. Raw byte 374 had an ordered structural signal for some participants,
+  but only 30/110 final values fit the then-known finite count codebook, and
+  rotating participant tails passed the same weak check. The exact-image
+  count transform now requires a fresh check of this particular byte; the
+  earlier finite-codebook rejection is retained as history, not used as a
+  current exclusion proof. Other variable byte windows had ordering
+  contradictions. No minion-count capability is registered without stronger
+  field and participant evidence.
 - **821 gold snapshot negative lead:** The same 3,270 keyframe hero packets
   did not yield a defensible `GOLD_EARNED` or `GOLD_SPENT` numeric candidate.
   Raw integer-window survivors from the first two Replays reversed or lost
@@ -640,8 +659,13 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   `PKT_S2C_HeroStats_s` and its factory constructor at numeric ID `0x0089`,
   but running that deserializer on two real 1,263-byte KR keyframe `0x0089`
   payloads consumed only 5 bytes and left 1,258 unread. Numeric ID equality
-  does not bind this keyframe carrier to that runtime object. The existing
-  raw-byte snapshot candidates remain independent Replay correlations.
+  does not bind this keyframe carrier to that runtime object. The object's
+  internal byte path implements `a = ROR8((raw + 0x11) & 255, 2)`,
+  `index = (((a & 0xd5) << 1) | ((a >> 1) & 0x55)) & 255`, and
+  `decoded = (table[index] + 0x39) & 255`. The keyframe raw-byte candidates
+  match this transform and remain independently gated Replay correlations,
+  not proven full-object decodes. Exact-image and real-payload evidence is
+  retained under `artifacts/16_19_development/path_probe_agent/`.
 - **Ward negative control:** Old 16.16 WardSpawn opcode `0x049a` is not an HN
   16.19 factory case and has no packets in this Replay. The HN `0x0400` case
   has 6,627 packets and a distinct exact-image runtime deserializer. Its

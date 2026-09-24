@@ -5,6 +5,9 @@ const crypto = require('node:crypto');
 const { walkBlocks } = require('../rofl');
 const { replaySourceError } = require('./replay_source_integrity');
 const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
+const {
+  RUNTIME_IMAGE_SHA256, LOOKUP_TABLE_SHA256, decodeRuntimeCountByte,
+} = require('./rofl_16_19_821_runtime_bytes');
 
 const REPLAY_VERSION = '16.19.821.7343';
 const PACKET_ID = 0x0089;
@@ -20,29 +23,25 @@ const ENCODED_BYTE_FOR_DEATH_COUNT = Object.freeze([
   0x97, 0xcc, 0x55, 0xf1, 0x6f, 0x8d, 0x58,
   0x02, 0xb7, 0xde, 0x3f, 0xb6, 0xbe,
 ]);
-const DEATH_COUNT_BY_ENCODED_BYTE = new Map(
-  ENCODED_BYTE_FOR_DEATH_COUNT.map((encoded, count) => [encoded, count]));
-const EVIDENCE_STATUS = 'CANDIDATE_EXACT_KR_821_RAW_BYTE_DEATH_COUNT_TAIL_CORRELATION';
+const EVIDENCE_STATUS = 'CANDIDATE_EXACT_KR_821_RUNTIME_BYTE_DEATH_COUNT_TAIL_CORRELATION';
 const ENCODED_BYTE_FOR_CHAMPION_KILL_COUNT = Object.freeze([
   0x97, 0xcc, 0x55, 0xf1, 0x6f, 0x8d, 0x58, 0x02, 0xb7,
   0xde, 0x3f, 0xb6, 0xbe, 0xbb, 0xc8, 0xea, 0xef, 0xd6,
 ]);
-const CHAMPION_KILL_COUNT_BY_ENCODED_BYTE = new Map(
-  ENCODED_BYTE_FOR_CHAMPION_KILL_COUNT.map((encoded, count) => [encoded, count]));
 const CHAMPION_KILLS_EVIDENCE_STATUS =
-  'CANDIDATE_EXACT_KR_821_MIRRORED_RAW_BYTE_KILL_COUNT_TAIL_AND_ROUTE_CORRELATION';
+  'CANDIDATE_EXACT_KR_821_RUNTIME_BYTE_KILL_COUNT_TAIL_AND_ROUTE_CORRELATION';
 const ENCODED_BYTE_FOR_ASSIST_COUNT = Object.freeze([
   ...ENCODED_BYTE_FOR_CHAMPION_KILL_COUNT,
 ]);
-const ASSIST_COUNT_BY_ENCODED_BYTE = new Map(
-  ENCODED_BYTE_FOR_ASSIST_COUNT.map((encoded, count) => [encoded, count]));
 const ASSISTS_EVIDENCE_STATUS =
-  'CANDIDATE_EXACT_KR_821_RAW_BYTE_ASSIST_COUNT_TAIL_CORRELATION';
+  'CANDIDATE_EXACT_KR_821_RUNTIME_BYTE_ASSIST_COUNT_TAIL_CORRELATION';
 
-// This profile decodes one observed raw byte. It does not decode the 1260-byte
-// HeroStats blob or reuse the 16.19.820.7193 runtime lookup table.
+// These arrays preserve the original Replay-observed byte evidence. Decoding
+// uses the independently captured 821 runtime transform, not these codebooks.
+// Factory 0x0089 does not fully consume the keyframe carrier, so the selected
+// offsets and their count labels remain Replay-tail-correlated candidates.
 const HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
-  id: 'rofl-16.19.821.7343-kr-hero-deaths-raw-byte-keyframe-candidate-v1',
+  id: 'rofl-16.19.821.7343-kr-hero-deaths-raw-byte-keyframe-candidate-v2',
   replay_version: REPLAY_VERSION,
   capability: 'hero_deaths_snapshot',
   status: 'CANDIDATE',
@@ -55,19 +54,20 @@ const HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
   payload_prefix_hex: PAYLOAD_PREFIX_HEX,
   raw_deaths_byte_index: RAW_DEATHS_BYTE_INDEX,
   encoded_byte_for_death_count_candidate: ENCODED_BYTE_FOR_DEATH_COUNT,
-  evidence_runtime_image_sha256: null,
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
   evidence_scope: '11 exact 16.19.821.7343 KR Replays, 327 keyframes and 3270 route packets; 110 participant sequences start at zero and are monotone; 82 final values equal NUM_DEATHS tails and 28 lag by one',
   known_limits: Object.freeze([
     'Only the observed 0x0089 keyframe raw byte is interpreted as a death-count candidate; the rest of the payload remains opaque.',
-    'The finite codebook covers candidate counts 0 through 12 only. An unrecognized encoded byte fails closed.',
-    'No exact 16.19.821.7343 runtime image or deserializer proof is available.',
+    'The exact 821 runtime byte transform covers all 256 input bytes; a value above the participant Replay tail fails closed.',
+    'Factory 0x0089 consumes only 5 of 1263 observed keyframe bytes; the carrier-to-object and field-offset binding is unconfirmed.',
     'Keyframe counts are snapshots, not individual death events or exact death times.',
     'The Replay tail can exceed the last keyframe by one; the gap is retained without interpolation.',
   ]),
 });
 
 const HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
-  id: 'rofl-16.19.821.7343-kr-hero-champion-kills-raw-byte-keyframe-candidate-v1',
+  id: 'rofl-16.19.821.7343-kr-hero-champion-kills-raw-byte-keyframe-candidate-v2',
   replay_version: REPLAY_VERSION,
   capability: 'hero_champion_kills_snapshot',
   status: 'CANDIDATE',
@@ -81,11 +81,12 @@ const HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
   raw_champion_kills_byte_index: RAW_CHAMPION_KILLS_BYTE_INDEX,
   raw_champion_kills_mirror_byte_index: RAW_CHAMPION_KILLS_MIRROR_BYTE_INDEX,
   encoded_byte_for_champion_kill_count_candidate: ENCODED_BYTE_FOR_CHAMPION_KILL_COUNT,
-  evidence_runtime_image_sha256: null,
-  evidence_scope: 'first two exact-build KR Replays for the finite 0..17 codebook; nine independent KR Replays checked; 109/110 participant sequences codeable, with one high-count unknown',
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  evidence_scope: '11 exact-build KR Replays; 327 keyframes and 3270 mirrored route packets; exact 821 byte transform maps previously unknown high counts and all 110 participant sequences remain monotone and tail-bound',
   known_limits: Object.freeze([
-    'The finite 0..17 codebook is inferred from Replay observations and tail comparisons; no exact-build runtime transform is available.',
-    'One high-count sequence in KR_8394000013 is outside the codebook and fails the whole capability for that Replay.',
+    'The exact 821 runtime byte transform covers all 256 input bytes; a value above the participant Replay tail fails closed.',
+    'Factory 0x0089 consumes only 5 of 1263 observed keyframe bytes; the carrier-to-object and field-offset binding is unconfirmed.',
     'Bytes 434 and 1186 mirror within the same keyframe packet; they are not independent semantic evidence.',
     'Keyframe values are candidate snapshots, not individual kill events, exact kill times, killer attribution, or assists.',
     'The measured final Replay-tail gap is retained without interpolation or a hard upper bound.',
@@ -93,7 +94,7 @@ const HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
 });
 
 const HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
-  id: 'rofl-16.19.821.7343-kr-hero-assists-raw-byte-keyframe-candidate-v1',
+  id: 'rofl-16.19.821.7343-kr-hero-assists-raw-byte-keyframe-candidate-v2',
   replay_version: REPLAY_VERSION,
   capability: 'hero_assists_snapshot',
   status: 'CANDIDATE',
@@ -106,11 +107,12 @@ const HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
   payload_prefix_hex: PAYLOAD_PREFIX_HEX,
   raw_assists_byte_index: RAW_ASSISTS_BYTE_INDEX,
   encoded_byte_for_assist_count_candidate: ENCODED_BYTE_FOR_ASSIST_COUNT,
-  evidence_runtime_image_sha256: null,
-  evidence_scope: 'first two exact-build KR Replays calibrated raw byte 1178; nine heldout KR Replays checked; six of eleven Replays fully codeable with the observed 0..17 codebook',
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  evidence_scope: '11 exact-build KR Replays; 327 keyframes and 3270 route packets; exact 821 byte transform maps previously unknown high counts and all 110 participant sequences remain monotone and tail-bound',
   known_limits: Object.freeze([
-    'The finite 0..17 codebook is inferred from exact-build Replay observations and ASSISTS tail comparisons; no exact-build runtime transform is available.',
-    'Five of eleven observed KR Replays contain higher-count unknown bytes and fail the whole capability without partial event output.',
+    'The exact 821 runtime byte transform covers all 256 input bytes; a value above the participant Replay tail fails closed.',
+    'Factory 0x0089 consumes only 5 of 1263 observed keyframe bytes; the carrier-to-object and field-offset binding is unconfirmed.',
     'Byte 1178 has no exact mirror in the observed 0x0089 payloads.',
     'Keyframe values are candidate snapshots, not individual assist events, exact assist times, or participant attribution for a kill.',
     'The measured final Replay-tail gap is retained without interpolation or a hard upper bound.',
@@ -282,7 +284,14 @@ function scanHeroStatsPackets821(replay, precollected, capability) {
 
 function decodeHeroDeathsSnapshotCandidates821(replay, precollected = null) {
   const profile = HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE;
-  const base = { profile_id: profile.id, input_packet_id: PACKET_ID };
+  const base = {
+    profile_id: profile.id,
+    input_packet_id: PACKET_ID,
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    lookup_table_sha256: LOOKUP_TABLE_SHA256,
+    runtime_image_used: false,
+    runtime_image_status: 'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED',
+  };
   const fail = (status, error, details = {}) => ({
     ...base, status, event_count: null, events: null, error, ...details,
   });
@@ -307,12 +316,7 @@ function decodeHeroDeathsSnapshotCandidates821(replay, precollected = null) {
     for (const row of frame) {
       const { block, chunk, ref, rawParam, participantId } = row;
       const rawByte = block.payload[RAW_DEATHS_BYTE_INDEX];
-      if (!DEATH_COUNT_BY_ENCODED_BYTE.has(rawByte)) {
-        return fail('DECODE_FAILED', `0x0089 byte ${RAW_DEATHS_BYTE_INDEX} has unknown code 0x${rawByte.toString(16).padStart(2, '0')}`, {
-          ...scan, first_unmatched_packet_ref: ref,
-        });
-      }
-      const value = DEATH_COUNT_BY_ENCODED_BYTE.get(rawByte);
+      const value = decodeRuntimeCountByte(rawByte);
       const index = participantId - 1;
       if (previous[index] === null && value !== 0) {
         return fail('DECODE_FAILED', `participant ${participantId} first observed death count is not zero`, {
@@ -386,7 +390,6 @@ function decodeHeroDeathsSnapshotCandidates821(replay, precollected = null) {
     ...base,
     status: 'CANDIDATE',
     evidence_status: EVIDENCE_STATUS,
-    evidence_runtime_image_sha256: null,
     ...scan,
     event_count: events.length,
     observed_participant_count: 10,
@@ -403,9 +406,10 @@ function decodeHeroChampionKillsSnapshotCandidates821(replay, precollected = nul
   const base = {
     profile_id: profile.id,
     input_packet_id: PACKET_ID,
-    evidence_runtime_image_sha256: null,
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    lookup_table_sha256: LOOKUP_TABLE_SHA256,
     runtime_image_used: false,
-    runtime_image_status: 'NOT_REQUIRED_ROUTE_TAIL_CANDIDATE',
+    runtime_image_status: 'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED',
     known_limits: [...profile.known_limits],
   };
   const fail = (status, error, details = {}) => ({
@@ -439,10 +443,7 @@ function decodeHeroChampionKillsSnapshotCandidates821(replay, precollected = nul
       if (rawByte !== mirrorByte) {
         return mismatch(`0x0089 champion-kills bytes ${RAW_CHAMPION_KILLS_BYTE_INDEX} and ${RAW_CHAMPION_KILLS_MIRROR_BYTE_INDEX} differ`);
       }
-      if (!CHAMPION_KILL_COUNT_BY_ENCODED_BYTE.has(rawByte)) {
-        return mismatch(`0x0089 champion-kills byte ${RAW_CHAMPION_KILLS_BYTE_INDEX} has unknown code 0x${rawByte.toString(16).padStart(2, '0')}`);
-      }
-      const value = CHAMPION_KILL_COUNT_BY_ENCODED_BYTE.get(rawByte);
+      const value = decodeRuntimeCountByte(rawByte);
       const index = participantId - 1;
       if (previous[index] === null && value !== 0) {
         return mismatch(`participant ${participantId} first observed champion-kill count is not zero`);
@@ -520,9 +521,10 @@ function decodeHeroAssistsSnapshotCandidates821(replay, precollected = null) {
   const base = {
     profile_id: profile.id,
     input_packet_id: PACKET_ID,
-    evidence_runtime_image_sha256: null,
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    lookup_table_sha256: LOOKUP_TABLE_SHA256,
     runtime_image_used: false,
-    runtime_image_status: 'NOT_REQUIRED_ROUTE_TAIL_CANDIDATE',
+    runtime_image_status: 'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED',
     known_limits: [...profile.known_limits],
   };
   const fail = (status, error, details = {}) => ({
@@ -551,10 +553,7 @@ function decodeHeroAssistsSnapshotCandidates821(replay, precollected = null) {
       const mismatch = (error) => fail('DECODE_FAILED', error, {
         ...scan, first_unmatched_packet_ref: ref,
       });
-      if (!ASSIST_COUNT_BY_ENCODED_BYTE.has(rawByte)) {
-        return mismatch(`0x0089 assists byte ${RAW_ASSISTS_BYTE_INDEX} has unknown code 0x${rawByte.toString(16).padStart(2, '0')}`);
-      }
-      const value = ASSIST_COUNT_BY_ENCODED_BYTE.get(rawByte);
+      const value = decodeRuntimeCountByte(rawByte);
       const index = participantId - 1;
       if (previous[index] === null && value !== 0) {
         return mismatch(`participant ${participantId} first observed assist count is not zero`);

@@ -69,12 +69,15 @@ test('821 raw-byte candidate emits bounded snapshots and packet provenance', () 
   const profile = HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE;
   assert.equal(profile.replay_version, BUILD);
   assert.equal(profile.raw_deaths_byte_index, 1182);
-  assert.equal(profile.evidence_runtime_image_sha256, null);
+  assert.equal(profile.id, 'rofl-16.19.821.7343-kr-hero-deaths-raw-byte-keyframe-candidate-v2');
+  assert.equal(profile.evidence_runtime_image_sha256,
+    '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325');
   assert.deepEqual(profile.encoded_byte_for_death_count_candidate, CODES);
   const assessed = assessHeroDeathsSnapshotTail821(replay);
   assert.equal(assessed.status, 'PASS');
   const result = decodeHeroDeathsSnapshotCandidates821(replay);
   assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.runtime_image_status, 'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED');
   assert.equal(result.event_count, 20);
   assert.equal(result.input_count, 20);
   assert.equal(result.keyframe_count, 2);
@@ -108,9 +111,9 @@ test('wrong build and missing or malformed tail stay unavailable', () => {
   assert.equal(decodeHeroDeathsSnapshotCandidates821(malformedTail).status, 'UNSUPPORTED');
 });
 
-test('unknown code and foreign length or prefix reject the whole candidate', () => {
+test('value above the tail and foreign length or prefix reject the whole candidate', () => {
   for (const change of [
-    (item) => { item.payload[1182] = 0xfa; },
+    (item) => { item.payload[1182] = 0x4d; },
     (item) => { item.payload = item.payload.subarray(0, 1262); },
     (item) => { item.payload[0] ^= 1; },
   ]) {
@@ -123,6 +126,20 @@ test('unknown code and foreign length or prefix reject the whole candidate', () 
     assert.equal(result.event_count, null);
     assert.equal(result.first_unmatched_packet_ref.raw_param, 0x400000ae);
   }
+});
+
+test('821 runtime transform admits a high death count only with matching tail evidence', () => {
+  const replay = fixture({
+    tails: [26, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    mutatePacket(item, frame, participant) {
+      if (frame === 1 && participant === 0) item.payload[1182] = 0x4d;
+    },
+  });
+  const result = decodeHeroDeathsSnapshotCandidates821(replay);
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.events[10].raw_deaths_byte, 0x4d);
+  assert.equal(result.events[10].deaths_candidate, 26);
+  assert.equal(result.tail_gaps[0].unobserved_tail_gap, 0);
 });
 
 test('keyframe route requires ten exact hero params and consistent Replay time', () => {

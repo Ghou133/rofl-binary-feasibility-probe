@@ -1865,18 +1865,18 @@ function capabilityQuery(replay, options = {}) {
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_deaths_snapshot') {
-        validationPending.push('KR keyframe 0x0089 length, prefix, param, and raw-byte codebook',
+        validationPending.push('KR keyframe 0x0089 length, prefix, param, and pinned 821 runtime byte transform',
           'ten-participant NUM_DEATHS final gap 0..1 and monotone snapshots');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_champion_kills_snapshot') {
-        validationPending.push('KR keyframe 0x0089 structure and mirrored bytes 434/1186',
-          'finite 0..17 codebook, monotone snapshots, and ten CHAMPIONS_KILLED tails');
+        validationPending.push('KR keyframe 0x0089 structure, mirrored bytes 434/1186, and pinned 821 runtime byte transform',
+          'monotone snapshots and ten CHAMPIONS_KILLED tails');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_assists_snapshot') {
-        validationPending.push('KR keyframe 0x0089 structure and raw byte 1178',
-          'finite 0..17 codebook, monotone snapshots, and ten ASSISTS tails');
+        validationPending.push('KR keyframe 0x0089 structure, raw byte 1178, and pinned 821 runtime byte transform',
+          'monotone snapshots and ten ASSISTS tails');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_level_state') {

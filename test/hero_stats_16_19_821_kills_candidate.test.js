@@ -60,11 +60,13 @@ function fixture({
   return replay;
 }
 
-test('821 fixed finite mirrored-byte codebook emits candidate snapshots and measured tail gaps', () => {
+test('821 runtime mirrored-byte transform emits candidate snapshots and measured tail gaps', () => {
   const replay = fixture();
   const profile = HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE;
   assert.equal(profile.replay_version, BUILD);
-  assert.equal(profile.evidence_runtime_image_sha256, null);
+  assert.equal(profile.id, 'rofl-16.19.821.7343-kr-hero-champion-kills-raw-byte-keyframe-candidate-v2');
+  assert.equal(profile.evidence_runtime_image_sha256,
+    '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325');
   assert.equal(profile.raw_champion_kills_byte_index, 1186);
   assert.equal(profile.raw_champion_kills_mirror_byte_index, 434);
   assert.deepEqual(profile.encoded_byte_for_champion_kill_count_candidate, CODES);
@@ -86,6 +88,22 @@ test('821 fixed finite mirrored-byte codebook emits candidate snapshots and meas
   assert.equal(result.events[10].field_confidence.champion_kills_candidate,
     result.evidence_status);
   assert.equal(result.runtime_image_used, false);
+  assert.equal(result.runtime_image_status, 'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED');
+});
+
+test('821 runtime transform admits a high mirrored kill count within the tail', () => {
+  const replay = fixture({
+    tails: [26, 16, ...Array(8).fill(0)],
+    mutate(item, frame, index) {
+      if (frame === 1 && index === 0) item.payload[434] = item.payload[1186] = 0x4d;
+    },
+  });
+  const result = decodeHeroChampionKillsSnapshotCandidates821(replay);
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.events[10].raw_champion_kills_byte, 0x4d);
+  assert.equal(result.events[10].raw_champion_kills_mirror_byte, 0x4d);
+  assert.equal(result.events[10].champion_kills_candidate, 26);
+  assert.equal(result.tail_gaps[0].unobserved_tail_gap, 0);
 });
 
 test('821 kills tail, source, and exact build failures stay explicit', () => {
@@ -106,9 +124,9 @@ test('821 kills tail, source, and exact build failures stay explicit', () => {
   assert.match(result.error, /Replay source failed/);
 });
 
-test('821 kills rejects unknown code, mirror mismatch, bad param, and foreign start route', () => {
+test('821 kills rejects a value above tail, mirror mismatch, bad param, and foreign start route', () => {
   const cases = [
-    [(item) => { item.payload[434] = item.payload[1186] = 0x4d; }, /unknown code/],
+    [(item) => { item.payload[434] = item.payload[1186] = 0x4d; }, /exceeds Replay tail CHAMPIONS_KILLED/],
     [(item) => { item.payload[434] ^= 1; }, /bytes 1186 and 434 differ/],
     [(item) => { item.param = 0x400000bd; }, /unsupported raw param/],
     [(item) => { item.payload[0] ^= 1; }, /length or prefix/],

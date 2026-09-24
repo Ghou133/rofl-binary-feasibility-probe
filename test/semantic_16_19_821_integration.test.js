@@ -41,7 +41,7 @@ function keyframeDeathsPacket(participantId, count, timeMs,
 }
 
 function replay({ unknownLevel = false, runtimeLevel20 = false, observedReturn = false,
-  unknownKill = false, unknownAssist = false } = {}) {
+  runtimeHighCounts = false, aboveTailKill = false, aboveTailAssist = false } = {}) {
   const levelPackets = Array.from({ length: 10 }, (_, index) => {
     const row = packet(0x0197, 0x400000ae + index,
       (unknownLevel || runtimeLevel20) && index === 0 ? 2 : 1);
@@ -64,15 +64,15 @@ function replay({ unknownLevel = false, runtimeLevel20 = false, observedReturn =
   const snapshots = [0, 1].map((frame) => ({ stream: 2,
     body: Buffer.concat(Array.from({ length: 10 }, (_, index) =>
       keyframeDeathsPacket(index + 1, frame && index === 0 ? 1 : 0, frame * 1000,
-        frame && index === 0 ? unknownKill ? 0xa6 : 0xcc : 0x97,
-        frame && index === 0 ? unknownAssist ? 0xa6 : 0xcc : 0x97))),
+        frame && index === 0 ? aboveTailKill ? 0x3d : runtimeHighCounts ? 0x4d : 0xcc : 0x97,
+        frame && index === 0 ? aboveTailAssist ? 0x3d : runtimeHighCounts ? 0x9d : 0xcc : 0x97))),
   }));
   const input = replayFromChunks([game, ...snapshots], BUILD);
   input.tail.stats = Array.from({ length: 10 }, (_, index) => ({
     NUM_DEATHS: index === 0 ? '1' : '0',
     TOTAL_TIME_SPENT_DEAD: observedReturn && index === 0 ? '9' : '0',
-    CHAMPIONS_KILLED: index === 0 ? unknownKill ? '28' : '1' : '0',
-    ASSISTS: index === 0 ? unknownAssist ? '28' : '1' : '0',
+    CHAMPIONS_KILLED: index === 0 ? aboveTailKill || runtimeHighCounts ? '28' : '1' : '0',
+    ASSISTS: index === 0 ? aboveTailAssist || runtimeHighCounts ? '28' : '1' : '0',
     LEVEL: (unknownLevel || runtimeLevel20) && index === 0 ? '20' : '2',
   }));
   return input;
@@ -246,15 +246,28 @@ test('out-of-range 821 level code leaves independent death candidates available'
   assert.equal(decoded.events.hero_level_state_candidates, undefined);
 });
 
-test('unknown 821 kill code leaves death, return, and level candidates available', () => {
-  const decoded = decodeSemanticReplay(replay({ unknownKill: true, observedReturn: true }), {
+test('821 runtime high kill and assist counts reach combined API candidate output', () => {
+  const decoded = decodeSemanticReplay(replay({ runtimeHighCounts: true }), {
+    capabilities: ['hero_champion_kills_snapshot', 'hero_assists_snapshot'],
+  });
+  assert.equal(decoded.status, 'EXPERIMENTAL_CANDIDATE');
+  assert.equal(decoded.capability_results.hero_champion_kills_snapshot.status, 'CANDIDATE');
+  assert.equal(decoded.events.hero_champion_kills_snapshot_candidates[10].champion_kills_candidate,
+    26);
+  assert.equal(decoded.capability_results.hero_assists_snapshot.status, 'CANDIDATE');
+  assert.equal(decoded.events.hero_assists_snapshot_candidates[10].assists_candidate, 19);
+});
+
+test('821 kill count above tail leaves death, return, and level candidates available', () => {
+  const decoded = decodeSemanticReplay(replay({ aboveTailKill: true, observedReturn: true }), {
     capabilities: ['hero_death', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_level_state'],
   });
   assert.equal(decoded.status, 'PARTIAL');
   assert.equal(decoded.capability_results.hero_champion_kills_snapshot.status, 'DECODE_FAILED');
-  assert.match(decoded.capability_results.hero_champion_kills_snapshot.error, /unknown code/);
+  assert.match(decoded.capability_results.hero_champion_kills_snapshot.error,
+    /exceeds Replay tail CHAMPIONS_KILLED/);
   assert.equal(decoded.capability_results.hero_champion_kills_snapshot.event_count, null);
   assert.equal(decoded.events.hero_champion_kills_snapshot_candidates, undefined);
   assert.equal(decoded.events.hero_death_candidates.length, 1);
@@ -264,15 +277,16 @@ test('unknown 821 kill code leaves death, return, and level candidates available
   assert.equal(decoded.events.hero_level_state_candidates.length, 10);
 });
 
-test('unknown 821 assist code leaves the other candidate capabilities available', () => {
-  const decoded = decodeSemanticReplay(replay({ unknownAssist: true }), {
+test('821 assist count above tail leaves the other candidate capabilities available', () => {
+  const decoded = decodeSemanticReplay(replay({ aboveTailAssist: true }), {
     capabilities: ['hero_death', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_level_state'],
   });
   assert.equal(decoded.status, 'PARTIAL');
   assert.equal(decoded.capability_results.hero_assists_snapshot.status, 'DECODE_FAILED');
-  assert.match(decoded.capability_results.hero_assists_snapshot.error, /unknown code/);
+  assert.match(decoded.capability_results.hero_assists_snapshot.error,
+    /exceeds Replay tail ASSISTS/);
   assert.equal(decoded.events.hero_assists_snapshot_candidates, undefined);
   assert.equal(decoded.events.hero_death_candidates.length, 1);
   assert.equal(decoded.events.hero_deaths_snapshot_candidates.length, 20);
