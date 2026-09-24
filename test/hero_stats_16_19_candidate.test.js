@@ -6,12 +6,14 @@ const test = require('node:test');
 
 const { replayFromChunks } = require('./helpers/synthetic_replay');
 const {
+  HERO_ASSISTS_SNAPSHOT_CANDIDATE_PROFILE: assistsProfile,
   HERO_CHAMPION_KILLS_SNAPSHOT_CANDIDATE_PROFILE: championKillsProfile,
   HERO_DEATHS_SNAPSHOT_CANDIDATE_PROFILE: deathsProfile,
   HERO_EXPERIENCE_SNAPSHOT_CANDIDATE_PROFILE: experienceProfile,
   HERO_GOLD_EARNED_SNAPSHOT_CANDIDATE_PROFILE: goldEarnedProfile,
   HERO_GOLD_SPENT_SNAPSHOT_CANDIDATE_PROFILE: goldSpentProfile,
   HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE: profile,
+  assessHeroAssistsSnapshotTail,
   assessHeroChampionKillsSnapshotTail,
   assessHeroDeathsSnapshotTail,
   assessHeroExperienceSnapshotTail,
@@ -19,6 +21,8 @@ const {
   assessHeroGoldSpentSnapshotTail,
   assessHeroMinionsKilledSnapshotTail,
   decodeHeroStatsByte,
+  decodeHeroAssistsPayload,
+  decodeHeroAssistsSnapshotCandidates,
   decodeHeroChampionKillsPayload,
   decodeHeroChampionKillsSnapshotCandidates,
   decodeHeroDeathsPayload,
@@ -44,7 +48,7 @@ for (let encoded = 0; encoded < 256; encoded += 1) {
 assert.ok(ENCODE_BYTE.every((value) => value !== null));
 
 function payloadFor(value, experience = 0, goldEarned = 0, goldSpent = 0,
-  championKills = 0, championKillsMirror = championKills, deaths = 0) {
+  championKills = 0, championKillsMirror = championKills, deaths = 0, assists = 0) {
   const blob = Buffer.alloc(1260);
   blob.writeFloatLE(experience, 0x28);
   blob.writeFloatLE(goldSpent, 0x34);
@@ -52,6 +56,7 @@ function payloadFor(value, experience = 0, goldEarned = 0, goldSpent = 0,
   blob.writeFloatLE(value, 0x3c);
   blob.writeUInt32LE(championKills, 0x4c);
   blob.writeUInt32LE(deaths, 0x50);
+  blob.writeUInt32LE(assists, 0x54);
   blob.writeUInt32LE(championKillsMirror, 0x33c);
   const payload = Buffer.alloc(1263);
   payload.set([0x1c, 0xa6, 0xe8], 0);
@@ -77,6 +82,7 @@ function fixture({ times = [0, 1000], values = null, tails = null,
   goldSpentValues = null, goldSpentTails = null,
   championKillsValues = null, championKillsTails = null,
   championKillsMirrorValues = null, deathsValues = null, deathsTails = null,
+  assistsValues = null, assistsTails = null,
   stream = 2,
   version = '16.19.820.7193', extraBlocks = [], omitParticipant = null } = {}) {
   const rows = values || times.map((_, timeIndex) =>
@@ -91,7 +97,8 @@ function fixture({ times = [0, 1000], values = null, tails = null,
             championKillsValues?.[timeIndex]?.[playerIndex] ?? 0,
             championKillsMirrorValues?.[timeIndex]?.[playerIndex]
               ?? championKillsValues?.[timeIndex]?.[playerIndex] ?? 0,
-            deathsValues?.[timeIndex]?.[playerIndex] ?? 0))])),
+            deathsValues?.[timeIndex]?.[playerIndex] ?? 0,
+            assistsValues?.[timeIndex]?.[playerIndex] ?? 0))])),
     ...extraBlocks,
   ]) }];
   const replay = replayFromChunks(chunks, version);
@@ -106,7 +113,9 @@ function fixture({ times = [0, 1000], values = null, tails = null,
       CHAMPIONS_KILLED: String(championKillsTails?.[index]
         ?? ((championKillsValues?.at(-1)?.[index] ?? 0) + 2)),
       NUM_DEATHS: String(deathsTails?.[index]
-        ?? ((deathsValues?.at(-1)?.[index] ?? 0) + 2)) }));
+        ?? ((deathsValues?.at(-1)?.[index] ?? 0) + 2)),
+      ASSISTS: String(assistsTails?.[index]
+        ?? ((assistsValues?.at(-1)?.[index] ?? 0) + 2)) }));
   return replay;
 }
 
@@ -298,7 +307,7 @@ test('experience snapshots fail closed on broken hero group, decrease, and tail 
     /exceeds Replay tail EXP/);
 });
 
-test('combined HeroStats selection walks keyframe chunks once and returns six candidates', () => {
+test('combined HeroStats selection walks keyframe chunks once and returns seven candidates', () => {
   const experienceValues = [Array(10).fill(0.25), Array(10).fill(100.75)];
   const goldEarnedValues = [Array(10).fill(500.25), Array(10).fill(750.75)];
   const goldSpentValues = [Array(10).fill(100), Array(10).fill(250)];
@@ -306,10 +315,12 @@ test('combined HeroStats selection walks keyframe chunks once and returns six ca
     Array.from({ length: 10 }, (_, index) => index + 1)];
   const deathsValues = [Array(10).fill(0),
     Array.from({ length: 10 }, (_, index) => index)];
+  const assistsValues = [Array(10).fill(0),
+    Array.from({ length: 10 }, (_, index) => index + 2)];
   const replay = fixture({ experienceValues, experienceTails: Array(10).fill(102),
     goldEarnedValues, goldEarnedTails: Array(10).fill(752),
     goldSpentValues, goldSpentTails: Array(10).fill(252),
-    championKillsValues, deathsValues });
+    championKillsValues, deathsValues, assistsValues });
   const chunks = replay.chunks;
   let chunkTraversalCount = 0;
   Object.defineProperty(replay, 'chunks', { get() {
@@ -319,24 +330,28 @@ test('combined HeroStats selection walks keyframe chunks once and returns six ca
   const results = decodeHeroStatsSnapshotCandidateSet(replay,
     ['hero_minions_killed_snapshot', 'hero_experience_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
-      'hero_champion_kills_snapshot', 'hero_deaths_snapshot']);
+      'hero_champion_kills_snapshot', 'hero_deaths_snapshot',
+      'hero_assists_snapshot']);
   assert.equal(chunkTraversalCount, 1);
   assert.deepEqual(Object.keys(results),
     ['hero_minions_killed_snapshot', 'hero_experience_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
-      'hero_champion_kills_snapshot', 'hero_deaths_snapshot']);
+      'hero_champion_kills_snapshot', 'hero_deaths_snapshot',
+      'hero_assists_snapshot']);
   assert.equal(results.hero_minions_killed_snapshot.status, 'CANDIDATE');
   assert.equal(results.hero_experience_snapshot.status, 'CANDIDATE');
   assert.equal(results.hero_gold_earned_snapshot.status, 'CANDIDATE');
   assert.equal(results.hero_gold_spent_snapshot.status, 'CANDIDATE');
   assert.equal(results.hero_champion_kills_snapshot.status, 'CANDIDATE');
   assert.equal(results.hero_deaths_snapshot.status, 'CANDIDATE');
+  assert.equal(results.hero_assists_snapshot.status, 'CANDIDATE');
   assert.equal(results.hero_minions_killed_snapshot.event_count, 20);
   assert.equal(results.hero_experience_snapshot.event_count, 20);
   assert.equal(results.hero_gold_earned_snapshot.event_count, 20);
   assert.equal(results.hero_gold_spent_snapshot.event_count, 20);
   assert.equal(results.hero_champion_kills_snapshot.event_count, 20);
   assert.equal(results.hero_deaths_snapshot.event_count, 20);
+  assert.equal(results.hero_assists_snapshot.event_count, 20);
   assert.equal(results.hero_minions_killed_snapshot.events[0].raw_packet_ref.raw_payload_sha256,
     results.hero_experience_snapshot.events[0].raw_packet_ref.raw_payload_sha256);
   assert.equal(results.hero_experience_snapshot.events[0].raw_packet_ref.raw_payload_sha256,
@@ -347,6 +362,8 @@ test('combined HeroStats selection walks keyframe chunks once and returns six ca
     results.hero_champion_kills_snapshot.events[0].raw_packet_ref.raw_payload_sha256);
   assert.equal(results.hero_champion_kills_snapshot.events[0].raw_packet_ref.raw_payload_sha256,
     results.hero_deaths_snapshot.events[0].raw_packet_ref.raw_payload_sha256);
+  assert.equal(results.hero_deaths_snapshot.events[0].raw_packet_ref.raw_payload_sha256,
+    results.hero_assists_snapshot.events[0].raw_packet_ref.raw_payload_sha256);
 });
 
 test('gold-earned offset is an observed float candidate over the exact HN transform', () => {
@@ -722,6 +739,99 @@ test('deaths candidate rejects wrong build and foreign or mixed keyframe shapes'
     blockFor(1, 1000, Buffer.from([1, 2])),
   ] });
   const rejected = decodeHeroDeathsSnapshotCandidates(mixed);
+  assert.equal(rejected.status, 'DECODE_FAILED');
+  assert.equal(rejected.events, null);
+});
+
+test('assists offset is a weaker one-Replay snapshot candidate without an assist event anchor', () => {
+  assert.equal(assistsProfile.replay_version, '16.19.820.7193');
+  assert.equal(assistsProfile.replay_block_packet_id, 0x0276);
+  assert.equal(assistsProfile.assists_u32le_offset_candidate, 0x54);
+  assert.equal(assistsProfile.lookup_table_sha256, profile.lookup_table_sha256);
+  assert.match(assistsProfile.evidence_scope, /one HN Replay/);
+  assert.ok(assistsProfile.known_limits.some((limit) => /no independent assist event anchor/.test(limit)));
+  assert.ok(assistsProfile.known_limits.some((limit) => /no assist event, time, attribution/.test(limit)));
+  assert.deepEqual(decodeHeroAssistsPayload(payloadFor(0, 0, 0, 0, 0, 0, 0, 7)),
+    { status: 'PASS', assists_candidate: 7 });
+});
+
+test('assists output preserves observed keyframe values, raw refs, and two unfilled tail gaps', () => {
+  const lastAssists = [9, 17, 4, 11, 25, 12, 11, 14, 13, 27];
+  const assistsTails = [10, 17, 4, 11, 26, 12, 11, 14, 13, 27];
+  const replay = fixture({ assistsValues: [Array(10).fill(0), lastAssists], assistsTails });
+  const result = decodeHeroAssistsSnapshotCandidates(replay);
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.input_count, 20);
+  assert.equal(result.event_count, 20);
+  assert.equal(result.keyframe_timestamp_count, 2);
+  assert.deepEqual(result.observed_max_assists, lastAssists);
+  assert.deepEqual(result.final_assists, assistsTails);
+  assert.deepEqual(result.tail_gaps.map((row) => row.unobserved_tail_gap),
+    [1, 0, 0, 0, 1, 0, 0, 0, 0, 0]);
+  assert.equal(result.tail_gap_total, 2);
+  assert.equal(result.tail_gaps[0].last_snapshot_assists_candidate, 9);
+  assert.equal(result.tail_gaps[0].final_assists_tail, 10);
+  assert.equal(result.events[0].event_type, 'HERO_ASSISTS_SNAPSHOT_CANDIDATE');
+  assert.equal(result.events[0].assists_candidate, 0);
+  assert.equal(result.events.at(-1).assists_candidate, 27);
+  assert.equal(result.events.at(-1).raw_packet_ref.chunk_stream, 'keyframe');
+  assert.equal(result.events.at(-1).raw_packet_ref.raw_param, 0x400000b7);
+  assert.equal(result.events.at(-1).raw_packet_ref.raw_payload_sha256,
+    crypto.createHash('sha256').update(payloadFor(10, 0, 0, 0, 0, 0, 0, 27)).digest('hex'));
+  assert.ok(result.events.every((row) => row.confidence === 'CANDIDATE'
+    && row.observation_kind === 'KEYFRAME_SNAPSHOT'));
+  assert.ok(!Object.hasOwn(result.events[0], 'assist_event_time_ms'));
+  assert.ok(!Object.hasOwn(result.events[0], 'assist_target'));
+});
+
+test('assists tail and sequence failures stay local to this selected field', () => {
+  const missing = fixture();
+  assert.equal(assessHeroAssistsSnapshotTail(missing).status, 'PASS');
+  delete missing.tail.stats[0].ASSISTS;
+  assert.equal(assessHeroAssistsSnapshotTail(missing).status, 'MISSING_INPUT');
+  const missingOutcomes = decodeHeroStatsSnapshotCandidateSet(missing,
+    ['hero_assists_snapshot', 'hero_deaths_snapshot']);
+  assert.equal(missingOutcomes.hero_assists_snapshot.status, 'MISSING_INPUT');
+  assert.equal(missingOutcomes.hero_deaths_snapshot.status, 'CANDIDATE');
+  missing.tail.stats[0].ASSISTS = '-1';
+  assert.equal(assessHeroAssistsSnapshotTail(missing).status, 'UNSUPPORTED');
+
+  const deathsMissing = fixture();
+  delete deathsMissing.tail.stats[0].NUM_DEATHS;
+  const deathsMissingOutcomes = decodeHeroStatsSnapshotCandidateSet(deathsMissing,
+    ['hero_assists_snapshot', 'hero_deaths_snapshot']);
+  assert.equal(deathsMissingOutcomes.hero_assists_snapshot.status, 'CANDIDATE');
+  assert.equal(deathsMissingOutcomes.hero_deaths_snapshot.status, 'MISSING_INPUT');
+
+  const declining = fixture({ assistsValues: [Array(10).fill(3), Array(10).fill(2)],
+    assistsTails: Array(10).fill(5) });
+  const decliningOutcomes = decodeHeroStatsSnapshotCandidateSet(declining,
+    ['hero_assists_snapshot', 'hero_minions_killed_snapshot']);
+  assert.equal(decliningOutcomes.hero_assists_snapshot.status, 'DECODE_FAILED');
+  assert.match(decliningOutcomes.hero_assists_snapshot.error, /decreasing observed ASSISTS/);
+  assert.equal(decliningOutcomes.hero_minions_killed_snapshot.status, 'CANDIDATE');
+
+  const aboveTail = fixture({ assistsValues: [Array(10).fill(0), Array(10).fill(3)],
+    assistsTails: Array(10).fill(2) });
+  assert.match(decodeHeroAssistsSnapshotCandidates(aboveTail).error,
+    /exceeds Replay tail ASSISTS/);
+});
+
+test('assists candidate rejects wrong build and foreign or mixed keyframe shapes', () => {
+  assert.equal(decodeHeroAssistsSnapshotCandidates(
+    fixture({ version: '16.19.820.7194' })).status, 'UNSUPPORTED');
+  const foreignBlocks = Array.from({ length: 10 }, (_, index) =>
+    blockFor(index + 1, 0, Buffer.from([1, 2])));
+  const foreign = replayFromChunks([{ stream: 2, body: Buffer.concat(foreignBlocks) }],
+    '16.19.820.7193');
+  const unavailable = decodeHeroAssistsSnapshotCandidates(foreign);
+  assert.equal(unavailable.status, 'PROFILE_UNAVAILABLE');
+  assert.equal(unavailable.observed_raw_route_count, 10);
+  assert.equal(unavailable.event_count, null);
+  const mixed = fixture({ times: [0], extraBlocks: [
+    blockFor(1, 1000, Buffer.from([1, 2])),
+  ] });
+  const rejected = decodeHeroAssistsSnapshotCandidates(mixed);
   assert.equal(rejected.status, 'DECODE_FAILED');
   assert.equal(rejected.events, null);
 });

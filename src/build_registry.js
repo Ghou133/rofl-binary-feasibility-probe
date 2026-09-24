@@ -238,6 +238,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_gold_spent_snapshot: 0x0276,
       hero_champion_kills_snapshot: 0x0276,
       hero_deaths_snapshot: 0x0276,
+      hero_assists_snapshot: 0x0276,
     },
     decoder_profile: {
       hero_death: {
@@ -262,6 +263,8 @@ const BUILD_PROFILES = deepFreeze({
         heroStatsCandidate1619.HERO_CHAMPION_KILLS_SNAPSHOT_CANDIDATE_PROFILE,
       hero_deaths_snapshot:
         heroStatsCandidate1619.HERO_DEATHS_SNAPSHOT_CANDIDATE_PROFILE,
+      hero_assists_snapshot:
+        heroStatsCandidate1619.HERO_ASSISTS_SNAPSHOT_CANDIDATE_PROFILE,
     },
     field_semantics: {
       hero_death: 'CANDIDATE_EXACT_BUILD_ROUTE_FINGERPRINT',
@@ -274,6 +277,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_gold_spent_snapshot: 'CANDIDATE_KEYFRAME_GOLD_SPENT_FIELD',
       hero_champion_kills_snapshot: 'CANDIDATE_KEYFRAME_MIRRORED_CHAMPION_KILLS_FIELD',
       hero_deaths_snapshot: 'CANDIDATE_KEYFRAME_DEATH_COUNT_FIELD',
+      hero_assists_snapshot: 'CANDIDATE_KEYFRAME_ASSIST_COUNT_FIELD',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, route-profile bounded',
@@ -286,6 +290,7 @@ const BUILD_PROFILES = deepFreeze({
       gold_spent_candidate: '0x0276 keyframe HeroStats f32 offset 0x34; HN route profile only',
       champion_kills_candidate: '0x0276 keyframe HeroStats mirrored u32 offsets 0x4c and 0x33c; HN route profile only',
       deaths_candidate: '0x0276 keyframe HeroStats u32 offset 0x50; HN route profile only',
+      assists_candidate: '0x0276 keyframe HeroStats u32 offset 0x54; HN route profile only',
     },
     verified_capabilities: [],
     candidate_capabilities: [
@@ -296,6 +301,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_gold_spent_snapshot',
       'hero_champion_kills_snapshot',
       'hero_deaths_snapshot',
+      'hero_assists_snapshot',
     ],
     unsupported_capabilities: [],
     validation_artifacts: [],

@@ -55,7 +55,7 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   monotonic criteria; adjacent gold/CS offsets fail the EXP control. This is
   one-Replay field correlation, not an XP transition or confirmed field.
 - **CLI/API efficiency:** Selecting the CS, EXP, GOLD_EARNED, GOLD_SPENT,
-  CHAMPIONS_KILLED and NUM_DEATHS HeroStats candidates together shares one
+  CHAMPIONS_KILLED, NUM_DEATHS and ASSISTS HeroStats candidates together shares one
   keyframe collection and retains separate field validation and results. The
   16.19 CLI reuses its raw-analysis walk for that collection; a compressed
   synthetic keyframe now decompresses once instead of twice. Standalone API
@@ -129,6 +129,15 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   gap of one. The route, participant mapping and field meaning remain
   experimental and bounded to one HN Replay; this output creates no death
   events.
+- **Done:** `hero_assists_snapshot` emits observed HN HeroStats keyframe
+  candidate counts from decoded u32LE offset `0x54`. In one HN Replay all 350
+  values are nonnegative, start at zero, are monotonic per participant, and do
+  not exceed tail `ASSISTS`; eight final snapshots equal the tail, while
+  participants 1 and 5 each have an unobserved gap of one. Among aligned
+  offsets, only `0x54` meets the initial-zero, monotonic and close-tail
+  criteria of at least eight exact final matches and total gap at most two.
+  There is no independent assist-event anchor, so this field is a
+  weaker one-Replay correlation and yields no assist event, time or attribution.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
   HN Replays to test level and HeroStats CS/EXP/gold/kills candidates. Movement-route
   research remains blocked on an exact registration-to-position-field link.

@@ -25,6 +25,7 @@
 | `16.19.820.7193 --events hero_gold_spent_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x34` 候选已花金币值 | 仅写入 `hero_gold_spent_snapshot_candidates`；保留数值下降，不推导退款、出售或购买；KR 的 HN profile 不可用 |
 | `16.19.820.7193 --events hero_champion_kills_snapshot` | 同一 HN HeroStats keyframe 中两处镜像值一致的候选英雄击杀数 | 仅写入 `hero_champion_kills_snapshot_candidates`；`0x4c` 与 `0x33c` 尚未确定唯一存储位置，不推导逐次击杀事件 |
 | `16.19.820.7193 --events hero_deaths_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x50` 候选死亡次数 | 仅写入 `hero_deaths_snapshot_candidates`；与本回放死亡候选累计数吻合，不推导新的死亡事件或时间 |
+| `16.19.820.7193 --events hero_assists_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x54` 候选助攻次数 | 仅写入 `hero_assists_snapshot_candidates`；缺少独立助攻事件锚点，不推导助攻时点或归属 |
 | `src/semantic_api.js` 与精确 build profiles | `16.16.805.0442` 的 HeroPath、等级、WardSpawn、伤害、死亡、重生、XP/lane-CS keyframe、受限 ItemState 和 gameplay-tail 等 | 独立 API 的逐字段能力；需要外部精确镜像、profiles 或对应已验证输入，不是主 CLI 的完整分析模式 |
 | V2 Ward / Path | 已验证位置、守卫事件及受限派生关联 | 来源 SHA 必须与回放一致；类型、匹配、生命周期和位置插值与直接字段分级 |
 | `research-v3/`、`research-v4/` | DuckDB 研究查询、保护量增量表和验证器 | 保留的真实功能，不是因版本号旧就可删除的目录；全量重建需要私有输入 |
@@ -113,7 +114,7 @@ node src/cli.js batch "D:\Replays\HN-example.rofl" "D:\Replays\KR-example.rofl" 
 
 ```powershell
 node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
-  --events hero_minions_killed_snapshot,hero_experience_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_champion_kills_snapshot,hero_deaths_snapshot `
+  --events hero_minions_killed_snapshot,hero_experience_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_champion_kills_snapshot,hero_deaths_snapshot,hero_assists_snapshot `
   --out-dir "work\16-19-hero-stats-snapshots"
 ```
 

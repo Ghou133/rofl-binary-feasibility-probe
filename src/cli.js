@@ -13,6 +13,7 @@ const {
   assessHeroGoldSpentSnapshotTail,
   assessHeroChampionKillsSnapshotTail,
   assessHeroDeathsSnapshotTail,
+  assessHeroAssistsSnapshotTail,
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   analyzeReplayWithHeroStats,
 } = require('./decoders/rofl_16_19_hero_stats_candidate');
@@ -1620,6 +1621,8 @@ function capabilityQuery(replay, options = {}) {
                   ? assessHeroChampionKillsSnapshotTail(replay)
                   : capability === 'hero_deaths_snapshot'
                     ? assessHeroDeathsSnapshotTail(replay)
+                    : capability === 'hero_assists_snapshot'
+                      ? assessHeroAssistsSnapshotTail(replay)
                   : candidateTailStatAssessment(replay, capability)
         : null;
       const tailStatInput = tailStat ? [{
@@ -1687,6 +1690,11 @@ function capabilityQuery(replay, options = {}) {
         validationPending.push('ten-participant NUM_DEATHS tail values',
           'HN keyframe 0x0276 offset 0x50 and observed sequences');
       }
+      if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_assists_snapshot') {
+        validationPending.push('ten-participant ASSISTS tail values',
+          'HN keyframe 0x0276 offset 0x54 and observed sequences');
+      }
       const gameLength = replay.tail?.metadata?.gameLength;
       const conditionalInputs = ['hero_death_timer', 'hero_respawn'].includes(capability)
         && profile.game_version === '16.19.820.7193'
@@ -1728,6 +1736,7 @@ function capabilityQuery(replay, options = {}) {
             hero_gold_spent_snapshot: 'hero_gold_spent_snapshot_candidates',
             hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
             hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
+            hero_assists_snapshot: 'hero_assists_snapshot_candidates',
           })[capability] ?? null
           : null,
       });
