@@ -14,6 +14,8 @@ const EXPERIENCE_OFFSET = 0x28;
 const GOLD_SPENT_OFFSET = 0x34;
 const GOLD_EARNED_OFFSET = 0x38;
 const MINIONS_KILLED_OFFSET = 0x3c;
+const CHAMPION_KILLS_OFFSET = 0x4c;
+const CHAMPION_KILLS_MIRROR_OFFSET = 0x33c;
 const RUNTIME_IMAGE_SHA256 = '7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f780af11ed6df76d';
 const LOOKUP_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b';
 
@@ -127,6 +129,31 @@ const HERO_GOLD_SPENT_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_CHAMPION_KILLS_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-hero-champion-kills-keyframe-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_champion_kills_snapshot',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: PACKET_ID,
+  stream_tags: Object.freeze([2, 3]),
+  hero_raw_param_first: HERO_PARAM_FIRST,
+  hero_raw_param_last: HERO_PARAM_LAST,
+  payload_length: PAYLOAD_LENGTH,
+  decoded_blob_length: BLOB_LENGTH,
+  champion_kills_u32le_offset_candidate: CHAMPION_KILLS_OFFSET,
+  champion_kills_mirror_u32le_offset_candidate: CHAMPION_KILLS_MIRROR_OFFSET,
+  storage_offset_status: 'AMBIGUOUS_MIRRORED_COPIES_ONE_REPLAY',
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  evidence_scope: 'exact HN HeroStats route and transform; two equal offsets in all 350 snapshots of one HN Replay, with final CHAMPIONS_KILLED tail comparison',
+  known_limits: Object.freeze([
+    'Only observed keyframe 0x0276 snapshots are emitted; no champion kill event or intervening value is inferred.',
+    'Decoded offsets 0x4c and 0x33c mirror in one HN Replay; the unique storage offset and participant mapping remain candidates.',
+    'The Replay tail can exceed the last observed snapshot; tail gaps are reported without interpolation.',
+  ]),
+});
+
 function decodeHeroStatsByte(encoded) {
   const x = LOOKUP_TABLE[encoded];
   let y = (((x & 0xd5) << 1) | ((x >>> 1) & 0x55)) & 0xff;
@@ -196,6 +223,18 @@ function decodeHeroGoldSpentPayload(payload) {
   return { status: 'PASS', gold_spent_candidate: value };
 }
 
+function decodeHeroChampionKillsPayload(payload) {
+  const decoded = decodeHeroStatsBlob(payload);
+  if (decoded.status !== 'PASS') return decoded;
+  const value = decoded.blob.readUInt32LE(CHAMPION_KILLS_OFFSET);
+  const mirror = decoded.blob.readUInt32LE(CHAMPION_KILLS_MIRROR_OFFSET);
+  if (value !== mirror) {
+    return { status: 'DECODE_FAILED',
+      error: 'HeroStats champion-kills candidate offsets 0x4c and 0x33c disagree' };
+  }
+  return { status: 'PASS', champion_kills_candidate: value };
+}
+
 function assessHeroStatsTail(replay, field) {
   const stats = replay?.tail?.stats;
   if (!Array.isArray(stats)) {
@@ -239,6 +278,10 @@ function assessHeroGoldEarnedSnapshotTail(replay) {
 
 function assessHeroGoldSpentSnapshotTail(replay) {
   return assessHeroStatsTail(replay, 'GOLD_SPENT');
+}
+
+function assessHeroChampionKillsSnapshotTail(replay) {
+  return assessHeroStatsTail(replay, 'CHAMPIONS_KILLED');
 }
 
 function packetRef(replay, block, chunk) {
@@ -588,6 +631,41 @@ function decodeHeroGoldSpentFromScan(replay, scan) {
   };
 }
 
+function decodeHeroChampionKillsFromScan(replay, scan) {
+  const profile = HERO_CHAMPION_KILLS_SNAPSHOT_CANDIDATE_PROFILE;
+  const collected = collectHeroStatsSnapshotCandidates(replay, {
+    profile,
+    assessTail: assessHeroChampionKillsSnapshotTail,
+    decodePayload: decodeHeroChampionKillsPayload,
+    valueKey: 'champion_kills_candidate',
+    tailProjection: (value) => value,
+  }, scan);
+  if (collected.status !== 'CANDIDATE') return collected;
+  const { observations, observedDeclines, previous, lastTimes, tailValues, gameLengthMs, ...base } = collected;
+  const tailGaps = tailValues.map((finalValue, index) => ({
+    participant_id_candidate: index + 1,
+    last_snapshot_replay_time_ms: lastTimes[index],
+    last_snapshot_champion_kills_candidate: previous[index],
+    final_champions_killed_tail: finalValue,
+    unobserved_tail_gap: finalValue - previous[index],
+    unobserved_tail_time_ms: gameLengthMs === null ? null : gameLengthMs - lastTimes[index],
+  }));
+  return {
+    ...base,
+    evidence_status: 'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_MIRRORED_FIELD_AND_TAIL_BOUND',
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    final_champions_killed: tailValues,
+    observed_max_champion_kills: previous,
+    tail_gaps: tailGaps,
+    tail_gap_total: tailGaps.reduce((sum, gap) => sum + gap.unobserved_tail_gap, 0),
+    events: observations.map((observation) => snapshotEvent(replay, profile, observation,
+      'HERO_CHAMPION_KILLS_SNAPSHOT_CANDIDATE',
+      'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_MIRRORED_FIELD_AND_TAIL_BOUND',
+      { champion_kills_candidate: observation.value },
+      { champion_kills_candidate: 'CANDIDATE_ONE_REPLAY_MIRRORED_FIELD_AND_TAIL_CORRELATION' })),
+  };
+}
+
 function decodeHeroStatsSnapshotCandidateSet(replay, capabilities) {
   if (!Array.isArray(capabilities) && !(capabilities instanceof Set)) {
     throw new TypeError('HeroStats candidate capabilities must be an array or Set');
@@ -597,7 +675,8 @@ function decodeHeroStatsSnapshotCandidateSet(replay, capabilities) {
     if (capability !== 'hero_minions_killed_snapshot'
       && capability !== 'hero_experience_snapshot'
       && capability !== 'hero_gold_earned_snapshot'
-      && capability !== 'hero_gold_spent_snapshot') {
+      && capability !== 'hero_gold_spent_snapshot'
+      && capability !== 'hero_champion_kills_snapshot') {
       throw new RangeError(`unsupported HeroStats candidate capability: ${String(capability)}`);
     }
   }
@@ -615,6 +694,9 @@ function decodeHeroStatsSnapshotCandidateSet(replay, capabilities) {
   }
   if (selected.has('hero_gold_spent_snapshot')) {
     outcomes.hero_gold_spent_snapshot = decodeHeroGoldSpentFromScan(replay, scan);
+  }
+  if (selected.has('hero_champion_kills_snapshot')) {
+    outcomes.hero_champion_kills_snapshot = decodeHeroChampionKillsFromScan(replay, scan);
   }
   return outcomes;
 }
@@ -639,16 +721,25 @@ function decodeHeroGoldSpentSnapshotCandidates(replay) {
     ['hero_gold_spent_snapshot']).hero_gold_spent_snapshot;
 }
 
+function decodeHeroChampionKillsSnapshotCandidates(replay) {
+  return decodeHeroStatsSnapshotCandidateSet(replay,
+    ['hero_champion_kills_snapshot']).hero_champion_kills_snapshot;
+}
+
 module.exports = {
+  HERO_CHAMPION_KILLS_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_EXPERIENCE_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_GOLD_EARNED_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_GOLD_SPENT_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
+  assessHeroChampionKillsSnapshotTail,
   assessHeroExperienceSnapshotTail,
   assessHeroGoldEarnedSnapshotTail,
   assessHeroGoldSpentSnapshotTail,
   assessHeroMinionsKilledSnapshotTail,
   decodeHeroStatsByte,
+  decodeHeroChampionKillsPayload,
+  decodeHeroChampionKillsSnapshotCandidates,
   decodeHeroExperiencePayload,
   decodeHeroExperienceSnapshotCandidates,
   decodeHeroGoldEarnedPayload,

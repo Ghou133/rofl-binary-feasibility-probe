@@ -54,9 +54,10 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   A four-byte-aligned scan found no second offset meeting the same tail and
   monotonic criteria; adjacent gold/CS offsets fail the EXP control. This is
   one-Replay field correlation, not an XP transition or confirmed field.
-- **CLI/API efficiency:** Selecting the CS, EXP, GOLD_EARNED and GOLD_SPENT HeroStats
-  candidates together traverses keyframe chunks once while keeping separate
-  field validation and per-capability results. A synthetic traversal-count
+- **CLI/API efficiency:** Selecting the CS, EXP, GOLD_EARNED, GOLD_SPENT and
+  CHAMPIONS_KILLED HeroStats candidates together traverses keyframe chunks
+  once while keeping separate field validation and per-capability results.
+  A synthetic traversal-count
   test and HN/KR combined runs cover the shared path.
 - **Public test entry:** `npm run test:16-19` runs the portable 16.19 candidate
   decoder and CLI/API tests; `npm test` now includes it after maintenance.
@@ -107,8 +108,17 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   had zero exact matches and at least 30,670 absolute difference, versus
   eight exact and 1000 on the original participant alignment. This is one
   HN Replay correlation, not a confirmed gold-spent field.
+- **Done:** `hero_champion_kills_snapshot` emits only observed HN HeroStats
+  keyframe candidate values. Decoded u32LE offsets `0x4c` and `0x33c` match
+  in all 350 packets; the decoder requires this mirror and does not claim a
+  unique storage offset. Values are nondecreasing and never exceed their
+  matching tail `CHAMPIONS_KILLED`: nine final values match, one has an
+  unobserved gap of 1 over the last 36,824 ms. The `0x4c` neighbors `0x50`
+  and `0x54` correlate with death and assist tails, while the `0x33c`
+  neighbors are zero in this Replay; this helps locate a KDA cluster but
+  remains one-Replay evidence. No individual kill event or time is inferred.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
-  HN Replays to test level and HeroStats CS/EXP/gold candidates. Movement-route
+  HN Replays to test level and HeroStats CS/EXP/gold/kills candidates. Movement-route
   research remains blocked on an exact registration-to-position-field link.
 - **Path negative control:** The exact HN image identifies `0x03ee` as
   DirectInputMovementDriverServerTurnData (84 HN packets in one short interval),

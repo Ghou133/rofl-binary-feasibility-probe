@@ -11,6 +11,7 @@ const {
   assessHeroExperienceSnapshotTail,
   assessHeroGoldEarnedSnapshotTail,
   assessHeroGoldSpentSnapshotTail,
+  assessHeroChampionKillsSnapshotTail,
 } = require('./decoders/rofl_16_19_hero_stats_candidate');
 
 const {
@@ -1605,7 +1606,9 @@ function capabilityQuery(replay, options = {}) {
               ? assessHeroGoldEarnedSnapshotTail(replay)
               : capability === 'hero_gold_spent_snapshot'
                 ? assessHeroGoldSpentSnapshotTail(replay)
-                : candidateTailStatAssessment(replay, capability)
+                : capability === 'hero_champion_kills_snapshot'
+                  ? assessHeroChampionKillsSnapshotTail(replay)
+                  : candidateTailStatAssessment(replay, capability)
         : null;
       const tailStatInput = tailStat ? [{
         name: `replay_tail_${tailStat.field}`,
@@ -1662,6 +1665,11 @@ function capabilityQuery(replay, options = {}) {
         validationPending.push('ten-participant GOLD_SPENT tail values',
           'HN keyframe 0x0276 route, offset 0x34 candidate, and observed declines');
       }
+      if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_champion_kills_snapshot') {
+        validationPending.push('ten-participant CHAMPIONS_KILLED tail values',
+          'HN keyframe 0x0276 mirrored offsets 0x4c/0x33c and observed sequences');
+      }
       const gameLength = replay.tail?.metadata?.gameLength;
       const conditionalInputs = ['hero_death_timer', 'hero_respawn'].includes(capability)
         && profile.game_version === '16.19.820.7193'
@@ -1701,6 +1709,7 @@ function capabilityQuery(replay, options = {}) {
             hero_experience_snapshot: 'hero_experience_snapshot_candidates',
             hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
             hero_gold_spent_snapshot: 'hero_gold_spent_snapshot_candidates',
+            hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
           })[capability] ?? null
           : null,
       });
