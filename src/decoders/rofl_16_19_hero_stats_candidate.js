@@ -16,6 +16,9 @@ const EXPERIENCE_OFFSET = 0x28;
 const GOLD_SPENT_OFFSET = 0x34;
 const GOLD_EARNED_OFFSET = 0x38;
 const MINIONS_KILLED_OFFSET = 0x3c;
+const JUNGLE_MINIONS_KILLED_OFFSET = 0x40;
+const YOUR_JUNGLE_MINIONS_KILLED_OFFSET = 0x44;
+const ENEMY_JUNGLE_MINIONS_KILLED_OFFSET = 0x48;
 const CHAMPION_KILLS_OFFSET = 0x4c;
 const DEATHS_OFFSET = 0x50;
 const ASSISTS_OFFSET = 0x54;
@@ -24,6 +27,7 @@ const RUNTIME_IMAGE_SHA256 = '7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f7
 const LOOKUP_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b';
 const HERO_STATS_SNAPSHOT_CAPABILITIES = Object.freeze([
   'hero_minions_killed_snapshot',
+  'hero_jungle_minions_killed_snapshot',
   'hero_experience_snapshot',
   'hero_gold_earned_snapshot',
   'hero_gold_spent_snapshot',
@@ -72,6 +76,32 @@ const HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
     'Only observed keyframe 0x0276 snapshots are emitted; no minion kill event or intervening value is inferred.',
     'The offset 0x3c interpretation and hero participant mapping remain candidates from one HN Replay.',
     'The Replay tail can exceed the last observed snapshot; tail gaps are reported without interpolation.',
+  ]),
+});
+
+const HERO_JUNGLE_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-hero-jungle-minions-killed-keyframe-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_jungle_minions_killed_snapshot',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: PACKET_ID,
+  stream_tags: Object.freeze([2, 3]),
+  hero_raw_param_first: HERO_PARAM_FIRST,
+  hero_raw_param_last: HERO_PARAM_LAST,
+  payload_length: PAYLOAD_LENGTH,
+  decoded_blob_length: BLOB_LENGTH,
+  jungle_minions_killed_f32le_offset_candidate: JUNGLE_MINIONS_KILLED_OFFSET,
+  your_jungle_minions_killed_f32le_offset_candidate: YOUR_JUNGLE_MINIONS_KILLED_OFFSET,
+  enemy_jungle_minions_killed_f32le_offset_candidate: ENEMY_JUNGLE_MINIONS_KILLED_OFFSET,
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  evidence_scope: 'exact HN HeroStats route and transform; offsets 0x40/0x44/0x48 correlate after flooring with three neutral-minion Replay tails in one HN Replay with 350 keyframe snapshots',
+  known_limits: Object.freeze([
+    'Only observed keyframe 0x0276 snapshots are emitted; no neutral-minion kill event, type, location, or intervening value is inferred.',
+    'The three decoded f32 fields are fractional in this Replay; their integer floors are derived candidates, not stored integer fields.',
+    'The offset interpretations and hero participant mapping remain candidates from one HN Replay, not exact-runtime field semantics.',
+    'Zero integer tail gaps do not exclude unobserved fractional changes after the last keyframe.',
   ]),
 });
 
@@ -253,6 +283,30 @@ function decodeHeroMinionsKilledPayload(payload) {
   return { status: 'PASS', minions_killed_candidate: value };
 }
 
+function decodeHeroJungleMinionsKilledPayload(payload) {
+  const decoded = decodeHeroStatsBlob(payload);
+  if (decoded.status !== 'PASS') return decoded;
+  const values = [
+    decoded.blob.readFloatLE(JUNGLE_MINIONS_KILLED_OFFSET),
+    decoded.blob.readFloatLE(YOUR_JUNGLE_MINIONS_KILLED_OFFSET),
+    decoded.blob.readFloatLE(ENEMY_JUNGLE_MINIONS_KILLED_OFFSET),
+  ];
+  if (values.some((value) => !Number.isFinite(value) || value < 0
+    || !Number.isSafeInteger(Math.floor(value)))) {
+    return { status: 'DECODE_FAILED',
+      error: 'HeroStats jungle offsets 0x40/0x44/0x48 must be finite nonnegative safe-range f32 values' };
+  }
+  return {
+    status: 'PASS',
+    jungle_minions_killed_raw_f32_candidate: values[0],
+    jungle_minions_killed_floor_candidate: Math.floor(values[0]),
+    your_jungle_minions_killed_raw_f32_candidate: values[1],
+    your_jungle_minions_killed_floor_candidate: Math.floor(values[1]),
+    enemy_jungle_minions_killed_raw_f32_candidate: values[2],
+    enemy_jungle_minions_killed_floor_candidate: Math.floor(values[2]),
+  };
+}
+
 function decodeHeroExperiencePayload(payload) {
   const decoded = decodeHeroStatsBlob(payload);
   if (decoded.status !== 'PASS') return decoded;
@@ -339,6 +393,19 @@ function assessHeroStatsTail(replay, field) {
 
 function assessHeroMinionsKilledSnapshotTail(replay) {
   return assessHeroStatsTail(replay, 'MINIONS_KILLED');
+}
+
+function assessHeroJungleMinionsKilledSnapshotTail(replay) {
+  const assessments = [
+    assessHeroStatsTail(replay, 'NEUTRAL_MINIONS_KILLED'),
+    assessHeroStatsTail(replay, 'NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE'),
+    assessHeroStatsTail(replay, 'NEUTRAL_MINIONS_KILLED_ENEMY_JUNGLE'),
+  ];
+  const failure = assessments.find((row) => row.status !== 'PASS');
+  if (failure) return { ...failure, required_fields: assessments };
+  return { ...assessments[0], required_fields: assessments,
+    yourJungleValues: assessments[1].values,
+    enemyJungleValues: assessments[2].values };
 }
 
 function assessHeroExperienceSnapshotTail(replay) {
@@ -617,7 +684,7 @@ function collectHeroStatsSnapshotCandidates(replay, spec, scan) {
     previous[participantId - 1] = value;
     lastTimes[participantId - 1] = block.timestamp_ms;
     previousRefs[participantId - 1] = rawPacketRef;
-    observations.push({ block, chunk, rawParam, participantId, value,
+    observations.push({ block, chunk, rawParam, participantId, value, decoded,
       rawPacketRef });
   }
   if (currentGroup.size !== 10) {
@@ -703,6 +770,101 @@ function decodeHeroMinionsKilledFromScan(replay, scan) {
       'CANDIDATE_EXACT_RUNTIME_KEYFRAME_FIELD_AND_TAIL_BOUND',
       { minions_killed_candidate: observation.value },
       { minions_killed_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD' })),
+  };
+}
+
+function decodeHeroJungleMinionsKilledFromScan(replay, scan) {
+  const profile = HERO_JUNGLE_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE;
+  const collected = collectHeroStatsSnapshotCandidates(replay, {
+    profile,
+    assessTail: assessHeroJungleMinionsKilledSnapshotTail,
+    decodePayload: decodeHeroJungleMinionsKilledPayload,
+    valueKey: 'jungle_minions_killed_raw_f32_candidate',
+    tailProjection: Math.floor,
+  }, scan);
+  if (collected.status !== 'CANDIDATE') return collected;
+  const { observations, observedDeclines, previous, lastTimes, tailValues, gameLengthMs, ...base } = collected;
+  const tail = assessHeroJungleMinionsKilledSnapshotTail(replay);
+  const yourPrevious = Array(10).fill(null);
+  const enemyPrevious = Array(10).fill(null);
+  const events = [];
+  const fail = (error) => ({ profile_id: profile.id, input_packet_id: PACKET_ID,
+    status: 'DECODE_FAILED', event_count: null, input_count: base.input_count,
+    scanned_block_count: base.scanned_block_count, events: null, error });
+  for (const observation of observations) {
+    const { decoded } = observation;
+    const index = observation.participantId - 1;
+    const yourValue = decoded.your_jungle_minions_killed_raw_f32_candidate;
+    const enemyValue = decoded.enemy_jungle_minions_killed_raw_f32_candidate;
+    if (yourPrevious[index] !== null && yourValue < yourPrevious[index]) {
+      return fail(`HN participant ${observation.participantId} has a decreasing observed own-jungle snapshot`);
+    }
+    if (enemyPrevious[index] !== null && enemyValue < enemyPrevious[index]) {
+      return fail(`HN participant ${observation.participantId} has a decreasing observed enemy-jungle snapshot`);
+    }
+    if (Math.floor(yourValue) > tail.yourJungleValues[index]) {
+      return fail(`HN participant ${observation.participantId} exceeds Replay tail NEUTRAL_MINIONS_KILLED_YOUR_JUNGLE`);
+    }
+    if (Math.floor(enemyValue) > tail.enemyJungleValues[index]) {
+      return fail(`HN participant ${observation.participantId} exceeds Replay tail NEUTRAL_MINIONS_KILLED_ENEMY_JUNGLE`);
+    }
+    yourPrevious[index] = yourValue;
+    enemyPrevious[index] = enemyValue;
+    events.push(snapshotEvent(replay, profile, observation,
+      'HERO_JUNGLE_MINIONS_KILLED_SNAPSHOT_CANDIDATE',
+      'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_THREE_TAIL_CORRELATION',
+      {
+        jungle_minions_killed_raw_f32_candidate: observation.value,
+        jungle_minions_killed_floor_candidate: Math.floor(observation.value),
+        your_jungle_minions_killed_raw_f32_candidate: yourValue,
+        your_jungle_minions_killed_floor_candidate: Math.floor(yourValue),
+        enemy_jungle_minions_killed_raw_f32_candidate: enemyValue,
+        enemy_jungle_minions_killed_floor_candidate: Math.floor(enemyValue),
+      },
+      {
+        jungle_minions_killed_raw_f32_candidate: 'CANDIDATE_ONE_REPLAY_TAIL_CORRELATION',
+        jungle_minions_killed_floor_candidate: 'DERIVED_FROM_CANDIDATE',
+        your_jungle_minions_killed_raw_f32_candidate: 'CANDIDATE_ONE_REPLAY_TAIL_CORRELATION',
+        your_jungle_minions_killed_floor_candidate: 'DERIVED_FROM_CANDIDATE',
+        enemy_jungle_minions_killed_raw_f32_candidate: 'CANDIDATE_ONE_REPLAY_TAIL_CORRELATION',
+        enemy_jungle_minions_killed_floor_candidate: 'DERIVED_FROM_CANDIDATE',
+      }));
+  }
+  const tailGaps = tailValues.map((finalValue, index) => ({
+    participant_id_candidate: index + 1,
+    last_snapshot_replay_time_ms: lastTimes[index],
+    last_snapshot_jungle_minions_killed_raw_f32_candidate: previous[index],
+    last_snapshot_jungle_minions_killed_floor_candidate: Math.floor(previous[index]),
+    final_neutral_minions_killed_tail: finalValue,
+    unobserved_tail_floor_gap: finalValue - Math.floor(previous[index]),
+    last_snapshot_your_jungle_minions_killed_raw_f32_candidate: yourPrevious[index],
+    last_snapshot_your_jungle_minions_killed_floor_candidate: Math.floor(yourPrevious[index]),
+    final_neutral_minions_killed_your_jungle_tail: tail.yourJungleValues[index],
+    unobserved_your_jungle_tail_floor_gap:
+      tail.yourJungleValues[index] - Math.floor(yourPrevious[index]),
+    last_snapshot_enemy_jungle_minions_killed_raw_f32_candidate: enemyPrevious[index],
+    last_snapshot_enemy_jungle_minions_killed_floor_candidate: Math.floor(enemyPrevious[index]),
+    final_neutral_minions_killed_enemy_jungle_tail: tail.enemyJungleValues[index],
+    unobserved_enemy_jungle_tail_floor_gap:
+      tail.enemyJungleValues[index] - Math.floor(enemyPrevious[index]),
+    unobserved_tail_time_ms: gameLengthMs === null ? null : gameLengthMs - lastTimes[index],
+  }));
+  return {
+    ...base,
+    evidence_status: 'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_THREE_TAIL_CORRELATION',
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    final_neutral_minions_killed: tailValues,
+    final_neutral_minions_killed_your_jungle: tail.yourJungleValues,
+    final_neutral_minions_killed_enemy_jungle: tail.enemyJungleValues,
+    observed_max_jungle_minions_killed_raw_f32: previous,
+    observed_max_jungle_minions_killed_floor: previous.map(Math.floor),
+    observed_max_your_jungle_minions_killed_raw_f32: yourPrevious,
+    observed_max_your_jungle_minions_killed_floor: yourPrevious.map(Math.floor),
+    observed_max_enemy_jungle_minions_killed_raw_f32: enemyPrevious,
+    observed_max_enemy_jungle_minions_killed_floor: enemyPrevious.map(Math.floor),
+    tail_gaps: tailGaps,
+    tail_gap_total: tailGaps.reduce((sum, gap) => sum + gap.unobserved_tail_floor_gap, 0),
+    events,
   };
 }
 
@@ -958,6 +1120,9 @@ function decodeHeroStatsSnapshotCandidateSet(replay, capabilities, precollectedS
   if (selected.has('hero_minions_killed_snapshot')) {
     outcomes.hero_minions_killed_snapshot = decodeHeroMinionsKilledFromScan(replay, scan);
   }
+  if (selected.has('hero_jungle_minions_killed_snapshot')) {
+    outcomes.hero_jungle_minions_killed_snapshot = decodeHeroJungleMinionsKilledFromScan(replay, scan);
+  }
   if (selected.has('hero_experience_snapshot')) {
     outcomes.hero_experience_snapshot = decodeHeroExperienceFromScan(replay, scan);
   }
@@ -982,6 +1147,11 @@ function decodeHeroStatsSnapshotCandidateSet(replay, capabilities, precollectedS
 function decodeHeroMinionsKilledSnapshotCandidates(replay) {
   return decodeHeroStatsSnapshotCandidateSet(replay,
     ['hero_minions_killed_snapshot']).hero_minions_killed_snapshot;
+}
+
+function decodeHeroJungleMinionsKilledSnapshotCandidates(replay) {
+  return decodeHeroStatsSnapshotCandidateSet(replay,
+    ['hero_jungle_minions_killed_snapshot']).hero_jungle_minions_killed_snapshot;
 }
 
 function decodeHeroExperienceSnapshotCandidates(replay) {
@@ -1022,6 +1192,7 @@ module.exports = {
   HERO_EXPERIENCE_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_GOLD_EARNED_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_GOLD_SPENT_SNAPSHOT_CANDIDATE_PROFILE,
+  HERO_JUNGLE_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
   assessHeroAssistsSnapshotTail,
   assessHeroChampionKillsSnapshotTail,
@@ -1029,6 +1200,7 @@ module.exports = {
   assessHeroExperienceSnapshotTail,
   assessHeroGoldEarnedSnapshotTail,
   assessHeroGoldSpentSnapshotTail,
+  assessHeroJungleMinionsKilledSnapshotTail,
   assessHeroMinionsKilledSnapshotTail,
   analyzeReplayWithHeroStats,
   decodeHeroStatsByte,
@@ -1044,6 +1216,8 @@ module.exports = {
   decodeHeroGoldEarnedSnapshotCandidates,
   decodeHeroGoldSpentPayload,
   decodeHeroGoldSpentSnapshotCandidates,
+  decodeHeroJungleMinionsKilledPayload,
+  decodeHeroJungleMinionsKilledSnapshotCandidates,
   decodeHeroStatsSnapshotCandidateSet,
   decodeHeroMinionsKilledPayload,
   decodeHeroMinionsKilledSnapshotCandidates,

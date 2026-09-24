@@ -233,6 +233,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_respawn: 0x0357,
       hero_level_state: 0x02b3,
       hero_minions_killed_snapshot: 0x0276,
+      hero_jungle_minions_killed_snapshot: 0x0276,
       hero_experience_snapshot: 0x0276,
       hero_gold_earned_snapshot: 0x0276,
       hero_gold_spent_snapshot: 0x0276,
@@ -254,6 +255,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_level_state: decoder1619.HERO_LEVEL_STATE_CANDIDATE_PROFILE,
       hero_minions_killed_snapshot:
         heroStatsCandidate1619.HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
+      hero_jungle_minions_killed_snapshot:
+        heroStatsCandidate1619.HERO_JUNGLE_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
       hero_experience_snapshot:
         heroStatsCandidate1619.HERO_EXPERIENCE_SNAPSHOT_CANDIDATE_PROFILE,
       hero_gold_earned_snapshot:
@@ -274,6 +277,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_respawn: 'CANDIDATE_EXACT_RUNTIME_ROUTE_AND_TIMER_MATCH',
       hero_level_state: 'CANDIDATE_EXACT_RUNTIME_FIELD_WITH_SEQUENCE_GAPS',
       hero_minions_killed_snapshot: 'CANDIDATE_KEYFRAME_MINIONS_KILLED_FIELD',
+      hero_jungle_minions_killed_snapshot: 'CANDIDATE_KEYFRAME_THREE_NEUTRAL_MINION_TAIL_CORRELATIONS',
       hero_experience_snapshot: 'CANDIDATE_KEYFRAME_EXPERIENCE_FIELD',
       hero_gold_earned_snapshot: 'CANDIDATE_KEYFRAME_GOLD_EARNED_FIELD',
       hero_gold_spent_snapshot: 'CANDIDATE_KEYFRAME_GOLD_SPENT_FIELD',
@@ -288,6 +292,7 @@ const BUILD_PROFILES = deepFreeze({
       respawn_time_candidate: 'observed 0x0357 time matched to HN death timer; HN route profile only',
       level_after_candidate: '0x02b3 decoded object field; HN route profile only',
       minions_killed_candidate: '0x0276 keyframe HeroStats f32 field; HN route profile only',
+      jungle_minions_killed_candidate: '0x0276 keyframe HeroStats f32 offsets 0x40/0x44/0x48; floors correlate with three neutral-minion Replay tails in one HN Replay',
       experience_points_candidate: '0x0276 keyframe HeroStats f32 offset 0x28; HN route profile only',
       gold_earned_candidate: '0x0276 keyframe HeroStats f32 offset 0x38; HN route profile only',
       gold_spent_candidate: '0x0276 keyframe HeroStats f32 offset 0x34; HN route profile only',
@@ -300,6 +305,7 @@ const BUILD_PROFILES = deepFreeze({
     candidate_capabilities: [
       'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
       'hero_minions_killed_snapshot',
+      'hero_jungle_minions_killed_snapshot',
       'hero_experience_snapshot',
       'hero_gold_earned_snapshot',
       'hero_gold_spent_snapshot',

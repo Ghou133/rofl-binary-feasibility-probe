@@ -1788,6 +1788,7 @@ function decode1619(replay, profile, options = {}) {
     hero_level_state: decodeHeroLevelStateCandidates,
     hero_inventory_mapview: decodeHeroInventoryMapViewCandidates,
     hero_minions_killed_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_jungle_minions_killed_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_experience_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_gold_earned_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_gold_spent_snapshot: decodeHeroStatsSnapshotCandidateSet,
@@ -1802,6 +1803,7 @@ function decode1619(replay, profile, options = {}) {
     hero_level_state: 'hero_level_state_candidates',
     hero_inventory_mapview: 'hero_inventory_mapview_candidates',
     hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
+    hero_jungle_minions_killed_snapshot: 'hero_jungle_minions_killed_snapshot_candidates',
     hero_experience_snapshot: 'hero_experience_snapshot_candidates',
     hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
     hero_gold_spent_snapshot: 'hero_gold_spent_snapshot_candidates',
@@ -2002,6 +2004,10 @@ function getHeroMinionsKilledSnapshotCandidates(decoded) {
   return decoded?.events?.hero_minions_killed_snapshot_candidates ?? null;
 }
 
+function getHeroJungleMinionsKilledSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_jungle_minions_killed_snapshot_candidates ?? null;
+}
+
 function getHeroExperienceSnapshotCandidates(decoded) {
   return decoded?.events?.hero_experience_snapshot_candidates ?? null;
 }
@@ -2139,6 +2145,7 @@ module.exports = {
   getHeroLevelStateCandidates,
   getHeroInventoryMapViewCandidates,
   getHeroMinionsKilledSnapshotCandidates,
+  getHeroJungleMinionsKilledSnapshotCandidates,
   getHeroExperienceSnapshotCandidates,
   getHeroGoldEarnedSnapshotCandidates,
   getHeroGoldSpentSnapshotCandidates,

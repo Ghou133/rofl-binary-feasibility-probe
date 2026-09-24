@@ -11,6 +11,7 @@ const {
 } = require('./decoders/rofl_16_19_820_7193');
 const {
   assessHeroMinionsKilledSnapshotTail,
+  assessHeroJungleMinionsKilledSnapshotTail,
   assessHeroExperienceSnapshotTail,
   assessHeroGoldEarnedSnapshotTail,
   assessHeroGoldSpentSnapshotTail,
@@ -1623,6 +1624,8 @@ function capabilityQuery(replay, options = {}) {
       const tailStat = perCapabilityInputsAssessed
         ? capability === 'hero_minions_killed_snapshot'
           ? assessHeroMinionsKilledSnapshotTail(replay)
+          : capability === 'hero_jungle_minions_killed_snapshot'
+            ? assessHeroJungleMinionsKilledSnapshotTail(replay)
           : capability === 'hero_experience_snapshot'
             ? assessHeroExperienceSnapshotTail(replay)
             : capability === 'hero_gold_earned_snapshot'
@@ -1637,14 +1640,15 @@ function capabilityQuery(replay, options = {}) {
                       ? assessHeroAssistsSnapshotTail(replay)
                   : candidateTailStatAssessment(replay, capability)
         : null;
-      const tailStatInput = tailStat ? [{
-        name: `replay_tail_${tailStat.field}`,
-        status: !Array.isArray(replay.tail?.stats) ? 'NOT_ASSESSED'
-          : tailStat.status === 'PASS' ? 'PRESENT_UNVALIDATED'
-          : tailStat.status === 'MISSING_INPUT' ? 'MISSING' : 'INVALID',
-        path: replay.source_path,
-        error: tailStat.status === 'PASS' ? null : tailStat.error,
-      }] : [];
+      const tailStatInput = (tailStat?.required_fields ?? (tailStat ? [tailStat] : []))
+        .map((assessment) => ({
+          name: `replay_tail_${assessment.field}`,
+          status: !Array.isArray(replay.tail?.stats) ? 'NOT_ASSESSED'
+            : assessment.status === 'PASS' ? 'PRESENT_UNVALIDATED'
+              : assessment.status === 'MISSING_INPUT' ? 'MISSING' : 'INVALID',
+          path: replay.source_path,
+          error: assessment.status === 'PASS' ? null : assessment.error,
+        }));
       const inputs = perCapabilityInputsAssessed
         ? capability === 'hero_inventory_mapview'
           ? [dependencies[0], options.runtimeImage
@@ -1680,6 +1684,11 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_minions_killed_snapshot') {
         validationPending.push('ten-participant MINIONS_KILLED tail values',
           'HN keyframe 0x0276 route, field transform, and per-participant sequences');
+      }
+      if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_jungle_minions_killed_snapshot') {
+        validationPending.push('ten-participant total, own-jungle, and enemy-jungle neutral-minion tails',
+          'HN keyframe 0x0276 offsets 0x40/0x44/0x48 and observed sequences');
       }
       if (profile.game_version === '16.19.820.7193'
           && capability === 'hero_experience_snapshot') {
@@ -1754,6 +1763,7 @@ function capabilityQuery(replay, options = {}) {
             hero_respawn: 'hero_respawn_candidates',
             hero_level_state: 'hero_level_state_candidates',
             hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
+            hero_jungle_minions_killed_snapshot: 'hero_jungle_minions_killed_snapshot_candidates',
             hero_experience_snapshot: 'hero_experience_snapshot_candidates',
             hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
             hero_gold_spent_snapshot: 'hero_gold_spent_snapshot_candidates',

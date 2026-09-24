@@ -20,6 +20,7 @@
 | `16.19.820.7193 --events hero_respawn` | 将 HN 已观察且与计时包唯一配对的 `0x0357` 包输出为候选复活时点 | 仅写入 `hero_respawn_candidates`；依赖完整的 HN 计时候选校验，不补造回放结束后的复活 |
 | `16.19.820.7193 --events hero_level_state` | HN `0x02b3` 包中观察到的候选英雄等级值及原始包来源 | 仅写入 `hero_level_state_candidates`；逐参与者列出未观察到的升级值，不补造事件；KR 路由未适配 |
 | `16.19.820.7193 --events hero_minions_killed_snapshot` | HN `0x0276` HeroStats keyframe 中已观察到的候选 `MINIONS_KILLED` 数值 | 仅写入 `hero_minions_killed_snapshot_candidates`；不是连续补刀事件，尾部差额不插值；KR 同号包不匹配 HN 指纹 |
+| `16.19.820.7193 --events hero_jungle_minions_killed_snapshot` | 同一 HN keyframe 中 `0x40/0x44/0x48` 的原始浮点值及向下取整后的中立野怪总数、己方野区和敌方野区候选快照 | 仅写入 `hero_jungle_minions_killed_snapshot_candidates`；一场回放的尾部相关性，不推导逐次清野事件 |
 | `16.19.820.7193 --events hero_experience_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x28` 浮点候选经验值 | 仅写入 `hero_experience_snapshot_candidates`；小数及尾部差额保留，不推导升级或经验获取时点；KR 的 HN profile 不可用 |
 | `16.19.820.7193 --events hero_gold_earned_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x38` 浮点候选已赚金币值 | 仅写入 `hero_gold_earned_snapshot_candidates`；一场 HN 回放的字段相关性，不推导金币收入事件；KR 的 HN profile 不可用 |
 | `16.19.820.7193 --events hero_gold_spent_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x34` 候选已花金币值 | 仅写入 `hero_gold_spent_snapshot_candidates`；保留数值下降，不推导退款、出售或购买；KR 的 HN profile 不可用 |
@@ -31,7 +32,7 @@
 | V2 Ward / Path | 已验证位置、守卫事件及受限派生关联 | 来源 SHA 必须与回放一致；类型、匹配、生命周期和位置插值与直接字段分级 |
 | `research-v3/`、`research-v4/` | DuckDB 研究查询、保护量增量表和验证器 | 保留的真实功能，不是因版本号旧就可删除的目录；全量重建需要私有输入 |
 
-各版本都保留“直接、派生、部分、候选、不可用”的区别。完整 Cast/Buff/Protection、CurrentHP、当前 Armor/MR、护盾实例与剩余量、effective heal/overheal、普通野怪清野等能力不能从现有有限字段外推。`stats_at` / `statsAt` 有逐字段 fail-closed 接口，但当前不发布 MaxHP/Armor/MR 数值；库存部分状态不是通用买卖事件。
+各版本都保留“直接、派生、部分、候选、不可用”的区别。完整 Cast/Buff/Protection、CurrentHP、当前 Armor/MR、护盾实例与剩余量、effective heal/overheal、逐次普通野怪清野等能力不能从现有有限字段外推。`stats_at` / `statsAt` 有逐字段 fail-closed 接口，但当前不发布 MaxHP/Armor/MR 数值；库存部分状态不是通用买卖事件。
 
 完整字段合同以 [能力矩阵](docs/ROFL_CAPABILITY_MATRIX.md)、[版本矩阵](docs/PROTOCOL_VERSION_MATRIX.md) 和 `src/capability_manifest.js` 为准。`READY`、`EVIDENCE_EXHAUSTED`、`SEMANTIC_RECOVERY_SATURATED` 均不表示 `FULLY_PARSED`。
 
@@ -116,7 +117,7 @@ node src/cli.js batch "D:\Replays\HN-example.rofl" "D:\Replays\KR-example.rofl" 
 
 ```powershell
 node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
-  --events hero_minions_killed_snapshot,hero_experience_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_champion_kills_snapshot,hero_deaths_snapshot,hero_assists_snapshot `
+  --events hero_minions_killed_snapshot,hero_jungle_minions_killed_snapshot,hero_experience_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_champion_kills_snapshot,hero_deaths_snapshot,hero_assists_snapshot `
   --out-dir "work\16-19-hero-stats-snapshots"
 ```
 

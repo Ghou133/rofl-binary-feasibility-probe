@@ -59,7 +59,7 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   level and gold earned `0x38` for two. Two transitions after the final keyframe
   were excluded. This cross-route check strengthens the one-Replay candidate,
   but does not establish a runtime semantic label or a confirmed XP field.
-- **CLI/API efficiency:** Selecting the CS, EXP, GOLD_EARNED, GOLD_SPENT,
+- **CLI/API efficiency:** Selecting the lane-CS, jungle-CS, EXP, GOLD_EARNED, GOLD_SPENT,
   CHAMPIONS_KILLED, NUM_DEATHS and ASSISTS HeroStats candidates together shares one
   keyframe collection and retains separate field validation and results. The
   16.19 CLI reuses its raw-analysis walk for that collection; a compressed
@@ -149,6 +149,18 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   criteria of at least eight exact final matches and total gap at most two.
   There is no independent assist-event anchor, so this field is a
   weaker one-Replay correlation and yields no assist event, time or attribution.
+- **Done:** `hero_jungle_minions_killed_snapshot` emits the raw f32 values at
+  HeroStats offsets `0x40/0x44/0x48` and their derived floors. Across 350
+  HN participant snapshots from 35 keyframes, each sequence starts at zero,
+  is nonnegative and nondecreasing,
+  and stays within its own Replay-tail neutral-minion total, own-jungle and
+  enemy-jungle fields. All three final floor arrays match 10/10 corresponding
+  tail values; `0x40` is fractional in 85 snapshots. Among 315 aligned f32
+  offsets, only `0x40` reaches at least nine total-neutral tail matches;
+  circular participant shifts match at most two. This remains one-Replay
+  field correlation, not a confirmed integer field or a neutral-minion event.
+  The last keyframe precedes game end by 36,824 ms, so zero integer tail gaps
+  do not exclude later fractional changes.
 - **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
   runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
   observed slot/item-definition-key records as candidates. All 94 game packets
