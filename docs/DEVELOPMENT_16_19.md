@@ -117,6 +117,15 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   and `0x54` correlate with death and assist tails, while the `0x33c`
   neighbors are zero in this Replay; this helps locate a KDA cluster but
   remains one-Replay evidence. No individual kill event or time is inferred.
+- **Done:** `hero_deaths_snapshot` emits observed HN HeroStats keyframe
+  candidate counts from decoded u32LE offset `0x50`. Its 350 values equal the
+  cumulative `hero_death` candidate victim count at each matching keyframe;
+  among 315 aligned offsets, only `0x50` matches all 350. Nine final snapshots
+  equal tail `NUM_DEATHS`. Participant 6 has one observed candidate death at
+  2,058,225 ms after the final keyframe at 2,040,609 ms, explaining its final
+  gap of one. The route, participant mapping and field meaning remain
+  experimental and bounded to one HN Replay; this output creates no death
+  events.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
   HN Replays to test level and HeroStats CS/EXP/gold/kills candidates. Movement-route
   research remains blocked on an exact registration-to-position-field link.
