@@ -241,6 +241,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_deaths_snapshot: 0x0276,
       hero_assists_snapshot: 0x0276,
       hero_inventory_mapview: 0x0420,
+      hero_inventory_set_item: 0x03b7,
     },
     decoder_profile: {
       hero_death: {
@@ -270,6 +271,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_assists_snapshot:
         heroStatsCandidate1619.HERO_ASSISTS_SNAPSHOT_CANDIDATE_PROFILE,
       hero_inventory_mapview: decoder1619.HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE,
+      hero_inventory_set_item: decoder1619.HERO_INVENTORY_SET_ITEM_CANDIDATE_PROFILE,
     },
     field_semantics: {
       hero_death: 'CANDIDATE_EXACT_BUILD_ROUTE_FINGERPRINT',
@@ -285,6 +287,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_deaths_snapshot: 'CANDIDATE_KEYFRAME_DEATH_COUNT_FIELD',
       hero_assists_snapshot: 'CANDIDATE_KEYFRAME_ASSIST_COUNT_FIELD',
       hero_inventory_mapview: 'CANDIDATE_EXACT_RUNTIME_MAPVIEW_PACKET_SLOT_RECORDS',
+      hero_inventory_set_item: 'CANDIDATE_EXACT_RUNTIME_SET_ITEM_PACKET_FIELDS',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, route-profile bounded',
@@ -300,6 +303,7 @@ const BUILD_PROFILES = deepFreeze({
       deaths_candidate: '0x0276 keyframe HeroStats u32 offset 0x50; HN route profile only',
       assists_candidate: '0x0276 keyframe HeroStats u32 offset 0x54; HN route profile only',
       inventory_mapview_candidate: '0x0420 observed HN packet slot/item-ID records; no continuous inventory state or purchase event',
+      inventory_set_item_candidate: '0x03b7 observed HN packet slot/item-ID fields; no item transaction or general participant mapping',
     },
     verified_capabilities: [],
     candidate_capabilities: [
@@ -313,6 +317,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_deaths_snapshot',
       'hero_assists_snapshot',
       'hero_inventory_mapview',
+      'hero_inventory_set_item',
     ],
     unsupported_capabilities: [],
     validation_artifacts: [],

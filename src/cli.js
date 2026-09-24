@@ -101,7 +101,7 @@ Options:
   --include-private-metadata     Include Riot ID/PUUID fields in roster output
   --strict                       Stop at the first framing error
   --decoder-image <path>        Exact 16.15 runtime image (external input; not bundled)
-  --runtime-image <path>        Exact external image for 16.16 or 16.19 MapView candidate
+  --runtime-image <path>        Exact external image for 16.16 or 16.19 inventory candidates
   --events <name[,name...]>     Select 16.19 semantic capabilities to decode
   --json                        Emit only machine-readable JSON (capabilities)
   --python <command>            Python command with Unicorn installed (default: python)
@@ -469,7 +469,7 @@ function parseOne1619(replay, options, started) {
     && Array.isArray(options.events)
     && options.events.some((name) => [
       'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
-      'hero_inventory_mapview',
+      'hero_inventory_mapview', 'hero_inventory_set_item',
     ].includes(name));
   const selectsHeroStats = options.semantic !== false
     && Array.isArray(options.events)
@@ -1621,6 +1621,8 @@ function capabilityQuery(replay, options = {}) {
       const applicable = status !== 'UNSUPPORTED' && status !== 'UNVERIFIED';
       const perCapabilityInputsAssessed = applicable
         && profile.game_version === '16.19.820.7193';
+      const needs1619InventoryImage = capability === 'hero_inventory_mapview'
+        || capability === 'hero_inventory_set_item';
       const tailStat = perCapabilityInputsAssessed
         ? capability === 'hero_minions_killed_snapshot'
           ? assessHeroMinionsKilledSnapshotTail(replay)
@@ -1650,7 +1652,7 @@ function capabilityQuery(replay, options = {}) {
           error: assessment.status === 'PASS' ? null : assessment.error,
         }));
       const inputs = perCapabilityInputsAssessed
-        ? capability === 'hero_inventory_mapview'
+        ? needs1619InventoryImage
           ? [dependencies[0], options.runtimeImage
             ? fileInputDependency('exact_runtime_image', options.runtimeImage)
             : { name: 'exact_runtime_image', status: 'MISSING', path: null }]
@@ -1721,9 +1723,11 @@ function capabilityQuery(replay, options = {}) {
           'HN keyframe 0x0276 offset 0x54 and observed sequences');
       }
       if (profile.game_version === '16.19.820.7193'
-          && capability === 'hero_inventory_mapview') {
+          && needs1619InventoryImage) {
         validationPending.push('exact runtime image SHA-256 and decoder execution',
-          'HN 0x0420 MapView route, full packet consumption, and slot record provenance');
+          capability === 'hero_inventory_mapview'
+            ? 'HN 0x0420 MapView route, full packet consumption, and slot record provenance'
+            : 'HN 0x03b7 SetItem route, full packet consumption, and slot/item field provenance');
       }
       const gameLength = replay.tail?.metadata?.gameLength;
       const conditionalInputs = ['hero_death_timer', 'hero_respawn'].includes(capability)
@@ -1743,7 +1747,7 @@ function capabilityQuery(replay, options = {}) {
         required_inputs: inputs,
         runtime_image_requirement: applicable
           ? perCapabilityInputsAssessed
-            ? capability === 'hero_inventory_mapview' ? 'EXACT_IMAGE_REQUIRED' : 'NOT_REQUIRED'
+            ? needs1619InventoryImage ? 'EXACT_IMAGE_REQUIRED' : 'NOT_REQUIRED'
             : 'NOT_ASSESSED_PER_CAPABILITY'
           : null,
         missing_inputs: perCapabilityInputsAssessed
@@ -1771,6 +1775,7 @@ function capabilityQuery(replay, options = {}) {
             hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
             hero_assists_snapshot: 'hero_assists_snapshot_candidates',
             hero_inventory_mapview: 'hero_inventory_mapview_candidates',
+            hero_inventory_set_item: 'hero_inventory_set_item_candidates',
           })[capability] ?? null
           : null,
       });

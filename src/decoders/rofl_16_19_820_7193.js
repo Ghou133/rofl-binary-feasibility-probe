@@ -126,6 +126,27 @@ const HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_INVENTORY_SET_ITEM_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-inventory-set-item-runtime-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_inventory_set_item',
+  status: 'CANDIDATE',
+  enabled: true,
+  stream_tag: 1,
+  replay_block_packet_id: 0x03b7,
+  packet_name: 'PKT_SetItem_s',
+  payload_length: 7,
+  evidence_runtime_image_sha256: HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE.evidence_runtime_image_sha256,
+  runtime_image_required: true,
+  evidence_scope: 'exact HN runtime constructor/deserializer, 16 fully consumed packets, and 10 initial slot-8 MapView matches in one Replay',
+  known_limits: Object.freeze([
+    'Only observed SetItem packet fields are emitted; no purchase, sale, swap, or item transition is inferred.',
+    'All 16 observed packets set slot 8, and six later packets repeat an existing item key.',
+    'One raw param is outside the ten canonical hero params; its participant remains unavailable.',
+    'The exact captured runtime image and Python Unicorn are required for decoding.',
+  ]),
+});
+
 const TIMER_FLOAT_CODES = new Set([1, 2, 4, 6]);
 const ROUTE_SCAN_SOURCE = new WeakMap();
 const TIMER_OUTCOME_SOURCE = new WeakMap();
@@ -234,6 +255,7 @@ const CANDIDATE_ROUTE_PACKET_IDS = new Set([
   HERO_DEATH_TIMER_CANDIDATE_PROFILE.reincarnate_alive_packet_id,
   HERO_LEVEL_STATE_CANDIDATE_PROFILE.replay_block_packet_id,
   HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE.replay_block_packet_id,
+  HERO_INVENTORY_SET_ITEM_CANDIDATE_PROFILE.replay_block_packet_id,
 ]);
 
 function emptyCandidateRoutes() {
@@ -1205,6 +1227,197 @@ function decodeHeroInventoryMapViewCandidates(replay, collected = null, options 
   };
 }
 
+function decodeHeroInventorySetItemCandidates(replay, collected = null, options = {}) {
+  const profile = HERO_INVENTORY_SET_ITEM_CANDIDATE_PROFILE;
+  const base = { profile_id: profile.id, input_packet_id: profile.replay_block_packet_id };
+  if (replay?.header?.version !== REPLAY_VERSION) {
+    return { ...base, status: 'UNSUPPORTED', input_count: null, event_count: null,
+      events: null, error: `SetItem candidate supports only ${REPLAY_VERSION}` };
+  }
+  const scan = candidateRoutesForReplay(replay, collected);
+  if (scan.error) {
+    return { ...base, status: 'DECODE_FAILED', input_count: null, event_count: null,
+      events: null, error: `Replay framing or route source failed: ${scan.error}` };
+  }
+  const rows = scan.routes.get(profile.replay_block_packet_id);
+  const inputCount = rows.length;
+  const fail = (status, error, extra = {}) => ({
+    ...base, status, input_count: inputCount, event_count: null, events: null,
+    scanned_block_count: scan.walk.block_count, error, ...extra,
+  });
+  if (inputCount === 0) {
+    return fail('PROFILE_UNAVAILABLE', 'HN game-stream SetItem route 0x03b7 is absent', {
+      input_count: null, observed_raw_route_count: 0,
+      runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
+    });
+  }
+  const hasObservedParamShape = ({ block }) => (block.param >>> 16) === 0x4000
+    && (block.param & 0xff) >= 0xae && (block.param & 0xff) <= 0xb7;
+  const shapeCount = rows.filter((row) => hasObservedParamShape(row)
+    && row.block.payload_length === profile.payload_length).length;
+  if (shapeCount !== inputCount) {
+    return fail(shapeCount === 0 ? 'PROFILE_UNAVAILABLE' : 'DECODE_FAILED',
+      '0x03b7 packets do not consistently match the observed HN SetItem framing', {
+        ...(shapeCount === 0 ? { input_count: null } : {}),
+        observed_raw_route_count: inputCount, matching_packet_count: shapeCount,
+        runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
+      });
+  }
+  const imagePath = options.runtimeImagePath;
+  if (typeof imagePath !== 'string' || !imagePath.trim()) {
+    return fail('MISSING_INPUT', 'exact 16.19 HN runtime image is required', {
+      missing_input: 'runtime_image', runtime_image_status: 'MISSING', runtime_image_used: false,
+    });
+  }
+  const resolvedImage = path.resolve(imagePath);
+  try {
+    if (!fs.statSync(resolvedImage).isFile()) {
+      return fail('MISSING_INPUT', 'runtime image path is not a file', {
+        missing_input: 'runtime_image', runtime_image_status: 'MISSING', runtime_image_used: false,
+      });
+    }
+  } catch (error) {
+    return fail('MISSING_INPUT', `runtime image cannot be read: ${error.message}`, {
+      missing_input: 'runtime_image', runtime_image_status: 'MISSING', runtime_image_used: false,
+    });
+  }
+  if (inputCount > 256) {
+    return fail('UNSUPPORTED', 'SetItem runtime batch exceeds its packet limit', {
+      runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
+    });
+  }
+  const request = {
+    replay_version: REPLAY_VERSION,
+    packets: rows.map(({ block }) => ({
+      raw_param: block.param >>> 0,
+      payload_hex: block.payload.toString('hex'),
+    })),
+  };
+  const serializedRequest = JSON.stringify(request);
+  if (Buffer.byteLength(serializedRequest, 'utf8') > 2_000_000) {
+    return fail('UNSUPPORTED', 'SetItem runtime input exceeds its byte limit', {
+      runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
+    });
+  }
+  const python = options.pythonExecutable || process.env.PYTHON || 'python';
+  const script = path.resolve(__dirname, '..', '..', 'scripts', 'decode_setitem_16_19.py');
+  const run = childProcess.spawnSync(python, ['-B', script, '--image', resolvedImage], {
+    input: serializedRequest, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024,
+    timeout: 60000,
+  });
+  if (run.error || run.status !== 0) {
+    const detail = String(run.error?.message || run.stderr || run.stdout
+      || `Python exited ${run.status}`).trim();
+    const missingPython = run.error?.code === 'ENOENT'
+      || /ModuleNotFoundError: No module named ['"]unicorn['"]|requires the installed unicorn dependency/.test(detail);
+    const imageMismatch = /image SHA-256|image hash/i.test(detail);
+    return fail(missingPython ? 'MISSING_INPUT' : 'DECODE_FAILED',
+      `exact runtime SetItem decoder failed: ${detail}`, {
+        ...(missingPython ? { missing_input: 'python_unicorn' } : {}),
+        runtime_image_status: imageMismatch ? 'HASH_MISMATCH' : 'NOT_CHECKED',
+        runtime_image_used: false,
+      });
+  }
+  let decoded;
+  try {
+    decoded = JSON.parse(run.stdout);
+  } catch (error) {
+    return fail('DECODE_FAILED', `runtime SetItem output is not JSON: ${error.message}`, {
+      runtime_image_status: 'EXECUTION_FAILED', runtime_image_used: false,
+    });
+  }
+  if (decoded?.status !== 'PASS'
+      || decoded.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || !Array.isArray(decoded.results) || decoded.results.length !== inputCount) {
+    return fail('DECODE_FAILED', 'runtime SetItem output identity or packet count differs', {
+      runtime_image_status: 'EXECUTION_FAILED', runtime_image_used: false,
+    });
+  }
+  const packetRefs = rows.map((row) => packetRef(replay, row.block, row.chunk));
+  const failures = [];
+  for (let index = 0; index < inputCount; index += 1) {
+    const source = rows[index];
+    const result = decoded.results[index];
+    const rawRef = packetRefs[index];
+    if (result?.input_index !== index
+        || result.raw_param !== (source.block.param >>> 0)
+        || result.raw_payload_sha256 !== rawRef.raw_payload_sha256) {
+      return fail('DECODE_FAILED', `runtime SetItem output does not match packet ${index}`, {
+        runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+        runtime_image_sha256: decoded.runtime_image_sha256,
+        first_failed_packet_ref: rawRef,
+      });
+    }
+    if (result.status !== 'DECODED'
+        || result.deserialize_return_al !== 1
+        || result.bytes_consumed !== profile.payload_length
+        || !Number.isSafeInteger(result.slot) || result.slot < 0 || result.slot > 9
+        || !Number.isSafeInteger(result.item_id) || result.item_id < 1
+        || result.item_id > 0xffffffff
+        || !Number.isSafeInteger(result.flag) || result.flag < 0 || result.flag > 255
+        || !/^[0-9a-f]{2}$/.test(result.raw_slot_byte_hex)
+        || !/^[0-9a-f]{8}$/.test(result.raw_item_id_bytes_hex)) {
+      failures.push({
+        packet_index: index, raw_packet_ref: rawRef,
+        runtime_status: result.status ?? null,
+        deserialize_return_al: result.deserialize_return_al ?? null,
+        bytes_consumed: result.bytes_consumed ?? null,
+        error: String(result.error ?? 'invalid result').slice(0, 500),
+      });
+    }
+  }
+  if (failures.length > 0) {
+    return fail('DECODE_FAILED', `${failures.length} runtime SetItem packets did not fully decode`, {
+      runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+      runtime_image_sha256: decoded.runtime_image_sha256,
+      first_failed_packet_ref: failures[0].raw_packet_ref,
+      failed_packet_count: failures.length,
+      failed_packet_results: failures,
+    });
+  }
+  const events = rows.map((source, index) => {
+    const result = decoded.results[index];
+    const rawParam = source.block.param >>> 0;
+    const participantId = rawParam >= 0x400000ae && rawParam <= 0x400000b7
+      ? participantIdFromDeathParam(rawParam) : null;
+    return {
+      event_type: 'HERO_INVENTORY_SET_ITEM_RECORD_CANDIDATE',
+      game_version: REPLAY_VERSION, patch: '16.19', build_profile: profile.id,
+      replay_sha256: replay.source_sha256 ?? null,
+      replay_time_ms: source.block.timestamp_ms,
+      hero_raw_param: rawParam,
+      participant_id_candidate: participantId,
+      slot_candidate: result.slot,
+      item_id_candidate: result.item_id,
+      emulated_flag_code: result.flag,
+      emulated_object_slot_byte_hex: result.raw_slot_byte_hex,
+      emulated_object_item_id_bytes_hex: result.raw_item_id_bytes_hex,
+      confidence: 'CANDIDATE',
+      semantic_status: 'CANDIDATE_EXACT_RUNTIME_SET_ITEM_ONE_REPLAY',
+      field_confidence: {
+        replay_time_ms: 'VERIFIED_DIRECT',
+        hero_raw_param: 'VERIFIED_DIRECT',
+        participant_id_candidate: participantId === null ? 'UNAVAILABLE' : 'CANDIDATE',
+        slot_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD',
+        item_id_candidate: 'CANDIDATE_EXACT_RUNTIME_ITEM_DEFINITION_KEY',
+        emulated_flag_code: 'UNCLASSIFIED_RUNTIME_FIELD',
+      },
+      raw_packet_ref: packetRefs[index],
+      known_limits: [...profile.known_limits],
+    };
+  });
+  return {
+    ...base, status: 'CANDIDATE',
+    evidence_status: 'CANDIDATE_EXACT_RUNTIME_SET_ITEM_ONE_REPLAY',
+    input_count: inputCount, event_count: events.length,
+    scanned_block_count: scan.walk.block_count,
+    unmapped_raw_param_count: events.filter((event) => event.participant_id_candidate === null).length,
+    runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+    runtime_image_sha256: decoded.runtime_image_sha256,
+    events,
+  };
+}
+
 module.exports = {
   REPLAY_VERSION,
   HERO_DEATH_CANDIDATE_PROFILES,
@@ -1212,6 +1425,7 @@ module.exports = {
   HERO_RESPAWN_CANDIDATE_PROFILE,
   HERO_LEVEL_STATE_CANDIDATE_PROFILE,
   HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE,
+  HERO_INVENTORY_SET_ITEM_CANDIDATE_PROFILE,
   analyzeReplayWithCandidateRoutes,
   collectCandidateRoutes,
   decodeHeroDeathCandidates,
@@ -1220,6 +1434,7 @@ module.exports = {
   decodeHeroDeathTimerPayload,
   decodeHeroLevelStateCandidates,
   decodeHeroInventoryMapViewCandidates,
+  decodeHeroInventorySetItemCandidates,
   decodeHeroLevelPayload,
   candidateTailStatAssessment,
   participantIdFromDeathParam,

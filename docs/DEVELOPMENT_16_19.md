@@ -172,11 +172,20 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   candidate bound to the original packet ref. A truncated payload fails; KR
   has no HN `0x0420` game route. No full inventory state or item transaction
   is inferred. Missing or wrong images affect only this selected capability.
+- **Done:** `--events hero_inventory_set_item --runtime-image <exact-image>`
+  runs the pinned HN `0x03b7` SetItem constructor/deserializer. All 16
+  seven-byte game packets returned success with full consumption, yielding
+  slot 8, flag 1 and item keys 1200–1204. The ten initial hero-param packets
+  match their first MapView slot-8 item keys 10/10. The six later packets
+  repeat existing values; one has raw param `0x400001b7` and no participant
+  candidate. A truncated packet fails, while changing only its raw param does
+  not change decoded slot/item fields. This supplies observed packet fields,
+  not a purchase, sale, transition, or general participant mapping.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
-  HN Replays to test level, HeroStats and MapView item candidates. The HN
+  HN Replays to test level, HeroStats and inventory candidates. The HN
   Broadcast `0x03ef` vector reaches ten records but its record parser still
-  depends on runtime TLS state; `0x03b7` SetItem remains a separate unclassified
-  delta lead. Movement-route research still needs a position-field link.
+  depends on runtime TLS state; no record decoder is published for it.
+  Movement-route research still needs a position-field link.
 - **Path negative control:** The exact HN image identifies `0x03ee` as
   DirectInputMovementDriverServerTurnData (84 HN packets in one short interval),
   `0x0160` as SetMovementDriver (4), `0x04dd` as AddFollowTargetPosition (0),

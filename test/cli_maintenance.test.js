@@ -148,6 +148,8 @@ test('inventory MapView capability preflight requires an explicit image but no t
 
   const absent = cli.capabilityQuery(replay);
   const missing = rowFor(absent);
+  const missingSetItem = absent.capabilities.find((item) =>
+    item.capability === 'hero_inventory_set_item');
   assert.equal(absent.packet_framing_inspected, false);
   assert.equal(absent.semantic_decode_performed, false);
   assert.equal(missing.status, 'CANDIDATE');
@@ -157,6 +159,11 @@ test('inventory MapView capability preflight requires an explicit image but no t
   assert.deepEqual(missing.required_inputs.map((input) => input.name),
     ['replay', 'exact_runtime_image']);
   assert.deepEqual(missing.missing_inputs, ['exact_runtime_image']);
+  assert.equal(missingSetItem.runtime_image_requirement, 'EXACT_IMAGE_REQUIRED');
+  assert.equal(missingSetItem.output, 'hero_inventory_set_item_candidates');
+  assert.deepEqual(missingSetItem.required_inputs.map((input) => input.name),
+    ['replay', 'exact_runtime_image']);
+  assert.deepEqual(missingSetItem.missing_inputs, ['exact_runtime_image']);
   assert.ok(missing.validation_pending.includes('exact runtime image SHA-256 and decoder execution'));
   assert.deepEqual(absent.capabilities.find((item) => item.capability === 'hero_death').missing_inputs,
     ['replay_tail_statsJson']);
@@ -167,7 +174,10 @@ test('inventory MapView capability preflight requires an explicit image but no t
   fs.writeFileSync(image, Buffer.from([1, 2, 3]));
   const present = cli.capabilityQuery(replay, { runtimeImage: image });
   const available = rowFor(present);
+  const availableSetItem = present.capabilities.find((item) =>
+    item.capability === 'hero_inventory_set_item');
   assert.equal(available.required_inputs[1].status, 'PRESENT_UNVERIFIED');
+  assert.equal(availableSetItem.required_inputs[1].status, 'PRESENT_UNVERIFIED');
   assert.deepEqual(available.missing_inputs, []);
   assert.deepEqual(available.invalid_inputs, []);
   assert.equal(present.runtime_image_used, false);

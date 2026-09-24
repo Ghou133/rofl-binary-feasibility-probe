@@ -28,6 +28,7 @@
 | `16.19.820.7193 --events hero_deaths_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x50` 候选死亡次数 | 仅写入 `hero_deaths_snapshot_candidates`；与本回放死亡候选累计数吻合，不推导新的死亡事件或时间 |
 | `16.19.820.7193 --events hero_assists_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x54` 候选助攻次数 | 仅写入 `hero_assists_snapshot_candidates`；缺少独立助攻事件锚点，不推导助攻时点或归属 |
 | `16.19.820.7193 --events hero_inventory_mapview` | 使用精确运行时镜像解码 HN `0x0420` 包中已观察到的候选物品槽与物品 ID | 仅写入 `hero_inventory_mapview_candidates`；不构造连续库存状态、购买或出售事件；其他路由不可复用 |
+| `16.19.820.7193 --events hero_inventory_set_item` | 使用精确运行时镜像解码 HN `0x03b7` SetItem 包中的候选槽位与物品键 | 仅写入 `hero_inventory_set_item_candidates`；其中一个非标准 raw param 不映射参与者，不推导买卖或物品变化 |
 | `src/semantic_api.js` 与精确 build profiles | `16.16.805.0442` 的 HeroPath、等级、WardSpawn、伤害、死亡、重生、XP/lane-CS keyframe、受限 ItemState 和 gameplay-tail 等 | 独立 API 的逐字段能力；需要外部精确镜像、profiles 或对应已验证输入，不是主 CLI 的完整分析模式 |
 | V2 Ward / Path | 已验证位置、守卫事件及受限派生关联 | 来源 SHA 必须与回放一致；类型、匹配、生命周期和位置插值与直接字段分级 |
 | `research-v3/`、`research-v4/` | DuckDB 研究查询、保护量增量表和验证器 | 保留的真实功能，不是因版本号旧就可删除的目录；全量重建需要私有输入 |
@@ -73,7 +74,7 @@ node src/cli.js capabilities "D:\Replays\example-16.19.820.7193.rofl" --json
 查询只读容器、metadata、chunk 描述和精确 build 注册表，不遍历 packet；`--json`
 输出逐能力状态、所需输入、已知缺项以及尚待运行的校验；16.19 还检查尾部十名参与者的
 `NUM_DEATHS` 或 `LEVEL` 是否齐备且在候选范围内。16.19 列出精确
-build 注册表中的候选能力；物品槽 MapView 候选额外要求显式指定精确运行时镜像，
+build 注册表中的候选能力；MapView 和 SetItem 物品槽候选额外要求显式指定精确运行时镜像，
 查询只检查文件是否存在，镜像哈希和包解码留待实际运行；查询不是成功解码证明。
 16.15/16.16 的外部文件仅按完整管线入口做存在性预检；单项能力的依赖和
 镜像哈希仍标记为未核验。
@@ -124,16 +125,16 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 输出包含每名英雄的候选快照值与原始包引用，并在逐能力结果中列出最后快照到回放尾部的差额。
 它不推导两次 keyframe 之间的补刀、经验、金币变动或英雄击杀时间，也不发布为确认事件。
 
-读取 HN `0x0420` 包内已观察到的候选槽位和物品 ID，需提供精确版本的外部运行时镜像：
+读取 HN `0x0420` MapView 与 `0x03b7` SetItem 包内已观察到的候选槽位和物品键，需提供精确版本的外部运行时镜像：
 
 ```powershell
 node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
-  --events hero_inventory_mapview `
+  --events hero_inventory_mapview,hero_inventory_set_item `
   --runtime-image "D:\PrivateInputs\league_16.19.820.7193.memory.bin" `
   --out-dir "work\16-19-mapview-candidates"
 ```
 
-每条记录保留原始包来源；此候选不要求回放尾部 `statsJson`，也不推导库存状态或交易事件。
+每条记录保留原始包来源；这两项候选不要求回放尾部 `statsJson`，也不推导库存状态或交易事件。
 
 执行 **16.15.801.3452** 的旧版整合语义分析：
 
