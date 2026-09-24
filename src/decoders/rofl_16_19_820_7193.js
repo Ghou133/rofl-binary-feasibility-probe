@@ -46,6 +46,28 @@ const HERO_DEATH_CANDIDATE_PROFILES = Object.freeze([
   }),
 ]);
 
+const HERO_DEATH_TIMER_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-death-timer-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_death_timer',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: 0x02d6,
+  hero_die_packet_id: 0x04d9,
+  reincarnate_alive_packet_id: 0x0357,
+  payload_length: 5,
+  evidence_runtime_image_sha256: '7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f780af11ed6df76d',
+  participant_mapping: '(raw_param & 0xff) - 0xad; upper bytes preserved',
+  evidence_scope: 'exact 16.19 runtime callback/deserializer plus one HN Replay with 85 timed respawns',
+  known_limits: Object.freeze([
+    'HN route profile only; timing and participant mapping are candidate semantics from one Replay.',
+    'The full raw param is preserved; its upper bytes can differ at reincarnation.',
+    'This capability does not provide killer, assists, or a confirmed HeroDeath event.',
+  ]),
+});
+
+const TIMER_FLOAT_CODES = new Set([1, 2, 4, 6]);
+
 function packetRef(replay, block, chunk) {
   return {
     source_path: replay.source_path ?? null,
@@ -99,26 +121,37 @@ function sortPacketRows(rows, withParticipant) {
     || left.block.offset - right.block.offset);
 }
 
-function decodeHeroDeathCandidates(replay) {
+function collectCandidateRoutes(replay) {
+  const relevantPacketIds = new Set([
+    ...HERO_DEATH_CANDIDATE_PROFILES.flatMap((profile) => [
+      profile.replay_block_packet_id,
+      profile.paired_replay_block_packet_id,
+      profile.corroborating_replay_block_packet_id,
+    ]),
+    HERO_DEATH_TIMER_CANDIDATE_PROFILE.reincarnate_alive_packet_id,
+  ]);
+  const routes = new Map([...relevantPacketIds].map((packetId) => [packetId, []]));
+  try {
+    const walk = walkBlocks(replay, (block, chunk) => {
+      if (routes.has(block.packet_id)) routes.get(block.packet_id).push({ block, chunk });
+    }, { includeStreams: [1], strict: true });
+    return { routes, walk, error: null };
+  } catch (error) {
+    return { routes: null, walk: null, error: error.message };
+  }
+}
+
+function decodeHeroDeathCandidates(replay, collected = null) {
   if (replay?.header?.version !== REPLAY_VERSION) {
     return { status: 'UNSUPPORTED', event_count: null, input_count: null,
       error: `hero_death candidate supports only ${REPLAY_VERSION}` };
   }
-  const relevantPacketIds = new Set(HERO_DEATH_CANDIDATE_PROFILES.flatMap((profile) => [
-    profile.replay_block_packet_id,
-    profile.paired_replay_block_packet_id,
-    profile.corroborating_replay_block_packet_id,
-  ]));
-  const routes = new Map([...relevantPacketIds].map((packetId) => [packetId, []]));
-  let walk;
-  try {
-    walk = walkBlocks(replay, (block, chunk) => {
-      if (routes.has(block.packet_id)) routes.get(block.packet_id).push({ block, chunk });
-    }, { includeStreams: [1], strict: true });
-  } catch (error) {
+  const scan = collected ?? collectCandidateRoutes(replay);
+  if (scan.error) {
     return { status: 'DECODE_FAILED', event_count: null, input_count: null,
-      error: `Replay framing failed: ${error.message}`, events: null };
+      error: `Replay framing failed: ${scan.error}`, events: null };
   }
+  const { routes, walk } = scan;
 
   const matchingProfiles = HERO_DEATH_CANDIDATE_PROFILES.filter((candidate) => [
     candidate.replay_block_packet_id,
@@ -280,6 +313,7 @@ function decodeHeroDeathCandidates(replay) {
     profile_id: profile.id,
     event_count: events.length,
     input_count: primary.length,
+    input_packet_id: profile.replay_block_packet_id,
     supporting_packet_count: primary.length + paired.length + corroborating.length,
     scanned_block_count: walk.block_count,
     final_death_counts: finalCounts.counts,
@@ -288,9 +322,234 @@ function decodeHeroDeathCandidates(replay) {
   };
 }
 
+function decodeHeroDeathTimerPayload(payload) {
+  if (!Buffer.isBuffer(payload) || payload.length !== 5) return null;
+  const first = payload[0];
+  if ((first & 0xf8) !== 0x18 || !TIMER_FLOAT_CODES.has(first & 7)) return null;
+  const decoded = Buffer.alloc(4);
+  for (let index = 0; index < 4; index += 1) {
+    const shifted = (((payload[index + 1] - 0x66) & 0xff) ^ 0x77);
+    const swapped = ((shifted >>> 4) | (shifted << 4)) & 0xff;
+    const mixed = (((swapped & 0xd5) << 1) | ((swapped >>> 1) & 0x55)) & 0xff;
+    decoded[index] = (~mixed) & 0xff;
+  }
+  const seconds = decoded.readFloatLE(0);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return {
+    float_code: first & 7,
+    timer_seconds_candidate: seconds,
+    decoded_float_bytes_hex: decoded.toString('hex'),
+  };
+}
+
+function decodeHeroDeathTimerCandidates(replay, collected = null) {
+  if (replay?.header?.version !== REPLAY_VERSION) {
+    return { status: 'UNSUPPORTED', event_count: null, input_count: null, events: null,
+      error: `hero_death_timer candidate supports only ${REPLAY_VERSION}` };
+  }
+  const scan = collected ?? collectCandidateRoutes(replay);
+  if (scan.error) {
+    return { status: 'DECODE_FAILED', event_count: null, input_count: null, events: null,
+      error: `Replay framing failed: ${scan.error}` };
+  }
+  const { routes, walk } = scan;
+  const profile = HERO_DEATH_TIMER_CANDIDATE_PROFILE;
+  const timers = [...routes.get(profile.replay_block_packet_id)];
+  const heroDies = [...routes.get(profile.hero_die_packet_id)];
+  const respawns = [...routes.get(profile.reincarnate_alive_packet_id)];
+  const inputCount = timers.length;
+  if (timers.length === 0 && heroDies.length === 0) {
+    return { status: 'PROFILE_UNAVAILABLE', profile_id: profile.id,
+      event_count: null, input_count: null, events: null,
+      scanned_block_count: walk.block_count,
+      error: 'HN death timer route pair is absent from this Replay' };
+  }
+  const fail = (error) => ({
+    status: 'DECODE_FAILED', profile_id: profile.id,
+    event_count: null, input_count: inputCount, events: null,
+    supporting_packet_count: timers.length + heroDies.length + respawns.length,
+    scanned_block_count: walk.block_count, error,
+  });
+  if (HERO_DEATH_CANDIDATE_PROFILES.slice(1).some((candidate) => [
+    candidate.replay_block_packet_id,
+    candidate.paired_replay_block_packet_id,
+    candidate.corroborating_replay_block_packet_id,
+  ].every((packetId) => routes.get(packetId).length > 0))) {
+    return fail('HN death timer routes coexist with a different death route profile');
+  }
+  if (timers.length !== heroDies.length) {
+    return fail(`HN death timer and Hero_Die route counts differ: ${timers.length}, ${heroDies.length}`);
+  }
+  if (timers.some(({ block }) => participantIdFromDeathParam(block.param) === null
+      || !Number.isSafeInteger(block.timestamp_ms) || block.timestamp_ms < 0)) {
+    return fail('HN death timer raw param or timestamp is outside the candidate scope');
+  }
+  if (heroDies.some(({ block }) => block.payload_length <= 5
+      || participantIdFromDeathParam(block.param) === null)) {
+    return fail('HN Hero_Die route payload or raw param is outside the candidate scope');
+  }
+  const decodedTimers = timers.map((row) => ({
+    row, timer: decodeHeroDeathTimerPayload(row.block.payload),
+  }));
+  if (decodedTimers.some(({ timer }) => timer === null)) {
+    return fail('HN death timer payload does not match the exact-runtime 5-byte float shape');
+  }
+  const sortRows = (left, right) => left.row.block.timestamp_ms - right.row.block.timestamp_ms
+    || (left.row.block.param >>> 0) - (right.row.block.param >>> 0)
+    || left.row.chunk.index - right.row.chunk.index
+    || left.row.block.offset - right.row.block.offset;
+  decodedTimers.sort(sortRows);
+  const sortedDies = heroDies.map((row) => ({ row })).sort(sortRows);
+  for (let index = 0; index < decodedTimers.length; index += 1) {
+    const timerRow = decodedTimers[index].row.block;
+    const dieRow = sortedDies[index].row.block;
+    if (timerRow.timestamp_ms !== dieRow.timestamp_ms
+        || (timerRow.param >>> 0) !== (dieRow.param >>> 0)) {
+      return fail(`HN death timer and Hero_Die pairing differs at occurrence ${index}`);
+    }
+    if (index > 0 && timerRow.timestamp_ms === decodedTimers[index - 1].row.block.timestamp_ms
+        && (timerRow.param >>> 0) === (decodedTimers[index - 1].row.block.param >>> 0)) {
+      return fail('duplicate same-millisecond victim has ambiguous death timer pairing');
+    }
+  }
+  const finalCounts = finalDeathCounts(replay);
+  if (finalCounts.status !== 'PASS') {
+    return { ...finalCounts, profile_id: profile.id,
+      event_count: null, input_count: inputCount, events: null };
+  }
+  const observedCounts = Array(10).fill(0);
+  for (const { row } of decodedTimers) {
+    observedCounts[participantIdFromDeathParam(row.block.param) - 1] += 1;
+  }
+  if (observedCounts.some((count, index) => count !== finalCounts.counts[index])) {
+    return fail('HN death timer victim counts do not match Replay tail NUM_DEATHS');
+  }
+
+  // The receive handler passes this float to AIBaseClient. A matching reincarnation
+  // route and Replay duration bound the candidate interpretation as seconds.
+  const matchedRespawns = new Map();
+  const matchKinds = { exact_param: 0, unique_low_byte: 0 };
+  let maximumResidualMs = 0;
+  for (const respawn of respawns) {
+    if (participantIdFromDeathParam(respawn.block.param) === null
+        || respawn.block.payload_length < 9 || respawn.block.payload_length > 13) {
+      return fail('HN reincarnation route payload or raw param is outside the candidate scope');
+    }
+    const participantId = participantIdFromDeathParam(respawn.block.param);
+    const eligible = decodedTimers.filter(({ row, timer }, index) => {
+      if (matchedRespawns.has(index)
+          || participantIdFromDeathParam(row.block.param) !== participantId) return false;
+      const residualMs = respawn.block.timestamp_ms - row.block.timestamp_ms
+        - timer.timer_seconds_candidate * 1000;
+      return residualMs >= 0 && residualMs <= 50;
+    });
+    if (eligible.length !== 1) {
+      return fail(`HN reincarnation has ${eligible.length} eligible death timer matches`);
+    }
+    const match = eligible[0];
+    const index = decodedTimers.indexOf(match);
+    const residualMs = respawn.block.timestamp_ms - match.row.block.timestamp_ms
+      - match.timer.timer_seconds_candidate * 1000;
+    const kind = (respawn.block.param >>> 0) === (match.row.block.param >>> 0)
+      ? 'exact_param' : 'unique_low_byte';
+    matchKinds[kind] += 1;
+    maximumResidualMs = Math.max(maximumResidualMs, residualMs);
+    matchedRespawns.set(index, { row: respawn, match_kind: kind, residual_ms: residualMs });
+  }
+  const gameLength = replay?.tail?.metadata?.gameLength;
+  const unmatched = decodedTimers.flatMap(({ row, timer }, index) =>
+    matchedRespawns.has(index) ? [] : [{ row, timer }]);
+  if (unmatched.length > 0 && !(Number.isSafeInteger(gameLength) && gameLength >= 0)) {
+    return { status: 'MISSING_INPUT', profile_id: profile.id, event_count: null,
+      input_count: inputCount, events: null,
+      missing_input: 'Replay tail gameLength for unobserved final reincarnations' };
+  }
+  if (unmatched.length > 0 && decodedTimers.some(({ row }) =>
+    row.block.timestamp_ms > gameLength)) {
+    return fail('Replay tail gameLength precedes an observed death timer');
+  }
+  if (unmatched.some(({ row, timer }) =>
+    row.block.timestamp_ms + timer.timer_seconds_candidate * 1000 <= gameLength)) {
+    return fail('unmatched HN death timer predicts reincarnation before Replay end');
+  }
+  for (const [index, { row }] of decodedTimers.entries()) {
+    const participantId = participantIdFromDeathParam(row.block.param);
+    const nextDeath = decodedTimers.find(({ row: other }, otherIndex) =>
+      otherIndex > index && participantIdFromDeathParam(other.block.param) === participantId);
+    if (nextDeath && (!matchedRespawns.has(index)
+        || matchedRespawns.get(index).row.block.timestamp_ms > nextDeath.row.block.timestamp_ms)) {
+      return fail('participant has another death before a matched reincarnation');
+    }
+  }
+
+  const events = decodedTimers.map(({ row, timer }, index) => {
+    const heroDie = sortedDies[index].row;
+    const respawn = matchedRespawns.get(index) ?? null;
+    const refs = [
+      { ...packetRef(replay, row.block, row.chunk), role: 'update_death_timer' },
+      { ...packetRef(replay, heroDie.block, heroDie.chunk), role: 'hero_die' },
+    ];
+    if (respawn) refs.push({
+      ...packetRef(replay, respawn.row.block, respawn.row.chunk),
+      role: 'hero_reincarnate_alive',
+    });
+    return {
+      event_type: 'HERO_DEATH_TIMER_CANDIDATE',
+      game_version: REPLAY_VERSION,
+      patch: '16.19',
+      build_profile: profile.id,
+      replay_sha256: replay.source_sha256 ?? null,
+      replay_time_ms: row.block.timestamp_ms,
+      victim_raw_param: row.block.param >>> 0,
+      victim_participant_id_candidate: participantIdFromDeathParam(row.block.param),
+      timer_seconds_candidate: timer.timer_seconds_candidate,
+      timer_float_code: timer.float_code,
+      decoded_float_bytes_hex: timer.decoded_float_bytes_hex,
+      respawn_replay_time_ms_candidate: respawn?.row.block.timestamp_ms ?? null,
+      respawn_match_kind: respawn?.match_kind ?? null,
+      respawn_timer_residual_ms: respawn?.residual_ms ?? null,
+      confidence: 'CANDIDATE',
+      semantic_status: 'CANDIDATE_EXACT_RUNTIME_FLOAT_AND_REPLAY_TIMING',
+      field_confidence: {
+        replay_time_ms: 'VERIFIED_DIRECT',
+        victim_raw_param: 'VERIFIED_DIRECT',
+        victim_participant_id_candidate: 'CANDIDATE',
+        timer_seconds_candidate: 'CANDIDATE_EXACT_RUNTIME_FLOAT',
+        respawn_replay_time_ms_candidate: respawn ? 'CANDIDATE_CORROBORATION' : 'UNAVAILABLE',
+      },
+      raw_packet_ref: refs[0],
+      raw_packet_refs: refs,
+      known_limits: [...profile.known_limits],
+    };
+  });
+  return {
+    status: 'CANDIDATE',
+    evidence_status: 'CANDIDATE_EXACT_RUNTIME_FLOAT_AND_REPLAY_TIMING',
+    profile_id: profile.id,
+    evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+    event_count: events.length,
+    input_count: inputCount,
+    input_packet_id: profile.replay_block_packet_id,
+    supporting_packet_count: timers.length + heroDies.length + respawns.length,
+    scanned_block_count: walk.block_count,
+    final_death_counts: finalCounts.counts,
+    observed_death_counts: observedCounts,
+    respawn_match_count: matchedRespawns.size,
+    exact_param_respawn_match_count: matchKinds.exact_param,
+    unique_low_byte_respawn_match_count: matchKinds.unique_low_byte,
+    unobserved_after_replay_end_count: unmatched.length,
+    maximum_respawn_residual_ms: maximumResidualMs,
+    events,
+  };
+}
+
 module.exports = {
   REPLAY_VERSION,
   HERO_DEATH_CANDIDATE_PROFILES,
+  HERO_DEATH_TIMER_CANDIDATE_PROFILE,
+  collectCandidateRoutes,
   decodeHeroDeathCandidates,
+  decodeHeroDeathTimerCandidates,
+  decodeHeroDeathTimerPayload,
   participantIdFromDeathParam,
 };

@@ -913,7 +913,9 @@ function writePerReplayArtifacts(analysis, rootDir, replayDirName) {
   for (const [name, rows] of Object.entries(analysis.events)) {
     writeJsonl(path.join(replayDir, `${name}.jsonl`), rows);
   }
-  writeJsonl(path.join(replayDir, 'adc_deaths.jsonl'), analysis.adc_deaths);
+  if (analysis.patch !== '16.19') {
+    writeJsonl(path.join(replayDir, 'adc_deaths.jsonl'), analysis.adc_deaths);
+  }
   const ward = analysis.ward_pipeline;
   if (ward) {
     writeJson(path.join(replayDir, 'ward_provenance.json'), ward.provenance);
@@ -1168,22 +1170,22 @@ function buildAcceptanceSummary(results, beforeHashes, afterHashes, testSummary,
       heal: sumMetadataStat((player) => player.aggregate_stats.total_heal),
       items_purchased: sumMetadataStat((player) => player.aggregate_stats.items_purchased),
     },
-    death_event_count: sum((analysis) => analysis.event_counts.death_events),
-    damage_event_count: sum((analysis) => analysis.event_counts.damage_events),
-    spell_event_count: sum((analysis) => analysis.event_counts.spell_events),
-    buff_event_count: sum((analysis) => analysis.event_counts.buff_events),
-    adc_death_count: sum((analysis) => analysis.adc_deaths.length),
-    position_event_count: sum((analysis) => analysis.event_counts.position_events),
-    ward_event_count: sum((analysis) => analysis.ward_events?.length),
-    ward_direct_spawn_event_count: sum((analysis) => analysis.ward_events?.filter(
+    death_event_count: has1619 ? null : sum((analysis) => analysis.event_counts.death_events),
+    damage_event_count: has1619 ? null : sum((analysis) => analysis.event_counts.damage_events),
+    spell_event_count: has1619 ? null : sum((analysis) => analysis.event_counts.spell_events),
+    buff_event_count: has1619 ? null : sum((analysis) => analysis.event_counts.buff_events),
+    adc_death_count: has1619 ? null : sum((analysis) => analysis.adc_deaths.length),
+    position_event_count: has1619 ? null : sum((analysis) => analysis.event_counts.position_events),
+    ward_event_count: has1619 ? null : sum((analysis) => analysis.ward_events?.length),
+    ward_direct_spawn_event_count: has1619 ? null : sum((analysis) => analysis.ward_events?.filter(
       (row) => row.position_source === 'ENTITY_SPAWN_DIRECT',
     ).length),
-    ward_cast_spawn_match_count: sum((analysis) => analysis.ward_cast_spawn_matches?.length),
-    ward_lifecycle_count: sum((analysis) => analysis.ward_lifecycles?.length),
-    item_event_count: sum((analysis) => analysis.event_counts.item_events),
-    shield_event_count: sum((analysis) => analysis.event_counts.shield_events),
-    heal_event_count: sum((analysis) => analysis.event_counts.heal_events),
-    unsupported_event_count: sum((analysis) => analysis.unknown_packet_count),
+    ward_cast_spawn_match_count: has1619 ? null : sum((analysis) => analysis.ward_cast_spawn_matches?.length),
+    ward_lifecycle_count: has1619 ? null : sum((analysis) => analysis.ward_lifecycles?.length),
+    item_event_count: has1619 ? null : sum((analysis) => analysis.event_counts.item_events),
+    shield_event_count: has1619 ? null : sum((analysis) => analysis.event_counts.shield_events),
+    heal_event_count: has1619 ? null : sum((analysis) => analysis.event_counts.heal_events),
+    unsupported_event_count: has1619 ? null : sum((analysis) => analysis.unknown_packet_count),
     errors: failed.map((result) => ({ source_path: result.source_path, ...result.error })),
     warnings,
     upstream_hash_before: beforeHashes,
@@ -1598,8 +1600,19 @@ function capabilityQuery(replay, options = {}) {
       }
       if (profile.game_version === '16.19.820.7193'
           && capability === 'hero_death_timer') {
-        validationPending.push('HN route, timer field, and death-to-respawn invariants');
+        validationPending.push('HN route, timer field, and death-to-respawn invariants',
+          'Replay tail gameLength if a timer has no observed reincarnation');
       }
+      const gameLength = replay.tail?.metadata?.gameLength;
+      const conditionalInputs = capability === 'hero_death_timer'
+        && profile.game_version === '16.19.820.7193'
+        ? [{
+          name: 'replay_tail_gameLength',
+          required_if: 'a death timer has no observed reincarnation',
+          status: Number.isSafeInteger(gameLength) && gameLength >= 0
+            ? 'PRESENT_UNVALIDATED' : gameLength === undefined ? 'MISSING' : 'INVALID',
+          path: replay.source_path,
+        }] : [];
       document.capabilities.push({
         capability,
         status,
@@ -1615,6 +1628,7 @@ function capabilityQuery(replay, options = {}) {
         invalid_inputs: perCapabilityInputsAssessed
           ? inputs.filter((input) => input.status === 'INVALID').map((input) => input.name)
           : null,
+        conditional_inputs: conditionalInputs,
         input_assessment_complete: perCapabilityInputsAssessed
           && !inputs.some((input) => input.status === 'NOT_ASSESSED'),
         validation_pending: validationPending,
@@ -1653,6 +1667,10 @@ function runCapabilitiesCommand(parsed) {
         + `${row.input_assessment_complete ? '' : ' (some inputs not assessed)'}\n`);
       if (row.validation_pending.length > 0) {
         process.stdout.write(`  Pending: ${row.validation_pending.join(', ')}\n`);
+      }
+      for (const input of row.conditional_inputs.filter((item) =>
+        item.status === 'MISSING' || item.status === 'INVALID')) {
+        process.stdout.write(`  Conditional input: ${input.name} ${input.status}; ${input.required_if}.\n`);
       }
     }
     if (result.entrypoint_input_precheck) {

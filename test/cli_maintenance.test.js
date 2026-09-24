@@ -120,6 +120,10 @@ test('capabilities reports only the 16.19 candidate without packet decoding or a
   assert.deepEqual(heroDeath.required_inputs.map((row) => row.name),
     ['replay', 'replay_tail_statsJson']);
   assert.ok(heroDeath.validation_pending.includes('matching 16.19 route fingerprint'));
+  const timer = result.capabilities.find((row) => row.capability === 'hero_death_timer');
+  assert.equal(timer.output, 'hero_death_timer_candidates');
+  assert.equal(timer.runtime_image_requirement, 'NOT_REQUIRED');
+  assert.equal(timer.conditional_inputs[0].name, 'replay_tail_gameLength');
   assert.equal(fs.existsSync(fakeRuntime), false);
 });
 
@@ -204,6 +208,8 @@ test('16.19 candidate decode preserves experimental events and exact capability 
   const summary = JSON.parse(fs.readFileSync(path.join(output, 'acceptance_summary.json'), 'utf8'));
   assert.equal(summary.status, 'CANDIDATE');
   assert.equal(summary.capability_runs[0].capability_results.hero_death.status, 'CANDIDATE');
+  assert.equal(summary.death_event_count, null);
+  assert.equal(summary.adc_death_count, null);
   const replayDir = path.join(output, 'replays', fs.readdirSync(path.join(output, 'replays'))[0]);
   const semantic = JSON.parse(fs.readFileSync(path.join(replayDir, 'semantic_run.json'), 'utf8'));
   const events = JSON.parse(fs.readFileSync(path.join(replayDir, 'events.json'), 'utf8'));
@@ -216,6 +222,7 @@ test('16.19 candidate decode preserves experimental events and exact capability 
   assert.deepEqual(manifest.dependencies.requested_runtime_images, [requestedImage]);
   assert.deepEqual(Object.keys(events), ['hero_death_candidates']);
   assert.equal(events.hero_death_candidates.length, 1);
+  assert.equal(fs.existsSync(path.join(replayDir, 'adc_deaths.jsonl')), false);
   assert.match(fs.readFileSync(path.join(output, 'ACCEPTANCE_REPORT.md'), 'utf8'),
     /CANDIDATE marks experimental output/);
 });

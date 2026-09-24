@@ -7,7 +7,11 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { resolveBuildProfile } = require('./build_registry');
-const { decodeHeroDeathCandidates } = require('./decoders/rofl_16_19_820_7193');
+const {
+  collectCandidateRoutes,
+  decodeHeroDeathCandidates,
+  decodeHeroDeathTimerCandidates,
+} = require('./decoders/rofl_16_19_820_7193');
 const {
   createSweeperCapabilityExport,
   emptySweeperEvents,
@@ -1770,22 +1774,31 @@ function decode1619(replay, profile, options = {}) {
   const capabilities = [...new Set(requested)];
   const capabilityResults = {};
   const events = {};
+  const collected = capabilities.some((capability) =>
+    capability === 'hero_death' || capability === 'hero_death_timer')
+    ? collectCandidateRoutes(replay) : null;
   for (const capability of capabilities) {
-    if (capability !== 'hero_death') {
+    if (capability !== 'hero_death' && capability !== 'hero_death_timer') {
       capabilityResults[capability] = {
         status: 'UNSUPPORTED', event_count: null, input_count: null,
         error: `16.19.820.7193 has no decoder for ${capability}`,
       };
       continue;
     }
-    const outcome = decodeHeroDeathCandidates(replay);
+    const outcome = capability === 'hero_death'
+      ? decodeHeroDeathCandidates(replay, collected)
+      : decodeHeroDeathTimerCandidates(replay, collected);
     const { events: candidateEvents, ...result } = outcome;
     result.runtime_image_status = options.runtimeImagePath
       ? 'PROVIDED_NOT_USED'
       : 'NOT_REQUIRED';
     result.runtime_image_used = false;
     capabilityResults[capability] = result;
-    if (result.status === 'CANDIDATE') events.hero_death_candidates = candidateEvents;
+    if (result.status === 'CANDIDATE') {
+      const key = capability === 'hero_death'
+        ? 'hero_death_candidates' : 'hero_death_timer_candidates';
+      events[key] = candidateEvents;
+    }
   }
   const results = Object.values(capabilityResults);
   const usable = results.filter((result) => result.status === 'CANDIDATE' || result.status === 'PASS');
@@ -1793,13 +1806,20 @@ function decode1619(replay, profile, options = {}) {
   const status = results.length === 0 ? 'PROFILE_RESOLVED'
     : failed.length > 0 ? (usable.length > 0 ? 'PARTIAL' : failed[0].status)
       : 'EXPERIMENTAL_CANDIDATE';
+  const uniqueDecodedInputCounts = new Map();
+  for (const result of usable) {
+    const packetId = result.input_packet_id;
+    uniqueDecodedInputCounts.set(packetId,
+      Math.max(uniqueDecodedInputCounts.get(packetId) ?? 0, result.input_count));
+  }
   return {
     status,
     game_version: profile.game_version,
     profile,
     events: usable.length > 0 ? events : null,
     capability_results: capabilityResults,
-    decoded_packet_count: usable.reduce((sum, result) => sum + result.input_count, 0),
+    decoded_packet_count: [...uniqueDecodedInputCounts.values()]
+      .reduce((sum, count) => sum + count, 0),
     runtime_image_used: false,
     sweeper_capability: createSweeperCapabilityExport(profile.game_version),
   };
@@ -1903,6 +1923,10 @@ function getHeroDeaths(decoded) {
 
 function getHeroDeathCandidates(decoded) {
   return decoded?.events?.hero_death_candidates ?? null;
+}
+
+function getHeroDeathTimerCandidates(decoded) {
+  return decoded?.events?.hero_death_timer_candidates ?? null;
 }
 
 function getHeroStates(decoded) {
@@ -2013,6 +2037,7 @@ module.exports = {
   getHeroDamage,
   getHeroDeaths,
   getHeroDeathCandidates,
+  getHeroDeathTimerCandidates,
   getHeroPaths,
   getHeroRespawns,
   getHeroStates,

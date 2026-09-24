@@ -16,6 +16,7 @@
 | `capabilities` | 从回放容器读取完整 build，查询已登记能力、入口及输入存在性 | 不解压 packet、不运行语义解码；候选能力仍需逐回放校验 |
 | `decode` / `analyze` / `batch` / `validate` | `16.15.801.3452` 旧版整合管线；16.19 精确 build 的指定能力实验入口 | 16.19 必须显式传 `--events`；16.16 语义 API 尚未由主 CLI 分发；`validate` 还会运行完整 Node 套件 |
 | `16.19.820.7193 --events hero_death` | HN/KR 结构指纹与回放尾部死亡总数同时匹配时，输出候选受害者和回放时间 | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；无杀手、助攻或重生推断，其他完整 build 不复用 |
+| `16.19.820.7193 --events hero_death_timer` | HN 路由的计时 float、同刻 Hero_Die 和后续复活时间相互校验时，输出候选计时秒数 | 仅写入 `hero_death_timer_candidates`；目前只覆盖 HN 路由，KR 回放会报 `PROFILE_UNAVAILABLE`，不产生确认的死亡或重生事件 |
 | `src/semantic_api.js` 与精确 build profiles | `16.16.805.0442` 的 HeroPath、等级、WardSpawn、伤害、死亡、重生、XP/lane-CS keyframe、受限 ItemState 和 gameplay-tail 等 | 独立 API 的逐字段能力；需要外部精确镜像、profiles 或对应已验证输入，不是主 CLI 的完整分析模式 |
 | V2 Ward / Path | 已验证位置、守卫事件及受限派生关联 | 来源 SHA 必须与回放一致；类型、匹配、生命周期和位置插值与直接字段分级 |
 | `research-v3/`、`research-v4/` | DuckDB 研究查询、保护量增量表和验证器 | 保留的真实功能，不是因版本号旧就可删除的目录；全量重建需要私有输入 |
@@ -74,6 +75,12 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 `semantic_run.json` 逐能力记录实际执行、候选、缺输入、不支持和失败；
 `hero_death_candidates.jsonl` 只在结构指纹与死亡总数校验均通过时产生。
 `inspect` 不要求镜像或语义 profile。实验候选没有使用运行时镜像，传入镜像路径不会使其成为已验证语义。
+
+对 HN 路由的同一完整 build，可单独选择计时候选，或用
+`--events hero_death,hero_death_timer` 一起运行。计时输出包含原始包引用、
+候选参与者、解出的秒数，以及存在匹配时的复活包引用；它要求十名参与者的死亡总数、
+同刻 Hero_Die 配对及复活时序都通过校验。未执行的旧版事件汇总计数为
+`null`，不会把未解码误写成零事件。
 
 执行 **16.15.801.3452** 的旧版整合语义分析：
 
