@@ -2018,7 +2018,7 @@ function capabilityQuery(replay, options = {}) {
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_inventory_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x018d MapView packet consumption',
-          'per-packet slot/item record transform and raw-param provenance; no transaction or inventory-state inference');
+          'per-packet slot/item record transform, exact-image callback reset/apply action, and raw-param provenance; no transaction or between-packet inventory-state inference');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'cast_spell_ans_packet') {

@@ -102,6 +102,13 @@ test('821 MapView emits packet-bound candidates and leaves observed raw-param va
   assert.equal(result.events[0].participant_id_candidate, 1);
   assert.equal(result.events[1].participant_id_candidate, null);
   assert.equal(result.events[1].field_confidence.participant_id_candidate, 'UNAVAILABLE');
+  assert.equal(result.events[0].snapshot_application,
+    'RESET_SLOTS_0_TO_9_THEN_APPLY_RECORDS');
+  assert.equal(result.events[1].snapshot_application,
+    'RESET_SLOTS_0_TO_9_THEN_APPLY_RECORDS');
+  assert.equal(result.events[0].field_confidence.snapshot_application,
+    'CANDIDATE_EXACT_RUNTIME_CALLBACK_APPLICATION');
+  assert.equal(profile.evidence_callback_body_rva, '0x354c60');
   assert.equal(result.events[0].records_candidate[1].item_id_candidate, 2031);
   assert.equal(result.events[0].raw_packet_ref.replay_sha256, replay.source_sha256);
   assert.equal(result.events[1].raw_packet_ref.raw_param, 0x400001b2);

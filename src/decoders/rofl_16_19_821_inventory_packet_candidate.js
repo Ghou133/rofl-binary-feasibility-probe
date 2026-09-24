@@ -11,6 +11,7 @@ const { collect821Routes, rowsFor821Capability } = require('./rofl_16_19_821_sca
 const REPLAY_VERSION = '16.19.821.7343';
 const IMAGE_SHA256 = '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325';
 const CAPABILITY = 'hero_inventory_packet';
+const SNAPSHOT_APPLICATION = 'RESET_SLOTS_0_TO_9_THEN_APPLY_RECORDS';
 const MAX_PACKETS = 256;
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 const MIN_PAYLOAD_BYTES = 23;
@@ -30,14 +31,18 @@ const HERO_INVENTORY_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
   packet_name: 'PKT_S2C_SetInventory_MapView_s',
   evidence_runtime_image_sha256: IMAGE_SHA256,
   evidence_record_transform_table_sha256: 'ae15d606869d66dc47309b26cb489e01bf841e9dd57d540683e2dc7f5e394588',
+  evidence_callback_receive_target_rva: '0x350240',
+  evidence_callback_body_rva: '0x354c60',
+  evidence_callback_clear_slot_rva: '0x2925f0',
+  evidence_callback_zero_slot_rva: '0x5e5400',
   runtime_image_required: true,
-  evidence_scope: 'exact KR runtime constructor/deserializer: 671 fully consumed packets and 5327 records across 11 exact-build Replays; final ITEM0–ITEM6 tails support candidate field labels',
+  evidence_scope: 'exact KR runtime constructor/deserializer: 671 fully consumed packets and 5327 records across 11 exact-build Replays; exact-image callback clears client slots 0–9 before applying packet records; final ITEM0–ITEM6 tails support candidate field labels',
   known_limits: Object.freeze([
-    'Each event is one observed packet with its observed records; unseen slots and complete inventory state are unavailable.',
+    'Each event is one observed packet. The exact-image callback resets slots 0–9 before applying its records; inventory between observed packets is unavailable.',
     'Slot and item-definition key are exact-runtime decoded candidates, not published semantic fields.',
     'Participant mapping applies only to the ten canonical raw params and remains candidate-only.',
     'Observed raw-param variants 0x400001b2 and 0x400001b5 retain unavailable participant identity; their extra 0x100 bit has no assigned meaning.',
-    'No purchase, sale, swap, replacement, transaction, or inventory lifecycle is inferred.',
+    'No purchase, sale, swap, per-item replacement, transaction, or inventory lifecycle is inferred.',
     'The pinned exact-build mapped runtime image and Python Unicorn are required.',
   ]),
 });
@@ -264,6 +269,7 @@ function decodeHeroInventoryPacketCandidates821(replay, {
       replay_time_ms: block.timestamp_ms,
       hero_raw_param: block.param >>> 0,
       participant_id_candidate: participant,
+      snapshot_application: SNAPSHOT_APPLICATION,
       record_count: records.length,
       records_candidate: records,
       confidence: 'CANDIDATE',
@@ -272,6 +278,7 @@ function decodeHeroInventoryPacketCandidates821(replay, {
         replay_time_ms: 'VERIFIED_DIRECT',
         hero_raw_param: 'VERIFIED_DIRECT',
         participant_id_candidate: participant === null ? 'UNAVAILABLE' : 'CANDIDATE',
+        snapshot_application: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_APPLICATION',
         slot_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD',
         item_id_candidate: 'CANDIDATE_EXACT_RUNTIME_ITEM_DEFINITION_KEY',
       },

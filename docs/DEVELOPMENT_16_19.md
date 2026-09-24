@@ -275,10 +275,23 @@ Current progress (older notes below retain their original research context):
   slot/item records. All 671 truncations failed and all 671 appended-byte
   controls left trailing input. The per-packet record decoder uses the pinned
   821 lookup table; the 109/110 latest canonical participant packets are
-  observations, not a continuous inventory state. The 64 additional packets,
-  including two `0x400001b2/b5` raw-param variants, remain separate and unpaired.
-  The CLI/API route requires the exact local image and emits packet records
-  only; no purchase, sale, item-use, or final-state inference follows.
+  observations, not a continuous inventory state. The exact-image callback
+  (`0x350240` trampoline to `0x354c60`) first clears client slots 0–9 through
+  `0x2925f0`/`0x5e5400`, then applies the packet records. The CLI/API now
+  reports `snapshot_application: RESET_SLOTS_0_TO_9_THEN_APPLY_RECORDS` as a
+  candidate callback action. Among 560 consecutive canonical participant packet
+  pairs, 146 omit a slot present in the preceding packet; this is a difference
+  between sparse observations, not evidence of a particular item action. For
+  52 last packets within 120 seconds of game end, slots 0–6 including omitted
+  slots as empty match the independent Replay tail 345/364 times; participant
+  rotation controls match 21–56/364, and all 19 mismatches remain negative
+  evidence. Of the 671 packets, 607 are co-timed with a `0x0048` return and
+  64 are not; 669 use the ten canonical raw params, while the two
+  `0x400001b2/b5` variants remain unmapped. These counts describe different
+  partitions of the same packets.
+  The CLI/API route requires the exact local image and emits packet records and
+  callback application only; no purchase, sale, item-use, between-packet state,
+  or final-state inference follows.
   Reproducible native and Replay checks are ignored under
   `artifacts/16_19_development/inventory_018d_821/`.
 - **Earlier 821 gold raw-window negative lead:** Before the exact 821 byte
