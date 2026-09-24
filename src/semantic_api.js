@@ -1803,6 +1803,8 @@ function decode1619(replay, profile, options = {}) {
     hero_ward_stats_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_damage_totals_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_total_heal_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_vision_score_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_epic_monster_damage_snapshot: decodeHeroStatsSnapshotCandidateSet,
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -1824,6 +1826,8 @@ function decode1619(replay, profile, options = {}) {
     hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
     hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
     hero_total_heal_snapshot: 'hero_total_heal_snapshot_candidates',
+    hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
+    hero_epic_monster_damage_snapshot: 'hero_epic_monster_damage_snapshot_candidates',
   };
   const gameRouteCapabilities = new Set([
     'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
@@ -2072,6 +2076,14 @@ function getHeroTotalHealSnapshotCandidates(decoded) {
   return decoded?.events?.hero_total_heal_snapshot_candidates ?? null;
 }
 
+function getHeroVisionScoreSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_vision_score_snapshot_candidates ?? null;
+}
+
+function getHeroEpicMonsterDamageSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_epic_monster_damage_snapshot_candidates ?? null;
+}
+
 function getHeroStates(decoded) {
   return decoded?.events?.hero_state_events ?? decoded?.events?.state_update_events ?? [];
 }
@@ -2198,6 +2210,8 @@ module.exports = {
   getHeroWardStatsSnapshotCandidates,
   getHeroDamageTotalsSnapshotCandidates,
   getHeroTotalHealSnapshotCandidates,
+  getHeroVisionScoreSnapshotCandidates,
+  getHeroEpicMonsterDamageSnapshotCandidates,
   getHeroPaths,
   getHeroRespawns,
   getHeroStates,

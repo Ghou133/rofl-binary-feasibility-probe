@@ -215,6 +215,24 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   its local output is `artifacts/16_19_development/total_heal_hn_cli_smoke/`.
   These one-Replay correlations support only a candidate accumulated value,
   not individual heal events, effective healing, or overheal.
+- **Done:** `hero_vision_score_snapshot` and
+  `hero_epic_monster_damage_snapshot` emit decoded HN
+  HeroStats f32 offsets `0x1b0` and `0x21c`. Across the same 350 participant
+  snapshots, the vision candidate changes 188 times, never declines, remains
+  floor-bounded by each participant's `VISION_SCORE` tail, and its last floors
+  match 8/10 tails (the other two are short by one). The epic-monster damage
+  candidate changes 25 times, never declines, remains floor-bounded by each
+  participant's `TOTAL_DAMAGE_DEALT_TO_EPIC_MONSTERS` tail, and its last
+  floors match 10/10. Each full f32 sequence is unique among 315 aligned
+  offsets and nine circular participant shifts give no final-tail matches.
+  Decoded `0x218` also approximately equals decoded `0x210 + 0x21c` across
+  these snapshots (maximum f32 residual 0.01465); this is a structural
+  cross-check, not a damage attribution. Local-only probe data is under
+  `artifacts/16_19_development/scoreboard_next_probe/`. The real HN CLI
+  emitted 350 candidates for each selected capability with 2,035,757 blocks,
+  zero framing errors and tail-gap totals 2/0; local output is under
+  `artifacts/16_19_development/vision_epic_hn_cli_smoke/`. Neither candidate
+  establishes an individual vision or damage event.
 - **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
   runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
   observed slot/item-definition-key records as candidates. All 94 game packets

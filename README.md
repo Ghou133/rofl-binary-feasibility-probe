@@ -25,6 +25,8 @@
 | `16.19.820.7193 --events hero_ward_stats_snapshot` | 同一 HN keyframe 中已观察到的插眼、拆眼与探测守卫计数候选快照 | 仅写入 `hero_ward_stats_snapshot_candidates`；不推导守卫生成、位置、生命周期或拆除事件 |
 | `16.19.820.7193 --events hero_damage_totals_snapshot` | 同一 HN keyframe 中三处浮点值及其向下取整值，对应英雄伤害、总伤害与承伤的候选累计快照 | 仅写入 `hero_damage_totals_snapshot_candidates`；一场回放的尾部相关性，不推导逐次伤害、目标、来源或减伤 |
 | `16.19.820.7193 --events hero_total_heal_snapshot` | 同一 HN keyframe 中 `0x234` 的候选累计治疗上报值 | 仅写入 `hero_total_heal_snapshot_candidates`；一场回放的尾部相关性，不推导逐次治疗、有效治疗或过量治疗 |
+| `16.19.820.7193 --events hero_vision_score_snapshot` | 同一 HN keyframe 中 `0x1b0` 原始浮点值及取整后的候选视野得分 | 仅写入 `hero_vision_score_snapshot_candidates`；一场回放的尾部相关性，不推导守卫或视野事件 |
+| `16.19.820.7193 --events hero_epic_monster_damage_snapshot` | 同一 HN keyframe 中 `0x21c` 原始浮点值及取整后的候选史诗野怪伤害累计值 | 仅写入 `hero_epic_monster_damage_snapshot_candidates`；一场回放的尾部相关性，不推导逐次伤害或目标归属 |
 | `16.19.820.7193 --events hero_experience_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x28` 浮点候选经验值 | 仅写入 `hero_experience_snapshot_candidates`；小数及尾部差额保留，不推导升级或经验获取时点；KR 的 HN profile 不可用 |
 | `16.19.820.7193 --events hero_gold_earned_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x38` 浮点候选已赚金币值 | 仅写入 `hero_gold_earned_snapshot_candidates`；一场 HN 回放的字段相关性，不推导金币收入事件；KR 的 HN profile 不可用 |
 | `16.19.820.7193 --events hero_gold_spent_snapshot` | 同一 HN HeroStats keyframe 中已观察到的 `0x34` 候选已花金币值 | 仅写入 `hero_gold_spent_snapshot_candidates`；保留数值下降，不推导退款、出售或购买；KR 的 HN profile 不可用 |
@@ -123,7 +125,7 @@ node src/cli.js batch "D:\Replays\HN-example.rofl" "D:\Replays\KR-example.rofl" 
 
 ```powershell
 node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
-  --events hero_minions_killed_snapshot,hero_jungle_minions_killed_snapshot,hero_experience_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_champion_kills_snapshot,hero_deaths_snapshot,hero_assists_snapshot,hero_kill_stats_snapshot,hero_ward_stats_snapshot,hero_damage_totals_snapshot,hero_total_heal_snapshot `
+  --events hero_minions_killed_snapshot,hero_jungle_minions_killed_snapshot,hero_experience_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_champion_kills_snapshot,hero_deaths_snapshot,hero_assists_snapshot,hero_kill_stats_snapshot,hero_ward_stats_snapshot,hero_damage_totals_snapshot,hero_total_heal_snapshot,hero_vision_score_snapshot,hero_epic_monster_damage_snapshot `
   --out-dir "work\16-19-hero-stats-snapshots"
 ```
 
