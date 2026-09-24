@@ -21,6 +21,8 @@ const assistCandidate1619821 =
   require('./decoders/rofl_16_19_821_assist_candidate');
 const inventoryPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_inventory_packet_candidate');
+const castSpellAnsCandidate1619821 =
+  require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const damageFloatCandidate1619821 =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
 const timeStatsCandidate1619821 =
@@ -487,6 +489,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_crowd_control_time_snapshot: 0x0089,
       hero_level_state: 0x0197,
       hero_inventory_packet: 0x018d,
+      cast_spell_ans_packet: 0x01da,
     },
     decoder_profile: {
       hero_death: decoder1619821.HERO_DEATH_CANDIDATE_PROFILE_821,
@@ -531,6 +534,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_level_state: levelCandidate1619821.HERO_LEVEL_CANDIDATE_PROFILE_821,
       hero_inventory_packet:
         inventoryPacketCandidate1619821.HERO_INVENTORY_PACKET_CANDIDATE_PROFILE_821,
+      cast_spell_ans_packet:
+        castSpellAnsCandidate1619821.CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
     },
     evidence_grades: {
       hero_death: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_AND_RUNTIME_DIE_SOURCE',
@@ -564,6 +569,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_crowd_control_time_snapshot: 'CANDIDATE_821_NATIVE_F32_CROWD_CONTROL_TAIL',
       hero_level_state: 'CANDIDATE_821_RUNTIME_LEVEL_BYTE_AND_REPLAY_TAIL',
       hero_inventory_packet: 'CANDIDATE_821_NATIVE_MAPVIEW_SLOT_ITEM_RECORDS',
+      cast_spell_ans_packet: 'CANDIDATE_821_NATIVE_CAST_SPELL_ANS_OPAQUE_PACKET_FIELDS',
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, 821 route-profile bounded',
@@ -591,6 +597,7 @@ const BUILD_PROFILES = deepFreeze({
         'exact 821 native 0x0089 carrier and reversed vector at offsets 0x244/0x248/0x234/0x23c/0x21c/0x230; Replay-tail labels candidate only',
       level_state: 'exact 821 PKT_NPC_LevelUp_s route and +0x11 byte transform; participant alignment and event interpretation candidate only',
       inventory_packet: 'exact 821 native 0x018d MapView record vector and slot/item transforms; raw-param participant mapping candidate and no inventory-state or transaction inference',
+      cast_spell_ans_packet: 'exact 821 native 0x01da packet constructor/deserializer and callback transforms for opaque object offsets 0x148/0x14c; no successful-cast, owner, target, spell or slot inference',
     },
     verified_capabilities: [],
     candidate_capabilities: [
@@ -607,6 +614,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
       'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
       'hero_level_state', 'hero_inventory_packet',
+      'cast_spell_ans_packet',
     ],
     unsupported_capabilities: [],
     validation_artifacts: [],

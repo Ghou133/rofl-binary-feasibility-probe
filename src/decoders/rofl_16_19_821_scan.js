@@ -18,6 +18,7 @@ const CAPABILITIES = new Set([
   'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
   'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
   'hero_level_state', 'hero_respawn', 'hero_assist', 'hero_inventory_packet',
+  'cast_spell_ans_packet',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
 const RESPAWN_ROUTES = new Set([0x0048, 0x018d]);
@@ -61,6 +62,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     hero_respawn: [],
     hero_assist: [],
     hero_inventory_packet: [],
+    cast_spell_ans_packet: [],
     hero_deaths_snapshot: heroStatsRows,
     hero_champion_kills_snapshot: heroStatsRows,
     hero_assists_snapshot: heroStatsRows,
@@ -132,6 +134,9 @@ function create821ScanCollector(replay, selectedCapabilities) {
       if (selected.has('hero_inventory_packet') && chunk.stream_tag === 1
           && block.packet_id === 0x018d) {
         rows.hero_inventory_packet.push(copyRow(block, chunk));
+      }
+      if (selected.has('cast_spell_ans_packet') && block.packet_id === 0x01da) {
+        rows.cast_spell_ans_packet.push(copyRow(block, chunk));
       }
       if (selectsHeroStats && (chunk.stream_tag === 2 || chunk.stream_tag === 3)
           && block.packet_id === 0x0089) {

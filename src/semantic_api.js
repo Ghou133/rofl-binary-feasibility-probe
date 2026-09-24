@@ -42,6 +42,8 @@ const { decodeHeroAssistCandidates821 } =
   require('./decoders/rofl_16_19_821_assist_candidate');
 const { decodeHeroInventoryPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_packet_candidate');
+const { decodeCastSpellAnsPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const { decodeHeroDamageSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
 const { decodeHeroTimeSnapshotCandidates821 } =
@@ -2076,6 +2078,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    cast_spell_ans_packet: (input, collected) =>
+      decodeCastSpellAnsPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -2108,6 +2116,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_crowd_control_time_snapshot: 'hero_crowd_control_time_snapshot_candidates',
     hero_level_state: 'hero_level_state_candidates',
     hero_inventory_packet: 'hero_inventory_packet_candidates',
+    cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
   };
   const capabilityResults = {};
   const events = {};
@@ -2125,6 +2134,7 @@ function decode1619821(replay, profile, options = {}) {
     'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
     'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
     'hero_inventory_packet',
+    'cast_spell_ans_packet',
   ]);
   const supported = capabilities.filter((capability) => sharedScanCapabilities.has(capability));
   let candidate821Scan = options.candidate821Scan ?? null;
@@ -2153,7 +2163,7 @@ function decode1619821(replay, profile, options = {}) {
       }
     }
     const { events: candidateEvents, ...result } = outcome;
-    if (capability === 'hero_inventory_packet') {
+    if (capability === 'hero_inventory_packet' || capability === 'cast_spell_ans_packet') {
       result.runtime_image_status ??= options.runtimeImagePath
         ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
       result.runtime_image_used ??= false;
@@ -2403,6 +2413,10 @@ function getHeroStructureObjectiveDamageSnapshotCandidates(decoded) {
   return decoded?.events?.hero_structure_objective_damage_snapshot_candidates ?? null;
 }
 
+function getCastSpellAnsPacketCandidates(decoded) {
+  return decoded?.events?.cast_spell_ans_packet_candidates ?? null;
+}
+
 function getHeroStates(decoded) {
   return decoded?.events?.hero_state_events ?? decoded?.events?.state_update_events ?? [];
 }
@@ -2540,6 +2554,7 @@ module.exports = {
   getHeroEpicMonsterDamageSnapshotCandidates,
   getHeroCrowdControlTimeSnapshotCandidates,
   getHeroStructureObjectiveDamageSnapshotCandidates,
+  getCastSpellAnsPacketCandidates,
   getHeroPaths,
   getHeroRespawns,
   getHeroStates,
