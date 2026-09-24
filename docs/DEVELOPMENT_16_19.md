@@ -4,6 +4,15 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `cast_spell_ans_packet` profile v2 retains protected
+  native bytes and the decoded anonymous f32 at packet object `+0xe0`.
+  The exact-image inverse table is pinned by SHA-256 and checked again at
+  the JS boundary; malformed or mismatched helper rows fail closed. Native
+  full decode covered all 63,496 route packets in 11 Replays; a v2 CLI batch
+  emitted 63,496 candidate rows with 0 errors. Among the native rows, 512
+  nonzero values occurred only in keyframe packets. The field has no established
+  spell, position, time or action meaning. Ignored controls are under
+  `artifacts/16_19_development/cast821_next/`.
 - **Completed:** KR 821 `hero_inventory_packet` now emits a packet-local
   candidate snapshot for slots 0–9 alongside its original decoded records.
   The exact-image callback clears those slots and applies each packet's

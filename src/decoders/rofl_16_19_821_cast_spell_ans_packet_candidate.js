@@ -12,6 +12,7 @@ const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
 const REPLAY_VERSION = '16.19.821.7343';
 const IMAGE_SHA256 = '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325';
 const CALLBACK_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b';
+const NESTED_FLOAT_INVERSE_SHA256 = 'cce644f3775d31b6be55e5abc79ed029298be5110b8f81be8957bd3b066019f5';
 const PACKET_ID = 0x01da;
 const CAPABILITY = 'cast_spell_ans_packet';
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
@@ -23,7 +24,7 @@ const MAX_OBSERVED_PAYLOAD_BYTES = 189;
 const OBSERVED_SELECTORS = new Set([0x05, 0x11, 0x15, 0x17, 0x19, 0x1b]);
 
 const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
-  id: 'rofl-16.19.821.7343-kr-cast-spell-ans-packet-runtime-candidate-v1',
+  id: 'rofl-16.19.821.7343-kr-cast-spell-ans-packet-runtime-candidate-v2',
   replay_version: REPLAY_VERSION,
   capability: CAPABILITY,
   status: 'CANDIDATE',
@@ -32,11 +33,13 @@ const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
   packet_name: 'PKT_NPC_CastSpellAns_s',
   evidence_runtime_image_sha256: IMAGE_SHA256,
   evidence_callback_table_sha256: CALLBACK_TABLE_SHA256,
+  evidence_nested_float_inverse_sha256: NESTED_FLOAT_INVERSE_SHA256,
   runtime_image_required: true,
-  evidence_scope: 'exact 821 native constructor/deserializer fully consumed 63496 route packets from 11 KR Replays; two callback-transformed object fields remain opaque',
+  evidence_scope: 'exact 821 native constructor/deserializer fully consumed 63496 route packets from 11 KR Replays; two callback-transformed and one nested protected float field remain opaque',
   known_limits: Object.freeze([
     'The packet class name does not prove a successful spell cast.',
     'Spell identity, slot, owner, target, cast action and gameplay meaning are unavailable.',
+    'The nested float has no established position, timing or action meaning.',
     'Only observed 821 packet selectors, payload lengths and stream tags are accepted.',
     'The pinned exact-build mapped runtime image and Python Unicorn are required.',
   ]),
@@ -44,6 +47,37 @@ const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
 
 function sha256(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
+function ror8(value, count) {
+  return ((value >>> count) | (value << (8 - count))) & 0xff;
+}
+
+function swap(value) {
+  return (((value & 0xd5) << 1) | ((value >>> 1) & 0x55)) & 0xff;
+}
+
+// Pin the exact 821 nested deserializer byte path at RVA 0x10bec00..0x10bec19.
+const NESTED_FLOAT_INVERSE = (() => {
+  const inverse = Buffer.alloc(256);
+  const seen = new Set();
+  for (let byte = 0; byte < 256; byte += 1) {
+    const encoded = (swap(ror8((byte - 0x73) & 0xff, 2)) + 0x6c) & 0xff;
+    inverse[encoded] = byte;
+    seen.add(encoded);
+  }
+  if (seen.size !== 256 || sha256(inverse) !== NESTED_FLOAT_INVERSE_SHA256) {
+    throw new Error('exact 821 nested float inverse differs');
+  }
+  return inverse;
+})();
+
+function decodeNestedFloat(rawHex) {
+  const raw = Buffer.from(rawHex, 'hex');
+  if (raw.length !== 4) return null;
+  const bytes = Buffer.from(raw.map((value) => NESTED_FLOAT_INVERSE[value]));
+  const value = bytes.readFloatLE(0);
+  return Number.isFinite(value) ? value : null;
 }
 
 function packetRef(replay, block, chunk) {
@@ -95,6 +129,7 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
     input_packet_id: PACKET_ID,
     evidence_runtime_image_sha256: IMAGE_SHA256,
     evidence_callback_table_sha256: CALLBACK_TABLE_SHA256,
+    evidence_nested_float_inverse_sha256: NESTED_FLOAT_INVERSE_SHA256,
   };
   const fail = (status, error, extra = {}) => ({
     ...base, status, input_count: null, event_count: null, events: null,
@@ -210,6 +245,7 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
     }
     if (decoded?.status !== 'PASS' || decoded.runtime_image_sha256 !== IMAGE_SHA256
         || decoded.callback_table_sha256 !== CALLBACK_TABLE_SHA256
+        || decoded.nested_float_inverse_sha256 !== NESTED_FLOAT_INVERSE_SHA256
         || !Array.isArray(decoded.results) || decoded.results.length !== batch.length) {
       return failed('DECODE_FAILED', 'runtime cast output identity or packet count differs', {
         runtime_image_used: start > 0,
@@ -226,10 +262,14 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
           || row.native_packet_id !== PACKET_ID || row.native_raw_param !== ref.raw_param
           || !/^[0-9a-f]{2}$/.test(row.raw_flag_byte_hex)
           || !/^[0-9a-f]{8}$/.test(row.raw_i32_bytes_hex)
+          || !/^[0-9a-f]{8}$/.test(row.raw_f32_bytes_hex)
           || ![0, 1].includes(row.opaque_flag_0x148)
           || !Number.isInteger(row.opaque_i32_0x14c)
           || row.opaque_i32_0x14c < -0x80000000
-          || row.opaque_i32_0x14c > 0x7fffffff) {
+          || row.opaque_i32_0x14c > 0x7fffffff
+          || typeof row.opaque_f32_0xe0 !== 'number'
+          || !Number.isFinite(row.opaque_f32_0xe0)
+          || !Object.is(row.opaque_f32_0xe0, decodeNestedFloat(row.raw_f32_bytes_hex))) {
         return failed('DECODE_FAILED', `runtime cast packet ${start + index} did not fully decode`, {
           runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
           runtime_image_sha256: IMAGE_SHA256, first_failed_packet_ref: ref,
@@ -246,6 +286,8 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
         raw_param: ref.raw_param,
         opaque_flag_0x148: row.opaque_flag_0x148,
         opaque_i32_0x14c: row.opaque_i32_0x14c,
+        raw_f32_0xe0_bytes_hex: row.raw_f32_bytes_hex,
+        opaque_f32_0xe0: row.opaque_f32_0xe0,
         confidence: 'CANDIDATE',
         semantic_status: 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS',
         raw_packet_ref: ref,

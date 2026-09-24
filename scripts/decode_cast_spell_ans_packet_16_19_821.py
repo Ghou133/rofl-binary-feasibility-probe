@@ -8,6 +8,7 @@ does not establish that any packet represents a successful spell cast.
 import argparse
 import hashlib
 import json
+import math
 import string
 import struct
 import sys
@@ -26,6 +27,7 @@ PACKET_ID = 0x01da
 VTABLE_RVA = 0x01ba8ca0
 CALLBACK_TABLE_RVA = 0x01ab62d0
 CALLBACK_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b'
+NESTED_FLOAT_INVERSE_SHA256 = 'cce644f3775d31b6be55e5abc79ed029298be5110b8f81be8957bd3b066019f5'
 PROFILE = {'constructor_rva': 0x00e9da90, 'deserialize_rva': 0x010df350,
            'object_size': 0x150, 'fields': []}
 MAX_INPUT_BYTES = 4_000_000
@@ -83,6 +85,24 @@ def swap(value):
     return (((value & 0xd5) << 1) | ((value >> 1) & 0x55)) & 0xff
 
 
+def nested_float_inverse():
+    # The 0x01da nested deserializer writes a protected f32 at nested +0xd0,
+    # packet object +0xe0. Exact 821 code: RVA 0x10bec00..0x10bec19 (and
+    # equivalent branches at 0x10bec50, 0x10beca0, 0x10becf0, 0x10bed40).
+    def encode(byte):
+        return (swap(ror8((byte - 0x73) & 0xff, 2)) + 0x6c) & 0xff
+
+    inverse = {encode(byte): byte for byte in range(256)}
+    if (len(inverse) != 256 or encode(0) != 0xff
+            or hashlib.sha256(bytes(inverse[index] for index in range(256))).hexdigest()
+            != NESTED_FLOAT_INVERSE_SHA256):
+        raise ValueError('cast nested float byte transform differs')
+    return inverse
+
+
+NESTED_FLOAT_INVERSE = nested_float_inverse()
+
+
 def decode_flag(encoded, table):
     # Exact callback byte path at RVA 0x002bd2ec and 0x002bd4c2.
     value = table[swap(ror8(encoded, 2))] ^ 0xea
@@ -123,10 +143,17 @@ def decode_packet(emulator, context, raw_param, payload, table):
                        return_al=return_al, consumed=consumed)
     raw_i32 = obj[0x14c:0x150]
     opaque_i32 = struct.unpack('<i', bytes(map(decode_i32_byte, raw_i32)))[0]
+    raw_float = obj[0xe0:0xe4]
+    opaque_float = struct.unpack('<f', bytes(NESTED_FLOAT_INVERSE[byte]
+                                             for byte in raw_float))[0]
+    if not math.isfinite(opaque_float):
+        return failure('nested cast packet float is not finite',
+                       return_al=return_al, consumed=consumed)
     return {'status': 'DECODED', 'deserialize_return_al': return_al,
             'bytes_consumed': consumed, 'native_packet_id': PACKET_ID,
             'native_raw_param': raw_param, 'raw_flag_byte_hex': f'{raw_flag:02x}',
             'opaque_flag_0x148': opaque_flag,
+            'raw_f32_bytes_hex': raw_float.hex(), 'opaque_f32_0xe0': opaque_float,
             'raw_i32_bytes_hex': raw_i32.hex(), 'opaque_i32_0x14c': opaque_i32}
 
 
@@ -166,7 +193,9 @@ def main():
             row.update(binding)
             results.append(row)
         json.dump({'status': 'PASS', 'runtime_image_sha256': digest,
-                   'callback_table_sha256': table_sha, 'results': results},
+                   'callback_table_sha256': table_sha,
+                   'nested_float_inverse_sha256': NESTED_FLOAT_INVERSE_SHA256,
+                   'results': results},
                   sys.stdout, separators=(',', ':'))
         sys.stdout.write('\n')
         return 0
