@@ -24,6 +24,7 @@ const DEATHS_OFFSET = 0x50;
 const ASSISTS_OFFSET = 0x54;
 const VISION_SCORE_OFFSET = 0x1b0;
 const EPIC_MONSTER_DAMAGE_OFFSET = 0x21c;
+const CROWD_CONTROL_TIME_OFFSET = 0x230;
 const TOTAL_HEAL_OFFSET = 0x234;
 const KILL_STATS_FIELDS = Object.freeze([
   Object.freeze({ tailField: 'LARGEST_KILLING_SPREE', candidateKey: 'largest_killing_spree_candidate', offset: 0x58 }),
@@ -61,6 +62,7 @@ const HERO_STATS_SNAPSHOT_CAPABILITIES = Object.freeze([
   'hero_total_heal_snapshot',
   'hero_vision_score_snapshot',
   'hero_epic_monster_damage_snapshot',
+  'hero_crowd_control_time_snapshot',
 ]);
 const HERO_STATS_SNAPSHOT_CAPABILITY_SET = new Set(HERO_STATS_SNAPSHOT_CAPABILITIES);
 const PRECOLLECTED_SCAN_SOURCE = new WeakMap();
@@ -425,6 +427,30 @@ const HERO_EPIC_MONSTER_DAMAGE_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_CROWD_CONTROL_TIME_SNAPSHOT_CANDIDATE_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-hero-crowd-control-time-keyframe-candidate-v1',
+  replay_version: REPLAY_VERSION,
+  capability: 'hero_crowd_control_time_snapshot',
+  status: 'CANDIDATE',
+  enabled: true,
+  replay_block_packet_id: PACKET_ID,
+  stream_tags: Object.freeze([2, 3]),
+  hero_raw_param_first: HERO_PARAM_FIRST,
+  hero_raw_param_last: HERO_PARAM_LAST,
+  payload_length: PAYLOAD_LENGTH,
+  decoded_blob_length: BLOB_LENGTH,
+  crowd_control_time_f32le_offset_candidate: CROWD_CONTROL_TIME_OFFSET,
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  evidence_scope: 'exact HN HeroStats route and transform; decoded f32 offset 0x230 correlates after flooring with TOTAL_TIME_CROWD_CONTROL_DEALT_TO_CHAMPIONS Replay tails across 350 participant snapshots from 35 keyframes in one HN Replay',
+  known_limits: Object.freeze([
+    'Only observed keyframe 0x0276 snapshots are emitted; no crowd-control event, target, source, application, or intervening value is inferred.',
+    'The offset 0x230 interpretation and hero participant mapping remain candidates from one HN Replay, not exact-runtime field semantics.',
+    'Raw f32 and its derived floor are retained separately; the floor is not a stored integer duration.',
+    'Five last observed floors remain below their Replay tails; tail gaps are retained without interpolation.',
+  ]),
+});
+
 function decodeHeroStatsByte(encoded) {
   const x = LOOKUP_TABLE[encoded];
   let y = (((x & 0xd5) << 1) | ((x >>> 1) & 0x55)) & 0xff;
@@ -599,6 +625,12 @@ function decodeHeroEpicMonsterDamagePayload(payload) {
     'epic monster damage');
 }
 
+function decodeHeroCrowdControlTimePayload(payload) {
+  return decodeHeroFloatTailPayload(payload, CROWD_CONTROL_TIME_OFFSET,
+    'crowd_control_time_raw_f32_candidate', 'crowd_control_time_floor_candidate',
+    'crowd control time');
+}
+
 function assessHeroStatsTail(replay, field) {
   const stats = replay?.tail?.stats;
   if (!Array.isArray(stats)) {
@@ -712,6 +744,10 @@ function assessHeroVisionScoreSnapshotTail(replay) {
 
 function assessHeroEpicMonsterDamageSnapshotTail(replay) {
   return assessHeroStatsTail(replay, 'TOTAL_DAMAGE_DEALT_TO_EPIC_MONSTERS');
+}
+
+function assessHeroCrowdControlTimeSnapshotTail(replay) {
+  return assessHeroStatsTail(replay, 'TOTAL_TIME_CROWD_CONTROL_DEALT_TO_CHAMPIONS');
 }
 
 function packetRef(replay, block, chunk) {
@@ -1698,6 +1734,18 @@ function decodeHeroEpicMonsterDamageFromScan(replay, scan) {
   });
 }
 
+function decodeHeroCrowdControlTimeFromScan(replay, scan) {
+  return decodeHeroFloatTailFromScan(replay, scan, {
+    profile: HERO_CROWD_CONTROL_TIME_SNAPSHOT_CANDIDATE_PROFILE,
+    assessTail: assessHeroCrowdControlTimeSnapshotTail,
+    decodePayload: decodeHeroCrowdControlTimePayload,
+    rawKey: 'crowd_control_time_raw_f32_candidate',
+    floorKey: 'crowd_control_time_floor_candidate',
+    eventType: 'HERO_CROWD_CONTROL_TIME_SNAPSHOT_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_EXACT_ROUTE_ONE_REPLAY_CROWD_CONTROL_TIME_TAIL_CORRELATION',
+  });
+}
+
 function decodeHeroStatsSnapshotCandidateSet(replay, capabilities, precollectedScan) {
   if (!Array.isArray(capabilities) && !(capabilities instanceof Set)) {
     throw new TypeError('HeroStats candidate capabilities must be an array or Set');
@@ -1753,6 +1801,9 @@ function decodeHeroStatsSnapshotCandidateSet(replay, capabilities, precollectedS
   }
   if (selected.has('hero_epic_monster_damage_snapshot')) {
     outcomes.hero_epic_monster_damage_snapshot = decodeHeroEpicMonsterDamageFromScan(replay, scan);
+  }
+  if (selected.has('hero_crowd_control_time_snapshot')) {
+    outcomes.hero_crowd_control_time_snapshot = decodeHeroCrowdControlTimeFromScan(replay, scan);
   }
   return outcomes;
 }
@@ -1827,6 +1878,11 @@ function decodeHeroEpicMonsterDamageSnapshotCandidates(replay) {
     ['hero_epic_monster_damage_snapshot']).hero_epic_monster_damage_snapshot;
 }
 
+function decodeHeroCrowdControlTimeSnapshotCandidates(replay) {
+  return decodeHeroStatsSnapshotCandidateSet(replay,
+    ['hero_crowd_control_time_snapshot']).hero_crowd_control_time_snapshot;
+}
+
 module.exports = {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   collectHeroStatsScanWithObserver,
@@ -1842,6 +1898,7 @@ module.exports = {
   HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_VISION_SCORE_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_EPIC_MONSTER_DAMAGE_SNAPSHOT_CANDIDATE_PROFILE,
+  HERO_CROWD_CONTROL_TIME_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_JUNGLE_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE_PROFILE,
   assessHeroAssistsSnapshotTail,
@@ -1857,6 +1914,7 @@ module.exports = {
   assessHeroTotalHealSnapshotTail,
   assessHeroVisionScoreSnapshotTail,
   assessHeroEpicMonsterDamageSnapshotTail,
+  assessHeroCrowdControlTimeSnapshotTail,
   assessHeroMinionsKilledSnapshotTail,
   analyzeReplayWithHeroStats,
   decodeHeroStatsByte,
@@ -1886,6 +1944,8 @@ module.exports = {
   decodeHeroVisionScoreSnapshotCandidates,
   decodeHeroEpicMonsterDamagePayload,
   decodeHeroEpicMonsterDamageSnapshotCandidates,
+  decodeHeroCrowdControlTimePayload,
+  decodeHeroCrowdControlTimeSnapshotCandidates,
   decodeHeroStatsSnapshotCandidateSet,
   decodeHeroMinionsKilledPayload,
   decodeHeroMinionsKilledSnapshotCandidates,

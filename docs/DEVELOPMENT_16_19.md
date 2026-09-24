@@ -241,6 +241,17 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   zero framing errors and tail-gap totals 2/0; local output is under
   `artifacts/16_19_development/vision_epic_hn_cli_smoke/`. Neither candidate
   establishes an individual vision or damage event.
+- **Done:** `hero_crowd_control_time_snapshot` emits decoded HN HeroStats f32
+  offset `0x230` and its derived floor. In the same 35 keyframes and ten
+  participants, the value rises 177 times, never declines or exceeds the
+  Replay-tail `TOTAL_TIME_CROWD_CONTROL_DEALT_TO_CHAMPIONS`; final floors
+  match 5/10 tails and the remaining gaps total 12. Its complete sequence is
+  unique among 315 aligned f32 offsets; nine participant shifts give at most
+  one tail match. The exact HN CLI smoke emitted 350 candidate rows from
+  2,035,757 blocks with zero framing errors under
+  `artifacts/16_19_development/crowd_control_time_hn_cli_smoke/`. The offset
+  interpretation and participant mapping remain one-Replay candidates; no
+  individual crowd-control event, target or source is inferred.
 - **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
   runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
   observed slot/item-definition-key records as candidates. All 94 game packets
