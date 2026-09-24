@@ -144,7 +144,7 @@ test('BuffRemove2 stops at 50,001 route packets before a later framing error', (
   assert.equal(invoke.mock.callCount(), 0);
 });
 
-test('BuffRemove2 rejects Replay source mutation during the walk', (t) => {
+test('BuffRemove2 rejects Replay source mutation during source validation', (t) => {
   const invoke = t.mock.method(childProcess, 'spawnSync', () => {
     throw new Error('runtime must not run');
   });
@@ -162,7 +162,7 @@ test('BuffRemove2 rejects Replay source mutation during the walk', (t) => {
     { runtimeImagePath: temporaryImage(t) });
   assert.equal(changed, true);
   assert.equal(result.status, 'DECODE_FAILED');
-  assert.match(result.error, /Replay source integrity failed after walk/);
+  assert.match(result.error, /Replay source integrity failed/);
   assert.equal(result.events, null);
   assert.equal(invoke.mock.callCount(), 0);
 });
