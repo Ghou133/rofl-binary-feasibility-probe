@@ -54,7 +54,7 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   A four-byte-aligned scan found no second offset meeting the same tail and
   monotonic criteria; adjacent gold/CS offsets fail the EXP control. This is
   one-Replay field correlation, not an XP transition or confirmed field.
-- **CLI/API efficiency:** Selecting the CS, EXP and GOLD_EARNED HeroStats
+- **CLI/API efficiency:** Selecting the CS, EXP, GOLD_EARNED and GOLD_SPENT HeroStats
   candidates together traverses keyframe chunks once while keeping separate
   field validation and per-capability results. A synthetic traversal-count
   test and HN/KR combined runs cover the shared path.
@@ -91,10 +91,19 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
 - **HeroStats KR control:** One KR Replay has 19,698 keyframe `0x0276` packets
   of lengths 2–16 bytes and zero HN 1263-byte fingerprints. The HN HeroStats
   candidate reports `PROFILE_UNAVAILABLE`; these raw KR packets are unclassified.
-- **Further gold lead:** HN f32LE offset `0x34` correlates with tail
-  `GOLD_SPENT` in 350 keyframe observations, but one participant's value
-  decreases by 100. Keep that observation and avoid treating it as a
-  monotonic earned-gold counter or a confirmed refund transaction.
+- **Done:** `hero_gold_spent_snapshot` exposes candidate HN keyframe values
+  from f32LE offset `0x34`. In the same exact HN Replay, all 350 values are
+  nonnegative integers; the first ten are zero. Eight final values match
+  tail `GOLD_SPENT`, and the other two are 500 lower (signed total difference
+  1000 over the final 36,824 ms). One participant's observation declines
+  from 9183 at 1,440,507 ms to 9083 at 1,500,533 ms; both raw packet refs
+  remain in the output. The decoder does not require monotonicity or a
+  nonnegative tail difference, and does not classify a sale, refund or
+  transaction. In a 315-offset aligned f32 scan, only `0x34` met the observed
+  integer/dynamic/initial-zero/final-tail criteria; circular tail shifts 1–9
+  had zero exact matches and at least 30,670 absolute difference, versus
+  eight exact and 1000 on the original participant alignment. This is one
+  HN Replay correlation, not a confirmed gold-spent field.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
   HN Replays to test level and HeroStats CS/EXP/gold candidates. Movement-route
   research remains blocked on an exact registration-to-position-field link.
