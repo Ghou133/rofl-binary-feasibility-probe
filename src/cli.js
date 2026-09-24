@@ -22,6 +22,7 @@ const {
   assessHeroWardStatsSnapshotTail,
   assessHeroDamageTotalsSnapshotTail,
   assessHeroDamageTakenFromChampionsSnapshotTail,
+  assessHeroDamageSelfMitigatedSnapshotTail,
   assessHeroTotalHealSnapshotTail,
   assessHeroVisionScoreSnapshotTail,
   assessHeroEpicMonsterDamageSnapshotTail,
@@ -1691,6 +1692,8 @@ function capabilityQuery(replay, options = {}) {
                       ? assessHeroDamageTotalsSnapshotTail(replay)
                     : capability === 'hero_damage_taken_from_champions_snapshot'
                       ? assessHeroDamageTakenFromChampionsSnapshotTail(replay)
+                    : capability === 'hero_damage_self_mitigated_snapshot'
+                      ? assessHeroDamageSelfMitigatedSnapshotTail(replay)
                     : capability === 'hero_total_heal_snapshot'
                       ? assessHeroTotalHealSnapshotTail(replay)
                     : capability === 'hero_vision_score_snapshot'
@@ -1804,6 +1807,11 @@ function capabilityQuery(replay, options = {}) {
           'HN keyframe 0x0276 f32 offset 0x200 and observed sequences');
       }
       if (profile.game_version === '16.19.820.7193'
+          && capability === 'hero_damage_self_mitigated_snapshot') {
+        validationPending.push('ten-participant TOTAL_DAMAGE_SELF_MITIGATED tail values',
+          'HN keyframe 0x0276 f32 offset 0x208 and observed sequences');
+      }
+      if (profile.game_version === '16.19.820.7193'
           && capability === 'hero_total_heal_snapshot') {
         validationPending.push('ten-participant TOTAL_HEAL tail values',
           'HN keyframe 0x0276 u32 offset 0x234 and observed sequences');
@@ -1891,6 +1899,8 @@ function capabilityQuery(replay, options = {}) {
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
             hero_damage_taken_from_champions_snapshot:
               'hero_damage_taken_from_champions_snapshot_candidates',
+            hero_damage_self_mitigated_snapshot:
+              'hero_damage_self_mitigated_snapshot_candidates',
             hero_total_heal_snapshot: 'hero_total_heal_snapshot_candidates',
             hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
             hero_epic_monster_damage_snapshot: 'hero_epic_monster_damage_snapshot_candidates',

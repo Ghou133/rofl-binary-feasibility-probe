@@ -65,7 +65,7 @@ function fixture({ foreignShape = false, version = BUILD } = {}) {
   return replay;
 }
 
-test('frozen capability list covers the seventeen shared HeroStats candidates', () => {
+test('frozen capability list covers the eighteen shared HeroStats candidates', () => {
   assert.equal(Object.hasOwn(heroStats, 'createHeroStatsScanCollector'), false);
   assert.equal(Object.isFrozen(HERO_STATS_SNAPSHOT_CAPABILITIES), true);
   assert.deepEqual(HERO_STATS_SNAPSHOT_CAPABILITIES, [
@@ -78,6 +78,7 @@ test('frozen capability list covers the seventeen shared HeroStats candidates', 
     'hero_ward_stats_snapshot',
     'hero_damage_totals_snapshot',
     'hero_damage_taken_from_champions_snapshot',
+    'hero_damage_self_mitigated_snapshot',
     'hero_total_heal_snapshot',
     'hero_vision_score_snapshot',
     'hero_epic_monster_damage_snapshot',
