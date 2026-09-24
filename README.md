@@ -27,6 +27,7 @@
 | `16.19.820.7193 --events hero_damage_taken_from_champions_snapshot` | HN HeroStats keyframe `0x200` 的原始浮点值及取整后的候选对英雄承伤快照 | 仅写入 `hero_damage_taken_from_champions_snapshot_candidates`；尾部相关性不证明逐次伤害或来源 |
 | `16.19.820.7193 --events hero_damage_self_mitigated_snapshot` | HN HeroStats keyframe `0x208` 的原始浮点值及取整后的候选自我减伤快照 | 仅写入 `hero_damage_self_mitigated_snapshot_candidates`；不推导逐次减伤事件 |
 | `16.19.820.7193 --events hero_longest_living_time_snapshot` | HN HeroStats keyframe `0x244` 的原始浮点值及取整后的候选最长存活时间快照 | 仅写入 `hero_longest_living_time_snapshot_candidates`；三场尾部对照为 10/10、10/10、9/10，不推导单次存活或死亡时长 |
+| `16.19.820.7193 --events hero_total_time_spent_dead_snapshot` | HN HeroStats keyframe `0x248` 的原始浮点值及取整后的候选累计死亡时间快照 | 仅写入 `hero_total_time_spent_dead_snapshot_candidates`；三场尾部相关性仍为候选，不推导逐次死亡时长 |
 | `16.19.820.7193 --events hero_total_heal_snapshot` | 同一 HN keyframe 中 `0x234` 的候选累计治疗上报值 | 仅写入 `hero_total_heal_snapshot_candidates`；一场回放的尾部相关性，不推导逐次治疗、有效治疗或过量治疗 |
 | `16.19.820.7193 --events hero_vision_score_snapshot` | 同一 HN keyframe 中 `0x1b0` 原始浮点值及取整后的候选视野得分 | 仅写入 `hero_vision_score_snapshot_candidates`；一场回放的尾部相关性，不推导守卫或视野事件 |
 | `16.19.820.7193 --events hero_epic_monster_damage_snapshot` | 同一 HN keyframe 中 `0x21c` 原始浮点值及取整后的候选史诗野怪伤害累计值 | 仅写入 `hero_epic_monster_damage_snapshot_candidates`；一场回放的尾部相关性，不推导逐次伤害或目标归属 |
@@ -132,7 +133,7 @@ node src/cli.js batch "D:\Replays\HN-example.rofl" "D:\Replays\KR-example.rofl" 
 
 ```powershell
 node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
-  --events hero_damage_self_mitigated_snapshot,hero_longest_living_time_snapshot `
+  --events hero_damage_self_mitigated_snapshot,hero_longest_living_time_snapshot,hero_total_time_spent_dead_snapshot `
   --out-dir "work\16-19-hero-stats-snapshots"
 ```
 

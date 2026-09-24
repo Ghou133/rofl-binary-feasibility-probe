@@ -341,6 +341,17 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   death packet also occurs after that keyframe, without proving an update
   rule. The selected real CLI run emitted 290 candidate rows with zero framing
   errors. No individual life span or death duration is inferred.
+- **Done:** Opt-in `hero_total_time_spent_dead_snapshot` uses the independent
+  `0x248` HeroStats f32 hypothesis for
+  `TOTAL_TIME_SPENT_DEAD` was fixed using the first two HN Replays before
+  opening the third. Its final floors matched 7/10, 7/10 and 10/10 tails;
+  all snapshots remained finite, nonnegative, monotone and within tail
+  bounds. Nine participant rotations matched at most one tail in the first
+  two Replays and none in the third; adjacent `0x244` and `0x24c`, plus u32
+  at `0x248`, failed the same bounds or final-value controls. This supports
+  a candidate snapshot, not individual death duration. The selected CLI on
+  the third Replay emitted 290 candidate rows over 29 keyframes with ten
+  observed participants, zero tail-value gap and zero framing errors.
 - **Done:** `--events hero_inventory_mapview --runtime-image <exact-image>`
   runs the pinned HN `0x0420` MapView constructor/deserializer and emits only
   observed slot/item-definition-key records as candidates. All 94 game packets
