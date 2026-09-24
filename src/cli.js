@@ -592,6 +592,9 @@ function parseOne1619(replay, options, started) {
         note: decoded.note ?? null,
         requested_capabilities: requested,
         capability_results: capabilitySummary.capabilityResults,
+        ...(decoded.candidate_associations
+          && Object.keys(decoded.candidate_associations).length > 0
+          ? { candidate_associations: decoded.candidate_associations } : {}),
         runtime_image_requested: options.runtimeImage ? path.resolve(options.runtimeImage) : null,
         runtime_image_used: runtimeImageUsed,
         runtime_image_sha256: decoded.runtime_image_sha256 ?? null,

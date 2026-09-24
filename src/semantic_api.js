@@ -22,6 +22,8 @@ const { decodeNpcBuffRemovePacketCandidates } =
   require('./decoders/rofl_16_19_buff_remove_candidate');
 const { decodeNpcBuffAddPacketCandidates } =
   require('./decoders/rofl_16_19_buff_add_candidate');
+const { analyzeBuffPacketKeyCompatibility } =
+  require('./decoders/rofl_16_19_buff_key_compatibility');
 const {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   decodeHeroStatsSnapshotCandidateSet,
@@ -1929,12 +1931,39 @@ function decode1619(replay, profile, options = {}) {
     uniqueDecodedInputCounts.set(packetId,
       Math.max(uniqueDecodedInputCounts.get(packetId) ?? 0, result.input_count));
   }
+  const candidateAssociations = {};
+  if (selectsBuffAdd && selectsBuffRemove) {
+    const addRows = events.npc_buff_add_packet_candidates;
+    const removeRows = events.npc_buff_remove_packet_candidates;
+    if (Array.isArray(addRows) && Array.isArray(removeRows)) {
+      try {
+        candidateAssociations.npc_buff_add_remove_opaque_key =
+          analyzeBuffPacketKeyCompatibility(addRows, removeRows,
+            replay.source_sha256);
+      } catch (error) {
+        candidateAssociations.npc_buff_add_remove_opaque_key = {
+          status: 'DECODE_FAILED',
+          error: error.message || String(error),
+        };
+      }
+    } else {
+      candidateAssociations.npc_buff_add_remove_opaque_key = {
+        status: 'UNAVAILABLE',
+        required_capabilities: ['npc_buff_add_packet', 'npc_buff_remove_packet'],
+        dependency_statuses: {
+          npc_buff_add_packet: capabilityResults.npc_buff_add_packet?.status ?? 'UNEXECUTED',
+          npc_buff_remove_packet: capabilityResults.npc_buff_remove_packet?.status ?? 'UNEXECUTED',
+        },
+      };
+    }
+  }
   return {
     status,
     game_version: profile.game_version,
     profile,
     events: usable.length > 0 ? events : null,
     capability_results: capabilityResults,
+    candidate_associations: candidateAssociations,
     decoded_packet_count: [...uniqueDecodedInputCounts.values()]
       .reduce((sum, count) => sum + count, 0),
     runtime_image_used: results.some((result) => result.runtime_image_used === true),
