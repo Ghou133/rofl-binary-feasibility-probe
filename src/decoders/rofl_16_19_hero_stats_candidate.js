@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 
+const { analyzeReplay } = require('../analysis');
 const { walkBlocks } = require('../rofl');
 
 const REPLAY_VERSION = '16.19.820.7193';
@@ -19,6 +20,16 @@ const DEATHS_OFFSET = 0x50;
 const CHAMPION_KILLS_MIRROR_OFFSET = 0x33c;
 const RUNTIME_IMAGE_SHA256 = '7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f780af11ed6df76d';
 const LOOKUP_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b';
+const HERO_STATS_SNAPSHOT_CAPABILITIES = Object.freeze([
+  'hero_minions_killed_snapshot',
+  'hero_experience_snapshot',
+  'hero_gold_earned_snapshot',
+  'hero_gold_spent_snapshot',
+  'hero_champion_kills_snapshot',
+  'hero_deaths_snapshot',
+]);
+const HERO_STATS_SNAPSHOT_CAPABILITY_SET = new Set(HERO_STATS_SNAPSHOT_CAPABILITIES);
+const PRECOLLECTED_SCAN_SOURCE = new WeakMap();
 
 // Exact 256-byte table at RVA 0x1ba7600 of the captured 16.19.820.7193 image.
 // The deserializer at RVA 0xf33290 uses this table before reversing the blob.
@@ -336,6 +347,27 @@ function packetRef(replay, block, chunk) {
   };
 }
 
+function finalizeHeroStatsRows(replay, rows, scannedBlockCount) {
+  if (replay?.header?.version !== REPLAY_VERSION) {
+    return { status: 'UNSUPPORTED', scanned_block_count: null };
+  }
+  if (rows.length === 0) {
+    return { status: 'PROFILE_UNAVAILABLE', scanned_block_count: scannedBlockCount,
+      error: 'HN HeroStats 0x0276 keyframe route is absent from this Replay' };
+  }
+  const hasHnFingerprint = rows.some(({ block }) => block.payload_length === PAYLOAD_LENGTH
+    && block.payload[0] === 0x1c && block.payload[1] === 0xa6 && block.payload[2] === 0xe8);
+  if (!hasHnFingerprint) {
+    return { status: 'PROFILE_UNAVAILABLE', scanned_block_count: scannedBlockCount,
+      observed_raw_route_count: rows.length,
+      error: '0x0276 keyframe route is present, but no packet matches the exact HN HeroStats payload fingerprint' };
+  }
+  rows.sort((left, right) => left.block.timestamp_ms - right.block.timestamp_ms
+    || (left.block.param >>> 0) - (right.block.param >>> 0)
+    || left.chunk.index - right.chunk.index || left.block.offset - right.block.offset);
+  return { status: 'PASS', scanned_block_count: scannedBlockCount, rows };
+}
+
 function scanHeroStatsRows(replay) {
   if (replay?.header?.version !== REPLAY_VERSION) {
     return { status: 'UNSUPPORTED', scanned_block_count: null };
@@ -350,21 +382,98 @@ function scanHeroStatsRows(replay) {
     return { status: 'DECODE_FAILED', scanned_block_count: null,
       error: `Replay keyframe framing failed: ${error.message}` };
   }
-  if (rows.length === 0) {
-    return { status: 'PROFILE_UNAVAILABLE', scanned_block_count: walk.block_count,
-      error: 'HN HeroStats 0x0276 keyframe route is absent from this Replay' };
+  return finalizeHeroStatsRows(replay, rows, walk.block_count);
+}
+
+function createHeroStatsScanCollector(replay) {
+  if (!replay || typeof replay !== 'object') {
+    throw new TypeError('HeroStats scan collector requires a Replay object');
   }
-  const hasHnFingerprint = rows.some(({ block }) => block.payload_length === PAYLOAD_LENGTH
-    && block.payload[0] === 0x1c && block.payload[1] === 0xa6 && block.payload[2] === 0xe8);
-  if (!hasHnFingerprint) {
-    return { status: 'PROFILE_UNAVAILABLE', scanned_block_count: walk.block_count,
-      observed_raw_route_count: rows.length,
-      error: '0x0276 keyframe route is present, but no packet matches the exact HN HeroStats payload fingerprint' };
+  const source = {
+    replay,
+    source_path: replay.source_path ?? null,
+    source_sha256: replay.source_sha256 ?? null,
+    version: replay.header?.version ?? null,
+  };
+  const rows = [];
+  let keyframeBlockCount = 0;
+  let finished = false;
+  return Object.freeze({
+    observe(block, chunk) {
+      if (finished) throw new Error('HeroStats scan collector is already finished');
+      if (chunk?.stream_tag !== 2 && chunk?.stream_tag !== 3) return;
+      keyframeBlockCount += 1;
+      if (block?.packet_id !== PACKET_ID) return;
+      if (!Buffer.isBuffer(block.payload) || block.payload.length !== block.payload_length) {
+        throw new TypeError('HeroStats observed block payload is invalid');
+      }
+      // Copy only selected keyframe payloads so later reuse does not retain
+      // whole decompressed chunks or depend on caller mutation.
+      rows.push({
+        block: {
+          offset: block.offset,
+          payload_offset: block.payload_offset,
+          payload_length: block.payload_length,
+          payload: Buffer.from(block.payload),
+          timestamp_ms: block.timestamp_ms,
+          packet_id: block.packet_id,
+          param: block.param,
+        },
+        chunk: {
+          index: chunk.index,
+          chunk_id: chunk.chunk_id,
+          stream: chunk.stream,
+          offset: chunk.offset,
+        },
+      });
+    },
+    finish(expectedKeyframeBlockCount) {
+      if (finished) throw new Error('HeroStats scan collector is already finished');
+      if (expectedKeyframeBlockCount !== undefined
+        && (!Number.isSafeInteger(expectedKeyframeBlockCount)
+          || expectedKeyframeBlockCount !== keyframeBlockCount)) {
+        throw new RangeError('HeroStats expected keyframe block count differs from observed framing');
+      }
+      finished = true;
+      const scan = finalizeHeroStatsRows(replay, rows, keyframeBlockCount);
+      const token = Object.freeze({
+        status: scan.status,
+        scanned_block_count: scan.scanned_block_count,
+        ...(scan.observed_raw_route_count === undefined ? {}
+          : { observed_raw_route_count: scan.observed_raw_route_count }),
+      });
+      PRECOLLECTED_SCAN_SOURCE.set(token, { ...source, scan });
+      return token;
+    },
+  });
+}
+
+function analyzeReplayWithHeroStats(replay, options = {}) {
+  const collector = createHeroStatsScanCollector(replay);
+  // The observer is owned by this function and only receives blocks from the
+  // full analyzer walk. Do not expose it to callers as a source of packet refs.
+  const analysis = analyzeReplay(replay, {
+    ...options,
+    includeStreams: [1, 2, 3],
+    onBlock: collector.observe,
+  });
+  return {
+    analysis,
+    heroStatsScan: analysis.block_errors.length === 0 ? collector.finish() : null,
+  };
+}
+
+function replayBoundHeroStatsScan(replay, token) {
+  const source = token && typeof token === 'object'
+    ? PRECOLLECTED_SCAN_SOURCE.get(token) : null;
+  if (source?.replay === replay
+    && source.source_path === (replay?.source_path ?? null)
+    && source.source_sha256 === (replay?.source_sha256 ?? null)
+    && source.version === (replay?.header?.version ?? null)) {
+    return source.scan;
   }
-  rows.sort((left, right) => left.block.timestamp_ms - right.block.timestamp_ms
-    || (left.block.param >>> 0) - (right.block.param >>> 0)
-    || left.chunk.index - right.chunk.index || left.block.offset - right.block.offset);
-  return { status: 'PASS', scanned_block_count: walk.block_count, rows };
+  return { status: 'DECODE_FAILED', scanned_block_count: null,
+    error: 'HeroStats precollected scan belongs to a different Replay or is unbound' };
 }
 
 function collectHeroStatsSnapshotCandidates(replay, spec, scan) {
@@ -735,23 +844,19 @@ function decodeHeroDeathsFromScan(replay, scan) {
   };
 }
 
-function decodeHeroStatsSnapshotCandidateSet(replay, capabilities) {
+function decodeHeroStatsSnapshotCandidateSet(replay, capabilities, precollectedScan) {
   if (!Array.isArray(capabilities) && !(capabilities instanceof Set)) {
     throw new TypeError('HeroStats candidate capabilities must be an array or Set');
   }
   const selected = new Set(capabilities);
   for (const capability of selected) {
-    if (capability !== 'hero_minions_killed_snapshot'
-      && capability !== 'hero_experience_snapshot'
-      && capability !== 'hero_gold_earned_snapshot'
-      && capability !== 'hero_gold_spent_snapshot'
-      && capability !== 'hero_champion_kills_snapshot'
-      && capability !== 'hero_deaths_snapshot') {
+    if (!HERO_STATS_SNAPSHOT_CAPABILITY_SET.has(capability)) {
       throw new RangeError(`unsupported HeroStats candidate capability: ${String(capability)}`);
     }
   }
   if (selected.size === 0) return {};
-  const scan = scanHeroStatsRows(replay);
+  const scan = precollectedScan === undefined
+    ? scanHeroStatsRows(replay) : replayBoundHeroStatsScan(replay, precollectedScan);
   const outcomes = {};
   if (selected.has('hero_minions_killed_snapshot')) {
     outcomes.hero_minions_killed_snapshot = decodeHeroMinionsKilledFromScan(replay, scan);
@@ -805,6 +910,7 @@ function decodeHeroDeathsSnapshotCandidates(replay) {
 }
 
 module.exports = {
+  HERO_STATS_SNAPSHOT_CAPABILITIES,
   HERO_CHAMPION_KILLS_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_DEATHS_SNAPSHOT_CANDIDATE_PROFILE,
   HERO_EXPERIENCE_SNAPSHOT_CANDIDATE_PROFILE,
@@ -817,6 +923,7 @@ module.exports = {
   assessHeroGoldEarnedSnapshotTail,
   assessHeroGoldSpentSnapshotTail,
   assessHeroMinionsKilledSnapshotTail,
+  analyzeReplayWithHeroStats,
   decodeHeroStatsByte,
   decodeHeroChampionKillsPayload,
   decodeHeroChampionKillsSnapshotCandidates,

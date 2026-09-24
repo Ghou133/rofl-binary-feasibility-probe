@@ -15,6 +15,7 @@ const {
   decodeHeroLevelStateCandidates,
 } = require('./decoders/rofl_16_19_820_7193');
 const {
+  HERO_STATS_SNAPSHOT_CAPABILITIES,
   decodeHeroStatsSnapshotCandidateSet,
 } = require('./decoders/rofl_16_19_hero_stats_candidate');
 const {
@@ -1806,12 +1807,7 @@ function decode1619(replay, profile, options = {}) {
   const gameRouteCapabilities = new Set([
     'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
   ]);
-  const heroStatsCapabilities = new Set([
-    'hero_minions_killed_snapshot', 'hero_experience_snapshot',
-    'hero_gold_earned_snapshot',
-    'hero_gold_spent_snapshot',
-    'hero_champion_kills_snapshot', 'hero_deaths_snapshot',
-  ]);
+  const heroStatsCapabilities = new Set(HERO_STATS_SNAPSHOT_CAPABILITIES);
   const collected = capabilities.some((capability) => gameRouteCapabilities.has(capability))
     ? collectCandidateRoutes(replay) : null;
   let timerOutcome = null;
@@ -1831,7 +1827,8 @@ function decode1619(replay, profile, options = {}) {
         ? decodeHeroRespawnCandidates(replay, collected, timerOutcome) : timerOutcome;
     } else if (heroStatsCapabilities.has(capability)) {
       heroStatsOutcomes ??= decodeHeroStatsSnapshotCandidateSet(replay,
-        capabilities.filter((name) => heroStatsCapabilities.has(name)));
+        capabilities.filter((name) => heroStatsCapabilities.has(name)),
+        options.heroStatsScan);
       outcome = heroStatsOutcomes[capability];
     } else {
       outcome = decoders[capability](replay, collected);

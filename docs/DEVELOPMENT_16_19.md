@@ -54,11 +54,14 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   A four-byte-aligned scan found no second offset meeting the same tail and
   monotonic criteria; adjacent gold/CS offsets fail the EXP control. This is
   one-Replay field correlation, not an XP transition or confirmed field.
-- **CLI/API efficiency:** Selecting the CS, EXP, GOLD_EARNED, GOLD_SPENT and
-  CHAMPIONS_KILLED HeroStats candidates together traverses keyframe chunks
-  once while keeping separate field validation and per-capability results.
-  A synthetic traversal-count
-  test and HN/KR combined runs cover the shared path.
+- **CLI/API efficiency:** Selecting the CS, EXP, GOLD_EARNED, GOLD_SPENT,
+  CHAMPIONS_KILLED and NUM_DEATHS HeroStats candidates together shares one
+  keyframe collection and retains separate field validation and results. The
+  16.19 CLI reuses its raw-analysis walk for that collection; a compressed
+  synthetic keyframe now decompresses once instead of twice. Standalone API
+  calls still perform their own strict walk. On the exact HN Replay, all six
+  candidate JSONL files are byte-identical before and after CLI scan reuse;
+  the KR Replay remains `PROFILE_UNAVAILABLE` for all six.
 - **Public test entry:** `npm run test:16-19` runs the portable 16.19 candidate
   decoder and CLI/API tests; `npm test` now includes it after maintenance.
   Real HN/KR Replay smoke remains separate evidence.

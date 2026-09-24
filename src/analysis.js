@@ -96,6 +96,10 @@ function analyzeReplay(replay, options = {}) {
   if (!Number.isSafeInteger(timelineLimit) || timelineLimit < 0) {
     throw new RangeError('timelineLimit must be a non-negative safe integer');
   }
+  const onBlock = options.onBlock ?? null;
+  if (onBlock !== null && typeof onBlock !== 'function') {
+    throw new TypeError('onBlock must be a function when supplied');
+  }
   const hexPrefixBytes = options.hexPrefixBytes ?? DEFAULT_HEX_PREFIX_BYTES;
   const packetStats = new Map();
   const timeline = [];
@@ -108,6 +112,8 @@ function analyzeReplay(replay, options = {}) {
   let lastBlock = null;
   let firstNonZero = null;
   const firstByStream = new Set();
+  let observerFailed = false;
+  let observerFailure;
 
   const walk = walkBlocks(replay, (block, chunk) => {
     packetCount += 1;
@@ -176,10 +182,22 @@ function analyzeReplay(replay, options = {}) {
     // Only the most recent block is retained; do not hash every discarded
     // last-block candidate or retain buffers from all decompressed chunks.
     lastBlock = { chunk, block };
+    // The caller may observe raw framed blocks during this walk. It must treat
+    // the supplied block and chunk as read-only; this analyzer retains no rows.
+    // Capture observer errors so walkBlocks does not mislabel them as framing errors.
+    if (onBlock !== null && !observerFailed) {
+      try {
+        onBlock(block, chunk);
+      } catch (error) {
+        observerFailed = true;
+        observerFailure = error;
+      }
+    }
   }, {
     includeStreams: options.includeStreams || [1, 2, 3],
     strict: Boolean(options.strict),
   });
+  if (observerFailed) throw observerFailure;
 
   for (const chunk of replay.chunks) {
     if (!chunkStats.has(chunk.index)) {

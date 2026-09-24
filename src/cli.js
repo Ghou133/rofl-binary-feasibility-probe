@@ -13,6 +13,8 @@ const {
   assessHeroGoldSpentSnapshotTail,
   assessHeroChampionKillsSnapshotTail,
   assessHeroDeathsSnapshotTail,
+  HERO_STATS_SNAPSHOT_CAPABILITIES,
+  analyzeReplayWithHeroStats,
 } = require('./decoders/rofl_16_19_hero_stats_candidate');
 
 const {
@@ -458,11 +460,17 @@ function summarizeCapabilityResults(requested, decoded) {
 }
 
 function parseOne1619(replay, options, started) {
-  const analysis = analyzeReplay(replay, {
+  const selectsHeroStats = options.semantic !== false
+    && Array.isArray(options.events)
+    && options.events.some((name) => HERO_STATS_SNAPSHOT_CAPABILITIES.includes(name));
+  const analysisOptions = {
     timelineLimit: options.timelineLimit,
     includePrivateMetadata: options.includePrivateMetadata,
     strict: options.strict,
-  });
+  };
+  const { analysis, heroStatsScan } = selectsHeroStats
+    ? analyzeReplayWithHeroStats(replay, analysisOptions)
+    : { analysis: analyzeReplay(replay, analysisOptions), heroStatsScan: null };
   // The raw analyzer initializes legacy event arrays. For a 16.19 run, only
   // arrays returned by an executed exact-build decoder may appear here.
   analysis.events = {};
@@ -512,6 +520,7 @@ function parseOne1619(replay, options, started) {
       try {
         decoded = decodeExactBuildReplay(replay, {
           capabilities: requested,
+          heroStatsScan: heroStatsScan ?? undefined,
           runtimeImagePath: options.runtimeImage ?? undefined,
           pythonExecutable: options.python ?? undefined,
         });
