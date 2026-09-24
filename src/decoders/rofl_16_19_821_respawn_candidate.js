@@ -215,7 +215,7 @@ function decodeHeroRespawnCandidates821(replay, precollected = null) {
     if (!Number.isSafeInteger(sumsMs[person - 1])) {
       return fail('candidate elapsed-time sum exceeds safe integer range');
     }
-    matched.push({ row, coTimed: coTimed[0], death: death.event });
+    matched.push({ row, coTimed: coTimed[0], death: death.event, intervalMs });
   }
 
   const terminalDeaths = deaths.filter(({ event }) => !usedDeaths.has(event));
@@ -230,7 +230,7 @@ function decodeHeroRespawnCandidates821(replay, precollected = null) {
     return fail('floor of paired death-to-0x0048 elapsed milliseconds does not match Replay tail TOTAL_TIME_SPENT_DEAD');
   }
 
-  const events = matched.map(({ row, coTimed, death }) => {
+  const events = matched.map(({ row, coTimed, death, intervalMs }) => {
     const refs = [
       packetRef(replay, row, 'candidate_observed_0x0048_return'),
       packetRef(replay, coTimed, 'co_timed_0x018d_support'),
@@ -246,6 +246,7 @@ function decodeHeroRespawnCandidates821(replay, precollected = null) {
       participant_id_candidate: death.victim_participant_id,
       return_raw_param: row.block.param >>> 0,
       matched_death_replay_time_ms_candidate: death.replay_time_ms,
+      observed_death_to_return_ms_candidate: intervalMs,
       confidence: 'CANDIDATE',
       semantic_status: 'CANDIDATE_821_REPLAY_TAIL_DEAD_TIME_CORRELATION',
       field_confidence: {
@@ -253,6 +254,7 @@ function decodeHeroRespawnCandidates821(replay, precollected = null) {
         return_raw_param: 'VERIFIED_DIRECT',
         participant_id_candidate: 'CANDIDATE_REPLAY_TAIL_COUNTS_AND_DEAD_TIME',
         matched_death_replay_time_ms_candidate: 'CANDIDATE_MATCHED_DEATH_CORE',
+        observed_death_to_return_ms_candidate: 'CANDIDATE_DIFFERENCE_OF_PAIRED_REPLAY_TIMES',
       },
       raw_packet_ref: refs[0],
       raw_packet_refs: refs,

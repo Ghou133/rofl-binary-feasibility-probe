@@ -17,7 +17,7 @@
 | `decode` / `analyze` / `batch` / `validate` | `16.15.801.3452` 旧版整合管线；16.19 精确 build 的指定能力实验入口 | 16.19 必须显式传 `--events`；16.16 语义 API 尚未由主 CLI 分发；`validate` 还会运行完整 Node 套件 |
 | `16.19.820.7193 --events hero_death` | HN/KR 结构指纹与回放尾部死亡总数同时匹配时，输出候选受害者和回放时间 | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；无杀手、助攻或重生推断，其他完整 build 不复用 |
 | `16.19.821.7343 --events hero_death` | KR `0x0259/0x0438/0x031b` 同刻路由与十名参与者回放尾部死亡数均匹配时，输出候选受害者和时间；`0x03d4` 作为可缺失的辅助观测 | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；孤立 `0x0259` 不输出，无 821 镜像，包 payload、杀手、计时及复活含义未确认 |
-| `16.19.821.7343 --events hero_respawn` | KR `0x0048` 与已验证死亡核心唯一配对、同刻前序 `0x018d` 支持，且每名参与者的已配对死亡到返回时长之和取整等于结算 `TOTAL_TIME_SPENT_DEAD` | 仅写入 `hero_respawn_candidates`，状态为 `CANDIDATE`；保留未观察到返回的末次死亡及额外 `0x018d`，不解释载荷或推断计时器；无 821 运行时镜像 |
+| `16.19.821.7343 --events hero_respawn` | KR `0x0048` 与已验证死亡核心唯一配对、同刻前序 `0x018d` 支持，且每名参与者的已配对死亡到返回时长之和取整等于结算 `TOTAL_TIME_SPENT_DEAD` | 仅写入 `hero_respawn_candidates`，状态为 `CANDIDATE`；提供两包时间差 `observed_death_to_return_ms_candidate`，保留未观察到返回的末次死亡及额外 `0x018d`；不推断计时器，无 821 运行时镜像 |
 | `16.19.821.7343 --events hero_deaths_snapshot` | KR `0x0089` 关键帧中一个原始字节的有限编码表，输出候选累计死亡次数快照 | 仅写入 `hero_deaths_snapshot_candidates`；末帧与结算可差 1 并保留差值；不是逐次死亡事件，也没有完整 HeroStats 变换或 821 镜像证明 |
 | `16.19.821.7343 --events hero_champion_kills_snapshot` | KR `0x0089` 关键帧的原始字节 434/1186 镜像与有限 0–17 编码表，输出候选累计英雄击杀数快照 | 仅写入 `hero_champion_kills_snapshot_candidates`；尾部差值原样保留；一份高击杀回放含未知编码，该能力失败但其他能力可继续；不推断击杀时点、击杀者或助攻 |
 | `16.19.821.7343 --events hero_assists_snapshot` | KR `0x0089` 关键帧原始字节 1178 的有限 0–17 编码表，输出候选累计助攻数快照 | 仅写入 `hero_assists_snapshot_candidates`；五份含未知高值编码的回放会使该能力失败，其他能力继续；无 821 运行时变换证明，不推断单次助攻或参与者关系 |

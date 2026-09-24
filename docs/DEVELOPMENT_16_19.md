@@ -23,7 +23,9 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   9 or 13; 33 matched deaths use a different full-param family, so identity is
   joined only through the validated participant candidate. This is a Replay
   correlation, not a runtime-confirmed respawn or payload decode. No timer is
-  inferred for unpaired final deaths.
+  inferred for unpaired final deaths. Each paired event also reports the
+  observed death-to-return millisecond difference as a candidate arithmetic
+  field, with no timer prediction.
 - **821 keyframe candidate:** `--events hero_deaths_snapshot` now reads only
   raw byte 1182 from exact KR `0x0089` keyframes of length 1263 and prefix
   `6700de`. A finite, locally derived codebook covers counts 0–12; 327
@@ -68,6 +70,21 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   have ordering contradictions. It remains raw evidence, not a registered
   candidate, until an exact 821 runtime transform or independent intermediate
   count can discriminate the interpretations.
+- **821 gold snapshot negative lead:** The same 3,270 keyframe hero packets
+  did not yield a defensible `GOLD_EARNED` or `GOLD_SPENT` numeric candidate.
+  Raw integer-window survivors from the first two Replays reversed or lost
+  their tail discrimination on the nine held-out files, and the strongest
+  float-shaped window spans wide final gold values under one code. No gold
+  capability was registered; an exact runtime transform or independent
+  intermediate balance is still needed.
+- **821 champion-damage negative lead:** No raw `f32`/`u32` window or bounded
+  byte transform passed numeric, monotone, and tail checks for
+  `TOTAL_DAMAGE_DEALT_TO_CHAMPIONS`. Byte 779 has an ordered high-byte signal:
+  a three-code mapping from the first two Replays matches 87/90 held-out
+  final tail exponent bytes, against 52–65/90 rotated-participant controls.
+  The six mismatches are one exponent behind the final tail, consistent with
+  a last-keyframe lag. Lower bytes and the inverse numeric transform remain
+  unknown, so 776–779 stays raw structural evidence, not a damage total.
 - **821 level observation candidate:** KR game route `0x0197` with exact
   `0x400000ae..b7` or `0x400001ae..b7` params has a bounded payload codebook
   for observed levels 1–19. The first two Replays supplied 304/304 decoded

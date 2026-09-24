@@ -117,6 +117,8 @@ test('821 candidate emits only observed 0x0048 times from matched death cores', 
     [1, 1, 4]);
   assert.deepEqual(result.events.map((event) =>
     event.matched_death_replay_time_ms_candidate), [1000, 20000, 2000]);
+  assert.deepEqual(result.events.map((event) =>
+    event.observed_death_to_return_ms_candidate), [10500, 11500, 33000]);
   for (const event of result.events) {
     assert.equal(event.confidence, 'CANDIDATE');
     assert.equal(event.raw_packet_ref, event.raw_packet_refs[0]);
@@ -124,6 +126,8 @@ test('821 candidate emits only observed 0x0048 times from matched death cores', 
       [0x0048, 0x018d, 0x0259, 0x0438, 0x031b]);
     assert.ok(event.raw_packet_refs.every((ref) => ref.replay_sha256 === replay.source_sha256));
     assert.equal(event.timer_seconds_candidate, undefined);
+    assert.equal(event.field_confidence.observed_death_to_return_ms_candidate,
+      'CANDIDATE_DIFFERENCE_OF_PAIRED_REPLAY_TIMES');
     assert.ok(event.known_limits.some((limit) => limit.includes('runtime')));
   }
 });

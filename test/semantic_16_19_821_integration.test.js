@@ -144,6 +144,8 @@ test('821 API exposes only observed return candidates and retains the death depe
   assert.equal(result.events.hero_respawn_candidates[0].replay_time_ms, 10000);
   assert.equal(result.events.hero_respawn_candidates[0].matched_death_replay_time_ms_candidate,
     1000);
+  assert.equal(result.events.hero_respawn_candidates[0].observed_death_to_return_ms_candidate,
+    9000);
   assert.equal(result.events.respawn_events, undefined);
 
   input.tail.stats[0].TOTAL_TIME_SPENT_DEAD = '10';
