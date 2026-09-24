@@ -337,7 +337,7 @@ const BUILD_PROFILES = deepFreeze({
       epic_monster_damage_candidate: '0x0276 keyframe HeroStats f32 offset 0x21c; floors correlate with TOTAL_DAMAGE_DEALT_TO_EPIC_MONSTERS tail in one HN Replay',
       inventory_mapview_candidate: '0x0420 observed HN packet slot/item-ID records; no continuous inventory state or purchase event',
       inventory_set_item_candidate: '0x03b7 observed HN packet slot/item-ID fields; no item transaction or general participant mapping',
-      inventory_broadcast_candidate: '0x03ef exact HN runtime vector and record fields; raw param retained without participant ownership or transaction inference',
+      inventory_broadcast_candidate: '0x03ef exact HN runtime vector and record fields; bounded one-Replay raw-param-to-participant candidate, without transaction inference',
     },
     verified_capabilities: [],
     candidate_capabilities: [

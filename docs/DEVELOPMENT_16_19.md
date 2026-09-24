@@ -264,12 +264,24 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   `artifacts/16_19_development/broadcast_03ef_probe/` and
   `artifacts/16_19_development/inventory_broadcast_hn_cli_smoke/`. The
   emulated TLS epoch selects captured image static data; the live thread
-  epoch was not captured. Raw params remain unassigned to participants, and
-  no transaction or continuous inventory state is inferred.
+  epoch was not captured. A bounded candidate mapping now assigns the ten
+  canonical raw params to participants 1–10: last-keyframe slots 0–6 match
+  the corresponding Replay tail items in 68/70 comparisons (the other two
+  differences remain), uniquely best among all one-to-one assignments and
+  ahead of nine shifted controls. The one observed `0x400001b1` Broadcast
+  variant matches nearby canonical `0x400000b1` MapView slots 9/9 and maps
+  candidate participant 4. Other variants remain unmapped; the extra bit is
+  unclassified. A real HN CLI rerun emitted 3,546 candidate records, all
+  retaining raw packet refs, with zero unmapped packets. Local negative
+  controls and rerun details are under
+  `artifacts/16_19_development/broadcast_identity_probe/`. This one-Replay
+  evidence does not establish confirmed packet ownership, transactions, or
+  continuous inventory state.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
   HN Replays to test level, HeroStats and inventory candidates. The HN
-  Broadcast candidate still needs independent participant and inventory-state
-  anchors. Movement-route research still needs a position-field link.
+  Broadcast participant mapping still needs an independent Replay, and
+  inventory-state inference needs independent anchors. Movement-route
+  research still needs a position-field link.
 - **Path negative control:** The exact HN image identifies `0x03ee` as
   DirectInputMovementDriverServerTurnData (84 HN packets in one short interval),
   `0x0160` as SetMovementDriver (4), `0x04dd` as AddFollowTargetPosition (0),

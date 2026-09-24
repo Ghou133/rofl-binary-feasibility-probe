@@ -64,7 +64,7 @@ function mockResults(request, failedIndex = -1) {
   }));
 }
 
-test('Broadcast retains keyframe and game packet refs without asserting ownership', (t) => {
+test('Broadcast retains keyframe and game packet refs with bounded participant candidates', (t) => {
   const image = temporaryImage(t);
   const calls = [];
   t.mock.method(childProcess, 'spawnSync', (_python, args, options) => {
@@ -90,7 +90,9 @@ test('Broadcast retains keyframe and game packet refs without asserting ownershi
   assert.equal(result.events[2].raw_packet_ref.raw_param, 0x400001b1);
   assert.equal(result.events[0].item_key_u32_candidate, 0);
   assert.equal(result.events[1].item_key_u32_candidate, 2001);
-  assert.equal(Object.hasOwn(result.events[2], 'participant_id_candidate'), false);
+  assert.equal(result.events[0].participant_id_candidate, 1);
+  assert.equal(result.events[2].participant_id_candidate, 4);
+  assert.equal(result.events[2].field_confidence.participant_id_candidate, 'CANDIDATE');
   assert.equal(calls.length, 1);
   assert.match(calls[0].args[1], /decode_broadcast_inventory_16_19\.py$/);
 });
@@ -218,5 +220,6 @@ test('selected CLI writes Broadcast records and exact packet provenance', async 
   assert.equal(rows[2].raw_packet_ref.replay_sha256,
     crypto.createHash('sha256').update(fs.readFileSync(input)).digest('hex'));
   assert.equal(rows[2].raw_packet_ref.raw_param, 0x400001b1);
-  assert.equal(Object.hasOwn(rows[2], 'participant_id_candidate'), false);
+  assert.equal(rows[2].participant_id_candidate, 4);
+  assert.equal(rows[2].field_confidence.participant_id_candidate, 'CANDIDATE');
 });

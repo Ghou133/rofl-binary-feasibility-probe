@@ -148,7 +148,7 @@ const HERO_INVENTORY_SET_ITEM_CANDIDATE_PROFILE = Object.freeze({
 });
 
 const HERO_INVENTORY_BROADCAST_CANDIDATE_PROFILE = Object.freeze({
-  id: 'rofl-16.19.820.7193-hn-inventory-broadcast-runtime-candidate-v1',
+  id: 'rofl-16.19.820.7193-hn-inventory-broadcast-runtime-candidate-v2',
   replay_version: REPLAY_VERSION,
   capability: 'hero_inventory_broadcast',
   status: 'CANDIDATE',
@@ -158,10 +158,11 @@ const HERO_INVENTORY_BROADCAST_CANDIDATE_PROFILE = Object.freeze({
   packet_name: 'PKT_S2C_SetInventory_Broadcast_s',
   evidence_runtime_image_sha256: HERO_INVENTORY_MAPVIEW_CANDIDATE_PROFILE.evidence_runtime_image_sha256,
   runtime_image_required: true,
-  evidence_scope: 'exact HN constructor, vector and record deserializers; 356 fully consumed packets and 3546 records in one Replay',
+  evidence_scope: 'exact HN constructor, vector and record deserializers; 356 fully consumed packets and 3546 records; candidate participant mapping supported by 68/70 final ITEM0–ITEM6 tail matches and shifted controls in one Replay',
   known_limits: Object.freeze([
     'The 356 observed packets include 350 keyframes and 6 game-stream packets; record rows are observations only.',
-    'The raw param is preserved without asserting participant or inventory ownership.',
+    'Participant mapping is candidate-only for ten canonical raw params and the observed 0x400001b1 variant in one HN Replay; other raw params remain unavailable.',
+    'The 0x100 difference in the observed variant is unclassified; no generic masking rule or confirmed inventory ownership is asserted.',
     'Slot and item-key labels remain exact-runtime candidates from one HN Replay; zero is a decoded key value.',
     'The mapped TLS epoch selects initialized static data in the captured image; a live thread epoch was not captured.',
     'No purchase, sale, swap, replacement, transaction, or complete inventory lifecycle is inferred.',
@@ -234,6 +235,17 @@ function participantIdFromDeathParam(rawParam) {
   if (!Number.isInteger(rawParam) || rawParam < 0 || rawParam > 0xffffffff) return null;
   const participantId = (rawParam & 0xff) - 0xad;
   return participantId >= 1 && participantId <= 10 ? participantId : null;
+}
+
+function participantIdFromBroadcastParam(rawParam) {
+  // Canonical params match the one-Replay tail ITEM0–ITEM6 and MapView
+  // controls. The single observed variant matches canonical 0x400000b1's
+  // MapView records; no meaning is assigned to the extra 0x100 bit.
+  if (!Number.isInteger(rawParam)) return null;
+  if (rawParam >= 0x400000ae && rawParam <= 0x400000b7) {
+    return rawParam - 0x400000ad;
+  }
+  return rawParam === 0x400001b1 ? 4 : null;
 }
 
 function finalDeathCounts(replay) {
@@ -1424,6 +1436,7 @@ function decodeHeroInventoryBroadcastCandidates(replay, collected = null, option
   for (let index = 0; index < inputCount; index += 1) {
     const source = rows[index];
     const result = decoded.results[index];
+    const participantId = participantIdFromBroadcastParam(source.block.param);
     for (const record of result.records) {
       events.push({
         event_type: 'INVENTORY_BROADCAST_RECORD_CANDIDATE',
@@ -1431,6 +1444,7 @@ function decodeHeroInventoryBroadcastCandidates(replay, collected = null, option
         replay_sha256: replay.source_sha256 ?? null,
         replay_time_ms: source.block.timestamp_ms,
         raw_param: source.block.param >>> 0,
+        participant_id_candidate: participantId,
         packet_record_index: record.record_index,
         packet_record_count: result.record_count,
         slot_candidate: record.slot,
@@ -1443,6 +1457,7 @@ function decodeHeroInventoryBroadcastCandidates(replay, collected = null, option
         semantic_status: 'CANDIDATE_EXACT_RUNTIME_BROADCAST_ONE_REPLAY',
         field_confidence: {
           replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
+          participant_id_candidate: participantId === null ? 'UNAVAILABLE' : 'CANDIDATE',
           slot_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD',
           item_key_u32_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD',
           emulated_flag_code: 'UNCLASSIFIED_RUNTIME_FIELD',
@@ -1459,6 +1474,8 @@ function decodeHeroInventoryBroadcastCandidates(replay, collected = null, option
     decoded_record_count: totalRecords,
     observed_keyframe_packet_count: rows.filter(({ chunk }) => chunk.stream_tag === 2).length,
     observed_game_packet_count: rows.filter(({ chunk }) => chunk.stream_tag === 1).length,
+    unmapped_raw_param_count: rows.filter(({ block }) =>
+      participantIdFromBroadcastParam(block.param) === null).length,
     scanned_block_count: scan.walk.block_count,
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
     runtime_image_sha256: decoded.runtime_image_sha256,
