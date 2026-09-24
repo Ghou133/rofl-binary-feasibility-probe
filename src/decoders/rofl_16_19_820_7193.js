@@ -101,10 +101,11 @@ const HERO_LEVEL_STATE_CANDIDATE_PROFILE = Object.freeze({
   hero_raw_param_first: 0x400000ae,
   hero_raw_param_last: 0x400000b7,
   evidence_runtime_image_sha256: '7e6804aa589a098a44b01e4fdc894fc697776caeea42fc78f780af11ed6df76d',
-  evidence_scope: 'exact HN runtime 0x02b3 deserializer and one HN Replay; observed level packets can have gaps',
+  evidence_scope: 'exact HN runtime 0x02b3 deserializer and three HN Replays; observed level packets can repeat or have gaps',
   known_limits: Object.freeze([
     'Only levels present in HN route 0x02b3 are emitted; missing updates are not reconstructed.',
-    'Participant mapping and level meaning remain candidate semantics from one Replay.',
+    'Repeated same-level packets are retained as observations, not additional level transitions.',
+    'Participant mapping and level meaning remain candidate semantics across three HN Replays.',
     'No experience, level-before, or complete level timeline is inferred.',
   ]),
 });
@@ -1067,15 +1068,16 @@ function decodeHeroLevelStateCandidates(replay, collected = null) {
     }
     const index = participantId - 1;
     const previous = lastLevel[index];
-    if (previous !== null && payload.level_candidate <= previous) {
-      return fail(`HN participant ${participantId} has a nonincreasing observed level`);
+    if (previous !== null && payload.level_candidate < previous) {
+      return fail(`HN participant ${participantId} has a decreasing observed level`);
     }
     if (payload.level_candidate > final.levels[index]) {
       return fail(`HN participant ${participantId} exceeds Replay tail LEVEL`);
     }
+    const repeatedLevel = previous !== null && payload.level_candidate === previous;
     lastLevel[index] = payload.level_candidate;
     observedByPlayer[index].add(payload.level_candidate);
-    decoded.push({ row, participantId, payload });
+    decoded.push({ row, participantId, payload, repeatedLevel });
   }
   const missingLevelUpdates = final.levels.map((finalLevel, index) => {
     const missing = [];
@@ -1084,7 +1086,7 @@ function decodeHeroLevelStateCandidates(replay, collected = null) {
     }
     return missing;
   });
-  const events = decoded.map(({ row, participantId, payload }) => ({
+  const events = decoded.map(({ row, participantId, payload, repeatedLevel }) => ({
     event_type: 'HERO_LEVEL_STATE_CANDIDATE',
     game_version: REPLAY_VERSION,
     patch: '16.19',
@@ -1094,8 +1096,8 @@ function decodeHeroLevelStateCandidates(replay, collected = null) {
     hero_raw_param: row.block.param >>> 0,
     participant_id_candidate: participantId,
     level_after_candidate: payload.level_candidate,
-    observation_kind: payload.level_candidate === 1
-      ? 'LEVEL_ONE_OBSERVATION' : 'HIGHER_LEVEL_OBSERVATION',
+    observation_kind: repeatedLevel ? 'REPEATED_LEVEL_OBSERVATION'
+      : payload.level_candidate === 1 ? 'LEVEL_ONE_OBSERVATION' : 'HIGHER_LEVEL_OBSERVATION',
     payload_selector_code: payload.code,
     confidence: 'CANDIDATE',
     semantic_status: 'CANDIDATE_EXACT_RUNTIME_FIELD_WITH_SEQUENCE_GAPS',
@@ -1123,6 +1125,8 @@ function decodeHeroLevelStateCandidates(replay, collected = null) {
     missing_level_update_count: missingLevelUpdates.reduce((sum, levels) => sum + levels.length, 0),
     level_one_packet_count: events.filter((event) =>
       event.observation_kind === 'LEVEL_ONE_OBSERVATION').length,
+    repeated_level_observation_count: events.filter((event) =>
+      event.observation_kind === 'REPEATED_LEVEL_OBSERVATION').length,
     events,
   };
 }

@@ -86,6 +86,7 @@ test('observed HN levels stay candidate events and sequence gaps remain explicit
   assert.deepEqual(result.events.map((row) => row.level_after_candidate), [1, 2, 3, 4]);
   assert.deepEqual(result.events.map((row) => row.participant_id_candidate), [1, 1, 2, 1]);
   assert.equal(result.level_one_packet_count, 1);
+  assert.equal(result.repeated_level_observation_count, 0);
   assert.deepEqual(result.missing_level_updates[0], [3]);
   assert.deepEqual(result.missing_level_updates[1], [2]);
   assert.equal(result.missing_level_update_count, 2);
@@ -142,19 +143,45 @@ test('capability query reports missing or invalid tail LEVEL before packet decod
   assert.equal(query().input_assessment_complete, false);
 });
 
-test('nonincreasing, above-tail, and malformed level sequences fail closed', () => {
-  const duplicate = decodeHeroLevelStateCandidates(replayWithLevelRows([
-    [1000, HERO_PARAM_1, '6d'], [2000, HERO_PARAM_1, '6d'],
-  ]));
-  assert.equal(duplicate.status, 'DECODE_FAILED');
-  assert.equal(duplicate.events, null);
-  assert.match(duplicate.error, /nonincreasing/);
+test('two distinct same-level packets remain separate candidate observations', () => {
+  const replay = replayWithLevelRows([
+    [1000, HERO_PARAM_1, '6ac7'], // level 8
+    [2000, HERO_PARAM_1, '6978'], // level 9, selector 1
+    [3000, HERO_PARAM_1, '6a78'], // level 9, selector 2
+    [4000, HERO_PARAM_1, '6868'], // level 10
+  ], { firstFinalLevel: 10 });
+  const result = decodeHeroLevelStateCandidates(replay);
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.input_count, 4);
+  assert.equal(result.event_count, 4);
+  assert.equal(result.repeated_level_observation_count, 1);
+  assert.deepEqual(result.events.map((event) => event.level_after_candidate), [8, 9, 9, 10]);
+  assert.deepEqual(result.events.map((event) => event.observation_kind), [
+    'HIGHER_LEVEL_OBSERVATION', 'HIGHER_LEVEL_OBSERVATION',
+    'REPEATED_LEVEL_OBSERVATION', 'HIGHER_LEVEL_OBSERVATION',
+  ]);
+  assert.deepEqual(result.events.slice(1, 3).map((event) => event.payload_selector_code), [1, 2]);
+  assert.notEqual(result.events[1].raw_packet_ref.decompressed_block_offset,
+    result.events[2].raw_packet_ref.decompressed_block_offset);
+  assert.notEqual(result.events[1].raw_packet_ref.raw_payload_sha256,
+    result.events[2].raw_packet_ref.raw_payload_sha256);
+  assert.equal(result.events[2].raw_packet_ref.replay_sha256, replay.source_sha256);
+  assert.equal(result.observed_max_levels[0], 10);
+  assert.equal(result.missing_level_updates[0].includes(9), false);
 
+  const selected = decodeSemanticReplay(replay, { capabilities: ['hero_level_state'] });
+  assert.equal(selected.status, 'EXPERIMENTAL_CANDIDATE');
+  assert.equal(selected.capability_results.hero_level_state.repeated_level_observation_count, 1);
+  assert.equal(selected.events.hero_level_state_candidates[2].observation_kind,
+    'REPEATED_LEVEL_OBSERVATION');
+});
+
+test('decreasing, above-tail, and malformed level sequences fail closed', () => {
   const decreasing = decodeHeroLevelStateCandidates(replayWithLevelRows([
     [1000, HERO_PARAM_1, '6a08'], [2000, HERO_PARAM_1, '6818'],
   ]));
   assert.equal(decreasing.status, 'DECODE_FAILED');
-  assert.match(decreasing.error, /nonincreasing/);
+  assert.match(decreasing.error, /decreasing/);
 
   const aboveTail = decodeHeroLevelStateCandidates(replayWithLevelRows([
     [1000, HERO_PARAM_1, '6a08'],
