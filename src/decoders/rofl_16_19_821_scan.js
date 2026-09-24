@@ -21,11 +21,13 @@ const CAPABILITIES = new Set([
   'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
   'hero_level_state', 'hero_respawn', 'hero_assist', 'hero_inventory_packet',
   'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
+  'direct_input_movement_turn_packet',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
 const RESPAWN_ROUTES = new Set([0x0048, 0x018d]);
 const MAX_BUFF_REMOVE_PACKET_ROWS = 50_000;
 const MAX_BUFF_ADD_PACKET_ROWS = 50_000;
+const MAX_DIRECT_INPUT_TURN_PACKET_ROWS = 20_000;
 const SCAN_SOURCE = new WeakMap();
 
 function copyRow(block, chunk) {
@@ -69,6 +71,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     cast_spell_ans_packet: [],
     npc_buff_remove_packet: [],
     npc_buff_add_packet: [],
+    direct_input_movement_turn_packet: [],
     hero_deaths_snapshot: heroStatsRows,
     hero_champion_kills_snapshot: heroStatsRows,
     hero_assists_snapshot: heroStatsRows,
@@ -125,6 +128,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let keyframeBlockCount = 0;
   let buffRemovePacketCount = 0;
   let buffAddPacketCount = 0;
+  let directInputTurnPacketCount = 0;
   let finished = false;
   return Object.freeze({
     observe(block, chunk) {
@@ -164,6 +168,12 @@ function create821ScanCollector(replay, selectedCapabilities) {
           rows.npc_buff_add_packet.push(copyRow(block, chunk));
         }
       }
+      if (selected.has('direct_input_movement_turn_packet') && block.packet_id === 0x00ba) {
+        directInputTurnPacketCount += 1;
+        if (rows.direct_input_movement_turn_packet.length < MAX_DIRECT_INPUT_TURN_PACKET_ROWS) {
+          rows.direct_input_movement_turn_packet.push(copyRow(block, chunk));
+        }
+      }
       if (selectsHeroStats && (chunk.stream_tag === 2 || chunk.stream_tag === 3)
           && block.packet_id === 0x0089) {
         heroStatsRows.push(copyRow(block, chunk));
@@ -191,7 +201,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         version: replay.header.version,
         file_size: replay.file_size,
         selected, rows, blockCount, keyframeBlockCount,
-        buffRemovePacketCount, buffAddPacketCount,
+        buffRemovePacketCount, buffAddPacketCount, directInputTurnPacketCount,
         error: token.error,
       });
       return token;
@@ -247,6 +257,13 @@ function rowsFor821Capability(replay, token, capability) {
       && bound.buffAddPacketCount > MAX_BUFF_ADD_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.buffAddPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'direct_input_movement_turn_packet'
+      && bound.directInputTurnPacketCount > MAX_DIRECT_INPUT_TURN_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.directInputTurnPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }

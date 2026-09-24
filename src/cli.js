@@ -597,6 +597,7 @@ function parseOne1619(replay, options, started) {
       'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
       'hero_level_state', 'hero_inventory_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
+      'direct_input_movement_turn_packet',
     ].includes(name)))] : [];
   const selectsBuffAdd = options.semantic !== false
     && Array.isArray(options.events) && options.events.includes('npc_buff_add_packet');
@@ -1789,7 +1790,9 @@ function capabilityQuery(replay, options = {}) {
           && (capability === 'hero_inventory_packet'
             || capability === 'cast_spell_ans_packet'))
         || capability === 'npc_buff_remove_packet'
-        || capability === 'npc_buff_add_packet';
+        || capability === 'npc_buff_add_packet'
+        || (profile.game_version === '16.19.821.7343'
+          && capability === 'direct_input_movement_turn_packet');
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
           && capability === 'hero_respawn'
@@ -2055,6 +2058,11 @@ function capabilityQuery(replay, options = {}) {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x00ae full packet consumption',
           'callback-transformed opaque fields and raw packet provenance; no buff identity or lifecycle inference');
       }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'direct_input_movement_turn_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x00ba full packet consumption',
+          'three callback-transformed opaque f32 fields and raw packet provenance; no world-position, general hero-path or participant inference');
+      }
       if (profile.game_version === '16.19.820.7193'
           && (capability === 'hero_death_timer' || capability === 'hero_respawn')) {
         validationPending.push('ten-participant NUM_DEATHS presence and equality',
@@ -2245,6 +2253,8 @@ function capabilityQuery(replay, options = {}) {
             cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
             npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
             npc_buff_add_packet: 'npc_buff_add_packet_candidates',
+            direct_input_movement_turn_packet:
+              'direct_input_movement_turn_packet_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
             hero_damage_taken_from_champions_snapshot:
               'hero_damage_taken_from_champions_snapshot_candidates',

@@ -4,6 +4,18 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `direct_input_movement_turn_packet` is wired to the
+  selected CLI/API using the independently registered `0x00ba` route and
+  exact-image native constructor/deserializer. Eight of 11 Replays contain
+  8,463 packets in total; three have no route. The selected batch scanned
+  18,235,209 blocks with zero framing errors and emitted 8,463 events; its
+  aggregate `PARTIAL`/exit 1 reflects the three absent routes. The candidate
+  emits only three anonymous callback-transformed f32 packet fields and raw
+  provenance. The emulated base-parameter stub receives `raw_param` from
+  Replay framing; object agreement is a stub-consistency check. The
+  callback's driver-state write is conditional, so no world position, hero
+  path or participant binding is claimed. Ignored probe evidence is under
+  `artifacts/16_19_development/path821_route/`.
 - **Completed:** KR 821 structure/objective damage keyframe candidates and
   exact-image CastSpellAns packet fields are available through selected CLI/API
   output. All 11 supplied KR Replays returned `CANDIDATE`: 3,270 damage

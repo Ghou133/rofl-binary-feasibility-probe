@@ -50,6 +50,8 @@ const { decodeNpcBuffRemovePacketCandidates821 } =
   require('./decoders/rofl_16_19_821_buff_remove_packet_candidate');
 const { decodeNpcBuffAddPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_buff_add_packet_candidate');
+const { decodeDirectInputMovementTurnPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_direct_input_turn_packet_candidate');
 const { decodeHeroDamageSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
 const { decodeHeroTimeSnapshotCandidates821 } =
@@ -2110,6 +2112,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    direct_input_movement_turn_packet: (input, collected) =>
+      decodeDirectInputMovementTurnPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -2148,6 +2156,7 @@ function decode1619821(replay, profile, options = {}) {
     cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
     npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
     npc_buff_add_packet: 'npc_buff_add_packet_candidates',
+    direct_input_movement_turn_packet: 'direct_input_movement_turn_packet_candidates',
   };
   const capabilityResults = {};
   const events = {};
@@ -2170,6 +2179,7 @@ function decode1619821(replay, profile, options = {}) {
     'cast_spell_ans_packet',
     'npc_buff_remove_packet',
     'npc_buff_add_packet',
+    'direct_input_movement_turn_packet',
   ]);
   const supported = capabilities.filter((capability) => sharedScanCapabilities.has(capability));
   let candidate821Scan = options.candidate821Scan ?? null;
@@ -2199,7 +2209,8 @@ function decode1619821(replay, profile, options = {}) {
     }
     const { events: candidateEvents, ...result } = outcome;
     if (capability === 'hero_inventory_packet' || capability === 'cast_spell_ans_packet'
-        || capability === 'npc_buff_remove_packet' || capability === 'npc_buff_add_packet') {
+        || capability === 'npc_buff_remove_packet' || capability === 'npc_buff_add_packet'
+        || capability === 'direct_input_movement_turn_packet') {
       result.runtime_image_status ??= options.runtimeImagePath
         ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
       result.runtime_image_used ??= false;
@@ -2398,6 +2409,10 @@ function getNpcBuffRemovePacketCandidates(decoded) {
 
 function getNpcBuffAddPacketCandidates(decoded) {
   return decoded?.events?.npc_buff_add_packet_candidates ?? null;
+}
+
+function getDirectInputMovementTurnPacketCandidates(decoded) {
+  return decoded?.events?.direct_input_movement_turn_packet_candidates ?? null;
 }
 
 function getHeroMinionsKilledSnapshotCandidates(decoded) {
@@ -2604,6 +2619,7 @@ module.exports = {
   getHeroInventoryBroadcastCandidates,
   getNpcBuffRemovePacketCandidates,
   getNpcBuffAddPacketCandidates,
+  getDirectInputMovementTurnPacketCandidates,
   getHeroMinionsKilledSnapshotCandidates,
   getHeroJungleMinionsKilledSnapshotCandidates,
   getHeroExperienceSnapshotCandidates,

@@ -177,7 +177,8 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
       'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
       'hero_level_state', 'hero_inventory_packet', 'cast_spell_ans_packet',
-      'npc_buff_remove_packet', 'npc_buff_add_packet']);
+      'npc_buff_remove_packet', 'npc_buff_add_packet',
+      'direct_input_movement_turn_packet']);
   const queried = Object.fromEntries(query.capabilities.map((row) => [row.capability, row]));
   assert.equal(queried.hero_death.runtime_image_requirement, 'NOT_REQUIRED');
   assert.equal(queried.hero_inventory_packet.runtime_image_requirement,
@@ -194,6 +195,12 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'EXACT_IMAGE_REQUIRED');
   assert.deepEqual(queried.npc_buff_add_packet.missing_inputs, ['exact_runtime_image']);
   assert.equal(queried.npc_buff_add_packet.output, 'npc_buff_add_packet_candidates');
+  assert.equal(queried.direct_input_movement_turn_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.deepEqual(queried.direct_input_movement_turn_packet.missing_inputs,
+    ['exact_runtime_image']);
+  assert.equal(queried.direct_input_movement_turn_packet.output,
+    'direct_input_movement_turn_packet_candidates');
   assert.equal(queried.hero_assist.output, 'hero_assist_candidates');
   assert.equal(queried.hero_damage_totals_snapshot.output,
     'hero_damage_totals_snapshot_candidates');
