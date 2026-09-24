@@ -12,7 +12,7 @@ const {
   candidateTailStatAssessment,
 } = require('./decoders/rofl_16_19_820_7193');
 const { assessHeroDeathTail821 } = require('./decoders/rofl_16_19_821_7343');
-const { assessHeroRespawnTail821 } =
+const { assessHeroRespawnDeadTimeTail821 } =
   require('./decoders/rofl_16_19_821_respawn_candidate');
 const {
   assessHeroDeathsSnapshotTail821,
@@ -546,7 +546,8 @@ function parseOne1619(replay, options, started) {
   const is821 = replay.header.version === '16.19.821.7343';
   const selected821 = is821 && options.semantic !== false && Array.isArray(options.events)
     ? [...new Set(options.events.filter((name) => [
-      'hero_death', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+      'hero_death', 'hero_respawn', 'hero_deaths_snapshot',
+      'hero_champion_kills_snapshot',
       'hero_level_state',
     ].includes(name)))] : [];
   const selectsBuffAdd = options.semantic !== false
@@ -1743,7 +1744,7 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_respawn'
           ? (() => {
             const death = assessHeroDeathTail821(replay);
-            const deadTime = assessHeroRespawnTail821(replay);
+            const deadTime = assessHeroRespawnDeadTimeTail821(replay);
             return { required_fields: [
               { field: 'NUM_DEATHS', status: death.status,
                 error: death.error ?? death.missing_input ?? null },

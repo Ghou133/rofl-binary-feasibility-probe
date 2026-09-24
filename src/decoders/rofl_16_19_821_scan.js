@@ -7,9 +7,10 @@ const { replaySourceError } = require('./replay_source_integrity');
 const BUILD = '16.19.821.7343';
 const CAPABILITIES = new Set([
   'hero_death', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
-  'hero_level_state',
+  'hero_level_state', 'hero_respawn',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
+const RESPAWN_ROUTES = new Set([0x0048, 0x018d]);
 const SCAN_SOURCE = new WeakMap();
 
 function copyRow(block, chunk) {
@@ -46,12 +47,16 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const heroStatsRows = [];
   const rows = {
     hero_death: [],
+    hero_respawn: [],
     hero_deaths_snapshot: heroStatsRows,
     hero_champion_kills_snapshot: heroStatsRows,
     hero_level_state: [],
   };
   const selectsHeroStats = selected.has('hero_deaths_snapshot')
     || selected.has('hero_champion_kills_snapshot');
+  // A return candidate is only meaningful after validating its death cores.
+  // Keep those route packets in the same walk even for respawn-only requests.
+  const selectsDeathRoutes = selected.has('hero_death') || selected.has('hero_respawn');
   let blockCount = 0;
   let keyframeBlockCount = 0;
   let finished = false;
@@ -60,9 +65,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
       if (finished) throw new Error('821 route scan collector is already finished');
       blockCount += 1;
       if (chunk.stream_tag === 2 || chunk.stream_tag === 3) keyframeBlockCount += 1;
-      if (selected.has('hero_death') && chunk.stream_tag === 1
+      if (selectsDeathRoutes && chunk.stream_tag === 1
           && DEATH_ROUTES.has(block.packet_id)) {
         rows.hero_death.push(copyRow(block, chunk));
+      }
+      if (selected.has('hero_respawn') && chunk.stream_tag === 1
+          && RESPAWN_ROUTES.has(block.packet_id)) {
+        rows.hero_respawn.push(copyRow(block, chunk));
       }
       if (selectsHeroStats && (chunk.stream_tag === 2 || chunk.stream_tag === 3)
           && block.packet_id === 0x0089) {
@@ -128,7 +137,9 @@ function rowsFor821Capability(replay, token, capability) {
   const sourceError = replaySourceError(replay);
   if (sourceError) return { error: `Replay source integrity failed: ${sourceError}` };
   if (bound.error) return { error: bound.error };
-  if (!bound.selected.has(capability)) {
+  const selected = bound.selected.has(capability)
+    || (capability === 'hero_death' && bound.selected.has('hero_respawn'));
+  if (!selected) {
     return { error: `${capability} was not selected by this 821 route scan` };
   }
   return {

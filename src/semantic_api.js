@@ -2017,11 +2017,12 @@ function decode1619821(replay, profile, options = {}) {
   const events = {};
   const sharedScanCapabilities = new Set([
     'hero_death', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
-    'hero_level_state',
+    'hero_level_state', 'hero_respawn',
   ]);
   const supported = capabilities.filter((capability) => sharedScanCapabilities.has(capability));
   let candidate821Scan = options.candidate821Scan ?? null;
-  if (candidate821Scan === null && supported.length > 1) {
+  if (candidate821Scan === null
+      && (supported.length > 1 || supported.includes('hero_respawn'))) {
     try {
       candidate821Scan = collect821Routes(replay, supported);
     } catch {

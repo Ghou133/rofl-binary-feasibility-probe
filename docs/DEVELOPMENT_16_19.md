@@ -63,6 +63,12 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   10 `CANDIDATE` and one `PARTIAL` Replay in both runs. Source-bound scan
   tokens reject another Replay or changed bytes; the API retains independent
   per-stream failures if a shared strict walk cannot complete.
+  The return candidate now joins that same scan, retaining its death-core
+  dependency even when selected alone. On the 11-Replay five-capability batch,
+  observed wall time fell from about 7.2 s to 4.0 s; all five candidate JSONL
+  families remained byte-identical, with nine `CANDIDATE` and two `PARTIAL`
+  Replays in both runs. CLI preflight assesses dead-time totals separately
+  from the required Replay-tail game length.
 
 - **Done:** The HN `16.19.820.7193` replay's 107 chunks and 2,035,757 blocks
   pass strict container/framing inspection with zero errors. The main CLI/API now

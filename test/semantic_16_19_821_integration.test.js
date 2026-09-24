@@ -145,6 +145,17 @@ test('821 API exposes only observed return candidates and retains the death depe
   assert.equal(failed.events.hero_respawn_candidates, undefined);
 });
 
+test('821 return preflight distinguishes a missing game length from present dead-time totals', () => {
+  const input = replay({ observedReturn: true });
+  input.tail.metadata.gameLength = null;
+  const row = capabilityQuery(input).capabilities.find((capability) =>
+    capability.capability === 'hero_respawn');
+  assert.deepEqual(row.missing_inputs, ['replay_tail_gameLength']);
+  assert.deepEqual(row.invalid_inputs, []);
+  assert.equal(row.required_inputs.find((item) =>
+    item.name === 'replay_tail_TOTAL_TIME_SPENT_DEAD').status, 'PRESENT_UNVALIDATED');
+});
+
 test('821 API dispatch emits separate candidate records and no confirmed deaths', () => {
   const input = replay();
   const decoded = decodeSemanticReplay(input, {

@@ -8,6 +8,7 @@ const {
   REPLAY_VERSION_821,
   decodeHeroDeathCandidates821,
 } = require('./rofl_16_19_821_7343');
+const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
 
 // The route and its timing are Replay observations. There is no 821 runtime
 // image or payload interpretation behind this candidate.
@@ -38,7 +39,7 @@ function participantFromHeroParam(rawParam) {
   return (rawParam & 0xff) - 0xad;
 }
 
-function assessHeroRespawnTail821(replay) {
+function assessHeroRespawnDeadTimeTail821(replay) {
   const stats = replay?.tail?.stats;
   if (!Array.isArray(stats)) {
     return { status: 'MISSING_INPUT', missing_input: 'Replay tail statsJson participant rows' };
@@ -59,11 +60,17 @@ function assessHeroRespawnTail821(replay) {
   if (seconds.some((value) => !Number.isSafeInteger(value))) {
     return { status: 'UNSUPPORTED', error: 'Replay tail TOTAL_TIME_SPENT_DEAD must be safe integers' };
   }
+  return { status: 'PASS', seconds };
+}
+
+function assessHeroRespawnTail821(replay) {
+  const deadTime = assessHeroRespawnDeadTimeTail821(replay);
+  if (deadTime.status !== 'PASS') return deadTime;
   const gameLength = replay?.tail?.metadata?.gameLength;
   if (!Number.isSafeInteger(gameLength) || gameLength < 0) {
     return { status: 'MISSING_INPUT', missing_input: 'Replay tail gameLength for observed final deaths' };
   }
-  return { status: 'PASS', seconds, game_length_ms: gameLength };
+  return { ...deadTime, game_length_ms: gameLength };
 }
 
 function packetRef(replay, source, role) {
@@ -86,7 +93,7 @@ function packetRef(replay, source, role) {
   };
 }
 
-function decodeHeroRespawnCandidates821(replay) {
+function decodeHeroRespawnCandidates821(replay, precollected = null) {
   const profile = HERO_RESPAWN_CANDIDATE_PROFILE_821;
   const base = {
     profile_id: profile.id,
@@ -105,10 +112,10 @@ function decodeHeroRespawnCandidates821(replay) {
   if (replay?.header?.version !== REPLAY_VERSION_821) {
     return unavailable('UNSUPPORTED', `hero_respawn candidate supports only ${REPLAY_VERSION_821}`);
   }
-  const sourceError = replaySourceError(replay);
+  const sourceError = precollected === null ? replaySourceError(replay) : null;
   if (sourceError) return unavailable('DECODE_FAILED', `Replay source integrity failed: ${sourceError}`);
 
-  const deathOutcome = decodeHeroDeathCandidates821(replay);
+  const deathOutcome = decodeHeroDeathCandidates821(replay, precollected);
   if (deathOutcome.status !== 'CANDIDATE') {
     return unavailable(deathOutcome.status,
       deathOutcome.error ? `hero_respawn requires matched 821 death cores: ${deathOutcome.error}` : null,
@@ -122,16 +129,26 @@ function decodeHeroRespawnCandidates821(replay) {
   const returns = [];
   const support = [];
   let walked;
-  try {
-    walked = walkBlocks(replay, (block, chunk) => {
-      if (chunk.stream_tag !== profile.stream_tag) return;
-      if (block.packet_id === profile.replay_block_packet_id) returns.push({ block, chunk });
-      if (block.packet_id === profile.corroborating_replay_block_packet_id) {
-        support.push({ block, chunk });
-      }
-    }, { strict: true });
-  } catch (error) {
-    return unavailable('DECODE_FAILED', `Replay framing failed: ${error.message}`);
+  if (precollected !== null) {
+    const scan = rowsFor821Capability(replay, precollected, 'hero_respawn');
+    if (scan.error) return unavailable('DECODE_FAILED', scan.error);
+    for (const row of scan.rows) {
+      if (row.block.packet_id === profile.replay_block_packet_id) returns.push(row);
+      if (row.block.packet_id === profile.corroborating_replay_block_packet_id) support.push(row);
+    }
+    walked = { block_count: scan.scanned_block_count };
+  } else {
+    try {
+      walked = walkBlocks(replay, (block, chunk) => {
+        if (chunk.stream_tag !== profile.stream_tag) return;
+        if (block.packet_id === profile.replay_block_packet_id) returns.push({ block, chunk });
+        if (block.packet_id === profile.corroborating_replay_block_packet_id) {
+          support.push({ block, chunk });
+        }
+      }, { strict: true });
+    } catch (error) {
+      return unavailable('DECODE_FAILED', `Replay framing failed: ${error.message}`);
+    }
   }
   const common = {
     ...base,
@@ -267,6 +284,7 @@ function decodeHeroRespawnCandidates821(replay) {
 
 module.exports = {
   HERO_RESPAWN_CANDIDATE_PROFILE_821,
+  assessHeroRespawnDeadTimeTail821,
   assessHeroRespawnTail821,
   decodeHeroRespawnCandidates821,
 };
