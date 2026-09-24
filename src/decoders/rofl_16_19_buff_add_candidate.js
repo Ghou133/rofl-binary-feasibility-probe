@@ -104,14 +104,30 @@ function decodeNpcBuffAddPacketCandidates(replay, _collected = null, options = {
       events: null, error: `Replay source integrity failed: ${sourceError}` };
   }
   const rows = [];
+  const packetLimitError = new Error('BuffAdd2 packet limit reached');
   let walk;
   try {
     walk = walkBlocks(replay, (block, chunk) => {
-      if (block.packet_id === profile.replay_block_packet_id) rows.push({ block, chunk });
+      if (block.packet_id !== profile.replay_block_packet_id) return;
+      if (rows.length === MAX_PACKETS) throw packetLimitError;
+      rows.push({ block, chunk: { ...chunk } });
     }, { includeStreams: profile.stream_tags, strict: true });
   } catch (error) {
+    if (error === packetLimitError) {
+      return { ...base, status: 'UNSUPPORTED', input_count: null,
+        observed_packet_count_minimum: MAX_PACKETS + 1,
+        event_count: null, events: null, scanned_block_count: null,
+        runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
+        error: `BuffAdd2 route exceeds ${MAX_PACKETS} packets` };
+    }
     return { ...base, status: 'DECODE_FAILED', input_count: null, event_count: null,
       events: null, error: `Replay framing failed: ${error.message}` };
+  }
+  const walkedSourceError = replaySourceError(replay);
+  if (walkedSourceError) {
+    return { ...base, status: 'DECODE_FAILED', input_count: null, event_count: null,
+      events: null, runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
+      error: `Replay source integrity failed after walk: ${walkedSourceError}` };
   }
   const inputCount = rows.length;
   const fail = (status, error, extra = {}) => ({
@@ -124,9 +140,9 @@ function decodeNpcBuffAddPacketCandidates(replay, _collected = null, options = {
       runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
     });
   }
-  if (inputCount > MAX_PACKETS || rows.some(({ block }) =>
+  if (rows.some(({ block }) =>
     !OBSERVED_LENGTHS.has(block.payload_length))) {
-    return fail('UNSUPPORTED', 'BuffAdd2 route exceeds packet limit or has an unobserved payload length', {
+    return fail('UNSUPPORTED', 'BuffAdd2 route has an unobserved payload length', {
       runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
     });
   }
@@ -251,19 +267,19 @@ function decodeNpcBuffAddPacketCandidates(replay, _collected = null, options = {
       raw_payload_hex: block.payload.toString('hex'),
       confidence: 'CANDIDATE',
       semantic_status: 'CANDIDATE_EXACT_RUNTIME_BUFF_ADD2_PACKET_ONE_REPLAY',
-      field_confidence: {
-        replay_time_ms: 'VERIFIED_DIRECT', stream_tag: 'VERIFIED_DIRECT',
-        raw_param: 'VERIFIED_DIRECT', raw_payload_hex: 'VERIFIED_DIRECT',
-        raw_object_hex: 'CANDIDATE_EXACT_RUNTIME_OBJECT_BYTES',
-        decoded_scalar_fields_candidate: { ...fieldConfidence },
-      },
       raw_packet_ref: refs[index],
-      known_limits: [...profile.known_limits],
     };
   });
   return {
     ...base, status: 'CANDIDATE',
     evidence_status: 'CANDIDATE_EXACT_RUNTIME_BUFF_ADD2_PACKET_ONE_REPLAY',
+    known_limits: [...profile.known_limits],
+    event_field_confidence: {
+      replay_time_ms: 'VERIFIED_DIRECT', stream_tag: 'VERIFIED_DIRECT',
+      raw_param: 'VERIFIED_DIRECT', raw_payload_hex: 'VERIFIED_DIRECT',
+      raw_object_hex: 'CANDIDATE_EXACT_RUNTIME_OBJECT_BYTES',
+      decoded_scalar_fields_candidate: fieldConfidence,
+    },
     input_count: inputCount, event_count: events.length,
     scanned_block_count: walk.block_count,
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,

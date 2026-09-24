@@ -154,6 +154,8 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
   --out-dir "work\16-19-buff-remove-candidates"
 ```
 
+大量 Buff 包的 JSONL 逐行保留候选状态和原始包来源；共用的字段置信度与限制说明写在同目录的 `semantic_run.json` 对应能力结果中。
+
 执行 **16.15.801.3452** 的旧版整合语义分析：
 
 ```powershell

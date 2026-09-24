@@ -66,14 +66,30 @@ function decodeNpcBuffRemovePacketCandidates(replay, _collected = null, options 
       events: null, error: `Replay source integrity failed: ${sourceError}` };
   }
   const rows = [];
+  const packetLimitError = new Error('BuffRemove2 packet limit reached');
   let walk;
   try {
     walk = walkBlocks(replay, (block, chunk) => {
-      if (block.packet_id === profile.replay_block_packet_id) rows.push({ block, chunk });
+      if (block.packet_id !== profile.replay_block_packet_id) return;
+      if (rows.length === MAX_PACKETS) throw packetLimitError;
+      rows.push({ block, chunk: { ...chunk } });
     }, { includeStreams: [profile.stream_tag], strict: true });
   } catch (error) {
+    if (error === packetLimitError) {
+      return { ...base, status: 'UNSUPPORTED', input_count: null,
+        observed_packet_count_minimum: MAX_PACKETS + 1,
+        event_count: null, events: null, scanned_block_count: null,
+        runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
+        error: `BuffRemove2 route exceeds ${MAX_PACKETS} packets` };
+    }
     return { ...base, status: 'DECODE_FAILED', input_count: null, event_count: null,
       events: null, error: `Replay framing failed: ${error.message}` };
+  }
+  const walkedSourceError = replaySourceError(replay);
+  if (walkedSourceError) {
+    return { ...base, status: 'DECODE_FAILED', input_count: null, event_count: null,
+      events: null, runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
+      error: `Replay source integrity failed after walk: ${walkedSourceError}` };
   }
   const inputCount = rows.length;
   const fail = (status, error, extra = {}) => ({
@@ -86,9 +102,9 @@ function decodeNpcBuffRemovePacketCandidates(replay, _collected = null, options 
       runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
     });
   }
-  if (inputCount > MAX_PACKETS || rows.some(({ block }) =>
+  if (rows.some(({ block }) =>
     block.payload_length < 1 || block.payload_length > MAX_PAYLOAD_BYTES)) {
-    return fail('UNSUPPORTED', 'BuffRemove2 runtime input exceeds its packet or payload limit', {
+    return fail('UNSUPPORTED', 'BuffRemove2 runtime payload exceeds its byte limit', {
       runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
     });
   }
@@ -218,21 +234,21 @@ function decodeNpcBuffRemovePacketCandidates(replay, _collected = null, options 
       raw_payload_hex: block.payload.toString('hex'),
       confidence: 'CANDIDATE',
       semantic_status: 'CANDIDATE_EXACT_RUNTIME_BUFF_REMOVE2_ONE_REPLAY',
-      field_confidence: {
-        replay_time_ms: 'VERIFIED_DIRECT',
-        raw_param: 'VERIFIED_DIRECT',
-        decoded_time_f32_seconds_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD',
-        buff_slot_index_candidate: 'CANDIDATE_EXACT_RUNTIME_VECTOR_INDEX',
-        buff_lookup_token_u32_candidate: 'CANDIDATE_EXACT_RUNTIME_LOOKUP_TOKEN',
-        raw_payload_hex: 'VERIFIED_DIRECT',
-      },
       raw_packet_ref: refs[index],
-      known_limits: [...profile.known_limits],
     };
   });
   return {
     ...base, status: 'CANDIDATE',
     evidence_status: 'CANDIDATE_EXACT_RUNTIME_BUFF_REMOVE2_ONE_REPLAY',
+    known_limits: [...profile.known_limits],
+    event_field_confidence: {
+      replay_time_ms: 'VERIFIED_DIRECT',
+      raw_param: 'VERIFIED_DIRECT',
+      decoded_time_f32_seconds_candidate: 'CANDIDATE_EXACT_RUNTIME_FIELD',
+      buff_slot_index_candidate: 'CANDIDATE_EXACT_RUNTIME_VECTOR_INDEX',
+      buff_lookup_token_u32_candidate: 'CANDIDATE_EXACT_RUNTIME_LOOKUP_TOKEN',
+      raw_payload_hex: 'VERIFIED_DIRECT',
+    },
     input_count: inputCount, event_count: events.length,
     scanned_block_count: walk.block_count,
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,

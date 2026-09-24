@@ -92,6 +92,11 @@ test('BuffRemove2 emits only exact-image candidate packet fields and raw provena
   assert.equal(result.events[0].raw_packet_ref.packet_id, 0x043c);
   assert.equal(result.events[0].raw_packet_ref.replay_sha256, replay.source_sha256);
   assert.equal(result.events[0].raw_packet_ref.raw_param, 0x400002b7);
+  assert.equal(result.event_field_confidence.buff_slot_index_candidate,
+    'CANDIDATE_EXACT_RUNTIME_VECTOR_INDEX');
+  assert.ok(result.known_limits.some((limit) => limit.includes('successful buff removal')));
+  assert.equal(Object.hasOwn(result.events[0], 'field_confidence'), false);
+  assert.equal(Object.hasOwn(result.events[0], 'known_limits'), false);
   assert.equal(Object.hasOwn(result.events[0], 'participant_id_candidate'), false);
   assert.equal(Object.hasOwn(result.events[0], 'buff_name'), false);
   assert.equal(calls.length, 1);
@@ -118,6 +123,47 @@ test('wrong route, wrong version, and changed replay source never call runtime',
   changedSource.buffer[changedSource.buffer.length - 8] ^= 1;
   assert.equal(decodeNpcBuffRemovePacketCandidates(changedSource).status,
     'DECODE_FAILED');
+  assert.equal(invoke.mock.callCount(), 0);
+});
+
+test('BuffRemove2 stops at 50,001 route packets before a later framing error', (t) => {
+  const invoke = t.mock.method(childProcess, 'spawnSync', () => {
+    throw new Error('runtime must not run');
+  });
+  const one = packet(0x043c, 0x400002b7, Buffer.from('01020304050607', 'hex'));
+  const replay = replayFromChunks([{
+    body: Buffer.concat([...Array(50_001).fill(one), Buffer.from([0x10])]),
+  }], BUILD);
+  const result = decodeNpcBuffRemovePacketCandidates(replay);
+  assert.equal(result.status, 'UNSUPPORTED');
+  assert.equal(result.input_count, null);
+  assert.equal(result.observed_packet_count_minimum, 50_001);
+  assert.equal(result.event_count, null);
+  assert.equal(result.events, null);
+  assert.equal(result.runtime_image_status, 'NOT_CHECKED');
+  assert.equal(invoke.mock.callCount(), 0);
+});
+
+test('BuffRemove2 rejects Replay source mutation during the walk', (t) => {
+  const invoke = t.mock.method(childProcess, 'spawnSync', () => {
+    throw new Error('runtime must not run');
+  });
+  const replay = fixtureReplay();
+  const chunks = replay.chunks;
+  let changed = false;
+  Object.defineProperty(replay, 'chunks', { configurable: true, get() {
+    if (!changed) {
+      replay.buffer[chunks[0].body_offset + 15] ^= 1;
+      changed = true;
+    }
+    return chunks;
+  } });
+  const result = decodeNpcBuffRemovePacketCandidates(replay, null,
+    { runtimeImagePath: temporaryImage(t) });
+  assert.equal(changed, true);
+  assert.equal(result.status, 'DECODE_FAILED');
+  assert.match(result.error, /Replay source integrity failed after walk/);
+  assert.equal(result.events, null);
   assert.equal(invoke.mock.callCount(), 0);
 });
 
@@ -242,6 +288,8 @@ test('selected CLI writes BuffRemove2 candidates with raw packet provenance', as
   const replayDir = path.join(output, summary.replay_artifacts[0].artifact_directory);
   const semantic = JSON.parse(fs.readFileSync(path.join(replayDir, 'semantic_run.json'), 'utf8'));
   assert.equal(semantic.capability_results.npc_buff_remove_packet.event_count, 2);
+  assert.equal(semantic.capability_results.npc_buff_remove_packet.event_field_confidence
+    .buff_slot_index_candidate, 'CANDIDATE_EXACT_RUNTIME_VECTOR_INDEX');
   const rows = fs.readFileSync(path.join(replayDir, 'npc_buff_remove_packet_candidates.jsonl'), 'utf8')
     .trim().split(/\r?\n/).map((line) => JSON.parse(line));
   assert.equal(rows.length, 2);
@@ -249,4 +297,6 @@ test('selected CLI writes BuffRemove2 candidates with raw packet provenance', as
   assert.equal(rows[0].raw_packet_ref.replay_sha256,
     crypto.createHash('sha256').update(fs.readFileSync(input)).digest('hex'));
   assert.equal(rows[0].raw_packet_ref.raw_param, 0x400002b7);
+  assert.equal(Object.hasOwn(rows[0], 'known_limits'), false);
+  assert.equal(Object.hasOwn(rows[0], 'field_confidence'), false);
 });

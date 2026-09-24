@@ -311,6 +311,9 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   This is a one-Replay correlation between anonymous fields, not proof of
   duration, elapsed time, owner, buff identity or successful application.
   Local probe evidence is under `artifacts/16_19_development/buff_add_probe/`.
+  For the high-volume BuffAdd2 and BuffRemove2 outputs, repeated field grades
+  and limits are stored once per capability in `semantic_run.json`; each JSONL
+  row retains its candidate status, build profile and raw packet provenance.
 - **Next:** Seek a matching KR runtime to resolve its timer field, and independent
   HN Replays to test level, HeroStats and inventory candidates. The HN
   Broadcast participant mapping still needs an independent Replay, and

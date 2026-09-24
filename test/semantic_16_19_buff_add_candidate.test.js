@@ -108,8 +108,11 @@ test('BuffAdd2 exposes bounded exact-runtime scalars from both streams with raw 
   assert.equal(result.events[1].raw_packet_ref.chunk_stream_tag, 2);
   assert.equal(result.events[0].raw_packet_ref.replay_sha256, replay.source_sha256);
   assert.equal(result.events[0].raw_packet_ref.raw_param, 0x400000ae);
-  assert.equal(result.events[0].field_confidence.decoded_scalar_fields_candidate
+  assert.equal(result.event_field_confidence.decoded_scalar_fields_candidate
     .offset_0x14_f32, 'CANDIDATE_EXACT_RUNTIME_CALLBACK_SCALAR');
+  assert.ok(result.known_limits.some((limit) => limit.includes('cross-stream')));
+  assert.equal(Object.hasOwn(result.events[0], 'field_confidence'), false);
+  assert.equal(Object.hasOwn(result.events[0], 'known_limits'), false);
   assert.equal(Object.hasOwn(result.events[0], 'participant_id_candidate'), false);
   assert.equal(Object.hasOwn(result.events[0], 'buff_name'), false);
   assert.deepEqual(request.packets.map((row) => row.stream_tag), [1, 2]);
@@ -137,6 +140,47 @@ test('wrong route, version, malformed source and unobserved shape refuse decodin
     payload: Buffer.alloc(16),
   }]);
   assert.equal(decodeNpcBuffAddPacketCandidates(unknownShape).status, 'UNSUPPORTED');
+  assert.equal(invoke.mock.callCount(), 0);
+});
+
+test('BuffAdd2 stops at 50,001 route packets before a later framing error', (t) => {
+  const invoke = t.mock.method(childProcess, 'spawnSync', () => {
+    throw new Error('runtime must not run');
+  });
+  const one = packet(0x03ed, 0x400000ae, Buffer.from(GAME_PAYLOAD, 'hex'));
+  const replay = replayFromChunks([{
+    stream: 1, body: Buffer.concat([...Array(50_001).fill(one), Buffer.from([0x10])]),
+  }], BUILD);
+  const result = decodeNpcBuffAddPacketCandidates(replay);
+  assert.equal(result.status, 'UNSUPPORTED');
+  assert.equal(result.input_count, null);
+  assert.equal(result.observed_packet_count_minimum, 50_001);
+  assert.equal(result.event_count, null);
+  assert.equal(result.events, null);
+  assert.equal(result.runtime_image_status, 'NOT_CHECKED');
+  assert.equal(invoke.mock.callCount(), 0);
+});
+
+test('BuffAdd2 rejects Replay source mutation during the walk', (t) => {
+  const invoke = t.mock.method(childProcess, 'spawnSync', () => {
+    throw new Error('runtime must not run');
+  });
+  const replay = fixtureReplay();
+  const chunks = replay.chunks;
+  let changed = false;
+  Object.defineProperty(replay, 'chunks', { configurable: true, get() {
+    if (!changed) {
+      replay.buffer[chunks[0].body_offset + 15] ^= 1;
+      changed = true;
+    }
+    return chunks;
+  } });
+  const result = decodeNpcBuffAddPacketCandidates(replay, null,
+    { runtimeImagePath: temporaryImage(t) });
+  assert.equal(changed, true);
+  assert.equal(result.status, 'DECODE_FAILED');
+  assert.match(result.error, /Replay source integrity failed after walk/);
+  assert.equal(result.events, null);
   assert.equal(invoke.mock.callCount(), 0);
 });
 
@@ -262,11 +306,16 @@ test('selected CLI writes game and keyframe BuffAdd2 candidate JSONL with proven
   const replayDir = path.join(output, summary.replay_artifacts[0].artifact_directory);
   const semantic = JSON.parse(fs.readFileSync(path.join(replayDir, 'semantic_run.json'), 'utf8'));
   assert.equal(semantic.capability_results.npc_buff_add_packet.event_count, 2);
+  assert.equal(semantic.capability_results.npc_buff_add_packet.event_field_confidence
+    .decoded_scalar_fields_candidate.offset_0x14_f32,
+  'CANDIDATE_EXACT_RUNTIME_CALLBACK_SCALAR');
   const rows = fs.readFileSync(path.join(replayDir, 'npc_buff_add_packet_candidates.jsonl'), 'utf8')
     .trim().split(/\r?\n/).map((line) => JSON.parse(line));
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.map((row) => row.stream_tag), [1, 2]);
   assert.equal(rows[0].decoded_scalar_fields_candidate.offset_0x14_f32, 5.5);
+  assert.equal(Object.hasOwn(rows[0], 'known_limits'), false);
+  assert.equal(Object.hasOwn(rows[0], 'field_confidence'), false);
   assert.equal(rows[1].raw_packet_ref.replay_sha256,
     crypto.createHash('sha256').update(fs.readFileSync(input)).digest('hex'));
   assert.equal(rows[1].raw_packet_ref.raw_param, 0x400000af);
