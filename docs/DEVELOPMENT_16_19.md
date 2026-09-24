@@ -110,9 +110,10 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   former high-count unknowns: champion kills 18–20 and 24–26, assists 18–28
   and 30. An independent Replay-side probe of all 327 keyframes and 3,270
   exact-shape hero-family packets in the 11 KR Replays found zero count-order
-  or tail-bound contradictions. This is an exact-build byte-transform match;
-  the whole `0x0089` keyframe carrier is not proven to be that runtime object
-  (see the route boundary below).
+  or tail-bound contradictions. This exact-build byte transform and the
+  complete native carrier binding were subsequently verified; the count
+  field labels remain Replay-correlated candidates (see the route boundary
+  below).
 - **821 death-count keyframe candidate:** `--events hero_deaths_snapshot`
   reads raw byte 1182 from exact KR `0x0089` keyframes of length 1263 and
   prefix `6700de`, using the pinned 821 count-byte transform. The Replay-side
@@ -179,9 +180,8 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   game-ID and test-suite warnings described above. Its ignored per-Replay
   evidence is under
   `artifacts/16_19_development/kr_821_missions_minions_11/acceptance_summary.json`.
-  The exact `0x0089` factory object still consumed only 5/1263 bytes of real
-  keyframe payloads, so full runtime carrier binding and published semantics
-  remain unproven.
+  A later native probe verified full runtime carrier consumption; this does
+  not promote the proposed field label to a published semantic capability.
 - **821 ward and cannon mission count candidates:** `hero_ward_stats_snapshot`
   reads transformed raw bytes 834/838/842 for `WARD_PLACED_DETECTOR`,
   `WARD_KILLED`, and `WARD_PLACED`; `hero_missions_cannon_minions_killed_snapshot`
@@ -201,28 +201,53 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   `artifacts/16_19_development/kr_821_ward_cannon_11/`.
 - **821 keyframe carrier structure:** A separate strict scan of those 327
   keyframes found 3,270/3,270 hero-family payloads with fixed `67 00 de`
-  prefix and length 1,263. The exact 821 byte transform maps `00 de` to
-  canonical ULEB128 `ec 09` (=1,260 bytes), consistent with a one-byte prefix,
-  two-byte size, and a 1,260-byte reversed blob. The observed native factory
-  instead consumes `0x67` as a base field, reads the object selector from
-  raw byte 1, and finishes at byte 5; it does not read `00 de` as this proposed
-  length. Under the independent structural hypothesis, raw
+  prefix and length 1,263. With the exact 821 constructor at RVA `0xeadf40`,
+  deserializer at `0xf2f550`, and base-reader hook at `0x1269bb0`, the native
+  route consumed all 1,263 bytes for every one of those 3,270 real packets,
+  returned success, and preserved the Replay raw parameter. Its 1,260-byte
+  vector matched the independently byte-transformed and reversed
+  `payload[3:]` exactly. Per Replay, truncation failed at cursor 3; appending
+  one trailing byte prevented full consumption; and a mutated length failed
+  at cursor 3. The earlier five-byte result omitted the base-reader hook and
+  accidentally consumed the Replay raw parameter as a payload field; it is
+  retained as a failed probe, not a carrier boundary. Raw
   offsets 1186/1182/1178 map to object offsets `0x4c/0x50/0x54` for the
   existing KDA candidates; 842/838/834 map to `0x1a4/0x1a8/0x1ac` for the
   new ward candidates; 450 maps to `0x32c` for cannon mission count; and
   371..374 map to `0x378` for `Missions_MinionsKilled`. Raw 434 maps to
-  `0x33c` and mirrors the `0x4c` kill candidate in all 3,270 packets. This
-  cross-check strengthens the structural hypothesis, while the exact 821
-  factory's 5/1,263 consumption still leaves carrier-to-runtime-object binding
-  unconfirmed. Its ignored audit is in
-  `artifacts/16_19_development/keyframe_carrier_821/carrier_scan.json`.
-- **821 gold snapshot negative lead:** The same 3,270 keyframe hero packets
-  did not yield a defensible `GOLD_EARNED` or `GOLD_SPENT` numeric candidate.
-  Raw integer-window survivors from the first two Replays reversed or lost
-  their tail discrimination on the nine held-out files, and the strongest
-  float-shaped window spans wide final gold values under one code. No gold
-  capability was registered; an exact runtime transform or independent
-  intermediate balance is still needed.
+  `0x33c` and mirrors the `0x4c` kill candidate in all 3,270 packets. These
+  byte offsets are native-vector facts; their semantic field names remain
+  candidate correlations. The structural and corrected native audits are in
+  ignored `artifacts/16_19_development/keyframe_carrier_821/carrier_scan.json`
+  and `artifacts/16_19_development/keyframe_wrapper_821/probe_all_summary.json`.
+- **821 experience, vision, and gold float snapshots:** In the 1,260-byte
+  byte-transformed reversed `0x0089` blob, `f32LE` offsets `0x28`, `0x1b0`,
+  `0x38`, and `0x34` correlate respectively with numeric Replay tails `EXP`,
+  `VISION_SCORE`, `GOLD_EARNED`, and `GOLD_SPENT`. Across 11 KR Replays,
+  327 keyframes, and 3,270 hero packets, each field has 110/110 finite,
+  nonnegative, tail-bounded participant sequences. Initial values are zero
+  except earned gold, which is 500 for all 110. Experience, vision, and
+  earned gold never decrease; spent gold has one observed decrease and the
+  CLI preserves it. Final floored snapshots equal their own tails for
+  52/110, 84/110, 0/110, and 92/110 participants, with retained total gaps
+  of 36,702, 45, 32,965, and 13,520. Earned gold's zero final equality is
+  explicit; its aligned mean absolute gap is 300 versus at least 2,478 in
+  nine rotated-participant controls. The other three fields also have much
+  smaller aligned gaps than rotations. The four CLI/API abilities emit only
+  cumulative `CANDIDATE` snapshots, without experience-source, vision-action,
+  income, purchase, sale, or refund events. The 11-Replay CLI batch produced
+  3,270 candidate rows per ability, 11/11 `CANDIDATE`, and zero errors.
+  Reproducible exploratory checks and per-Replay CLI provenance remain under
+  ignored `artifacts/16_19_development/kr_821_float_probe/` and
+  `artifacts/16_19_development/kr_821_float_stats_11/`.
+- **Earlier 821 gold raw-window negative lead:** Before the exact 821 byte
+  transform and reversed blob were applied, direct raw integer/float windows
+  did not yield a defensible `GOLD_EARNED` or `GOLD_SPENT` value. Survivors
+  from two calibration Replays lost discrimination on nine further exploratory
+  Replays; these were not a protected holdout. That failed search remains
+  negative evidence for direct raw windows, and is superseded by the bounded
+  transformed `f32` snapshot candidates above. It did not identify an income
+  or transaction event.
 - **821 champion-damage negative lead:** No raw `f32`/`u32` window or bounded
   byte transform passed numeric, monotone, and tail checks for
   `TOTAL_DAMAGE_DEALT_TO_CHAMPIONS`. Byte 779 has an ordered high-byte signal:
@@ -756,8 +781,7 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   `artifacts/16_19_development/buff_link_probe_second/`.
   In the third Replay all 3,030 distinct Remove keys appear in Add rows, while
   3,023 appear in game-stream Adds; row identity remains unresolved.
-- **Next:** Seek an exact 821 native binding for the full `0x0089` keyframe
-  carrier and independent assist/other combat-field evidence; continue bounded
+- **Next:** Seek independent assist/other combat-field evidence; continue bounded
   KR route research.
   Further independent HN Replays
   can test HeroStats and inventory candidates. The HN
@@ -778,17 +802,20 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
   controls, a weak lead. `0x023c` co-times with other routes, `0x0113` forms
   short repeated trains, and `0x0194` appears during observed death intervals.
   None is emitted as a path candidate.
-- **821 HeroStats route boundary:** The exact image registers
-  `PKT_S2C_HeroStats_s` and its factory constructor at numeric ID `0x0089`,
-  but running that deserializer on two real 1,263-byte KR keyframe `0x0089`
-  payloads consumed only 5 bytes and left 1,258 unread. Numeric ID equality
-  does not bind this keyframe carrier to that runtime object. The object's
+- **821 HeroStats route correction:** The exact image registers
+  `PKT_S2C_HeroStats_s` and its factory constructor at numeric ID `0x0089`.
+  An earlier probe on two real 1,263-byte KR keyframe payloads consumed only
+  five bytes because it omitted the native base-reader hook. The corrected
+  native probe consumed 1,263/1,263 bytes and produced the exact independent
+  1,260-byte vector for all 3,270 target packets. The object's
   internal byte path implements `a = ROR8((raw + 0x11) & 255, 2)`,
   `index = (((a & 0xd5) << 1) | ((a >> 1) & 0x55)) & 255`, and
   `decoded = (table[index] + 0x39) & 255`. The keyframe raw-byte candidates
-  match this transform and remain independently gated Replay correlations,
-  not proven full-object decodes. Exact-image and real-payload evidence is
-  retained under `artifacts/16_19_development/path_probe_agent/`.
+  match this transform and remain independently gated Replay correlations.
+  Native carrier binding confirms the bytes, not the proposed semantic names
+  or published capability. The failed and corrected probe evidence is retained
+  under `artifacts/16_19_development/path_probe_agent/` and
+  `artifacts/16_19_development/keyframe_wrapper_821/`.
 - **Ward negative control:** Old 16.16 WardSpawn opcode `0x049a` is not an HN
   16.19 factory case and has no packets in this Replay. The HN `0x0400` case
   has 6,627 packets and a distinct exact-image runtime deserializer. Its

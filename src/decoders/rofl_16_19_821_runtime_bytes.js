@@ -7,8 +7,9 @@ const LOOKUP_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5
 
 // Independently extracted from RVA 0x01ba1560 of the captured 821 module.
 // The LevelUp and HeroStats runtime routines use this same table with
-// different byte arithmetic. The keyframe 0x0089 carrier is not fully consumed
-// by the factory 0x0089 deserializer, so the count result remains a candidate.
+// different byte arithmetic. With the Replay raw_param supplied to its base
+// reader, exact 821 native 0x0089 decoding fully consumes observed keyframes;
+// the semantic labels of individual vector offsets remain candidates.
 const LOOKUP_TABLE = Buffer.from([
   'd75682dc83028f2935042171799e927fcb976a5105c76fe640637e345b470778',
   '5a96b8b92c995e6ed1754161245f4aaa4bcf0ed4865dba1d3f2bdf62f0330055',

@@ -63,9 +63,9 @@ const HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
   lookup_table_sha256: LOOKUP_TABLE_SHA256,
   evidence_scope: '11 exact 16.19.821.7343 KR Replays, 327 keyframes and 3270 route packets; 110 participant sequences start at zero and are monotone; 82 final values equal NUM_DEATHS tails and 28 lag by one',
   known_limits: Object.freeze([
-    'Only the observed 0x0089 keyframe raw byte is interpreted as a death-count candidate; the rest of the payload remains opaque.',
+    'Only the observed 0x0089 keyframe raw byte is interpreted as a death-count candidate by this capability; other decoded vector offsets are outside its scope.',
     'The exact 821 runtime byte transform covers all 256 input bytes; a value above the participant Replay tail fails closed.',
-    'Factory 0x0089 consumes only 5 of 1263 observed keyframe bytes; the carrier-to-object and field-offset binding is unconfirmed.',
+    'Exact 821 native 0x0089 decoding fully consumes all 3270 observed bodies into a 1260-byte transformed vector; the death-count field label remains a Replay-tail candidate.',
     'Keyframe counts are snapshots, not individual death events or exact death times.',
     'The Replay tail can exceed the last keyframe by one; the gap is retained without interpolation.',
   ]),
@@ -91,7 +91,7 @@ const HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
   evidence_scope: '11 exact-build KR Replays; 327 keyframes and 3270 mirrored route packets; exact 821 byte transform maps previously unknown high counts and all 110 participant sequences remain monotone and tail-bound',
   known_limits: Object.freeze([
     'The exact 821 runtime byte transform covers all 256 input bytes; a value above the participant Replay tail fails closed.',
-    'Factory 0x0089 consumes only 5 of 1263 observed keyframe bytes; the carrier-to-object and field-offset binding is unconfirmed.',
+    'Exact 821 native 0x0089 decoding fully consumes all 3270 observed bodies into a 1260-byte transformed vector; the kill-count field label remains a Replay-tail candidate.',
     'Bytes 434 and 1186 mirror within the same keyframe packet; they are not independent semantic evidence.',
     'Keyframe values are candidate snapshots, not individual kill events, exact kill times, killer attribution, or assists.',
     'The measured final Replay-tail gap is retained without interpolation or a hard upper bound.',
@@ -117,7 +117,7 @@ const HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
   evidence_scope: '11 exact-build KR Replays; 327 keyframes and 3270 route packets; exact 821 byte transform maps previously unknown high counts and all 110 participant sequences remain monotone and tail-bound',
   known_limits: Object.freeze([
     'The exact 821 runtime byte transform covers all 256 input bytes; a value above the participant Replay tail fails closed.',
-    'Factory 0x0089 consumes only 5 of 1263 observed keyframe bytes; the carrier-to-object and field-offset binding is unconfirmed.',
+    'Exact 821 native 0x0089 decoding fully consumes all 3270 observed bodies into a 1260-byte transformed vector; the assist-count field label remains a Replay-tail candidate.',
     'Byte 1178 has no exact mirror in the observed 0x0089 payloads.',
     'Keyframe values are candidate snapshots, not individual assist events, exact assist times, or participant attribution for a kill.',
     'The measured final Replay-tail gap is retained without interpolation or a hard upper bound.',
@@ -146,7 +146,7 @@ const HERO_MISSIONS_MINIONS_KILLED_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freez
   known_limits: Object.freeze([
     'This is correlated with Replay tail Missions_MinionsKilled, a distinct mission field; it is not MINIONS_KILLED.',
     'Against standard MINIONS_KILLED, zero of 110 final keyframe values matched across the observed 11 Replays.',
-    'Factory 0x0089 consumes only 5 of 1263 observed keyframe bytes; carrier-to-object and field-offset binding is unconfirmed.',
+    'Exact 821 native 0x0089 decoding fully consumes all 3270 observed bodies into a 1260-byte transformed vector; the Missions_MinionsKilled field label remains a Replay-tail candidate.',
     'The embedded exact 821 runtime byte transform decodes bytes, but does not itself prove the semantic field label.',
     'Keyframe values are candidate snapshots, not individual minion kill events, targets, lanes, or causes.',
     'Final Replay-tail gaps are retained without interpolation or a hard upper bound.',

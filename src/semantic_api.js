@@ -36,6 +36,8 @@ const {
   decodeHeroWardStatsSnapshotCandidates821,
   decodeHeroMissionsCannonMinionsKilledSnapshotCandidates821,
 } = require('./decoders/rofl_16_19_821_aux_counts_candidate');
+const { decodeHeroFloatSnapshotCandidates821 } =
+  require('./decoders/rofl_16_19_821_float_stats_candidate');
 const { collect821Routes } = require('./decoders/rofl_16_19_821_scan');
 const { decodeNpcBuffRemovePacketCandidates } =
   require('./decoders/rofl_16_19_buff_remove_candidate');
@@ -2018,6 +2020,14 @@ function decode1619821(replay, profile, options = {}) {
     hero_ward_stats_snapshot: decodeHeroWardStatsSnapshotCandidates821,
     hero_missions_cannon_minions_killed_snapshot:
       decodeHeroMissionsCannonMinionsKilledSnapshotCandidates821,
+    hero_experience_snapshot: (input, collected) =>
+      decodeHeroFloatSnapshotCandidates821(input, 'hero_experience_snapshot', collected),
+    hero_vision_score_snapshot: (input, collected) =>
+      decodeHeroFloatSnapshotCandidates821(input, 'hero_vision_score_snapshot', collected),
+    hero_gold_earned_snapshot: (input, collected) =>
+      decodeHeroFloatSnapshotCandidates821(input, 'hero_gold_earned_snapshot', collected),
+    hero_gold_spent_snapshot: (input, collected) =>
+      decodeHeroFloatSnapshotCandidates821(input, 'hero_gold_spent_snapshot', collected),
     hero_level_state: decodeHeroLevelCandidates821,
   };
   const outputKeys = {
@@ -2031,6 +2041,10 @@ function decode1619821(replay, profile, options = {}) {
     hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
     hero_missions_cannon_minions_killed_snapshot:
       'hero_missions_cannon_minions_killed_snapshot_candidates',
+    hero_experience_snapshot: 'hero_experience_snapshot_candidates',
+    hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
+    hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
+    hero_gold_spent_snapshot: 'hero_gold_spent_snapshot_candidates',
     hero_level_state: 'hero_level_state_candidates',
   };
   const capabilityResults = {};
@@ -2040,6 +2054,8 @@ function decode1619821(replay, profile, options = {}) {
     'hero_assists_snapshot', 'hero_level_state', 'hero_respawn',
     'hero_missions_minions_killed_snapshot',
     'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
+    'hero_experience_snapshot', 'hero_vision_score_snapshot',
+    'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
   ]);
   const supported = capabilities.filter((capability) => sharedScanCapabilities.has(capability));
   let candidate821Scan = options.candidate821Scan ?? null;

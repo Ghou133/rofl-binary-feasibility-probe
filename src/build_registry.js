@@ -15,6 +15,8 @@ const deathTimerCandidate1619821 =
   require('./decoders/rofl_16_19_821_death_timer_candidate');
 const auxiliaryCountsCandidate1619821 =
   require('./decoders/rofl_16_19_821_aux_counts_candidate');
+const floatStatsCandidate1619821 =
+  require('./decoders/rofl_16_19_821_float_stats_candidate');
 const heroStatsCandidate1619 = require('./decoders/rofl_16_19_hero_stats_candidate');
 const buffRemoveCandidate1619 = require('./decoders/rofl_16_19_buff_remove_candidate');
 const buffAddCandidate1619 = require('./decoders/rofl_16_19_buff_add_candidate');
@@ -456,6 +458,10 @@ const BUILD_PROFILES = deepFreeze({
       hero_missions_minions_killed_snapshot: 0x0089,
       hero_ward_stats_snapshot: 0x0089,
       hero_missions_cannon_minions_killed_snapshot: 0x0089,
+      hero_experience_snapshot: 0x0089,
+      hero_vision_score_snapshot: 0x0089,
+      hero_gold_earned_snapshot: 0x0089,
+      hero_gold_spent_snapshot: 0x0089,
       hero_level_state: 0x0197,
     },
     decoder_profile: {
@@ -474,6 +480,10 @@ const BUILD_PROFILES = deepFreeze({
         auxiliaryCountsCandidate1619821.HERO_WARD_STATS_SNAPSHOT_821_CANDIDATE_PROFILE,
       hero_missions_cannon_minions_killed_snapshot:
         auxiliaryCountsCandidate1619821.HERO_MISSIONS_CANNON_MINIONS_KILLED_SNAPSHOT_821_CANDIDATE_PROFILE,
+      hero_experience_snapshot: floatStatsCandidate1619821.PROFILES.hero_experience_snapshot,
+      hero_vision_score_snapshot: floatStatsCandidate1619821.PROFILES.hero_vision_score_snapshot,
+      hero_gold_earned_snapshot: floatStatsCandidate1619821.PROFILES.hero_gold_earned_snapshot,
+      hero_gold_spent_snapshot: floatStatsCandidate1619821.PROFILES.hero_gold_spent_snapshot,
       hero_level_state: levelCandidate1619821.HERO_LEVEL_CANDIDATE_PROFILE_821,
     },
     evidence_grades: {
@@ -488,6 +498,10 @@ const BUILD_PROFILES = deepFreeze({
       hero_ward_stats_snapshot: 'CANDIDATE_821_RUNTIME_WARD_COUNT_BYTES_AND_TAILS',
       hero_missions_cannon_minions_killed_snapshot:
         'CANDIDATE_821_RUNTIME_CANNON_COUNT_BYTE_AND_MISSIONS_TAIL',
+      hero_experience_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_EXP_TAIL',
+      hero_vision_score_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_VISION_TAIL',
+      hero_gold_earned_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_EARNED_TAIL',
+      hero_gold_spent_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_SPENT_TAIL',
       hero_level_state: 'CANDIDATE_821_RUNTIME_LEVEL_BYTE_AND_REPLAY_TAIL',
     },
     semantic_mappings: {
@@ -496,17 +510,19 @@ const BUILD_PROFILES = deepFreeze({
       death_timer_seconds_candidate: 'exact 821 0x0259 deserializer f32; matched death core only, not a respawn prediction',
       observed_return_time: 'exact 821 0x0048 ReincarnateAlive route/f32 decode paired with death core and dead-time tail; co-timed 0x018d is inventory MapView fingerprint only',
       keyframe_deaths_snapshot:
-        'exact 821 runtime byte transform at 0x0089 raw byte 1182; keyframe carrier binding and death-count label candidate only',
+        'exact 821 native 0x0089 carrier and vector byte transform at raw byte 1182; death-count semantic label candidate only',
       keyframe_champion_kills_snapshot:
-        'exact 821 runtime byte transform at 0x0089 mirrored raw bytes 434/1186; keyframe carrier binding and kill-count label candidate only',
+        'exact 821 native 0x0089 carrier and vector byte transform at mirrored raw bytes 434/1186; kill-count semantic label candidate only',
       keyframe_assists_snapshot:
-        'exact 821 runtime byte transform at 0x0089 raw byte 1178; keyframe carrier binding and assist-count label candidate only',
+        'exact 821 native 0x0089 carrier and vector byte transform at raw byte 1178; assist-count semantic label candidate only',
       keyframe_missions_minions_killed_snapshot:
         'exact 821 runtime byte transform at 0x0089 raw bytes 374/373; Missions_MinionsKilled tail correlation only, distinct from MINIONS_KILLED',
       keyframe_ward_stats_snapshot:
-        'exact 821 runtime count-byte transform at 0x0089 raw bytes 834/838/842; three ward-tail correlations, keyframe carrier binding candidate only',
+        'exact 821 native 0x0089 carrier and vector bytes at raw offsets 834/838/842; three ward-tail semantic labels candidate only',
       keyframe_missions_cannon_minions_killed_snapshot:
-        'exact 821 runtime count-byte transform at 0x0089 raw byte 450; Missions_CannonMinionsKilled tail correlation, keyframe carrier binding candidate only',
+        'exact 821 native 0x0089 carrier and vector byte at raw offset 450; Missions_CannonMinionsKilled semantic label candidate only',
+      keyframe_float_snapshots:
+        'exact 821 native 0x0089 carrier and reversed vector at offsets 0x28/0x1b0/0x38/0x34; EXP/VISION_SCORE/GOLD_EARNED/GOLD_SPENT semantic labels candidate only',
       level_state: 'exact 821 PKT_NPC_LevelUp_s route and +0x11 byte transform; participant alignment and event interpretation candidate only',
     },
     verified_capabilities: [],
@@ -515,6 +531,8 @@ const BUILD_PROFILES = deepFreeze({
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
+      'hero_experience_snapshot', 'hero_vision_score_snapshot',
+      'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_level_state',
     ],
     unsupported_capabilities: [],

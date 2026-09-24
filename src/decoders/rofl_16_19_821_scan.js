@@ -9,6 +9,8 @@ const CAPABILITIES = new Set([
   'hero_death', 'hero_death_timer', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
   'hero_assists_snapshot', 'hero_missions_minions_killed_snapshot',
   'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
+  'hero_experience_snapshot', 'hero_vision_score_snapshot',
+  'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
   'hero_level_state', 'hero_respawn',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
@@ -57,6 +59,10 @@ function create821ScanCollector(replay, selectedCapabilities) {
     hero_missions_minions_killed_snapshot: heroStatsRows,
     hero_ward_stats_snapshot: heroStatsRows,
     hero_missions_cannon_minions_killed_snapshot: heroStatsRows,
+    hero_experience_snapshot: heroStatsRows,
+    hero_vision_score_snapshot: heroStatsRows,
+    hero_gold_earned_snapshot: heroStatsRows,
+    hero_gold_spent_snapshot: heroStatsRows,
     hero_level_state: [],
   };
   const selectsHeroStats = selected.has('hero_deaths_snapshot')
@@ -64,7 +70,11 @@ function create821ScanCollector(replay, selectedCapabilities) {
     || selected.has('hero_assists_snapshot')
     || selected.has('hero_missions_minions_killed_snapshot')
     || selected.has('hero_ward_stats_snapshot')
-    || selected.has('hero_missions_cannon_minions_killed_snapshot');
+    || selected.has('hero_missions_cannon_minions_killed_snapshot')
+    || selected.has('hero_experience_snapshot')
+    || selected.has('hero_vision_score_snapshot')
+    || selected.has('hero_gold_earned_snapshot')
+    || selected.has('hero_gold_spent_snapshot');
   // A return candidate is only meaningful after validating its death cores.
   // Keep those route packets in the same walk even for respawn-only requests.
   const selectsDeathRoutes = selected.has('hero_death') || selected.has('hero_death_timer')
@@ -165,6 +175,10 @@ function rowsFor821Capability(replay, token, capability) {
       || capability === 'hero_missions_minions_killed_snapshot'
       || capability === 'hero_ward_stats_snapshot'
       || capability === 'hero_missions_cannon_minions_killed_snapshot'
+      || capability === 'hero_experience_snapshot'
+      || capability === 'hero_vision_score_snapshot'
+      || capability === 'hero_gold_earned_snapshot'
+      || capability === 'hero_gold_spent_snapshot'
       ? bound.keyframeBlockCount : bound.blockCount,
   };
 }

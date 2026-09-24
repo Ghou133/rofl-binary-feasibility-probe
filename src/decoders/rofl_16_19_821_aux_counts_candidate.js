@@ -36,7 +36,7 @@ const HERO_WARD_STATS_SNAPSHOT_821_CANDIDATE_PROFILE = Object.freeze({
   known_limits: Object.freeze([
     'Experimental keyframe snapshots only; ward placement, removal, detector type, position, and lifecycle events are not inferred.',
     'The three encoded low bytes at 834, 838 and 842 correlate with distinct Replay tail fields; their decoded upper three bytes are zero in the observed corpus.',
-    'Factory 0x0089 consumes only 5 of 1263 observed keyframe bytes; carrier-to-object and field-offset binding remains unconfirmed.',
+    'Exact 821 native 0x0089 decoding fully consumes all 3270 observed bodies into a 1260-byte transformed vector; ward-count labels remain Replay-tail candidates.',
     'Only observed values below 256 are accepted, and final Replay-tail gaps remain uninterpolated.',
   ]),
 });
@@ -57,7 +57,7 @@ const HERO_MISSIONS_CANNON_MINIONS_KILLED_SNAPSHOT_821_CANDIDATE_PROFILE = Objec
   evidence_scope: '11 KR exact-build Replays, 327 keyframes, 3270 hero packets; 110 zero-start, monotone, tail-bound sequences, 93 final values equal Missions_CannonMinionsKilled',
   known_limits: Object.freeze([
     'This candidate is tied only to the Replay tail field Missions_CannonMinionsKilled, not to a general lane minion count or a per-kill event.',
-    'Factory 0x0089 consumes only 5 of 1263 observed keyframe bytes; carrier-to-object and field-offset binding remains unconfirmed.',
+    'Exact 821 native 0x0089 decoding fully consumes all 3270 observed bodies into a 1260-byte transformed vector; the cannon mission field label remains a Replay-tail candidate.',
     'The encoded low byte at 450 correlates with the tail field; its decoded upper three bytes are zero in the observed corpus.',
     'Only observed values below 256 are accepted, and final Replay-tail gaps remain uninterpolated.',
   ]),
