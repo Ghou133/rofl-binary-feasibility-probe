@@ -44,6 +44,7 @@
 | `16.19.821.7343 --events hero_level_state` | KR `0x0197` 精确 821 运行时解码器及查表变换输出观察到的候选等级值，覆盖等级 1–20 | 仅写入 `hero_level_state_candidates`；覆盖 1,613 个选定英雄包的 76 种载荷形状经完整消费验证，重复观测与一个中间等级缺口保留；参与者映射仍是候选，不补造升级事件 |
 | `16.19.821.7343 --events hero_inventory_packet --runtime-image PATH` | 精确 821 镜像原生反序列化 KR `0x018d` MapView，逐包输出候选槽位与物品 ID 记录 | 仅写入 `hero_inventory_packet_candidates`；不推断购买、出售或持续库存状态；额外原始参数变体不映射参与者，镜像按完整 SHA-256 校验 |
 | `16.19.821.7343 --events cast_spell_ans_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x01da` CastSpellAns 包，输出原始包来源及两个回调变换后的不透明字段 | 仅写入 `cast_spell_ans_packet_candidates`；不声称一次成功施法，也不推断技能、槽位、施法者或目标；镜像按完整 SHA-256 校验 |
+| `16.19.821.7343 --events npc_buff_add_packet,npc_buff_remove_packet --runtime-image PATH` | 分别解码 KR `0x00ae/0x047c` 原生包，并在两项均成功时汇总相同不透明 `(u32, u8)` 键的重合与时序歧义 | 逐包候选分别写入两个 JSONL；`candidate_associations.npc_buff_add_remove_opaque_key` 仅含回放内统计，不配对单个包，不推断 Buff 名称、归属或生命周期 |
 | `16.19.820.7193 --events hero_death_timer` | HN 路由的计时 float、同刻 Hero_Die 和后续复活时间相互校验时，输出候选计时秒数 | 仅写入 `hero_death_timer_candidates`；该 profile 仅用于 820 HN 路由，821 KR 使用独立精确版本的候选 profile；不产生确认的死亡或重生事件 |
 | `16.19.820.7193 --events hero_respawn` | 将 HN 已观察且与计时包唯一配对的 `0x0357` 包输出为候选复活时点 | 仅写入 `hero_respawn_candidates`；依赖完整的 HN 计时候选校验，不补造回放结束后的复活 |
 | `16.19.820.7193 --events hero_level_state` | HN `0x02b3` 包中观察到的候选英雄等级值及原始包来源 | 仅写入 `hero_level_state_candidates`；同等级的独立包保留为重复观测，不补造升级事件；KR 路由未适配 |

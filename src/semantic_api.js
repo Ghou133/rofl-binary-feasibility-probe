@@ -63,6 +63,8 @@ const { decodeNpcBuffAddPacketCandidates } =
   require('./decoders/rofl_16_19_buff_add_candidate');
 const { analyzeBuffPacketKeyCompatibility } =
   require('./decoders/rofl_16_19_buff_key_compatibility');
+const { analyzeBuffPacketKeyCompatibility821 } =
+  require('./decoders/rofl_16_19_821_buff_key_compatibility');
 const {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   decodeHeroStatsSnapshotCandidateSet,
@@ -2205,6 +2207,33 @@ function decode1619821(replay, profile, options = {}) {
   const results = Object.values(capabilityResults);
   const usable = results.filter((result) => result.status === 'CANDIDATE');
   const failed = results.filter((result) => result.status !== 'CANDIDATE');
+  const candidateAssociations = {};
+  if (capabilities.includes('npc_buff_add_packet')
+      && capabilities.includes('npc_buff_remove_packet')) {
+    const addRows = events.npc_buff_add_packet_candidates;
+    const removeRows = events.npc_buff_remove_packet_candidates;
+    if (Array.isArray(addRows) && Array.isArray(removeRows)) {
+      try {
+        candidateAssociations.npc_buff_add_remove_opaque_key =
+          analyzeBuffPacketKeyCompatibility821(addRows, removeRows,
+            replay.source_sha256);
+      } catch (error) {
+        candidateAssociations.npc_buff_add_remove_opaque_key = {
+          status: 'DECODE_FAILED',
+          error: error.message || String(error),
+        };
+      }
+    } else {
+      candidateAssociations.npc_buff_add_remove_opaque_key = {
+        status: 'UNAVAILABLE',
+        required_capabilities: ['npc_buff_add_packet', 'npc_buff_remove_packet'],
+        dependency_statuses: {
+          npc_buff_add_packet: capabilityResults.npc_buff_add_packet?.status ?? 'UNEXECUTED',
+          npc_buff_remove_packet: capabilityResults.npc_buff_remove_packet?.status ?? 'UNEXECUTED',
+        },
+      };
+    }
+  }
   return {
     status: results.length === 0 ? 'PROFILE_RESOLVED'
       : failed.length > 0 ? (usable.length > 0 ? 'PARTIAL' : failed[0].status)
@@ -2213,6 +2242,7 @@ function decode1619821(replay, profile, options = {}) {
     profile,
     events: usable.length > 0 ? events : null,
     capability_results: capabilityResults,
+    candidate_associations: candidateAssociations,
     decoded_packet_count: usable.reduce((sum, result) => sum + result.input_count, 0),
     runtime_image_used: results.some((result) => result.runtime_image_used === true),
     runtime_image_sha256: results.find((result) => result.runtime_image_used === true)

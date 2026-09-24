@@ -90,6 +90,24 @@ Current progress (older notes below retain their original research context):
   Run `node src/cli.js batch <821-rofl-directory> --events npc_buff_add_packet
   --runtime-image <captured-821-image> --event-jsonl-only
   --out-dir <output-directory>`.
+- **821 opaque Buff key compatibility:** When both exact-image packet decoders
+  succeed, CLI/API now emits a per-Replay
+  `candidate_associations.npc_buff_add_remove_opaque_key` summary. In the
+  independently decoded 11-Replay corpus, all 37,417 per-Replay distinct
+  Remove `(opaque_u32_0x10, opaque_u8_0x14)` keys appear among Add rows;
+  37,373 appear among game-stream Add rows and the remaining 44 only in keyframe Add
+  snapshots. A shifted-u32 control overlaps only 162 distinct Remove keys.
+  But 77 Remove rows have no preceding same-key game Add, 103,072 have
+  multiple preceding game Adds, and 17,399 follow another same-key Remove
+  without an intervening game Add. The summary makes no packet-row join and
+  does not infer Buff identity, owner, target, successful application or
+  removal, duration, or lifecycle. Missing/failed decoders yield
+  `UNAVAILABLE`; keyframe Add snapshots are counted separately. The 11-Replay
+  independent analysis and per-Replay JS/Python agreement are retained under
+  ignored `artifacts/16_19_development/kr_821_buff_pair_evidence/`. The
+  combined exact-image CLI batch also returned 11/11 `CANDIDATE` associations,
+  11/11 `MATCHED_USED` image outcomes, and zero framing errors; its ignored
+  output is `artifacts/16_19_development/kr_821_buff_pair_cli_11/`.
 - **821 observed-return candidate:** `--events hero_respawn` pairs each matched
   death core with a subsequent same-participant `0x0048` and preceding co-timed
   `0x018d`, requiring the ten per-participant sums of elapsed milliseconds,
