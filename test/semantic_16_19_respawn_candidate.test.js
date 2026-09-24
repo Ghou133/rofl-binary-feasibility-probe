@@ -218,6 +218,21 @@ test('foreign candidate timer outcome cannot be projected into an identical seco
   assert.equal(rejected.events, null);
 });
 
+test('editing a returned timer candidate cannot forge a later respawn projection', () => {
+  const replay = hnReplay();
+  const routeScan = collectCandidateRoutes(replay);
+  const timer = decodeHeroDeathTimerCandidates(replay, routeScan);
+  const baseline = decodeHeroRespawnCandidates(replay, routeScan, timer);
+  assert.equal(baseline.status, 'CANDIDATE');
+  timer.events[0].respawn_replay_time_ms_candidate = 999999;
+  timer.events[0].raw_packet_refs[0].packet_id = 0xffff;
+  timer.respawn_match_count = 999;
+  const afterMutation = decodeHeroRespawnCandidates(replay, routeScan, timer);
+  assert.equal(afterMutation.status, 'CANDIDATE');
+  assert.deepEqual(afterMutation.events, baseline.events);
+  assert.equal(afterMutation.events[0].replay_time_ms, 13025);
+});
+
 test('foreign route scan cannot be reused for an identical second Replay', () => {
   const replayA = hnReplay();
   const replayB = hnReplay();

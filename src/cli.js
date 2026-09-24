@@ -5,7 +5,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { rawAnchorChainStatus, renderAcceptanceReport } = require('./cli_report');
 const { resolveBuildProfile } = require('./build_registry');
-const { candidateTailStatAssessment } = require('./decoders/rofl_16_19_820_7193');
+const {
+  analyzeReplayWithCandidateRoutes,
+  candidateTailStatAssessment,
+} = require('./decoders/rofl_16_19_820_7193');
 const {
   assessHeroMinionsKilledSnapshotTail,
   assessHeroExperienceSnapshotTail,
@@ -461,6 +464,11 @@ function summarizeCapabilityResults(requested, decoded) {
 }
 
 function parseOne1619(replay, options, started) {
+  const selectsGameRoutes = options.semantic !== false
+    && Array.isArray(options.events)
+    && options.events.some((name) => [
+      'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
+    ].includes(name));
   const selectsHeroStats = options.semantic !== false
     && Array.isArray(options.events)
     && options.events.some((name) => HERO_STATS_SNAPSHOT_CAPABILITIES.includes(name));
@@ -469,9 +477,11 @@ function parseOne1619(replay, options, started) {
     includePrivateMetadata: options.includePrivateMetadata,
     strict: options.strict,
   };
-  const { analysis, heroStatsScan } = selectsHeroStats
-    ? analyzeReplayWithHeroStats(replay, analysisOptions)
-    : { analysis: analyzeReplay(replay, analysisOptions), heroStatsScan: null };
+  const { analysis, heroStatsScan, candidateRouteScan } = selectsGameRoutes
+    ? analyzeReplayWithCandidateRoutes(replay, analysisOptions, selectsHeroStats)
+    : selectsHeroStats ? analyzeReplayWithHeroStats(replay, analysisOptions)
+      : { analysis: analyzeReplay(replay, analysisOptions), heroStatsScan: null,
+        candidateRouteScan: null };
   // The raw analyzer initializes legacy event arrays. For a 16.19 run, only
   // arrays returned by an executed exact-build decoder may appear here.
   analysis.events = {};
@@ -522,6 +532,7 @@ function parseOne1619(replay, options, started) {
         decoded = decodeExactBuildReplay(replay, {
           capabilities: requested,
           heroStatsScan: heroStatsScan ?? undefined,
+          candidateRouteScan: candidateRouteScan ?? undefined,
           runtimeImagePath: options.runtimeImage ?? undefined,
           pythonExecutable: options.python ?? undefined,
         });

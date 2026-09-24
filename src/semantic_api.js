@@ -1811,7 +1811,7 @@ function decode1619(replay, profile, options = {}) {
   ]);
   const heroStatsCapabilities = new Set(HERO_STATS_SNAPSHOT_CAPABILITIES);
   const collected = capabilities.some((capability) => gameRouteCapabilities.has(capability))
-    ? collectCandidateRoutes(replay) : null;
+    ? options.candidateRouteScan ?? collectCandidateRoutes(replay) : null;
   let timerOutcome = null;
   let heroStatsOutcomes = null;
   for (const capability of capabilities) {

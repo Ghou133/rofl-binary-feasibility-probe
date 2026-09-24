@@ -2,8 +2,10 @@
 
 const crypto = require('node:crypto');
 
+const { analyzeReplay } = require('../analysis');
 const { deathEvent } = require('../events');
 const { walkBlocks } = require('../rofl');
+const { analyzeReplayWithHeroStats } = require('./rofl_16_19_hero_stats_candidate');
 
 const REPLAY_VERSION = '16.19.820.7193';
 const PROFILE_LIMITS = Object.freeze([
@@ -104,12 +106,15 @@ const TIMER_FLOAT_CODES = new Set([1, 2, 4, 6]);
 const ROUTE_SCAN_SOURCE = new WeakMap();
 const TIMER_OUTCOME_SOURCE = new WeakMap();
 
-function bindReplaySource(store, result, replay) {
-  store.set(result, {
+function bindTimerOutcome(result, replay) {
+  TIMER_OUTCOME_SOURCE.set(result, {
     replay,
     source_path: replay?.source_path ?? null,
     source_sha256: replay?.source_sha256 ?? null,
     version: replay?.header?.version ?? null,
+    // A public candidate result remains editable for consumers, but edits to
+    // it cannot become the input for a later respawn projection.
+    outcome: structuredClone(result),
   });
   return result;
 }
@@ -120,6 +125,24 @@ function hasReplaySource(store, result, replay) {
     && source.source_path === (replay?.source_path ?? null)
     && source.source_sha256 === (replay?.source_sha256 ?? null)
     && source.version === (replay?.header?.version ?? null);
+}
+
+function bindRouteScan(scan, replay) {
+  // The public value is only a token. Keeping the route Map in a private
+  // WeakMap prevents callers from changing framed rows and reusing their
+  // original Replay identity to manufacture candidate packet provenance.
+  const token = Object.freeze({
+    error: scan.error,
+    scanned_block_count: scan.walk?.block_count ?? null,
+  });
+  ROUTE_SCAN_SOURCE.set(token, {
+    replay,
+    source_path: replay?.source_path ?? null,
+    source_sha256: replay?.source_sha256 ?? null,
+    version: replay?.header?.version ?? null,
+    scan,
+  });
+  return token;
 }
 
 function packetRef(replay, block, chunk) {
@@ -178,31 +201,84 @@ function sortPacketRows(rows, withParticipant) {
     || left.block.offset - right.block.offset);
 }
 
+const CANDIDATE_ROUTE_PACKET_IDS = new Set([
+  ...HERO_DEATH_CANDIDATE_PROFILES.flatMap((profile) => [
+    profile.replay_block_packet_id,
+    profile.paired_replay_block_packet_id,
+    profile.corroborating_replay_block_packet_id,
+  ]),
+  HERO_DEATH_TIMER_CANDIDATE_PROFILE.reincarnate_alive_packet_id,
+  HERO_LEVEL_STATE_CANDIDATE_PROFILE.replay_block_packet_id,
+]);
+
+function emptyCandidateRoutes() {
+  return new Map([...CANDIDATE_ROUTE_PACKET_IDS].map((packetId) => [packetId, []]));
+}
+
+function retainCandidateRoute(routes, block, chunk) {
+  if (!routes.has(block.packet_id)) return;
+  if (!Buffer.isBuffer(block.payload) || block.payload.length !== block.payload_length) {
+    throw new TypeError('candidate route observed block payload is invalid');
+  }
+  // The standalone walk can alias an uncompressed Replay buffer. Copy both
+  // payload and chunk metadata so a later Replay mutation cannot rewrite a
+  // route scan that was bound to the original source hash.
+  routes.get(block.packet_id).push({
+    block: { ...block, payload: Buffer.from(block.payload) },
+    chunk: { ...chunk },
+  });
+}
+
 function collectCandidateRoutes(replay) {
-  const relevantPacketIds = new Set([
-    ...HERO_DEATH_CANDIDATE_PROFILES.flatMap((profile) => [
-      profile.replay_block_packet_id,
-      profile.paired_replay_block_packet_id,
-      profile.corroborating_replay_block_packet_id,
-    ]),
-    HERO_DEATH_TIMER_CANDIDATE_PROFILE.reincarnate_alive_packet_id,
-    HERO_LEVEL_STATE_CANDIDATE_PROFILE.replay_block_packet_id,
-  ]);
-  const routes = new Map([...relevantPacketIds].map((packetId) => [packetId, []]));
+  const routes = emptyCandidateRoutes();
   try {
     const walk = walkBlocks(replay, (block, chunk) => {
-      if (routes.has(block.packet_id)) routes.get(block.packet_id).push({ block, chunk });
+      retainCandidateRoute(routes, block, chunk);
     }, { includeStreams: [1], strict: true });
-    return bindReplaySource(ROUTE_SCAN_SOURCE, { routes, walk, error: null }, replay);
+    return bindRouteScan({ routes, walk, error: null }, replay);
   } catch (error) {
-    return bindReplaySource(ROUTE_SCAN_SOURCE,
-      { routes: null, walk: null, error: error.message }, replay);
+    return bindRouteScan({ routes: null, walk: null, error: error.message }, replay);
   }
 }
 
+function createCandidateRouteScanCollector(replay) {
+  const routes = emptyCandidateRoutes();
+  let gameBlockCount = 0;
+  let finished = false;
+  return Object.freeze({
+    observe(block, chunk) {
+      if (finished) throw new Error('candidate route scan collector is already finished');
+      if (chunk?.stream_tag !== 1) return;
+      gameBlockCount += 1;
+      retainCandidateRoute(routes, block, chunk);
+    },
+    finish() {
+      if (finished) throw new Error('candidate route scan collector is already finished');
+      finished = true;
+      return bindRouteScan({ routes, walk: { block_count: gameBlockCount }, error: null }, replay);
+    },
+  });
+}
+
+function analyzeReplayWithCandidateRoutes(replay, options = {}, includeHeroStats = false) {
+  const collector = createCandidateRouteScanCollector(replay);
+  const inspected = includeHeroStats
+    ? analyzeReplayWithHeroStats(replay, options, collector.observe)
+    : { analysis: analyzeReplay(replay, {
+      ...options, includeStreams: [1, 2, 3], onBlock: collector.observe,
+    }), heroStatsScan: null };
+  return {
+    ...inspected,
+    candidateRouteScan: inspected.analysis.block_errors.length === 0
+      ? collector.finish() : null,
+  };
+}
+
 function candidateRoutesForReplay(replay, collected) {
-  if (collected === null || collected === undefined) return collectCandidateRoutes(replay);
-  if (hasReplaySource(ROUTE_SCAN_SOURCE, collected, replay)) return collected;
+  const token = collected ?? collectCandidateRoutes(replay);
+  if (hasReplaySource(ROUTE_SCAN_SOURCE, token, replay)) {
+    return ROUTE_SCAN_SOURCE.get(token).scan;
+  }
   return { routes: null, walk: null,
     error: 'candidate route scan belongs to a different Replay' };
 }
@@ -588,7 +664,7 @@ function decodeHeroDeathTimerCandidates(replay, collected = null) {
       known_limits: [...profile.known_limits],
     };
   });
-  return bindReplaySource(TIMER_OUTCOME_SOURCE, {
+  return bindTimerOutcome({
     status: 'CANDIDATE',
     evidence_status: 'CANDIDATE_EXACT_RUNTIME_FLOAT_AND_REPLAY_TIMING',
     profile_id: profile.id,
@@ -611,7 +687,8 @@ function decodeHeroDeathTimerCandidates(replay, collected = null) {
 
 function decodeHeroRespawnCandidates(replay, collected = null, timerOutcome = null) {
   const profile = HERO_RESPAWN_CANDIDATE_PROFILE;
-  const scan = candidateRoutesForReplay(replay, collected);
+  const scanToken = collected ?? collectCandidateRoutes(replay);
+  const scan = candidateRoutesForReplay(replay, scanToken);
   if (scan.error) {
     return { status: 'DECODE_FAILED', profile_id: profile.id,
       event_count: null, input_count: null,
@@ -627,7 +704,8 @@ function decodeHeroRespawnCandidates(replay, collected = null, timerOutcome = nu
       error: 'death timer outcome belongs to a different Replay' };
   }
   const timer = timerOutcome?.status === 'CANDIDATE'
-    ? timerOutcome : decodeHeroDeathTimerCandidates(replay, scan);
+    ? TIMER_OUTCOME_SOURCE.get(timerOutcome).outcome
+    : decodeHeroDeathTimerCandidates(replay, scanToken);
   if (timer.status !== 'CANDIDATE') {
     const unclassified = observedRawRouteCount > 0
       ? `${observedRawRouteCount} raw 0x0357 packets remain unclassified` : null;
@@ -883,6 +961,7 @@ module.exports = {
   HERO_DEATH_TIMER_CANDIDATE_PROFILE,
   HERO_RESPAWN_CANDIDATE_PROFILE,
   HERO_LEVEL_STATE_CANDIDATE_PROFILE,
+  analyzeReplayWithCandidateRoutes,
   collectCandidateRoutes,
   decodeHeroDeathCandidates,
   decodeHeroDeathTimerCandidates,

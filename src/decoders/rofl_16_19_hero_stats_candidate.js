@@ -483,14 +483,21 @@ function createHeroStatsScanCollector(replay) {
   });
 }
 
-function analyzeReplayWithHeroStats(replay, options = {}) {
+function analyzeReplayWithHeroStats(replay, options = {}, afterBlock = null) {
+  if (afterBlock !== null && typeof afterBlock !== 'function') {
+    throw new TypeError('HeroStats additional block observer must be a function');
+  }
   const collector = createHeroStatsScanCollector(replay);
   // The observer is owned by this function and only receives blocks from the
-  // full analyzer walk. Do not expose it to callers as a source of packet refs.
+  // full analyzer walk. Copy the HeroStats bytes before another observer sees
+  // them; neither collector exposes a source of forgeable packet refs.
   const analysis = analyzeReplay(replay, {
     ...options,
     includeStreams: [1, 2, 3],
-    onBlock: collector.observe,
+    onBlock(block, chunk) {
+      collector.observe(block, chunk);
+      if (afterBlock !== null) afterBlock(block, chunk);
+    },
   });
   return {
     analysis,

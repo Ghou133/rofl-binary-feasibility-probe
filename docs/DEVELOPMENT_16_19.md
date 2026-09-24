@@ -52,16 +52,25 @@ Updated: 2026-09-24. Branch: `codex/16-19-development`.
   floors equal the matching tail; the other five final floor gaps are
   `551, 466, 511, 581, 104` (total 2213) in the unobserved last 36,824 ms.
   A four-byte-aligned scan found no second offset meeting the same tail and
-  monotonic criteria; adjacent gold/CS offsets fail the EXP control. This is
-  one-Replay field correlation, not an XP transition or confirmed field.
+  monotonic criteria; adjacent gold/CS offsets fail the EXP control. Separately,
+  156 observed `0x02b3` level transitions fall between same-participant
+  HeroStats keyframes. The XP `0x28` intervals have a common feasible threshold
+  for each of the 18 observed target levels 2–19; CS `0x3c` does so for one
+  level and gold earned `0x38` for two. Two transitions after the final keyframe
+  were excluded. This cross-route check strengthens the one-Replay candidate,
+  but does not establish a runtime semantic label or a confirmed XP field.
 - **CLI/API efficiency:** Selecting the CS, EXP, GOLD_EARNED, GOLD_SPENT,
   CHAMPIONS_KILLED, NUM_DEATHS and ASSISTS HeroStats candidates together shares one
   keyframe collection and retains separate field validation and results. The
   16.19 CLI reuses its raw-analysis walk for that collection; a compressed
-  synthetic keyframe now decompresses once instead of twice. Standalone API
-  calls still perform their own strict walk. On the exact HN Replay, all six
-  candidate JSONL files are byte-identical before and after CLI scan reuse;
-  the KR Replay remains `PROFILE_UNAVAILABLE` for all six.
+  synthetic keyframe now decompresses once instead of twice. It also reuses
+  that walk for selected game-route candidates, avoiding a second game-stream
+  scan. A mixed compressed game/keyframe test decompresses each chunk once;
+  malformed framing suppresses candidate output. Standalone API calls still
+  perform their own strict walk. On the exact HN Replay, the six earlier
+  death/timer/respawn/level/CS/EXP candidate JSONL files remain byte-identical
+  after game-scan reuse. The KR Replay retains its death candidate and reports
+  `PROFILE_UNAVAILABLE` for the HN-only selections.
 - **Public test entry:** `npm run test:16-19` runs the portable 16.19 candidate
   decoder and CLI/API tests; `npm test` now includes it after maintenance.
   Real HN/KR Replay smoke remains separate evidence.
