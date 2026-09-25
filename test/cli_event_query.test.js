@@ -12,6 +12,7 @@ const SHA = 'a'.repeat(64);
 const VERSION = '16.19.820.7193';
 const EVENT = 'hero_level_state_candidates';
 const CAPABILITY = 'hero_level_state';
+const INVENTORY_EVENT = 'hero_inventory_packet_candidates';
 
 function artifact(t, rows = [
   { replay_sha256: SHA, replay_time_ms: 0, participant_id_candidate: 1,
@@ -22,33 +23,35 @@ function artifact(t, rows = [
     confidence: 'CANDIDATE', raw_packet_ref: { replay_sha256: SHA } },
   { replay_sha256: SHA, replay_time_ms: 2000, participant_id_candidate: 2,
     confidence: 'CANDIDATE', raw_packet_ref: { replay_sha256: SHA } },
-], compact = true) {
+], compact = true, eventKey = EVENT) {
+  const capability = eventKey.slice(0, -'_candidates'.length);
+  const replayVersion = eventKey === INVENTORY_EVENT ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const replayDirectory = path.join(root, 'replays', 'synthetic');
   fs.mkdirSync(replayDirectory, { recursive: true });
   const semantic = {
-    replay_version: VERSION, replay_sha256: SHA, container_status: 'PASS',
+    replay_version: replayVersion, replay_sha256: SHA, container_status: 'PASS',
     status: 'PARTIAL', api_status: 'PARTIAL',
-    requested_capabilities: [CAPABILITY, 'hero_path'],
+    requested_capabilities: [capability, 'hero_path'],
     capability_results: {
-      [CAPABILITY]: { status: 'CANDIDATE', input_count: rows.length,
+      [capability]: { status: 'CANDIDATE', input_count: rows.length,
         event_count: rows.length, evidence_status: 'CANDIDATE_SYNTHETIC' },
       hero_path: { status: 'MISSING_INPUT', input_count: null, event_count: null,
         missing_input: 'exact runtime image' },
     },
   };
   const analysis = {
-    patch: '16.19', replay_version: VERSION, replay_sha256: SHA,
-    event_counts: { [EVENT]: rows.length },
+    patch: '16.19', replay_version: replayVersion, replay_sha256: SHA,
+    event_counts: { [eventKey]: rows.length },
     ...(compact ? { event_storage: 'JSONL_ONLY',
-      event_jsonl_files: { [EVENT]: `${EVENT}.jsonl` }, events: null }
-      : { events: { [EVENT]: rows } }),
+      event_jsonl_files: { [eventKey]: `${eventKey}.jsonl` }, events: null }
+      : { events: { [eventKey]: rows } }),
   };
   fs.writeFileSync(path.join(replayDirectory, 'semantic_run.json'), JSON.stringify(semantic));
   fs.writeFileSync(path.join(replayDirectory, 'replay_analysis.json'), JSON.stringify(analysis));
   const lines = rows.map((row) => JSON.stringify(row));
-  fs.writeFileSync(path.join(replayDirectory, `${EVENT}.jsonl`),
+  fs.writeFileSync(path.join(replayDirectory, `${eventKey}.jsonl`),
     lines.length ? `${lines.join('\n')}\n` : '');
   return { root, replayDirectory, semantic, analysis, lines };
 }
@@ -139,6 +142,106 @@ test('query-events distinguishes absent raw parameters from zero matches', (t) =
   assert.equal(zeroMatch.status, 0, zeroMatch.stderr);
   assert.equal(zeroMatch.stdout, '');
   assert.equal(JSON.parse(zeroMatch.stderr).matched_count, 0);
+});
+
+test('query-events filters only current inventory packet records by decimal or hex item ID', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, participant_id_candidate: 1,
+      record_count: 2, records_candidate: [
+        { slot_candidate: 0, item_id_candidate: 1001 },
+        { slot_candidate: 6, item_id_candidate: 3340 },
+      ], packet_slot_snapshot_candidate: [{ slot_candidate: 0, item_id_candidate: 1001 }] },
+    { replay_sha256: SHA, replay_time_ms: 20, participant_id_candidate: 1,
+      record_count: 1, records_candidate: [{ slot_candidate: 0, item_id_candidate: 2031 }],
+      packet_slot_snapshot_candidate: [{ slot_candidate: 6, item_id_candidate: 3340 }] },
+    { replay_sha256: SHA, replay_time_ms: 30, participant_id_candidate: 2,
+      record_count: 0, records_candidate: [],
+      packet_slot_snapshot_candidate: [{ slot_candidate: 6, item_id_candidate: 3340 }] },
+  ];
+  const fixture = artifact(t, rows, true, INVENTORY_EVENT);
+  const output = path.join(fixture.root, 'item-3340.jsonl');
+  const hex = run(fixture.replayDirectory, '--event', INVENTORY_EVENT,
+    '--item-id', '0xd0c', '--output', output);
+  assert.equal(hex.status, 0, hex.stderr);
+  assert.equal(hex.stderr, '');
+  const summary = JSON.parse(hex.stdout);
+  assert.equal(summary.query_status, 'COMPLETE');
+  assert.equal(summary.capability_status, 'CANDIDATE');
+  assert.equal(summary.scanned_count, 3);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.item_id_unavailable_count, 0);
+  assert.equal(summary.filters.item_id, 3340);
+  assert.equal(fs.readFileSync(output, 'utf8'), `${fixture.lines[0]}\n`);
+  assert.equal(fs.readFileSync(path.join(fixture.replayDirectory, `${INVENTORY_EVENT}.jsonl`), 'utf8'),
+    `${fixture.lines.join('\n')}\n`);
+
+  const decimal = run(fixture.replayDirectory, '--event', INVENTORY_EVENT,
+    '--item-id=2031', '--participant', '1');
+  assert.equal(decimal.status, 0, decimal.stderr);
+  assert.equal(decimal.stdout, `${fixture.lines[1]}\n`);
+  assert.equal(JSON.parse(decimal.stderr).matched_count, 1);
+
+  const zero = run(fixture.replayDirectory, '--event', INVENTORY_EVENT, '--item-id', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(JSON.parse(zero.stderr).matched_count, 0);
+});
+
+test('query-events distinguishes unavailable inventory item fields from a confirmed zero match', (t) => {
+  const missing = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, record_count: 1 },
+    { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+      records_candidate: [{ slot_candidate: 0 }] },
+  ], true, INVENTORY_EVENT);
+  const output = path.join(missing.root, 'unavailable.jsonl');
+  const unavailable = run(missing.replayDirectory, '--event', INVENTORY_EVENT,
+    '--item-id', '1001', '--output', output);
+  assert.equal(unavailable.status, 2);
+  const error = JSON.parse(unavailable.stderr);
+  assert.equal(error.code, 'ITEM_ID_UNAVAILABLE');
+  assert.equal(error.item_id_unavailable_count, 2);
+  assert.equal(fs.existsSync(output), false);
+
+  const known = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, record_count: 1,
+      records_candidate: [{ slot_candidate: 0, item_id_candidate: 1001 }] },
+    { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+      records_candidate: [{ slot_candidate: 0 }] },
+  ], true, INVENTORY_EVENT);
+  const zero = run(known.replayDirectory, '--event', INVENTORY_EVENT, '--item-id', '2001');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, '');
+  const summary = JSON.parse(zero.stderr);
+  assert.equal(summary.matched_count, 0);
+  assert.equal(summary.item_id_unavailable_count, 1);
+
+  const empty = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    record_count: 0, records_candidate: [] }], true, INVENTORY_EVENT);
+  const emptyResult = run(empty.replayDirectory, '--event', INVENTORY_EVENT, '--item-id', '1001');
+  assert.equal(emptyResult.status, 0, emptyResult.stderr);
+  assert.equal(JSON.parse(emptyResult.stderr).item_id_unavailable_count, 0);
+});
+
+test('query-events rejects item ID filters on other streams and corrupt inventory records', (t) => {
+  const unsupported = artifact(t);
+  const wrongEvent = run(unsupported.replayDirectory, '--event', EVENT, '--item-id', '1001');
+  assert.equal(wrongEvent.status, 1);
+  assert.match(wrongEvent.stderr, /--item-id requires --event hero_inventory_packet_candidates/);
+
+  for (const bad of [-1, 0, 4294967296, '1001']) {
+    const fixture = artifact(t, [
+      { replay_sha256: SHA, replay_time_ms: 10, record_count: 1,
+        records_candidate: [{ slot_candidate: 0, item_id_candidate: 1001 }] },
+      { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+        records_candidate: [{ slot_candidate: 0, item_id_candidate: bad }] },
+    ], true, INVENTORY_EVENT);
+    const output = path.join(fixture.root, 'invalid-item.jsonl');
+    const result = run(fixture.replayDirectory, '--event', INVENTORY_EVENT,
+      '--item-id', '1001', '--output', output);
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
 });
 
 test('query-events rejects invalid recorded raw parameters and removes partial output', (t) => {
@@ -237,6 +340,8 @@ test('query-events rejects malformed numeric filters before scanning', (t) => {
     ['--participant', '0'], ['--limit', '0'], ['--from-ms', '2', '--to-ms', '1'],
     ['--raw-param', '-1'], ['--raw-param', '0x100000000'],
     ['--raw-param', '4294967296'], ['--raw-param', '0xgg'],
+    ['--item-id', '-1'], ['--item-id', '0x100000000'],
+    ['--item-id', '4294967296'], ['--item-id', '0xgg'],
   ]) {
     const result = run(fixture.replayDirectory, '--event', EVENT, ...args);
     assert.equal(result.status, 1, args.join(' '));

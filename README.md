@@ -208,6 +208,15 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 
 16.19 `decode` 或 `batch` 使用 `--events` 时，可额外指定 `--event-jsonl-only` 减少大量事件的重复输出。此模式仍写入每项事件的完整 JSONL、`semantic_run.json` 和各报告；`replay_analysis.json` 中的 `events` 为 `null`，同时记录 `event_storage: "JSONL_ONLY"`、`event_jsonl_files` 相对路径与 `event_counts`，不生成重复的 `events.json`。输出 manifest 只散列实际生成的文件。默认模式保持原有三份事件输出；此选项不适用于 `inspect`、旧版回放或未指定 `--events` 的调用。
 
+对已解码的 821 库存包按物品 ID 查询单包记录：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-inventory\replays\KR_example" `
+  --event hero_inventory_packet_candidates --item-id 3340 --limit 20
+```
+
+`--item-id` 接受十进制或 `0x` 十六进制 uint32，只匹配当包 `records_candidate[].item_id_candidate`，不查询回调空槽、包间库存或买卖事件。输出仍是未修改的原始 JSONL 行；汇总中的 `item_id_unavailable_count` 区分字段不可用与已检查后的零命中。其他事件流不能使用此过滤器。
+
 执行 **16.15.801.3452** 的旧版整合语义分析：
 
 ```powershell

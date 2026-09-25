@@ -163,6 +163,7 @@ Options:
   --from-ms/--to-ms <number>    Inclusive Replay millisecond bounds
   --participant <1..10>        Candidate subject participant; unknown rows do not match
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
+  --item-id <uint32|0xhex>     Exact decoded packet record item ID (hero_inventory_packet only)
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
   --output <path|->            Write unmodified JSONL rows (default: stdout)
                                 Query summary is JSON on stderr when output is stdout
@@ -203,6 +204,7 @@ function parseArgs(argv) {
     eventJsonlOnly: false,
     participant: null,
     rawParam: null,
+    itemId: null,
     limit: null,
     python: null,
     wardSpawns: null,
@@ -299,6 +301,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'to-ms') options.toMs = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'participant') options.participant = queryInteger(value, key);
       else if (command === 'query-events' && key === 'raw-param') options.rawParam = queryRawParam(value);
+      else if (command === 'query-events' && key === 'item-id') options.itemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'limit') options.limit = queryInteger(value, key);
       else if (command === 'ward-events' && key === 'format') options.format = String(value).toLowerCase();
       else if (command === 'ward-events' && key === 'collection') options.collection = value;
@@ -341,6 +344,9 @@ function parseArgs(argv) {
     if (options.fromMs !== null && options.toMs !== null && options.fromMs > options.toMs) {
       throw new Error('--from-ms must not exceed --to-ms');
     }
+    if (options.itemId !== null && options.event !== 'hero_inventory_packet_candidates') {
+      throw new Error('--item-id requires --event hero_inventory_packet_candidates');
+    }
     if (options.output === '') throw new Error('--output must be a path or -');
   }
   return { command, positionals, options };
@@ -359,13 +365,17 @@ function queryInteger(value, label, allowZero = false) {
 }
 
 function queryRawParam(value) {
+  return queryUint32(value, 'raw-param');
+}
+
+function queryUint32(value, label) {
   const literal = String(value);
   if (!/^(?:0|[1-9][0-9]*|0[xX][0-9a-fA-F]{1,8})$/.test(literal)) {
-    throw new Error('--raw-param must be a decimal or 0x hexadecimal uint32');
+    throw new Error(`--${label} must be a decimal or 0x hexadecimal uint32`);
   }
   const number = Number(literal);
   if (!Number.isSafeInteger(number) || number > 0xffffffff) {
-    throw new Error('--raw-param must be a decimal or 0x hexadecimal uint32');
+    throw new Error(`--${label} must be a decimal or 0x hexadecimal uint32`);
   }
   return number;
 }
@@ -2409,6 +2419,7 @@ async function runQueryEventsCommand(parsed) {
       toMs: options.toMs,
       participant: options.participant,
       rawParam: options.rawParam,
+      itemId: options.itemId,
       limit: options.limit,
     }, async (line) => {
       if (!writer.write(line)) await once(writer, 'drain');

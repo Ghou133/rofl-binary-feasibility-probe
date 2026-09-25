@@ -215,14 +215,47 @@ function rawPacketParams(row, lineNumber) {
   return values;
 }
 
+function packetRecordItemIds(row, lineNumber) {
+  const records = row.records_candidate;
+  if (records == null) return { values: [], unavailable: true, available: false };
+  if (!Array.isArray(records)
+      || (row.record_count != null && row.record_count !== records.length)) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid inventory records at JSONL line ${lineNumber}.`,
+      { line_number: lineNumber });
+  }
+  const values = [];
+  let unavailable = false;
+  for (const [index, record] of records.entries()) {
+    if (record === null || typeof record !== 'object' || Array.isArray(record)) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        `Invalid inventory record ${index} at JSONL line ${lineNumber}.`,
+        { line_number: lineNumber });
+    }
+    if (record.item_id_candidate == null) {
+      unavailable = true;
+      continue;
+    }
+    const itemId = record.item_id_candidate;
+    if (!Number.isSafeInteger(itemId) || itemId < 1 || itemId > 0xffffffff) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        `Invalid records_candidate[${index}].item_id_candidate at JSONL line ${lineNumber}.`,
+        { line_number: lineNumber });
+    }
+    values.push(itemId);
+  }
+  return { values, unavailable, available: values.length > 0 || records.length === 0 };
+}
+
 function validateFilters(options) {
   const { fromMs = null, toMs = null, participant = null, rawParam = null,
-    limit = null } = options;
+    itemId = null, limit = null } = options;
   for (const [name, value, minimum, maximum] of [
     ['fromMs', fromMs, 0, Number.MAX_SAFE_INTEGER],
     ['toMs', toMs, 0, Number.MAX_SAFE_INTEGER],
     ['participant', participant, 1, 10],
     ['rawParam', rawParam, 0, 0xffffffff],
+    ['itemId', itemId, 0, 0xffffffff],
     ['limit', limit, 1, Number.MAX_SAFE_INTEGER],
   ]) {
     if (value != null && (!Number.isSafeInteger(value) || value < minimum || value > maximum)) {
@@ -237,12 +270,19 @@ function validateFilters(options) {
 async function streamEventQuery(prepared, options, emitLine) {
   validateFilters(options);
   const { fromMs = null, toMs = null, participant = null, rawParam = null,
-    limit = null } = options;
+    itemId = null, limit = null } = options;
+  if (itemId != null && (prepared.eventKey !== 'hero_inventory_packet_candidates'
+      || prepared.replayVersion !== '16.19.821.7343')) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--item-id requires 16.19.821.7343 hero_inventory_packet_candidates.');
+  }
   let scannedCount = 0;
   let matchedCount = 0;
   let emittedCount = 0;
   let participantUnavailableCount = 0;
   let rawParamUnavailableCount = 0;
+  let itemIdUnavailableCount = 0;
+  let itemIdAvailableCount = 0;
   const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
   try {
@@ -272,12 +312,16 @@ async function streamEventQuery(prepared, options, emitLine) {
           { line_number: lineNumber });
       }
       const params = rawParam == null ? null : rawPacketParams(row, lineNumber);
+      const items = itemId == null ? null : packetRecordItemIds(row, lineNumber);
       if (participant != null && subject.value == null) participantUnavailableCount += 1;
       if (rawParam != null && params.length === 0) rawParamUnavailableCount += 1;
+      if (itemId != null && items.unavailable) itemIdUnavailableCount += 1;
+      if (itemId != null && items.available) itemIdAvailableCount += 1;
       if ((fromMs != null && replayTime < fromMs)
           || (toMs != null && replayTime > toMs)
           || (participant != null && subject.value !== participant)
-          || (rawParam != null && !params.includes(rawParam))) continue;
+          || (rawParam != null && !params.includes(rawParam))
+          || (itemId != null && !items.values.includes(itemId))) continue;
       matchedCount += 1;
       if (limit == null || emittedCount < limit) {
         // Reuse the original line so candidate grades, provenance, and field order survive.
@@ -306,6 +350,12 @@ async function streamEventQuery(prepared, options, emitLine) {
       { scanned_count: scannedCount, raw_param_unavailable_count: rawParamUnavailableCount,
         capability_status: prepared.capabilityStatus });
   }
+  if (itemId != null && scannedCount > 0 && itemIdAvailableCount === 0) {
+    throw new EventQueryError('ITEM_ID_UNAVAILABLE',
+      'This event stream has no decoded packet record item ID for filtering.',
+      { scanned_count: scannedCount, item_id_unavailable_count: itemIdUnavailableCount,
+        capability_status: prepared.capabilityStatus });
+  }
   return {
     schema_version: 1,
     command: 'query-events',
@@ -326,8 +376,10 @@ async function streamEventQuery(prepared, options, emitLine) {
     emitted_count: emittedCount,
     participant_unavailable_count: participantUnavailableCount,
     ...(rawParam == null ? {} : { raw_param_unavailable_count: rawParamUnavailableCount }),
+    ...(itemId == null ? {} : { item_id_unavailable_count: itemIdUnavailableCount }),
     filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit,
-      ...(rawParam == null ? {} : { raw_param: rawParam }) },
+      ...(rawParam == null ? {} : { raw_param: rawParam }),
+      ...(itemId == null ? {} : { item_id: itemId }) },
     rows_unmodified: true,
   };
 }
