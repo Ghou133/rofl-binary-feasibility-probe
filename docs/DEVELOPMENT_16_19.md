@@ -42,7 +42,9 @@ Current progress (older notes below retain their original research context):
 - **Completed:** `query-events --opaque-u32` searches either decoded
   anonymous u32 in exact 821 `params_heal_packet_candidates` or
   `shielding_params_packet_pair_candidates`, or `event_u32_0x04` in
-  `stealth_event_packet_candidates`. It preserves JSONL rows,
+  `stealth_event_packet_candidates`. It also matches callback-read anonymous
+  u32 fields in `champion_die_event_packet_candidates` and
+  `champion_kill_event_packet_candidates`. It preserves JSONL rows,
   reports missing fields separately from zero matches, and never substitutes
   outer `raw_param` or assigns entity roles. A real KR Replay query scanned
   6,059 heal rows and 164 shield pairs, matching 321 and 100 respectively

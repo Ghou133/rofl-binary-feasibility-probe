@@ -20,6 +20,10 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
     'event_u32_0x08', 'event_u32_0x0c',
   ]),
   stealth_event_packet_candidates: Object.freeze(['event_u32_0x04']),
+  champion_die_event_packet_candidates: Object.freeze(['event_u32_0x04']),
+  champion_kill_event_packet_candidates: Object.freeze([
+    'event_u32_0x04', 'event_u32_0x58', 'event_u32_0x5c',
+  ]),
 });
 
 class EventQueryError extends Error {
@@ -325,7 +329,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   if (opaqueU32 != null && (!opaqueU32Fields
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
-      '--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, or stealth-event packet candidate event.');
+      '--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, or OnChampionKill packet candidate event.');
   }
   let scannedCount = 0;
   let matchedCount = 0;

@@ -358,8 +358,10 @@ function parseArgs(argv) {
       'params_heal_packet_candidates',
       'shielding_params_packet_pair_candidates',
       'stealth_event_packet_candidates',
+      'champion_die_event_packet_candidates',
+      'champion_kill_event_packet_candidates',
     ].includes(options.event)) {
-      throw new Error('--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, or stealth packet event');
+      throw new Error('--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, or OnChampionKill packet event');
     }
     if (options.output === '') throw new Error('--output must be a path or -');
   }

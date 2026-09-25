@@ -18,6 +18,8 @@ const SET_ITEM_EVENT = 'hero_inventory_set_item_packet_candidates';
 const HEAL_PACKET_EVENT = 'params_heal_packet_candidates';
 const SHIELD_PAIR_EVENT = 'shielding_params_packet_pair_candidates';
 const STEALTH_PACKET_EVENT = 'stealth_event_packet_candidates';
+const CHAMPION_DIE_EVENT = 'champion_die_event_packet_candidates';
+const CHAMPION_KILL_EVENT = 'champion_kill_event_packet_candidates';
 
 function artifact(t, rows = [
   { replay_sha256: SHA, replay_time_ms: 0, participant_id_candidate: 1,
@@ -31,7 +33,8 @@ function artifact(t, rows = [
 ], compact = true, eventKey = EVENT) {
   const capability = eventKey.slice(0, -'_candidates'.length);
   const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT,
-    HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT].includes(eventKey)
+    HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT,
+    CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -385,6 +388,104 @@ test('query-events keeps missing 821 stealth u32 unavailable and enforces exact 
     '--opaque-u32', '0');
   assert.equal(notDecoded.status, 2);
   assert.equal(JSON.parse(notDecoded.stderr).code, 'CAPABILITY_UNAVAILABLE');
+});
+
+test('query-events filters OnChampionDie child u32 without using its different raw param', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae,
+      event_u32_0x04: 0x400000af,
+      raw_packet_ref: { replay_sha256: SHA, raw_param: 0x400000ae } },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000af,
+      event_u32_0x04: 0 },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 0x400000b0 },
+  ];
+  const fixture = artifact(t, rows, true, CHAMPION_DIE_EVENT);
+  const decoded = run(fixture.replayDirectory, '--event', CHAMPION_DIE_EVENT,
+    '--opaque-u32', '0x400000af');
+  assert.equal(decoded.status, 0, decoded.stderr);
+  assert.equal(decoded.stdout, `${fixture.lines[0]}\n`);
+  assert.equal(JSON.parse(decoded.stderr).opaque_u32_unavailable_count, 1);
+  const rawOnly = run(fixture.replayDirectory, '--event', CHAMPION_DIE_EVENT,
+    '--opaque-u32', '0x400000ae');
+  assert.equal(rawOnly.status, 0, rawOnly.stderr);
+  assert.equal(rawOnly.stdout, '');
+  assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
+  const zero = run(fixture.replayDirectory, '--event', CHAMPION_DIE_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${fixture.lines[1]}\n`);
+
+  const missing = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000af },
+  ], true, CHAMPION_DIE_EVENT);
+  const unavailable = run(missing.replayDirectory, '--event', CHAMPION_DIE_EVENT,
+    '--opaque-u32', '0x400000af');
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+
+  const wrongBuild = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, event_u32_0x04: 0 },
+  ], true, CHAMPION_DIE_EVENT);
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(wrongBuild.replayDirectory, name);
+    const document = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    document.replay_version = VERSION;
+    fs.writeFileSync(filename, JSON.stringify(document));
+  }
+  const rejected = run(wrongBuild.replayDirectory, '--event', CHAMPION_DIE_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
+test('query-events matches only OnChampionKill decoded u32 fields and rejects invalid rows', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000aa,
+      event_u32_0x04: 0x400000ab, event_u32_0x58: 0xffffffff,
+      event_u32_0x5c: 0 },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 8,
+      event_u32_0x04: 5, event_u32_0x58: 6, event_u32_0x5c: 7 },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 10,
+      event_u32_0x04: null, event_u32_0x58: null, event_u32_0x5c: 9 },
+    { replay_sha256: SHA, replay_time_ms: 40, raw_param: 9 },
+  ];
+  const fixture = artifact(t, rows, true, CHAMPION_KILL_EVENT);
+  for (const [value, expectedLine] of [
+    ['0x400000ab', 0], ['0xffffffff', 0], ['0', 0], ['6', 1], ['9', 2],
+  ]) {
+    const selected = run(fixture.replayDirectory, '--event', CHAMPION_KILL_EVENT,
+      '--opaque-u32', value);
+    assert.equal(selected.status, 0, `${value}: ${selected.stderr}`);
+    assert.equal(selected.stdout, `${fixture.lines[expectedLine]}\n`, value);
+  }
+  const rawOnly = run(fixture.replayDirectory, '--event', CHAMPION_KILL_EVENT,
+    '--opaque-u32', '0x400000aa');
+  assert.equal(rawOnly.status, 0, rawOnly.stderr);
+  assert.equal(rawOnly.stdout, '');
+  assert.equal(JSON.parse(rawOnly.stderr).opaque_u32_unavailable_count, 2);
+
+  const invalid = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      event_u32_0x04: 1, event_u32_0x58: 2, event_u32_0x5c: 3 },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      event_u32_0x04: 1, event_u32_0x58: -1, event_u32_0x5c: 0 },
+  ], true, CHAMPION_KILL_EVENT);
+  const output = path.join(invalid.root, 'invalid-kill-u32.jsonl');
+  const failed = run(invalid.replayDirectory, '--event', CHAMPION_KILL_EVENT,
+    '--opaque-u32', '1', '--output', output);
+  assert.equal(failed.status, 2);
+  assert.equal(JSON.parse(failed.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
+
+  const semanticPath = path.join(fixture.replayDirectory, 'semantic_run.json');
+  const semantic = JSON.parse(fs.readFileSync(semanticPath, 'utf8'));
+  semantic.capability_results.champion_kill_event_packet.status = 'MISSING_INPUT';
+  semantic.capability_results.champion_kill_event_packet.event_count = null;
+  fs.writeFileSync(semanticPath, JSON.stringify(semantic));
+  const unavailable = run(fixture.replayDirectory, '--event', CHAMPION_KILL_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'CAPABILITY_UNAVAILABLE');
 });
 
 test('query-events distinguishes missing anonymous u32 fields from zero matches', (t) => {
