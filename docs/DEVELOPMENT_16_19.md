@@ -4,6 +4,15 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed packet candidate:** Exact KR 821 `0x040a/116` child `0x0035`,
+  named `OnDampenerDie` in the SHA-256-pinned runtime image, is selectable
+  through CLI/API. The exact-image native census fully consumed all 831
+  same-length parents from the 11 supplied Replays: 18 target packets in
+  10 Replays, with 813 foreign-child controls. One Replay has no target and
+  reports `PROFILE_UNAVAILABLE`. Candidate rows retain the anonymous
+  108-byte child blob and raw packet provenance. The image name and packet
+  occurrence do not establish actual structure destruction, structure or actor
+  identity, or a game-state transition.
 - **Completed query:** `query-events --event turret_first_blood_die_pair_candidates`
   reads exact 821 single-Replay or batch artifacts and filters by time or either
   recorded raw packet parameter. The query checks the pair and both source

@@ -59,6 +59,7 @@
 | `16.19.821.7343 --events resurrect_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x002d` 子包，保留 OnResurrect 镜像名表标签、匿名原生子包 `+0x04/+0x08` 整数和原始包来源 | 有此包形状的回放写入 `resurrect_event_packet_candidates`，状态为 `CANDIDATE`；无此形状的回放报告 `PROFILE_UNAVAILABLE`；不推断实际复活、对象角色或状态变化 |
 | `16.19.821.7343 --events revive_ally_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x002c` 子包，保留 OnReviveAlly 镜像名表标签、匿名原生子包 `+0x04` 整数及原始包来源 | 有目标包时写入 `revive_ally_event_packet_candidates`，状态为 `CANDIDATE`；无目标包时报告 `PROFILE_UNAVAILABLE`；同长度异类子事件保留为排除证据，不推断实际复活、对象角色或状态变化 |
 | `16.19.821.7343 --events turret_plate_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0107` 子包，保留 OnTurretPlateDestroyed 镜像名表标签、匿名原生子包 `+0x04` 整数和原始包来源 | 仅写入 `turret_plate_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断镀层破坏、建筑、参与者或状态变化 |
+| `16.19.821.7343 --events dampener_die_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x0035` 子包，保留 OnDampenerDie 镜像名表标签、匿名 108 字节原生子包及原始包来源 | 有目标包时写入 `dampener_die_event_packet_candidates`，状态为 `CANDIDATE`；无目标包时报告 `PROFILE_UNAVAILABLE`；同长度异类子事件作为排除证据，不推断建筑实际毁坏、建筑身份、参与者或状态变化 |
 | `16.19.821.7343 --events turret_die_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x003b` 子包，保留 OnTurretDie 镜像名表标签、匿名 108 字节原生子包内容及 SHA-256、原始包来源 | 仅写入 `turret_die_event_packet_candidates`，状态为 `CANDIDATE`；同长度异类子事件作为排除证据，不推断实际防御塔死亡、建筑身份、参与者或状态变化 |
 | `16.19.821.7343 --events turret_first_blood_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x003d` 子包，保留 OnTurretFirstBlood 镜像名表标签、匿名 108 字节原生子包内容及 SHA-256、原始包来源 | 仅写入 `turret_first_blood_event_packet_candidates`，状态为 `CANDIDATE`；同长度异类子事件作为排除证据，不推断实际首座防御塔死亡、建筑身份、参与者或状态变化 |
 | `16.19.821.7343 --events turret_die_event_packet,turret_first_blood_event_packet --runtime-image PATH` | 两类子包分别通过精确镜像校验后，检查 `0x003d` 是否在同一 chunk、同一毫秒中位于唯一较早的 `0x003b` 之后，中间没有其他 `0x040a` OnEvent 包；重新核对回放原始包来源 | 成功时另写入 `turret_first_blood_die_pair_candidates` 和 `candidate_associations.turret_first_blood_die_pair`，均为包级 `CANDIDATE`；不推断实际首座防御塔死亡、建筑或参与者身份 |
@@ -232,6 +233,10 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-turret-plate-event-packets"
 node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
+  --events dampener_die_event_packet `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-dampener-die-event-packets"
+node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events turret_die_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-turret-die-event-packets"
@@ -319,6 +324,12 @@ OnShutdown 只是镜像中的事件标签，未确认游戏内 shutdown 效果�
 11 份 KR 821 回放中观察到 657 个目标子包；同为 17 字节的其他子事件 4964 个作为排除对照，
 不进入该候选流。镜像中的事件名不足以确认游戏内镀层效果或对象角色。
 
+`dampener_die_event_packet` 只报告 `0x0035` 子包的匿名 108 字节内容及来源。
+精确镜像原生解码在 11 份 KR 821 回放的 831 个同为 116 字节的包中识别出 18 个目标，
+分布于 10 份回放；813 个异类子事件作为排除对照。剩余一份回放未见目标，
+应报告 `PROFILE_UNAVAILABLE`。OnDampenerDie 是镜像名表标签，不确认建筑实际毁坏、
+建筑身份、参与者或状态变化。
+
 `turret_die_event_packet` 只报告 `0x003b` 子包的匿名 108 字节内容、哈希及来源。
 11 份 KR 821 回放均有目标包，共 136 个通过精确镜像原生完整消费和子事件身份校验；
 同为 116 字节的 695 个异类子事件按已观察的原始形状排除，保留来源以供核查。
@@ -356,6 +367,7 @@ OnShutdown 只是镜像中的事件标签，未确认游戏内 shutdown 效果�
 OnShutdown 子包 `on_shutdown_event_packet`、OnResurrect 子包
 `resurrect_event_packet`、OnReviveAlly 子包 `revive_ally_event_packet`、
 OnTurretPlateDestroyed 子包 `turret_plate_event_packet`、
+OnDampenerDie 子包 `dampener_die_event_packet`、
 OnTurretDie 子包 `turret_die_event_packet`
 及 OnTurretFirstBlood 子包 `turret_first_blood_event_packet`
 也需要 `--runtime-image` 指向同一完整 build 的镜像。

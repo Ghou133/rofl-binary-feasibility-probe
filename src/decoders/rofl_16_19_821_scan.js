@@ -33,6 +33,7 @@ const CAPABILITIES = new Set([
   'resurrect_event_packet',
   'revive_ally_event_packet',
   'turret_die_event_packet',
+  'dampener_die_event_packet',
   'turret_first_blood_event_packet',
   'turret_plate_event_packet',
   'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
@@ -66,6 +67,7 @@ const MAX_ON_SHUTDOWN_EVENT_PACKET_ROWS = 2_000;
 const MAX_RESURRECT_EVENT_PACKET_ROWS = 2_000;
 const MAX_REVIVE_ALLY_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_DIE_EVENT_PACKET_ROWS = 2_000;
+const MAX_DAMPENER_DIE_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_FIRST_BLOOD_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_PLATE_EVENT_PACKET_ROWS = 10_000;
 const MAX_DIRECT_INPUT_TURN_PACKET_ROWS = 20_000;
@@ -124,6 +126,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     resurrect_event_packet: [],
     revive_ally_event_packet: [],
     turret_die_event_packet: [],
+    dampener_die_event_packet: [],
     turret_first_blood_event_packet: [],
     turret_plate_event_packet: [],
     cast_spell_ans_packet: [],
@@ -211,6 +214,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let resurrectEventPacketCount = 0;
   let reviveAllyEventPacketCount = 0;
   let turretDieEventPacketCount = 0;
+  let dampenerDieEventPacketCount = 0;
   let turretFirstBloodEventPacketCount = 0;
   let turretPlateEventPacketCount = 0;
   let directInputTurnPacketCount = 0;
@@ -232,6 +236,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsResurrectEvent = selected.has('resurrect_event_packet');
   const selectsReviveAllyEvent = selected.has('revive_ally_event_packet');
   const selectsTurretDieEvent = selected.has('turret_die_event_packet');
+  const selectsDampenerDieEvent = selected.has('dampener_die_event_packet');
   const selectsTurretFirstBloodEvent = selected.has('turret_first_blood_event_packet');
   const selectsTurretPlateEvent = selected.has('turret_plate_event_packet');
   const selectsInventoryPacket = selected.has('hero_inventory_packet');
@@ -352,6 +357,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
         turretDieEventPacketCount += 1;
         if (rows.turret_die_event_packet.length < MAX_TURRET_DIE_EVENT_PACKET_ROWS) {
           rows.turret_die_event_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsDampenerDieEvent
+          && block.packet_id === 0x040a && block.payload_length === 116) {
+        dampenerDieEventPacketCount += 1;
+        if (rows.dampener_die_event_packet.length < MAX_DAMPENER_DIE_EVENT_PACKET_ROWS) {
+          rows.dampener_die_event_packet.push(copyRow(block, chunk));
         }
       }
       if (selectsTurretFirstBloodEvent
@@ -491,6 +503,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         resurrectEventPacketCount,
         reviveAllyEventPacketCount,
         turretDieEventPacketCount,
+        dampenerDieEventPacketCount,
         turretFirstBloodEventPacketCount,
         turretPlateEventPacketCount,
         directInputTurnPacketCount,
@@ -637,6 +650,13 @@ function rowsFor821Capability(replay, token, capability) {
       && bound.turretDieEventPacketCount > MAX_TURRET_DIE_EVENT_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.turretDieEventPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'dampener_die_event_packet'
+      && bound.dampenerDieEventPacketCount > MAX_DAMPENER_DIE_EVENT_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.dampenerDieEventPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }
