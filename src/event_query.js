@@ -57,9 +57,20 @@ const { TURRET_DIE_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_turret_die_event_packet_candidate');
 const { DAMPENER_DIE_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_dampener_die_event_packet_candidate');
+const { INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821,
+  isObservedIncrementMinionKillsPayloadHex,
+  lookupIncrementMinionKillsKeyFromNativeBytes } =
+  require('./decoders/rofl_16_19_821_increment_minion_kills_packet_candidate');
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
+const INCREMENT_MINION_KILLS_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param', 'raw_payload_hex', 'raw_selector_byte',
+  'native_object_lookup_key_bytes_hex', 'callback_lookup_key_candidate',
+  'callback_lookup_key_matches_raw_param', 'conditional_counter_write_status',
+  'semantic_cs_effect_status', 'confidence', 'semantic_status', 'raw_packet_ref',
+]);
 const SUBJECT_PARTICIPANT_FIELDS = [
   'participant_id_candidate', 'participant_id',
   'victim_participant_id_candidate', 'victim_participant_id',
@@ -386,6 +397,46 @@ function prepareExactBlobPacketEvent(semantic, analysis, eventKey, result,
       || analysis.event_counts?.[eventKey] !== result.event_count) {
     throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
       `${profile.capability} identity or candidate counts differ from its exact-build profile.`,
+      { capability: profile.capability });
+  }
+}
+
+function prepareIncrementMinionKillsPacketEvent(semantic, analysis, eventKey, result) {
+  const profile = INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`,
+      { replay_version: semantic.replay_version,
+        required_replay_version: profile.replay_version });
+  }
+  if (result?.status !== 'CANDIDATE') return;
+  const fieldConfidence = {
+    replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
+    raw_payload_hex: 'VERIFIED_DIRECT', raw_selector_byte: 'VERIFIED_DIRECT',
+    native_object_lookup_key_bytes_hex: 'CANDIDATE_EXACT_RUNTIME_FIELD',
+    callback_lookup_key_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_TRANSFORM',
+  };
+  if (result.profile_id !== profile.id
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.evidence_callback_transform_sha256
+        !== profile.evidence_callback_transform_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || result.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_CALLBACK_LOOKUP_KEY'
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || !isCount(result.event_count) || result.event_count === 0
+      || result.input_count !== result.event_count
+      || !isCount(result.scanned_block_count)
+      || result.scanned_block_count < result.event_count
+      || !isDeepStrictEqual(result.event_field_confidence, fieldConfidence)
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || analysis.event_counts?.[eventKey] !== result.event_count
+      || !isDeepStrictEqual(
+        analysis.semantic?.capability_results?.[profile.capability], result)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} identity or counts differ from its exact-build profile.`,
       { capability: profile.capability });
   }
 }
@@ -917,6 +968,10 @@ function prepareEventQuery(directory, eventKey) {
   if (exactBlobPacketConfig) {
     prepareExactBlobPacketEvent(semantic, analysis, eventKey, capabilityResult,
       exactBlobPacketConfig);
+  }
+  if (eventKey === 'increment_minion_kills_packet_candidates') {
+    prepareIncrementMinionKillsPacketEvent(semantic, analysis, eventKey,
+      capabilityResult);
   }
   const capabilityStatus = capabilityResult?.status ?? null;
   if (capabilityStatus && !['CANDIDATE', 'PASS'].includes(capabilityStatus)) {
@@ -1929,6 +1984,64 @@ function exactBlobPacketRow(row, prepared, lineNumber, seenPacketPositions) {
   seenPacketPositions.add(position);
 }
 
+function incrementMinionKillsPacketRow(row, prepared, lineNumber, seenPacketPositions) {
+  if (prepared.eventKey !== 'increment_minion_kills_packet_candidates') return;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid increment_minion_kills_packet row at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const profile = INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821;
+  const ref = row.raw_packet_ref;
+  const fields = Object.keys(row);
+  const payload = row.raw_payload_hex;
+  const lookupKey = lookupIncrementMinionKillsKeyFromNativeBytes(
+    row.native_object_lookup_key_bytes_hex);
+  if (fields.length !== INCREMENT_MINION_KILLS_ROW_FIELDS_821.size
+      || fields.some((field) => !INCREMENT_MINION_KILLS_ROW_FIELDS_821.has(field))
+      || row.event_type !== 'INCREMENT_MINION_KILLS_PACKET_CANDIDATE'
+      || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== 'CANDIDATE_EXACT_RUNTIME_CALLBACK_LOOKUP_KEY'
+      || !Number.isSafeInteger(row.raw_param)
+      || row.raw_param < 0x400000ae || row.raw_param > 0x400000b7
+      || !isObservedIncrementMinionKillsPayloadHex(payload)
+      || row.raw_selector_byte !== Number.parseInt(payload.slice(0, 2), 16)
+      || lookupKey === null || lookupKey !== row.raw_param
+      || row.callback_lookup_key_candidate !== lookupKey
+      || row.callback_lookup_key_matches_raw_param !== true
+      || row.conditional_counter_write_status !== 'UNKNOWN'
+      || row.semantic_cs_effect_status !== 'UNKNOWN') {
+    invalid('exact-build packet, callback key or unknown effect fields differ');
+  }
+  if (!ref || typeof ref !== 'object' || Array.isArray(ref)
+      || ref.replay_sha256 !== prepared.replaySha
+      || (ref.source_path !== null
+        && (typeof ref.source_path !== 'string' || ref.source_path.length === 0))
+      || (prepared.sourcePath !== undefined
+        && ref.source_path !== prepared.sourcePath)
+      || ref.chunk_stream !== 'game_chunk'
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== profile.replay_block_packet_id
+      || ref.replay_time_ms !== row.replay_time_ms
+      || ref.payload_length !== 3
+      || ref.raw_param !== row.raw_param
+      || ref.raw_payload_sha256 !== crypto.createHash('sha256')
+        .update(Buffer.from(payload, 'hex')).digest('hex')) {
+    invalid('raw packet source, framing or payload SHA-256 differs');
+  }
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (seenPacketPositions.has(position)) invalid('duplicate raw packet position');
+  seenPacketPositions.add(position);
+}
+
 function candidateChildEventId(row, eventKey, lineNumber) {
   const field = eventKey === 'champion_triple_quadra_multi_group_candidates'
     ? 'on_champion_triple_quadra_child_event_id'
@@ -2221,6 +2334,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       exactNamedKillPacketRow(row, prepared, lineNumber,
         associationPacketPositions);
       exactBlobPacketRow(row, prepared, lineNumber,
+        associationPacketPositions);
+      incrementMinionKillsPacketRow(row, prepared, lineNumber,
         associationPacketPositions);
       if (prepared.eventKey === 'revive_ally_event_packet_candidates'
           && (row.event_type !== 'REVIVE_ALLY_EVENT_PACKET_CANDIDATE'

@@ -314,4 +314,7 @@ function decodeIncrementMinionKillsPacketCandidates821(replay, {
 module.exports = {
   INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821,
   decodeIncrementMinionKillsPacketCandidates821,
+  isObservedIncrementMinionKillsPayloadHex: (payloadHex) =>
+    OBSERVED_PAYLOADS.has(payloadHex),
+  lookupIncrementMinionKillsKeyFromNativeBytes: lookupKeyFromNativeBytes,
 };

@@ -4,6 +4,13 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed query:** Saved `increment_minion_kills_packet_candidates` now
+  receives exact-build profile/image/transform, original packet reference,
+  payload/key, and `UNKNOWN` effect-field checks before time/raw-param
+  filtering. Missing image remains unavailable in batch results. The real
+  11-Replay batch query validated 279 rows, matched 119 for raw parameter
+  `0x400000b1`, and emitted the same 119 original JSONL lines byte-for-byte.
+  No participant or latest-per-participant interpretation is supplied.
 - **Completed protocol candidate:** Exact-821 game route `0x03a7` is registered as
   `PKT_S2C_IncrementMinionKills_s`. Its three-byte payload is consumed by the
   pinned native constructor/deserializer; the callback-derived object lookup
@@ -11,7 +18,14 @@ Current progress (older notes below retain their original research context):
   Replays. The candidate decoder emits selector, key, and raw packet ref with
   conditional counter write and semantic CS effect `UNKNOWN`. Across these
   Replays only seven of the ten canonical hero-family keys appeared, and 279
-  packets do not explain the 16,567 standard lane-CS tail total. The selected
+  packets do not explain the 16,567 standard lane-CS tail total. In 70 of 110
+  participant sequences the lane-CS tail was positive without any `0x03a7`
+  packet; 2,127 keyframe intervals gained lane-CS with no such packet. The
+  148 route-bearing intervals with lane-CS gains leave individual effects
+  unresolved. The next decisive gate is an exact-build live receiver/heap
+  trace of lookup branches and the resolved object's counter before/after a
+  Replay-anchored packet; the mapped image does not contain that live state.
+  The selected
   CLI batch returned 11/11 `CANDIDATE`, zero framing errors, 279 JSONL rows,
   and `MATCHED_USED` for the pinned image in every Replay; all 279 rows had
   matching callback key/raw parameter and explicit `UNKNOWN` effect status.

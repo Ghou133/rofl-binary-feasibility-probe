@@ -465,6 +465,16 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 
 输出保留每包的选择字节、原始参数、镜像回调生成的对象查找键和原始包引用；条件计数写入与实际补刀效果均保持 `UNKNOWN`。这 279 包不能代替回放结算中的补刀总数，也不用于推算未观察到的包间状态。
 
+保存产物可按时间和原始参数查询这一路由，例如：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-increment-minion-kills" `
+  --event increment_minion_kills_packet_candidates `
+  --raw-param 0x400000b1 --limit 20
+```
+
+查询会校验精确 build、镜像与回调变换身份、逐行包引用和 `UNKNOWN` 状态，然后原样输出 JSONL。该路由未建立参与者身份；`--participant` 不会将原始参数解释为参与者，`--latest-per-participant` 不适用。
+
 对 HN 路由的同一完整 build，可单独选择计时候选，或用
 `--events hero_death,hero_death_timer` 一起运行。计时输出包含原始包引用、
 候选参与者、解出的秒数，以及存在匹配时的复活包引用；它要求十名参与者的死亡总数、
