@@ -37,7 +37,7 @@ const HERO_ASSIST_CANDIDATE_PROFILE_821 = Object.freeze({
     'The 0x040a route carries other data; even the first 44-byte shape occurs 282 times outside matched deaths in the observed corpus.',
     'A candidate assist requires both 44-byte shapes before a co-timed, matched 0x0438 Hero_Die packet, identical bytes 5..42, a killer-tail-aligned source, and all ten ASSISTS tails aligned.',
     'The exact 821 native 0x040a deserializer fully consumed 2476 observed 44-byte packets; its packet-specific callback and field name remain unconfirmed.',
-    'Optional exact-image child identity checks confirm 0x0056/0x0057 packet identities, not an effective assist or actor role.',
+    'Optional exact-image checks confirm 0x0056/0x0057 packet identities and anonymous +0x04/+0x20 equality with matched Hero_Die fields, not an effective assist or actor role.',
     'The hero participant and killer labels rely on exact-build route and Replay-tail correlations; nonhero death sources do not imply an empty assist list.',
   ]),
 });
@@ -257,6 +257,19 @@ function decodeHeroAssistCandidates821(replay, precollected = null, options = {}
     if (!(first.block.offset < second.block.offset && second.block.offset < dieOffset)) {
       return fail('paired 0x040a/44 packets do not precede Hero_Die in source order');
     }
+    if (nativeByRow !== null) {
+      const firstChild = nativeByRow.get(first);
+      const secondChild = nativeByRow.get(second);
+      const deathParamWithout0x100 =
+        (event.die_source_raw_packet_ref.raw_param & ~0x100) >>> 0;
+      if (firstChild.event_u32_0x04 !== deathParamWithout0x100
+          || secondChild.event_u32_0x04 !== deathParamWithout0x100) {
+        return fail('paired 0x040a child +0x04 differs from matched Hero_Die raw param after 0x100 normalization');
+      }
+      if (secondChild.event_u32_0x20 !== event.die_source_network_id_candidate) {
+        return fail('paired 0x040a second child +0x20 differs from matched Hero_Die decoded source candidate');
+      }
+    }
     const current = pairsByDeath.get(event) ?? [];
     current.push({ assistant, first, second });
     pairsByDeath.set(event, current);
@@ -325,6 +338,7 @@ function decodeHeroAssistCandidates821(replay, precollected = null, options = {}
       rawRef(replay, row, 'nondeath_first_shape_excluded', nativeByRow?.get(row) ?? null)),
     native_child_identity_status: native === null ? 'NOT_CHECKED' : 'MATCHED_USED',
     ...(native === null ? {} : {
+      native_pair_death_field_alignment_count: pairGroups.size,
       runtime_image_status: native.runtime_image_status,
       runtime_image_used: native.runtime_image_used,
       runtime_image_sha256: native.runtime_image_sha256,

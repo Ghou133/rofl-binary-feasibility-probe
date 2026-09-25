@@ -45,8 +45,8 @@ function pairPacket(part, timeMs, assistant, options = {}) {
   return packet(0x040a, timeMs, param, payload);
 }
 
-function deathCore(timeMs, victim, sourceWire) {
-  const victimParam = 0x400000ad + victim;
+function deathCore(timeMs, victim, sourceWire, paramMarker = 0) {
+  const victimParam = (0x400000ad + victim) | paramMarker;
   const diePayload = Buffer.alloc(13, 0x38);
   Buffer.from(sourceWire, 'hex').copy(diePayload, 11);
   return [
@@ -64,10 +64,10 @@ function replayWithAssists(options = {}) {
     { differentSharedByte: options.differentSharedByte });
   const pair = options.reversedOrder ? [second, first] : [first, second];
   const rows = [
-    ...deathCore(1000, 1, '3678').slice(0, 3),
+    ...deathCore(1000, 1, '3678', options.markedDeath ? 0x100 : 0).slice(0, 3),
     ...pair.filter((_, index) => !options.missingSecond || index === 0),
     ...(options.duplicateSecond ? [second] : []),
-    ...deathCore(1000, 1, '3678').slice(3),
+    ...deathCore(1000, 1, '3678', options.markedDeath ? 0x100 : 0).slice(3),
     pairPacket('first', 1500, 9), // First shape alone also appears outside death.
     ...deathCore(2000, 4, options.nonheroSecondDeath ? '3478' : '3678'),
   ];
@@ -105,7 +105,7 @@ function nativeResult(request) {
         raw_event_id_hex: first ? '0x4914' : '0x49d4',
         event_blob_length: 36, event_blob_sha256: 'a'.repeat(64),
         event_u32_0x04: 0x400000ae,
-        ...(first ? {} : { event_u32_0x20: 123 }),
+        ...(first ? {} : { event_u32_0x20: 0x400000b3 }),
       };
     }),
   };
@@ -181,10 +181,25 @@ test('821 assist optional exact-image child IDs bind matched and excluded packet
   const pair = result.events[0].assist_pair_raw_packet_refs[0];
   assert.equal(pair.first_raw_packet_ref.native_child_event_id, 0x0056);
   assert.equal(pair.second_raw_packet_ref.native_child_event_id, 0x0057);
-  assert.equal(pair.second_raw_packet_ref.event_u32_0x20, 123);
+  assert.equal(pair.second_raw_packet_ref.event_u32_0x20, 0x400000b3);
+  assert.equal(result.native_pair_death_field_alignment_count, 1);
   assert.equal(result.nondeath_first_shape_packet_refs[0].native_child_event_id, 0x0056);
   assert.equal(result.events[1].assisting_participant_ids_candidate.length, 0);
   assert.equal(invoke.mock.callCount(), 1);
+});
+
+test('821 assist exact-image pair aligns a Hero_Die raw param carrying bit 0x100', (t) => {
+  const image = fakeImage(t);
+  t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => ({
+    status: 0, stderr: '', stdout: JSON.stringify(nativeResult(JSON.parse(options.input))),
+  }));
+  const result = decodeHeroAssistCandidates821(replayWithAssists({ markedDeath: true }),
+    null, { runtimeImagePath: image });
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.native_pair_death_field_alignment_count, 1);
+  assert.equal(result.events[0].matched_hero_die_raw_packet_ref.raw_param, 0x400001ae);
+  assert.equal(result.events[0].assist_pair_raw_packet_refs[0]
+    .first_raw_packet_ref.event_u32_0x04, 0x400000ae);
 });
 
 test('821 assist native child disagreement and wrong image suppress candidate output', (t) => {
@@ -222,6 +237,27 @@ test('821 assist native child disagreement and wrong image suppress candidate ou
   assert.equal(wrongImage.native_child_identity_status, 'FAILED');
   assert.equal(wrongImage.events, null);
 });
+
+for (const [name, mutate, expectedError] of [
+  ['child +0x04', (rows) => { rows[0].event_u32_0x04++; }, /child \+0x04 differs/],
+  ['second child +0x20', (rows) => { rows[1].event_u32_0x20++; },
+    /second child \+0x20 differs/],
+]) {
+  test(`821 assist exact-image pair rejects mismatched ${name} death field`, (t) => {
+    const image = fakeImage(t);
+    t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+      const result = nativeResult(JSON.parse(options.input));
+      mutate(result.results);
+      return { status: 0, stderr: '', stdout: JSON.stringify(result) };
+    });
+    const outcome = decodeHeroAssistCandidates821(replayWithAssists(), null,
+      { runtimeImagePath: image });
+    assert.equal(outcome.status, 'DECODE_FAILED');
+    assert.equal(outcome.runtime_image_status, 'MATCHED_USED');
+    assert.equal(outcome.events, null);
+    assert.match(outcome.error, expectedError);
+  });
+}
 
 test('nonhero death source preserves unavailable attribution', () => {
   const result = decodeHeroAssistCandidates821(replayWithAssists({ nonheroSecondDeath: true }));

@@ -294,7 +294,15 @@ OnShutdown 只是镜像中的事件标签，未确认游戏内 shutdown 效果�
 11 份 KR 821 回放中观察到 657 个目标子包；同为 17 字节的其他子事件 4964 个作为排除对照，
 不进入该候选流。镜像中的事件名不足以确认游戏内镀层效果或对象角色。
 
-`hero_assist` 不提供镜像时保留已有的回放形状、配对、死亡核心和结算尾部候选校验，并标记 `native_child_identity_status=NOT_CHECKED`。提供完整 821 镜像时，对选中的全部 `0x040a/44` 包执行原生解码；只有子包身份分别与两种原始形状吻合时才输出候选，失败则只使该能力失败。11 份 KR 821 回放中，1,379 条第一形状均解为 `0x0056`，1,097 条第二形状均解为 `0x0057`；其中 1,097 组进入候选配对，282 条第一形状保留为排除证据。输出中的 `event_u32_0x04/+0x20` 仅是匿名原生字段，不代表助攻生效、对象身份或游戏内行为。
+`hero_assist` 不提供镜像时保留已有的回放形状、配对、死亡核心和结算尾部候选校验，
+并标记 `native_child_identity_status=NOT_CHECKED`。提供完整 821 镜像时，
+对选中的全部 `0x040a/44` 包执行原生解码；只有子包身份分别与两种原始形状吻合时才输出候选，
+失败则只使该能力失败。11 份 KR 821 回放中，1,379 条第一形状均解为 `0x0056`，
+1,097 条第二形状均解为 `0x0057`；其中 1,097 组进入候选配对，282 条第一形状保留为排除证据。
+这 1,097 组的子包 `+0x04` 都与同刻 Hero_Die 原始参数清除 `0x100` 位后的数值相同，
+第二子包 `+0x20` 都与独立解码的 Hero_Die 来源 ID 相同；原始参数直接相同的有 1,047 组，
+相差 `0x100` 的有 50 组。启用镜像时，这两项相等关系也是候选输出条件。
+字段仍按匿名偏移命名；这些相等关系不证明助攻生效、对象身份或游戏内行为。
 
 821 的候选死亡记录保留原始包来源及未配对路由的负例计数。该 build 的运行时镜像已从真实回放进程捕获；当前死亡包的计时浮点和 Hero_Die 来源 ID 均有独立候选解码，单次助攻候选在 `hero_assist` 入口。可追加 `hero_assist,hero_respawn,hero_death_timer,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_assists_snapshot,hero_missions_minions_killed_snapshot,hero_ward_stats_snapshot,hero_missions_cannon_minions_killed_snapshot,hero_experience_snapshot,hero_vision_score_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_damage_totals_snapshot,hero_damage_taken_from_champions_snapshot,hero_damage_self_mitigated_snapshot,hero_structure_objective_damage_snapshot,hero_longest_living_time_snapshot,hero_total_time_spent_dead_snapshot,hero_total_heal_snapshot,hero_total_units_healed_snapshot,hero_epic_monster_damage_snapshot,hero_crowd_control_time_snapshot,hero_level_state` 到 `--events`；计数、浮点、计时和等级使用已固定的精确镜像变换，CLI 运行时无需再次提供镜像。库存 `hero_inventory_packet`、广播包 `hero_inventory_broadcast_packet`、单包 `hero_inventory_set_item_packet`、治疗上报包 `params_heal_packet`、护盾配对包 `shielding_params_packet_pair`、隐身名表子包 `stealth_event_packet`、CastSpellAns 包 `cast_spell_ans_packet`、DirectInput turn 包 `direct_input_movement_turn_packet`、SetMovementDriver 包 `set_movement_driver_packet`、OnChampionDie 子包 `champion_die_event_packet` 和 OnChampionKill 子包 `champion_kill_event_packet` 需要 `--runtime-image` 指向同一完整 build 的镜像。各能力独立报告状态；载荷形状超出已验证范围、解码值违反参与者结算上界等情况仍会保留其他已通过能力的候选输出，并明确标出失败项。11 份现有 KR 回放中的等级 20 和高击杀/助攻编码均已被相应变换覆盖。计时值不用于预测返回时点。
 
