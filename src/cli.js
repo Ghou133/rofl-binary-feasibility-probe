@@ -144,6 +144,7 @@ For 821, hero_death with champion_die_event_packet emits a candidate packet pair
 adding champion_kill_event_packet, champion_multiple_kill_event_packet, or
 on_shutdown_event_packet emits the corresponding candidate three-route packet group.
 champion_double_kill_event_packet emits a separate packet-local named child marker.
+champion_triple_quadra_event_packet emits exact-image 0x000c/0x000d packet markers.
 resurrect_event_packet emits a separate packet-local OnResurrect candidate.
 turret_plate_event_packet emits a separate packet-local OnTurretPlateDestroyed candidate.
 Inspect reads the container and packet framing without a runtime image.
@@ -391,6 +392,7 @@ function parseArgs(argv) {
       'champion_kill_die_hero_death_pair_candidates',
       'champion_multiple_kill_die_hero_death_pair_candidates',
       'champion_double_kill_multi_group_candidates',
+      'champion_triple_quadra_multi_group_candidates',
       'on_shutdown_die_hero_death_pair_candidates',
     ].includes(options.event)) {
       throw new Error('--opaque-u32 requires a supported 821 packet or packet-group candidate event');
@@ -685,6 +687,7 @@ function parseOne1619(replay, options, started) {
       'champion_kill_event_packet',
       'champion_multiple_kill_event_packet',
       'champion_double_kill_event_packet',
+      'champion_triple_quadra_event_packet',
       'on_shutdown_event_packet',
       'resurrect_event_packet',
       'turret_plate_event_packet',
@@ -1890,6 +1893,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'champion_kill_event_packet'
             || capability === 'champion_multiple_kill_event_packet'
             || capability === 'champion_double_kill_event_packet'
+            || capability === 'champion_triple_quadra_event_packet'
             || capability === 'on_shutdown_event_packet'
             || capability === 'resurrect_event_packet'
             || capability === 'turret_plate_event_packet'
@@ -2195,6 +2199,11 @@ function capabilityQuery(replay, options = {}) {
           'OnChampionDoubleKill image label only; no callback-backed field, effective double kill, actor, or lifecycle inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'champion_triple_quadra_event_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x000c/0x000d packet consumption',
+          'OnChampionTripleKill/OnChampionQuadraKill image labels only; no effective kill streak, actor, or lifecycle inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'on_shutdown_event_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x00e8 packet consumption',
           'OnShutdown image label and anonymous u32 fields; no gameplay shutdown effect, actor, or lifecycle inference');
@@ -2430,6 +2439,7 @@ function capabilityQuery(replay, options = {}) {
             champion_kill_event_packet: 'champion_kill_event_packet_candidates',
             champion_multiple_kill_event_packet: 'champion_multiple_kill_event_packet_candidates',
             champion_double_kill_event_packet: 'champion_double_kill_event_packet_candidates',
+            champion_triple_quadra_event_packet: 'champion_triple_quadra_event_packet_candidates',
             on_shutdown_event_packet: 'on_shutdown_event_packet_candidates',
             resurrect_event_packet: 'resurrect_event_packet_candidates',
             turret_plate_event_packet: 'turret_plate_event_packet_candidates',

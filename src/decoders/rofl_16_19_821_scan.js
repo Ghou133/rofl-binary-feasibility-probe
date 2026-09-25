@@ -28,6 +28,7 @@ const CAPABILITIES = new Set([
   'champion_kill_event_packet',
   'champion_multiple_kill_event_packet',
   'champion_double_kill_event_packet',
+  'champion_triple_quadra_event_packet',
   'on_shutdown_event_packet',
   'resurrect_event_packet',
   'turret_plate_event_packet',
@@ -48,6 +49,7 @@ const MAX_CHAMPION_DIE_EVENT_PACKET_ROWS = 10_000;
 const MAX_CHAMPION_KILL_EVENT_PACKET_ROWS = 2_000;
 const MAX_CHAMPION_MULTIPLE_KILL_EVENT_PACKET_ROWS = 10_000;
 const MAX_CHAMPION_DOUBLE_KILL_EVENT_PACKET_ROWS = 2_000;
+const MAX_CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_ROWS = 2_000;
 const MAX_ON_SHUTDOWN_EVENT_PACKET_ROWS = 2_000;
 const MAX_RESURRECT_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_PLATE_EVENT_PACKET_ROWS = 10_000;
@@ -102,6 +104,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     champion_kill_event_packet: [],
     champion_multiple_kill_event_packet: [],
     champion_double_kill_event_packet: [],
+    champion_triple_quadra_event_packet: [],
     on_shutdown_event_packet: [],
     resurrect_event_packet: [],
     turret_plate_event_packet: [],
@@ -175,6 +178,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let championKillEventPacketCount = 0;
   let championMultipleKillEventPacketCount = 0;
   let championDoubleKillEventPacketCount = 0;
+  let championTripleQuadraEventPacketCount = 0;
   let onShutdownEventPacketCount = 0;
   let resurrectEventPacketCount = 0;
   let turretPlateEventPacketCount = 0;
@@ -192,6 +196,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsChampionKillEvent = selected.has('champion_kill_event_packet');
   const selectsChampionMultipleKillEvent = selected.has('champion_multiple_kill_event_packet');
   const selectsChampionDoubleKillEvent = selected.has('champion_double_kill_event_packet');
+  const selectsChampionTripleQuadraEvent = selected.has('champion_triple_quadra_event_packet');
   const selectsOnShutdownEvent = selected.has('on_shutdown_event_packet');
   const selectsResurrectEvent = selected.has('resurrect_event_packet');
   const selectsTurretPlateEvent = selected.has('turret_plate_event_packet');
@@ -272,6 +277,14 @@ function create821ScanCollector(replay, selectedCapabilities) {
         if (rows.champion_double_kill_event_packet.length
             < MAX_CHAMPION_DOUBLE_KILL_EVENT_PACKET_ROWS) {
           rows.champion_double_kill_event_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsChampionTripleQuadraEvent
+          && block.packet_id === 0x040a && block.payload_length === 104) {
+        championTripleQuadraEventPacketCount += 1;
+        if (rows.champion_triple_quadra_event_packet.length
+            < MAX_CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_ROWS) {
+          rows.champion_triple_quadra_event_packet.push(copyRow(block, chunk));
         }
       }
       if (selectsOnShutdownEvent
@@ -376,6 +389,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         championKillEventPacketCount,
         championMultipleKillEventPacketCount,
         championDoubleKillEventPacketCount,
+        championTripleQuadraEventPacketCount,
         onShutdownEventPacketCount,
         resurrectEventPacketCount,
         turretPlateEventPacketCount,
@@ -487,6 +501,14 @@ function rowsFor821Capability(replay, token, capability) {
         > MAX_CHAMPION_DOUBLE_KILL_EVENT_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.championDoubleKillEventPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'champion_triple_quadra_event_packet'
+      && bound.championTripleQuadraEventPacketCount
+        > MAX_CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.championTripleQuadraEventPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }

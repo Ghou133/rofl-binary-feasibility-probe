@@ -15,6 +15,8 @@ const { CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_champion_multiple_kill_die_hero_death_pair_candidate');
 const { CHAMPION_DOUBLE_KILL_MULTI_GROUP_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_champion_double_kill_multi_group_candidate');
+const { CHAMPION_TRIPLE_QUADRA_MULTI_GROUP_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_triple_quadra_multi_group_candidate');
 const { ON_SHUTDOWN_DIE_HERO_DEATH_PAIR_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_on_shutdown_die_hero_death_pair_candidate');
 const { CHAMPION_DIE_EVENT_PACKET_821_PROFILE } =
@@ -25,6 +27,8 @@ const { CHAMPION_MULTIPLE_KILL_EVENT_PACKET_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_champion_multiple_kill_event_packet_candidate');
 const { CHAMPION_DOUBLE_KILL_EVENT_PACKET_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_champion_double_kill_event_packet_candidate');
+const { CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_triple_quadra_event_packet_candidate');
 const { ON_SHUTDOWN_EVENT_PACKET_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
 const { HERO_DEATH_CANDIDATE_PROFILE_821 } =
@@ -52,6 +56,8 @@ const DIE_PAIR_EVENT = 'champion_die_hero_death_pair_candidates';
 const KILL_GROUP_EVENT = 'champion_kill_die_hero_death_pair_candidates';
 const MULTI_GROUP_EVENT = 'champion_multiple_kill_die_hero_death_pair_candidates';
 const DOUBLE_MULTI_GROUP_EVENT = 'champion_double_kill_multi_group_candidates';
+const TRIPLE_QUADRA_PACKET_EVENT = 'champion_triple_quadra_event_packet_candidates';
+const TRIPLE_QUADRA_MULTI_GROUP_EVENT = 'champion_triple_quadra_multi_group_candidates';
 const SHUTDOWN_GROUP_EVENT = 'on_shutdown_die_hero_death_pair_candidates';
 const ASSOCIATION_EVENTS = [DIE_PAIR_EVENT, KILL_GROUP_EVENT, MULTI_GROUP_EVENT,
   SHUTDOWN_GROUP_EVENT];
@@ -275,6 +281,96 @@ function doubleMultiAssociationArtifact(t) {
   return { ...fixture, row, association, eventPath, line };
 }
 
+function tripleQuadraAssociationArtifact(t, childId = 0x000c) {
+  const fixture = doubleMultiAssociationArtifact(t);
+  const profile = CHAMPION_TRIPLE_QUADRA_MULTI_GROUP_821_PROFILE;
+  const childProfile = CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_821_PROFILE;
+  const childName = childId === 0x000c ? 'OnChampionTripleKill' : 'OnChampionQuadraKill';
+  const multiValue = childId === 0x000c ? 3 : 4;
+  const rawEventId = childId === 0x000c ? '0x49c8' : '0x4988';
+  const groupRow = structuredClone(fixture.row);
+  groupRow.event_type =
+    'CHAMPION_TRIPLE_QUADRA_MULTI_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE';
+  groupRow.build_profile = profile.id;
+  groupRow.semantic_status =
+    'CANDIDATE_821_TRIPLE_QUADRA_NAMED_MULTI_DIE_HERO_PACKET_GROUP';
+  groupRow.on_champion_triple_quadra_child_event_id = childId;
+  groupRow.on_champion_triple_quadra_registered_event_name = childName;
+  groupRow.on_champion_triple_quadra_raw_param =
+    groupRow.on_champion_double_kill_raw_param;
+  groupRow.on_champion_triple_quadra_event_blob_sha256 =
+    groupRow.on_champion_double_kill_event_blob_sha256;
+  groupRow.on_champion_triple_quadra_raw_packet_ref =
+    groupRow.on_champion_double_kill_raw_packet_ref;
+  groupRow.on_champion_multiple_kill_opaque_u32_0x08 = multiValue;
+  for (const field of ['on_champion_double_kill_child_event_id',
+    'on_champion_double_kill_registered_event_name',
+    'on_champion_double_kill_raw_param',
+    'on_champion_double_kill_event_blob_sha256',
+    'on_champion_double_kill_raw_packet_ref']) delete groupRow[field];
+  const packetRow = {
+    event_type: 'CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_CANDIDATE',
+    game_version: profile.replay_version, patch: '16.19',
+    build_profile: childProfile.id,
+    replay_sha256: SHA, replay_time_ms: 100,
+    raw_param: groupRow.on_champion_triple_quadra_raw_param,
+    child_event_id: childId, registered_event_name: childName,
+    raw_event_id_hex: rawEventId,
+    event_blob_sha256: groupRow.on_champion_triple_quadra_event_blob_sha256,
+    confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD',
+    raw_packet_ref: groupRow.on_champion_triple_quadra_raw_packet_ref,
+  };
+  const association = {
+    profile_id: profile.id,
+    evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+    depends_on: [...profile.depends_on], known_limits: [...profile.known_limits],
+    status: 'CANDIDATE', evidence_status: groupRow.semantic_status,
+    replay_sha256: SHA, on_champion_triple_quadra_count: 1,
+    on_champion_multiple_kill_group_count: 1,
+    matched_multi_u32_0x08_3_count: childId === 0x000c ? 1 : 0,
+    matched_multi_u32_0x08_4_count: childId === 0x000d ? 1 : 0,
+    excluded_other_multi_u32_0x08_count: 0,
+    unmatched_on_champion_triple_quadra_count: 0,
+    unpaired_multi_u32_0x08_3_or_4_count: 0,
+    pair_count: 1, event_count: 1,
+  };
+  const childResult = {
+    status: 'CANDIDATE', profile_id: childProfile.id,
+    evidence_runtime_image_sha256: childProfile.evidence_runtime_image_sha256,
+    evidence_status: 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD',
+    runtime_image_sha256: childProfile.evidence_runtime_image_sha256,
+    runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+    input_packet_id: 0x040a, child_event_ids: [...childProfile.child_event_ids],
+    input_count: 1, target_packet_count: 1, excluded_child_count: 0,
+    event_count: 1,
+  };
+  rewriteJson(fixture.semanticPath, (semantic) => {
+    semantic.requested_capabilities.push('champion_triple_quadra_event_packet');
+    semantic.capability_results.champion_triple_quadra_event_packet = childResult;
+    semantic.candidate_associations[profile.capability] = association;
+  });
+  rewriteJson(fixture.analysisPath, (analysis) => {
+    analysis.event_counts[TRIPLE_QUADRA_PACKET_EVENT] = 1;
+    analysis.event_counts[TRIPLE_QUADRA_MULTI_GROUP_EVENT] = 1;
+    analysis.event_jsonl_files[TRIPLE_QUADRA_PACKET_EVENT] =
+      `${TRIPLE_QUADRA_PACKET_EVENT}.jsonl`;
+    analysis.event_jsonl_files[TRIPLE_QUADRA_MULTI_GROUP_EVENT] =
+      `${TRIPLE_QUADRA_MULTI_GROUP_EVENT}.jsonl`;
+    analysis.semantic.candidate_associations[profile.capability] = association;
+  });
+  const packetPath = path.join(fixture.replayDirectory,
+    `${TRIPLE_QUADRA_PACKET_EVENT}.jsonl`);
+  const groupPath = path.join(fixture.replayDirectory,
+    `${TRIPLE_QUADRA_MULTI_GROUP_EVENT}.jsonl`);
+  const packetLine = JSON.stringify(packetRow);
+  const groupLine = JSON.stringify(groupRow);
+  fs.writeFileSync(packetPath, `${packetLine}\n`);
+  fs.writeFileSync(groupPath, `${groupLine}\n`);
+  return { ...fixture, association, packetRow, groupRow,
+    packetPath, groupPath, packetLine, groupLine };
+}
+
 function artifact(t, rows = [
   { replay_sha256: SHA, replay_time_ms: 0, participant_id_candidate: 1,
     confidence: 'CANDIDATE', field_confidence: { level: 'CANDIDATE' } },
@@ -291,7 +387,8 @@ function artifact(t, rows = [
     CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
     CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT,
     RESURRECT_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
-    DOUBLE_MULTI_GROUP_EVENT,
+    DOUBLE_MULTI_GROUP_EVENT, TRIPLE_QUADRA_PACKET_EVENT,
+    TRIPLE_QUADRA_MULTI_GROUP_EVENT,
     ...ASSOCIATION_EVENTS].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
@@ -580,6 +677,99 @@ test('query-events fails closed on 821 named double-kill group metadata and row 
   assert.equal(bad.status, 2);
   assert.equal(JSON.parse(bad.stderr).code, 'INVALID_EVENT_ROW');
   assert.equal(fs.existsSync(output), false);
+});
+
+test('query-events reads exact 821 triple and quadra packet and group candidates', (t) => {
+  for (const [childId, opaque] of [[0x000c, 3], [0x000d, 4]]) {
+    const fixture = tripleQuadraAssociationArtifact(t, childId);
+    const packet = run(fixture.replayDirectory, '--event', TRIPLE_QUADRA_PACKET_EVENT,
+      '--raw-param', '0x400000af');
+    assert.equal(packet.status, 0, packet.stderr);
+    assert.equal(packet.stdout, `${fixture.packetLine}\n`);
+    assert.equal(JSON.parse(packet.stderr).capability_status, 'CANDIDATE');
+
+    const group = run(fixture.replayDirectory, '--event', TRIPLE_QUADRA_MULTI_GROUP_EVENT,
+      '--opaque-u32', String(opaque));
+    assert.equal(group.status, 0, group.stderr);
+    assert.equal(group.stdout, `${fixture.groupLine}\n`);
+    assert.equal(JSON.parse(group.stderr).opaque_u32_unavailable_count, 0);
+    const absent = run(fixture.replayDirectory, '--event', TRIPLE_QUADRA_MULTI_GROUP_EVENT,
+      '--opaque-u32', String(opaque === 3 ? 4 : 3));
+    assert.equal(absent.status, 0, absent.stderr);
+    assert.equal(absent.stdout, '');
+    assert.equal(JSON.parse(absent.stderr).matched_count, 0);
+  }
+});
+
+test('query-events fails closed on 821 triple and quadra identity or packet order corruption', (t) => {
+  const wrongBuild = tripleQuadraAssociationArtifact(t);
+  rewriteJson(wrongBuild.semanticPath, (semantic) => {
+    semantic.replay_version = VERSION;
+  });
+  rewriteJson(wrongBuild.analysisPath, (analysis) => {
+    analysis.replay_version = VERSION;
+  });
+  const old = run(wrongBuild.replayDirectory, '--event', TRIPLE_QUADRA_MULTI_GROUP_EVENT);
+  assert.equal(old.status, 2);
+  assert.equal(JSON.parse(old.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+  const oldPacket = run(wrongBuild.replayDirectory, '--event', TRIPLE_QUADRA_PACKET_EVENT);
+  assert.equal(oldPacket.status, 2);
+  assert.equal(JSON.parse(oldPacket.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+
+  const image = tripleQuadraAssociationArtifact(t);
+  rewriteJson(image.semanticPath, (semantic) => {
+    semantic.capability_results.champion_triple_quadra_event_packet
+      .runtime_image_sha256 = 'f'.repeat(64);
+  });
+  const wrongImage = run(image.replayDirectory, '--event', TRIPLE_QUADRA_PACKET_EVENT);
+  assert.equal(wrongImage.status, 2);
+  assert.equal(JSON.parse(wrongImage.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+
+  const counts = tripleQuadraAssociationArtifact(t);
+  rewriteJson(counts.semanticPath, (semantic) => {
+    const joined = semantic.candidate_associations.champion_triple_quadra_multi_group;
+    joined.matched_multi_u32_0x08_3_count = 0;
+    joined.matched_multi_u32_0x08_4_count = 1;
+  });
+  rewriteJson(counts.analysisPath, (analysis) => {
+    const joined = analysis.semantic.candidate_associations.champion_triple_quadra_multi_group;
+    joined.matched_multi_u32_0x08_3_count = 0;
+    joined.matched_multi_u32_0x08_4_count = 1;
+  });
+  const wrongDistribution = run(counts.replayDirectory,
+    '--event', TRIPLE_QUADRA_MULTI_GROUP_EVENT);
+  assert.equal(wrongDistribution.status, 2);
+  assert.equal(JSON.parse(wrongDistribution.stderr).code, 'EVENT_COUNT_MISMATCH');
+
+  const packet = tripleQuadraAssociationArtifact(t);
+  const badPacket = structuredClone(packet.packetRow);
+  badPacket.registered_event_name = 'OnChampionQuadraKill';
+  fs.writeFileSync(packet.packetPath, `${JSON.stringify(badPacket)}\n`);
+  const packetOutput = path.join(packet.root, 'bad-triple-packet.jsonl');
+  const invalidPacket = run(packet.replayDirectory, '--event', TRIPLE_QUADRA_PACKET_EVENT,
+    '--output', packetOutput);
+  assert.equal(invalidPacket.status, 2);
+  assert.equal(JSON.parse(invalidPacket.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(packetOutput), false);
+
+  const group = tripleQuadraAssociationArtifact(t, 0x000d);
+  const badGroup = structuredClone(group.groupRow);
+  badGroup.on_champion_multiple_kill_opaque_u32_0x08 = 3;
+  fs.writeFileSync(group.groupPath, `${JSON.stringify(badGroup)}\n`);
+  const groupOutput = path.join(group.root, 'bad-quadra-group.jsonl');
+  const invalidGroup = run(group.replayDirectory, '--event', TRIPLE_QUADRA_MULTI_GROUP_EVENT,
+    '--output', groupOutput);
+  assert.equal(invalidGroup.status, 2);
+  assert.equal(JSON.parse(invalidGroup.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(groupOutput), false);
+
+  const order = tripleQuadraAssociationArtifact(t);
+  const badOrder = structuredClone(order.groupRow);
+  badOrder.on_champion_triple_quadra_raw_packet_ref.decompressed_block_offset = 35;
+  fs.writeFileSync(order.groupPath, `${JSON.stringify(badOrder)}\n`);
+  const invalidOrder = run(order.replayDirectory, '--event', TRIPLE_QUADRA_MULTI_GROUP_EVENT);
+  assert.equal(invalidOrder.status, 2);
+  assert.equal(JSON.parse(invalidOrder.stderr).code, 'INVALID_EVENT_ROW');
 });
 
 test('query-events rejects wrong-build or unavailable 821 association without treating it as zero', (t) => {

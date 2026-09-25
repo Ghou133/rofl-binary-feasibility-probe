@@ -54,6 +54,7 @@
 | `16.19.821.7343 --events champion_kill_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0007` 子包，保留 OnChampionKill 镜像名表标签、回调用作同一对象树查找键的 `+0x04` 及匿名 `+0x58/+0x5c` 整数和原始包来源 | 仅写入 `champion_kill_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断实际击杀、对象查找成功、击杀者、受害者或状态变化 |
 | `16.19.821.7343 --events champion_multiple_kill_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0009` 子包，保留 OnChampionMultipleKill 镜像名表标签、作为对象查找键的 `+0x04`、控制 `+0x10` 键数组遍历的 `+0x0c`、原样传入后续虚调用的 `+0x08` 和原始包来源 | 仅写入 `champion_multiple_kill_event_packet_candidates`，状态为 `CANDIDATE`；不把包标记或整数解释为实际多杀、等级、击杀者、受害者或状态变化 |
 | `16.19.821.7343 --events champion_double_kill_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x000b` 子包，保留 OnChampionDoubleKill 镜像名表标签、原生子包摘要与原始包来源 | 仅写入 `champion_double_kill_event_packet_candidates`，状态为 `CANDIDATE`；同为 104 字节的其他子事件按原生 ID 排除；不推断实际双杀、回调字段、参与者或状态变化 |
+| `16.19.821.7343 --events champion_triple_quadra_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x000c/0x000d` 子包，保留 OnChampionTripleKill/OnChampionQuadraKill 镜像名表标签、原生子包摘要与原始包来源 | 有目标包时写入 `champion_triple_quadra_event_packet_candidates`，状态为 `CANDIDATE`；无目标包时为 `PROFILE_UNAVAILABLE`；不推断实际连续击杀、回调字段、参与者或状态变化 |
 | `16.19.821.7343 --events on_shutdown_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x00e8` 子包，保留 OnShutdown 镜像名表标签、匿名 `+0x04/+0x58/+0x5c` 整数和原始包来源 | 仅写入 `on_shutdown_event_packet_candidates`，状态为 `CANDIDATE`；不推断实际 shutdown 效果、对象角色或状态变化 |
 | `16.19.821.7343 --events resurrect_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x002d` 子包，保留 OnResurrect 镜像名表标签、匿名原生子包 `+0x04/+0x08` 整数和原始包来源 | 有此包形状的回放写入 `resurrect_event_packet_candidates`，状态为 `CANDIDATE`；无此形状的回放报告 `PROFILE_UNAVAILABLE`；不推断实际复活、对象角色或状态变化 |
 | `16.19.821.7343 --events turret_plate_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0107` 子包，保留 OnTurretPlateDestroyed 镜像名表标签、匿名原生子包 `+0x04` 整数和原始包来源 | 仅写入 `turret_plate_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断镀层破坏、建筑、参与者或状态变化 |
@@ -201,6 +202,10 @@ node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
   --events hero_death,champion_die_event_packet,champion_multiple_kill_event_packet,champion_double_kill_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-double-kill-groups"
+node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
+  --events hero_death,champion_die_event_packet,champion_multiple_kill_event_packet,champion_triple_quadra_event_packet `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-triple-quadra-groups"
 node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events hero_death,champion_die_event_packet,on_shutdown_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
@@ -254,6 +259,17 @@ OnChampionDoubleKill 的 `0x000b` 当包标记。11 份 KR 821 回放中 654 个
 关联还要求相同外层参数、Die/`0x000b`/Multi/Hero 原始包顺序，且匹配的 Multi
 匿名 `+0x08` 为 `2`。其余 590 个 Multi 包组不满足该匿名值。
 这只报告精确 build 的包级关系，不确认实际双杀、计数含义或参与者角色。
+
+独立选择 `champion_triple_quadra_event_packet` 可查看镜像标为
+OnChampionTripleKill/OnChampionQuadraKill 的当包标记。同时选上
+`hero_death,champion_die_event_packet,champion_multiple_kill_event_packet` 后，
+`champion_triple_quadra_multi_group_candidates.jsonl` 记录与 Multi/Die/Hero 的
+候选包组关联，汇总和拒绝原因在 `semantic_run.json` 的
+`candidate_associations.champion_triple_quadra_multi_group`。11 份 KR 821 回放中
+有 9 条 `0x000c` 和 1 条 `0x000d`，均与同回放、同 chunk、同毫秒的 Multi 包组
+一一对应；匹配的匿名 Multi `+0x08` 分别为 `3` 和 `4`。5 份回放为
+`CANDIDATE`，另外 6 份未见目标子包，逐回放报告 `PROFILE_UNAVAILABLE`，
+批处理为 `PARTIAL`。这不是对实际连续击杀或对象角色的确认。
 
 同时选择 `hero_death,champion_die_event_packet,on_shutdown_event_packet`
 后，`on_shutdown_die_hero_death_pair_candidates.jsonl` 记录第三种候选包组，
@@ -361,6 +377,9 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 node src/cli.js query-events "work\16-19-821-batch" `
   --event resurrect_event_packet_candidates --limit 20 `
   --output "work\resurrect-query.jsonl"
+node src/cli.js query-events "work\16-19-821-triple-quadra-groups" `
+  --event champion_triple_quadra_multi_group_candidates --opaque-u32 4 `
+  --output "work\quadra-named-packet-groups.jsonl"
 ```
 
 对已解码的 821 库存包按物品 ID 查询单包记录：

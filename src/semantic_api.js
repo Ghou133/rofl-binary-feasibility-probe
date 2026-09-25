@@ -66,6 +66,8 @@ const { decodeChampionMultipleKillEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_multiple_kill_event_packet_candidate');
 const { decodeChampionDoubleKillEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_double_kill_event_packet_candidate');
+const { decodeChampionTripleQuadraEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_triple_quadra_event_packet_candidate');
 const { decodeOnShutdownEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
 const { decodeResurrectEventPacketCandidates821 } =
@@ -115,6 +117,8 @@ const { associateChampionMultipleKillDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_multiple_kill_die_hero_death_pair_candidate');
 const { associateChampionDoubleKillMultiGroupCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_double_kill_multi_group_candidate');
+const { associateChampionTripleQuadraMultiGroupCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_triple_quadra_multi_group_candidate');
 const { associateOnShutdownDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_on_shutdown_die_hero_death_pair_candidate');
 const { analyzeMovementParticipantAssociations821 } =
@@ -2233,6 +2237,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    champion_triple_quadra_event_packet: (input, collected) =>
+      decodeChampionTripleQuadraEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     on_shutdown_event_packet: (input, collected) =>
       decodeOnShutdownEventPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2325,6 +2335,7 @@ function decode1619821(replay, profile, options = {}) {
     champion_kill_event_packet: 'champion_kill_event_packet_candidates',
     champion_multiple_kill_event_packet: 'champion_multiple_kill_event_packet_candidates',
     champion_double_kill_event_packet: 'champion_double_kill_event_packet_candidates',
+    champion_triple_quadra_event_packet: 'champion_triple_quadra_event_packet_candidates',
     on_shutdown_event_packet: 'on_shutdown_event_packet_candidates',
     resurrect_event_packet: 'resurrect_event_packet_candidates',
     turret_plate_event_packet: 'turret_plate_event_packet_candidates',
@@ -2361,6 +2372,7 @@ function decode1619821(replay, profile, options = {}) {
     'champion_kill_event_packet',
     'champion_multiple_kill_event_packet',
     'champion_double_kill_event_packet',
+    'champion_triple_quadra_event_packet',
     'on_shutdown_event_packet',
     'resurrect_event_packet',
     'turret_plate_event_packet',
@@ -2408,6 +2420,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'champion_kill_event_packet'
         || capability === 'champion_multiple_kill_event_packet'
         || capability === 'champion_double_kill_event_packet'
+        || capability === 'champion_triple_quadra_event_packet'
         || capability === 'on_shutdown_event_packet'
         || capability === 'resurrect_event_packet'
         || capability === 'turret_plate_event_packet'
@@ -2450,6 +2463,8 @@ function decode1619821(replay, profile, options = {}) {
                 ? '0x040a/child_0009'
                 : capability === 'champion_double_kill_event_packet'
                   ? '0x040a/child_000b'
+                  : capability === 'champion_triple_quadra_event_packet'
+                    ? '0x040a/child_000c_000d'
                 : capability === 'on_shutdown_event_packet'
                   ? '0x040a/child_00e8'
                   : capability === 'resurrect_event_packet'
@@ -2466,6 +2481,8 @@ function decode1619821(replay, profile, options = {}) {
             ? result.event_count
             : capability === 'champion_double_kill_event_packet'
               ? result.event_count
+              : capability === 'champion_triple_quadra_event_packet'
+                ? result.event_count
             : capability === 'on_shutdown_event_packet'
               ? result.event_count
               : capability === 'resurrect_event_packet'
@@ -2642,6 +2659,29 @@ function decode1619821(replay, profile, options = {}) {
       }
     } catch (error) {
       candidateAssociations.champion_double_kill_multi_group = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_death')
+      && capabilities.includes('champion_die_event_packet')
+      && capabilities.includes('champion_multiple_kill_event_packet')
+      && capabilities.includes('champion_triple_quadra_event_packet')) {
+    try {
+      const association = associateChampionTripleQuadraMultiGroupCandidates821(replay, {
+        championTripleQuadraEventPacketOutcome:
+          outcomes.champion_triple_quadra_event_packet,
+        championMultipleKillDieHeroDeathPairOutcome: multipleKillGroupOutcome,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: groupEvents, ...summary } = association;
+        candidateAssociations.champion_triple_quadra_multi_group = summary;
+        events.champion_triple_quadra_multi_group_candidates = groupEvents;
+      } else {
+        candidateAssociations.champion_triple_quadra_multi_group = association;
+      }
+    } catch (error) {
+      candidateAssociations.champion_triple_quadra_multi_group = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }
