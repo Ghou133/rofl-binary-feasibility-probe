@@ -4,6 +4,25 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `champion_multiple_kill_event_packet` is an
+  unpublished selected CLI/API candidate for exact-image OnEvent child
+  `0x0009`, named OnChampionMultipleKill in the image table. The registered
+  callback directly reads anonymous child `+0x04/+0x08/+0x0c` u32 values
+  and passes the `+0x10` address with the bounded `+0x0c` value to a helper.
+  Native decoding fully consumed all 653 observed 88-byte packets in 11 KR
+  Replays; all had child `0x0009`, with no real same-length foreign-child
+  controls. A changed child ID on one packet still fully decoded but was
+  rejected by the explicit ID gate. The candidate exposes a bounded opaque
+  u32 list, source ref and blob hash without assigning an actor, multikill
+  level or gameplay effect. A seven-capability CLI smoke on `KR_8392938200`
+  emitted 71 such packets with zero framing errors. Ignored independent
+  evidence is under `artifacts/16_19_development/on_champion_multiple_kill_821/`.
+- **Investigated, not enabled:** Exact 821 name table labels child `0x00e8`
+  OnShutdown. All 72 observed 105-byte packets in 11 KR Replays natively
+  decoded, but there were no real same-length foreign-child controls and
+  the registered closure invokes an unresolved indirect callback. Its
+  numeric fields and gameplay effect remain UNKNOWN. The ignored evidence
+  is under `artifacts/16_19_development/on_shutdown_821/`.
 - **Completed:** KR 821 `champion_kill_event_packet` is an unpublished
   selected CLI/API candidate for exact-image OnEvent child `0x0007`. The
   exact name table labels it OnChampionKill, and the registered callback

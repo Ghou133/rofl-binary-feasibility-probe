@@ -176,9 +176,9 @@ test('821 selected-only token stays bound to its Replay and copied packet rows',
 
 test('821 OnEvent packet shapes stay separate in the shared scan', () => {
   const replay = replayFromChunks([
-    { stream: 1, body: Buffer.concat([17, 29, 44, 60, 104, 116].map((length) =>
+    { stream: 1, body: Buffer.concat([17, 29, 44, 60, 88, 104, 116].map((length) =>
       shortPacket(0x040a, 0x400000ae, Buffer.alloc(length)))) },
-    { stream: 2, body: Buffer.concat([17, 29, 60, 104, 116].map((length) =>
+    { stream: 2, body: Buffer.concat([17, 29, 60, 88, 104, 116].map((length) =>
       shortPacket(0x040a, 0x400000ae, Buffer.alloc(length)))) },
   ], BUILD);
   const token = collect821Routes(replay, [
@@ -186,6 +186,7 @@ test('821 OnEvent packet shapes stay separate in the shared scan', () => {
     'stealth_event_packet',
     'champion_die_event_packet',
     'champion_kill_event_packet',
+    'champion_multiple_kill_event_packet',
   ]);
   assert.deepEqual(rowsFor821Capability(replay, token, 'hero_assist').rows
     .map(({ block }) => block.payload_length), [44]);
@@ -199,6 +200,8 @@ test('821 OnEvent packet shapes stay separate in the shared scan', () => {
     .map(({ block }) => block.payload_length), [116, 116]);
   assert.deepEqual(rowsFor821Capability(replay, token, 'champion_kill_event_packet').rows
     .map(({ block }) => block.payload_length), [104, 104]);
+  assert.deepEqual(rowsFor821Capability(replay, token, 'champion_multiple_kill_event_packet').rows
+    .map(({ block }) => block.payload_length), [88, 88]);
 });
 
 test('821 out-of-range level retains independent results and a bad start chunk blocks all', (t) => {
