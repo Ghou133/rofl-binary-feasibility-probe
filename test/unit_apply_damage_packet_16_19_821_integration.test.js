@@ -42,6 +42,9 @@ test('821 UnitApplyDamage candidate reaches API and CLI without losing raw rows'
     RAW_READER: 64471, CONSTANT_0: 10, CONSTANT_1: 293, CONSTANT_2: 50,
   });
   assert.equal(result.native_callback_lookup_full_write_count, result.event_count);
+  assert.equal(result.native_callback_u32_0x10_full_write_count, result.event_count);
+  assert.deepEqual(result.native_callback_u32_0x10_source_counts,
+    { RAW_READER: 48718, CONSTANT_0: 16106 });
   assert.equal(Object.values(
     result.native_callback_lookup_key_0x24_raw_param_relation_counts)
     .reduce((sum, count) => sum + count, 0), result.event_count);
@@ -55,6 +58,10 @@ test('821 UnitApplyDamage candidate reaches API and CLI without losing raw rows'
       && ['RAW_READER', 'CONSTANT_0', 'CONSTANT_1', 'CONSTANT_2']
         .includes(row.native_callback_f32_0x20_source)
       && Number.isSafeInteger(row.native_callback_lookup_key_u32_0x24_candidate)
+      && Number.isSafeInteger(row.native_callback_u32_0x10_candidate)
+      && row.native_callback_u32_0x10_candidate >= 0
+      && /^[0-9a-f]{8}$/.test(row.native_callback_u32_0x10_encoded_bytes_hex)
+      && ['RAW_READER', 'CONSTANT_0'].includes(row.native_callback_u32_0x10_source)
       && Number.isSafeInteger(row.native_callback_lookup_key_u32_0x2c_candidate)
       && ['EQUAL', 'RAW_PARAM_IS_LOOKUP_PLUS_0X100', 'OTHER']
         .includes(row.native_callback_lookup_key_0x24_raw_param_relation)

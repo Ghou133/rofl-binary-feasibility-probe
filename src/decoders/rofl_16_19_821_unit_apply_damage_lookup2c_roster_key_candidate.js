@@ -5,13 +5,16 @@
 const { isDeepStrictEqual } = require('node:util');
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
 } = require('./rofl_16_19_821_unit_apply_damage_packet_candidate');
 const {
   UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: RAW_PAIR_PROFILE,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821: RAW_PAIR_PROFILE_V1,
   associateUnitApplyDamageRosterKeys821,
 } = require('./rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const {
   UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE: KEY24_PAIR_PROFILE,
+  UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821: KEY24_PAIR_PROFILE_V1,
   associateUnitApplyDamageLookupRosterKeys821,
 } = require('./rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
 const { RUNTIME_IMAGE_SHA256 } = require('./rofl_16_19_821_runtime_bytes');
@@ -25,7 +28,7 @@ const KEY24_ROSTER_RELATIONS = Object.freeze([
   'SAME_ROSTER_KEY', 'DIFFERENT_ROSTER_KEY', 'KEY24_NOT_IN_ROSTER',
 ]);
 
-const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE = Object.freeze({
+const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821 = Object.freeze({
   id: 'rofl-16.19.821.7343-kr-unit-apply-damage-lookup2c-roster-key-candidate-v1',
   replay_version: BUILD,
   capability: 'unit_apply_damage_lookup2c_roster_key_pair',
@@ -51,6 +54,15 @@ const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE = Object.freeze({
   ]),
 });
 
+const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE = Object.freeze({
+  ...UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821,
+  id: 'rofl-16.19.821.7343-kr-unit-apply-damage-lookup2c-roster-key-candidate-v2',
+  known_limits: Object.freeze([
+    ...UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821.known_limits.slice(0, -1),
+    'The complete native-witnessed v4 damage outcome, complete same-Replay roster, and physically source-bound raw-key pair are required.',
+  ]),
+});
+
 function sha(value) {
   return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
 }
@@ -59,7 +71,9 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
   unitApplyDamagePacketOutcome, minionsKilledSnapshotOutcome,
   validatedRawRosterPairOutcome, validatedLookup24RosterPairOutcome,
 } = {}) {
-  const profile = UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE;
+  const profile = unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V3_ID
+    ? UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821
+    : UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE;
   const damage = unitApplyDamagePacketOutcome;
   const snapshot = minionsKilledSnapshotOutcome;
   const base = {
@@ -111,8 +125,8 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
       },
     });
   }
-  if (damage.profile_id !== DAMAGE_PROFILE.id) {
-    return fail('PROFILE_UNAVAILABLE', 'native +0x2c roster association requires the exact 821 v3 damage profile');
+  if (damage.profile_id !== DAMAGE_PROFILE.id && damage.profile_id !== DAMAGE_V3_ID) {
+    return fail('PROFILE_UNAVAILABLE', 'native +0x2c roster association requires an exact 821 v3 or v4 damage profile');
   }
 
   // Recheck all 0x005f/0x0089 references against the physical Replay even
@@ -128,7 +142,9 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
       dependency_error: rawPair.error ?? null,
     });
   }
-  if (rawPair.profile_id !== RAW_PAIR_PROFILE.id) {
+  const expectedRawPair = damage.profile_id === DAMAGE_PROFILE.id
+    ? RAW_PAIR_PROFILE : RAW_PAIR_PROFILE_V1;
+  if (rawPair.profile_id !== expectedRawPair.id) {
     return fail('INCONSISTENT', 'source-bound raw-key roster profile differs');
   }
   if (validatedRawRosterPairOutcome
@@ -146,7 +162,9 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
       dependency_error: key24Pair.error ?? null,
     });
   }
-  if (key24Pair.profile_id !== KEY24_PAIR_PROFILE.id) {
+  const expectedKey24Pair = damage.profile_id === DAMAGE_PROFILE.id
+    ? KEY24_PAIR_PROFILE : KEY24_PAIR_PROFILE_V1;
+  if (key24Pair.profile_id !== expectedKey24Pair.id) {
     return fail('INCONSISTENT', 'native +0x24 roster profile differs');
   }
   if (validatedLookup24RosterPairOutcome
@@ -250,5 +268,6 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
 
 module.exports = {
   UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE,
+  UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821,
   associateUnitApplyDamageLookup2cRosterKeys821,
 };

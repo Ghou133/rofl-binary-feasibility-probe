@@ -12,7 +12,9 @@ const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: profile,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821: v1ProfileId,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821: v2ProfileId,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: v3ProfileId,
   decodeUnitApplyDamageCallbackF32FromRaw821,
+  decodeUnitApplyDamageCallbackU32FromRaw821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
   isObservedShape,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
@@ -114,7 +116,7 @@ function v3Row(index, payloadHex = FLOAT_PACKET, relation = 'EQUAL',
   const entry = v2Row(index, payloadHex);
   const key24 = decodeUnitApplyDamageLookupKeyFromRaw821(encoded24, 0x24);
   const key2c = decodeUnitApplyDamageLookupKeyFromRaw821(encoded2c, 0x2c);
-  entry.build_profile = profile.id;
+  entry.build_profile = v3ProfileId;
   entry.raw_param = relation === 'EQUAL' ? key24
     : relation === 'RAW_PARAM_IS_LOOKUP_PLUS_0X100' ? key24 + 0x100
       : key24 + 0x200;
@@ -124,6 +126,19 @@ function v3Row(index, payloadHex = FLOAT_PACKET, relation = 'EQUAL',
   entry.native_callback_lookup_key_u32_0x2c_candidate = key2c;
   entry.native_callback_lookup_key_0x2c_encoded_bytes_hex = encoded2c;
   entry.native_callback_lookup_key_0x24_raw_param_relation = relation;
+  return entry;
+}
+
+function v4Row(index, payloadHex = FLOAT_PACKET, relation = 'EQUAL') {
+  const entry = v3Row(index, payloadHex, relation);
+  const isConstant = entry.header_selector_bits_24_26 === 6;
+  const encoded = isConstant ? '85858585' : '01020304';
+  entry.build_profile = profile.id;
+  entry.native_callback_u32_0x10_candidate =
+    decodeUnitApplyDamageCallbackU32FromRaw821(encoded);
+  entry.native_callback_u32_0x10_encoded_bytes_hex = encoded;
+  entry.native_callback_u32_0x10_source = isConstant
+    ? 'CONSTANT_0' : 'RAW_READER';
   return entry;
 }
 
@@ -174,7 +189,7 @@ function writeReplay(root, name, rows, {
           entry.native_callback_f32_0x20_source === 'CONSTANT_2').length,
       },
     } : {}),
-    ...(rows[0]?.build_profile === profile.id ? {
+    ...([v3ProfileId, profile.id].includes(rows[0]?.build_profile) ? {
       native_callback_lookup_full_write_count: rows.length,
       evidence_lookup_key_0x24_table_sha256:
         profile.evidence_lookup_key_0x24_table_sha256,
@@ -188,6 +203,17 @@ function writeReplay(root, name, rows, {
             === 'RAW_PARAM_IS_LOOKUP_PLUS_0X100').length,
         OTHER: rows.filter((entry) =>
           entry.native_callback_lookup_key_0x24_raw_param_relation === 'OTHER').length,
+      },
+    } : {}),
+    ...(rows[0]?.build_profile === profile.id ? {
+      evidence_callback_u32_0x10_table_sha256:
+        profile.evidence_callback_u32_0x10_table_sha256,
+      native_callback_u32_0x10_full_write_count: rows.length,
+      native_callback_u32_0x10_source_counts: {
+        RAW_READER: rows.filter((entry) =>
+          entry.native_callback_u32_0x10_source === 'RAW_READER').length,
+        CONSTANT_0: rows.filter((entry) =>
+          entry.native_callback_u32_0x10_source === 'CONSTANT_0').length,
       },
     } : {}),
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
@@ -365,6 +391,111 @@ test('saved v3 lookup filter validates every row after limit and rejects damaged
   await assert.rejects(queryLibrary(badMetadata.directory,
     { damageLookupKey2c: rows[0].native_callback_lookup_key_u32_0x2c_candidate }),
   (error) => error.code === 'CAPABILITY_METADATA_MISMATCH');
+});
+
+test('saved v4 query filters anonymous +0x10 u32 including zero after full validation',
+  async (t) => {
+    const rows = [v4Row(0), v4Row(1, OTHER_PACKET),
+      v4Row(2, CONSTANT_PACKETS[0][0])];
+    const { directory, lines } = fixture(t, rows);
+    const zero = await queryLibrary(directory,
+      { damageCallbackU32At10: 0, limit: 1 });
+    assert.deepEqual(zero.lines, [`${lines[0]}\n`]);
+    assert.equal(zero.summary.scanned_count, 3);
+    assert.equal(zero.summary.matched_count, 2);
+    assert.equal(zero.summary.emitted_count, 1);
+    assert.equal(zero.summary.damage_callback_u32_0x10_checked_count, 3);
+    assert.equal(zero.summary.filters.damage_callback_u32_0x10, 0);
+    assert.equal(zero.summary.native_witness_check,
+      'PERSISTED_METADATA_AND_RAW_BYTES');
+    assert.equal(zero.summary.rows_unmodified, true);
+    const rawValue = rows[1].native_callback_u32_0x10_candidate;
+    const nonzero = await queryLibrary(directory,
+      { damageCallbackU32At10: rawValue,
+        damageLookupKey24: rows[1].native_callback_lookup_key_u32_0x24_candidate });
+    assert.deepEqual(nonzero.lines, [`${lines[1]}\n`]);
+    assert.equal(nonzero.summary.scanned_count, 3);
+    assert.equal(nonzero.summary.matched_count, 1);
+  });
+
+test('CLI v4 +0x10 filter accepts zero and scans rows after limit', (t) => {
+  const rows = [v4Row(0), v4Row(1, OTHER_PACKET),
+    v4Row(2, CONSTANT_PACKETS[0][0])];
+  const { directory, lines } = fixture(t, rows);
+  const selected = command(directory, '--damage-callback-u32-0x10', '0',
+    '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${lines[0]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 3);
+  assert.equal(summary.matched_count, 2);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.filters.damage_callback_u32_0x10, 0);
+});
+
+test('saved v4 +0x10 query rejects altered row and metadata after output limit',
+  async (t) => {
+    const rows = [v4Row(0), v4Row(1, OTHER_PACKET), v4Row(2)];
+    for (const mutate of [
+      (entry) => { entry.native_callback_u32_0x10_encoded_bytes_hex = '00000000'; },
+      (entry) => { entry.native_callback_u32_0x10_source = 'RAW_READER'; },
+      (entry) => { entry.native_callback_u32_0x10_candidate = -1; },
+      (entry) => { delete entry.native_callback_u32_0x10_source; },
+    ]) {
+      const changed = rows.map((entry) => structuredClone(entry));
+      mutate(changed[2]);
+      const damaged = fixture(t, rows);
+      fs.writeFileSync(path.join(damaged.directory, `${EVENT}.jsonl`),
+        `${changed.map((entry) => JSON.stringify(entry)).join('\n')}\n`);
+      await assert.rejects(queryLibrary(damaged.directory,
+        { damageCallbackU32At10: 0, limit: 1 }),
+      (error) => error.code === 'INVALID_EVENT_ROW');
+    }
+    const bad = fixture(t, rows);
+    const semanticFile = path.join(bad.directory, 'semantic_run.json');
+    const semantic = JSON.parse(fs.readFileSync(semanticFile, 'utf8'));
+    semantic.capability_results[CAPABILITY]
+      .native_callback_u32_0x10_source_counts.RAW_READER += 1;
+    fs.writeFileSync(semanticFile, JSON.stringify(semantic));
+    await assert.rejects(queryLibrary(bad.directory,
+      { damageCallbackU32At10: 0 }),
+    (error) => error.code === 'CAPABILITY_METADATA_MISMATCH');
+  });
+
+test('anonymous +0x10 filter requires v4 and validates uint32 input', async (t) => {
+  for (const older of [row(0), v2Row(0), v3Row(0)]) {
+    const saved = fixture(t, [older]);
+    await assert.rejects(queryLibrary(saved.directory,
+      { damageCallbackU32At10: 0 }),
+    (error) => error.code === 'UNSUPPORTED_FILTER');
+  }
+  const saved = fixture(t, [v4Row(0)]);
+  for (const invalid of [-1, 0x100000000, 1.5, '0']) {
+    await assert.rejects(queryLibrary(saved.directory,
+      { damageCallbackU32At10: invalid }),
+    (error) => error.code === 'INVALID_FILTER');
+  }
+});
+
+test('original saved KR v3 packet artifact remains queryable', async (t) => {
+  const directory = path.resolve(__dirname, '..', 'artifacts',
+    '16_19_development', 'combat_lookup_roster_batch_v3_11_821',
+    'replays', 'KR_8392938200');
+  if (!fs.existsSync(path.join(directory, 'semantic_run.json'))
+      || !fs.existsSync(path.join(directory, `${EVENT}.jsonl`))) {
+    t.skip('original local saved v3 artifact absent');
+    return;
+  }
+  const semantic = JSON.parse(fs.readFileSync(path.join(directory,
+    'semantic_run.json'), 'utf8'));
+  assert.equal(semantic.capability_results[CAPABILITY].profile_id, v3ProfileId);
+  const queried = await queryLibrary(directory, { damageLookupKey24: 0, limit: 1 });
+  assert.equal(queried.summary.scanned_count,
+    semantic.capability_results[CAPABILITY].event_count);
+  assert.equal(queried.summary.matched_count, 0);
+  assert.equal(queried.summary.damage_lookup_keys_checked_count,
+    queried.summary.scanned_count);
+  assert.deepEqual(queried.lines, []);
 });
 
 test('saved lookup filter accepts only exact 821 v3 packet artifacts and uint32 keys', async (t) => {

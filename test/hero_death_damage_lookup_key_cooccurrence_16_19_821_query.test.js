@@ -8,14 +8,17 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE: profile } =
+const { HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821: profile,
+  HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE: currentProfile } =
   require('../src/decoders/rofl_16_19_821_hero_death_damage_lookup_key_cooccurrence_candidate');
 const { HERO_DEATH_CANDIDATE_PROFILE_821: deathProfile } =
   require('../src/decoders/rofl_16_19_821_7343');
 const { UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: damageProfile,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: damageProfileV3Id,
   decodeUnitApplyDamageLookupKeyFromRaw821: decodeKey } =
   require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
-const { UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: rawPairProfile } =
+const { UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821: rawPairProfile,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: currentRawPairProfile } =
   require('../src/decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const { PROFILES } =
   require('../src/decoders/rofl_16_19_821_float_stats_candidate');
@@ -247,7 +250,7 @@ function writeReplay(root, name, rows, {
         result.verified_hero_death_route_packet_count,
     },
     unit_apply_damage_packet: {
-      status: 'CANDIDATE', profile_id: damageProfile.id,
+      status: 'CANDIDATE', profile_id: damageProfileV3Id,
       evidence_status: damageProfile.evidence_status,
       input_count: damageCount, event_count: damageCount,
       native_witness_status: 'FULLY_CONSUMED_ALL',
@@ -532,4 +535,36 @@ test('batch death/damage query validates later Replay after global output limit'
   assert.equal(rejected.status, 2, rejected.stderr);
   assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
   assert.equal(fs.existsSync(output), false);
+});
+
+test('saved v2 death/damage association accepts v4 damage and v2 raw pair', (t) => {
+  const { directory } = fixture(t);
+  for (const basename of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(directory, basename);
+    const doc = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    const caps = basename === 'semantic_run.json'
+      ? doc.capability_results : doc.semantic.capability_results;
+    caps[CAPABILITY].profile_id = currentProfile.id;
+    caps[CAPABILITY].known_limits = [...currentProfile.known_limits];
+    caps.unit_apply_damage_roster_key_pair.profile_id = currentRawPairProfile.id;
+    const damage = caps.unit_apply_damage_packet;
+    damage.profile_id = damageProfile.id;
+    damage.evidence_callback_u32_0x10_table_sha256 =
+      damageProfile.evidence_callback_u32_0x10_table_sha256;
+    damage.native_callback_u32_0x10_full_write_count = damage.event_count;
+    damage.native_callback_u32_0x10_source_counts = {
+      RAW_READER: 0, CONSTANT_0: damage.event_count,
+    };
+    fs.writeFileSync(filename, JSON.stringify(doc));
+  }
+  const events = path.join(directory, `${EVENT}.jsonl`);
+  fs.writeFileSync(events, fs.readFileSync(events, 'utf8').trimEnd()
+    .split('\n').map((line) => {
+      const entry = JSON.parse(line);
+      entry.build_profile = currentProfile.id;
+      return JSON.stringify(entry);
+    }).join('\n') + '\n');
+  const selected = query(directory, '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(JSON.parse(selected.stderr).scanned_count, defaultRows().length);
 });

@@ -79,7 +79,7 @@
 | `16.19.821.7343 --events set_movement_driver_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x0335` SetMovementDriver 包，输出回调变换后的匿名分发字节和原始包来源 | 仅写入 `set_movement_driver_packet_candidates`，状态为 `CANDIDATE`；不声称驱动状态已改变，也不推断位置、路径或参与者；仅接受两种已观察到的包形状 |
 | `16.19.821.7343 --events face_direction_packet --runtime-image PATH` | 对 KR `0x038e` 已观察到的 13/17 字节包形状使用精确 821 镜像，输出包内向量、可选标量候选值和原始包来源 | 仅写入 `face_direction_packet_candidates`，状态为 `CANDIDATE`；不据原始参数认定行动者，不推断世界位置、路径或方向效果；其他 build 与未观察到的形状明确拒绝 |
 | `16.19.821.7343 --events circular_movement_restriction_packet --runtime-image PATH` | 对 KR `0x0464` 已观察到的一字节零记录包与 24 字节单记录包，按精确 821 镜像验证回调字节变换，保留包内匿名标量、三浮点值及原始包引用；11 份回放共 68,242 包 | 仅写入 `circular_movement_restriction_packet_candidates`，状态为 `CANDIDATE`；原生探针完整消费了 129 个单记录包，生产解码只接受已验证形状；不推断行动者、世界位置、英雄路径、接收者或实际限制效果 |
-| `16.19.821.7343 --events unit_apply_damage_packet --runtime-image PATH` | 精确 821 镜像注册 KR 游戏流 `0x005f` UnitApplyDamage；每次运行用 Python + Unicorn 原生完整消费全部待输出包，11 份回放共 628,909 包；输出原始包来源、选择位、匿名 `+0x20` 回调 f32，以及 `+0x24/+0x2c` 两个原生对象查找键候选及受保护编码字节 | 仅写入 `unit_apply_damage_packet_candidates`，状态为 `CANDIDATE`；旧 `callback_f32_*` 字段仍只覆盖原先 6,501 包，v2 `native_callback_f32_*` 覆盖全部已验证包；查找键和 `raw_param` 的关系单列，不能推断查找成功、实际伤害、生命变化或确定的来源与目标 |
+| `16.19.821.7343 --events unit_apply_damage_packet --runtime-image PATH` | 精确 821 镜像注册 KR 游戏流 `0x005f` UnitApplyDamage；每次运行用 Python + Unicorn 原生完整消费全部待输出包，11 份回放共 628,909 包；v4 新增匿名回调对象 `+0x10` u32、四字节原始编码和原生读取或常量零的来源，继续输出原始包来源、选择位、匿名 `+0x20` 回调 f32，以及 `+0x24/+0x2c` 两个原生对象查找键候选及受保护编码字节 | 仅写入 `unit_apply_damage_packet_candidates`，状态为 `CANDIDATE`；旧 `callback_f32_*` 字段仍只覆盖原先 6,501 包，v2 `native_callback_f32_*` 覆盖全部已验证包；`+0x10` 是匿名整数，查找键和 `raw_param` 的关系单列，不能推断查找成功、伤害类型或数值、生命变化或确定的来源与目标 |
 | `16.19.821.7343 --events show_health_bar_packet --runtime-image PATH` | 精确 821 镜像注册 KR `0x0165` ShowHealthBar；两种已观察的单字节载荷经 Python + Unicorn 逐包完整消费，输出原始包引用、回调字节与零标记候选；11 份回放共 89,515 包 | 仅写入 `show_health_bar_packet_candidates`，状态为 `CANDIDATE`；未知载荷、镜像或原生见证不符时整项失败；不推断血量、伤害、参与者身份或实际显示效果 |
 | `16.19.821.7343 --events unit_apply_damage_roster_key_pair --runtime-image PATH` | 将原生验证的 `0x005f` 完整原始参数与同回放完整十人 `0x0089` HeroStats 阵容键精确配对，输出两个来源引用和阵容一侧的候选参与者标签；11 份回放匹配 49,473/628,909 包 | 仅写入 `unit_apply_damage_roster_key_candidates`，状态为 `CANDIDATE`；10,284 个 `+0x100` 别名和其他键明确排除，不把阵容标签当作伤害包行动者、来源或目标，也不推断实际伤害 |
 | `16.19.821.7343 --events unit_apply_damage_lookup_roster_key_pair --runtime-image PATH` | 将原生回调解出的 `0x005f` 对象 `+0x24` 完整查找键与同回放完整十人 `0x0089` HeroStats 阵容键精确配对，保留原始参数与查找键的关系及两个来源引用；11 份回放匹配 62,860/628,909 包，其中 10,284 包的原始参数为匹配键 `+0x100` | 另写入 `unit_apply_damage_lookup_roster_key_candidates`，状态为 `CANDIDATE`；阵容标签仅属于查找键共现，不能确定对象查找成功、行动者、来源、目标、实际伤害或血量变化 |
@@ -873,7 +873,7 @@ node src/cli.js query-events "work\16-19-821-unit-damage" `
   --damage-callback-f32-available --limit 20
 ```
 
-v3 伤害包保存结果还可按两个独立的原生对象查找键筛选。以下两个条件同时给出时，必须由同一包满足；`--raw-param` 仍单独表示原始包参数：
+v3 和 v4 伤害包保存结果还可按两个独立的原生对象查找键筛选。以下两个条件同时给出时，必须由同一包满足；`--raw-param` 仍单独表示原始包参数：
 
 ```powershell
 node src/cli.js query-events "work\16-19-821-unit-damage" `
@@ -882,9 +882,17 @@ node src/cli.js query-events "work\16-19-821-unit-damage" `
   --limit 20
 ```
 
-查询仅接受精确 `16.19.821.7343` 的 v3 保存产物，核对全部行、原始字节和原生见证元数据，`--limit` 不缩短核对范围；缺失或旧版产物会明确拒绝。两个键可分别筛选，不能据此认定伤害包的施加者、目标、致死关系或实际伤害。
+查找键筛选仅接受精确 `16.19.821.7343` 的 v3/v4 保存产物，核对全部行、原始字节和原生见证元数据，`--limit` 不缩短核对范围；缺失或更早的产物会明确拒绝。两个键可分别筛选，不能据此认定伤害包的施加者、目标、致死关系或实际伤害。
 
-查询校验精确 build、镜像和变换标识、保存的全包原生见证状态与有序输入摘要，以及每行原始包哈希与来源引用；v2 校验全部匿名原生浮点值的读取偏移或常量来源，v3 另校验两项查找键的固定字节变换和 `raw_param` 关系汇总；旧 v1/v2 产物仍按各自合同读取。达到输出上限后仍检查余下行，不重新运行原生解码或打开原始回放。该筛选保留原来较窄的 `callback_f32_*` 含义：11 份回放共 628,909 行，其中 6,501 行可用，622,408 行为 `UNAVAILABLE_SHAPE`；保存的 v1、v2、v3 三版分别完整扫描 628,909 行，均筛出 6,501 行。新版 `native_callback_f32_*` 在全部已验证包可用，仍不代表实际伤害量。
+v4 保存结果还可筛选匿名 `+0x10` u32；数值零有效，旧 v1/v2/v3 保存结果不具有该字段：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-unit-damage-v4" `
+  --event unit_apply_damage_packet_candidates `
+  --damage-callback-u32-0x10 0 --limit 20
+```
+
+查询校验精确 build、镜像和变换标识、保存的全包原生见证状态与有序输入摘要，以及每行原始包哈希与来源引用；v2 校验全部匿名原生浮点值的读取偏移或常量来源，v3 另校验两项查找键的固定字节变换和 `raw_param` 关系汇总，v4 再校验 `+0x10` 的变换、编码字节、来源和计数；旧 v1/v2/v3 产物仍按各自合同读取。达到输出上限后仍检查余下行，不重新运行原生解码或打开原始回放。旧版 `callback_f32_*` 筛选的含义保持不变：11 份回放共 628,909 行，其中 6,501 行可用，622,408 行为 `UNAVAILABLE_SHAPE`；保存的 v1、v2、v3 三版分别完整扫描 628,909 行，均筛出 6,501 行。新版 `native_callback_f32_*` 在全部已验证包可用，仍不代表实际伤害量。
 
 血条显示包的匿名回调零标记可在保存结果中筛选：
 

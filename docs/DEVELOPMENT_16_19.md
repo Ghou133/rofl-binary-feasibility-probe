@@ -4,6 +4,28 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **UnitApplyDamage anonymous callback u32 v4:** The exact-821 native
+  deserializer writes an anonymous u32 to callback object offset `+0x10`.
+  The first header selector determines whether its four payload bytes pass
+  through the pinned native reader or whether the callback writes constant
+  zero. The decoder preserves the encoded bytes, decoded u32, write source,
+  exact runtime/table hashes, and a full-consumption witness per packet.
+  A fresh packet-only CLI batch on all 11 supplied KR Replays returned
+  `CANDIDATE` in 11/11 with zero framing errors. All 628,909 selected packets
+  had the `+0x10` native write: 464,779 `RAW_READER`, 164,130 `CONSTANT_0`.
+  A separate selected-only batch of the four dependent raw/lookup/death
+  associations was `CANDIDATE` in 11/11 for each, with 49,473, 62,860,
+  173,125, and 655 rows respectively. Their v2 profiles bind the v4 packet
+  input; these counts describe packet/key proximity rather than combat effects.
+  A saved `query-events --damage-callback-u32-0x10 0 --limit 1` run on the
+  11-Replay v4 packet batch completed 11/11, checked all 628,909 rows,
+  matched 164,130 constant-zero packets, and emitted one row. The filter is
+  limited to v4 artifacts and validates all saved rows despite an output
+  limit. Historical
+  v1/v2/v3 packet profiles remain readable under their original contracts;
+  dependent roster/death associations use new profiles for v4 inputs and
+  retain their historical profile identities for older saved results. The
+  integer has no established damage type, amount, actor, target, or effect.
 - **Death/damage native lookup-key co-occurrence candidate:** The independent
   `hero_death_damage_lookup_key_cooccurrence` capability links each exact-821
   `hero_death` candidate anchor to every `0x005f` native-witnessed packet in

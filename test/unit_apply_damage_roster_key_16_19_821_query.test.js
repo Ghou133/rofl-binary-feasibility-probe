@@ -8,9 +8,11 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: profile } =
+const { UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821: profile,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: currentProfile } =
   require('../src/decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
-const { UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: damageProfile,
+const { UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: currentDamageProfile,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: damageProfileV3Id,
   decodeUnitApplyDamageCallbackF32FromRaw821 } =
   require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 const { PROFILES } =
@@ -99,7 +101,7 @@ function writeReplay(root, rows, {
   };
   const dependencies = withDependencies ? {
     unit_apply_damage_packet: {
-      status: 'CANDIDATE', profile_id: damageProfile.id,
+      status: 'CANDIDATE', profile_id: damageProfileV3Id,
       event_count: rows.length, runtime_image_status: 'MATCHED_USED',
       runtime_image_sha256: profile.evidence_runtime_image_sha256,
       native_witness_status: 'FULLY_CONSUMED_ALL',
@@ -212,6 +214,56 @@ test('saved roster key pair metadata rejects profile, dependency and count chang
   assert.equal(sourceMismatch.status, 2);
   assert.equal(JSON.parse(sourceMismatch.stderr).code,
     'CAPABILITY_METADATA_MISMATCH');
+});
+
+test('saved v1 association rejects v4-only metadata on its v3 damage source', (t) => {
+  const { directory } = fixture(t);
+  for (const basename of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(directory, basename);
+    const doc = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    const capabilities = basename === 'semantic_run.json'
+      ? doc.capability_results : doc.semantic.capability_results;
+    capabilities.unit_apply_damage_packet.evidence_callback_u32_0x10_table_sha256 =
+      currentDamageProfile.evidence_callback_u32_0x10_table_sha256;
+    fs.writeFileSync(filename, JSON.stringify(doc));
+  }
+  const rejected = query(directory, '--raw-param', '0x400000ae');
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+});
+
+test('saved v2 association accepts exact v4 damage provenance', (t) => {
+  const { directory } = fixture(t);
+  for (const basename of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(directory, basename);
+    const doc = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    const capabilities = basename === 'semantic_run.json'
+      ? doc.capability_results : doc.semantic.capability_results;
+    const result = capabilities[CAPABILITY];
+    result.profile_id = currentProfile.id;
+    result.known_limits = [...currentProfile.known_limits];
+    const damage = capabilities.unit_apply_damage_packet;
+    damage.profile_id = currentDamageProfile.id;
+    damage.evidence_callback_u32_0x10_table_sha256 =
+      currentDamageProfile.evidence_callback_u32_0x10_table_sha256;
+    damage.native_callback_u32_0x10_full_write_count = damage.event_count;
+    damage.native_callback_u32_0x10_source_counts = {
+      RAW_READER: 0, CONSTANT_0: damage.event_count,
+    };
+    fs.writeFileSync(filename, JSON.stringify(doc));
+  }
+  const events = path.join(directory, `${EVENT}.jsonl`);
+  fs.writeFileSync(events, fs.readFileSync(events, 'utf8').trimEnd()
+    .split('\n').map((line) => {
+      const entry = JSON.parse(line);
+      entry.build_profile = currentProfile.id;
+      return JSON.stringify(entry);
+    }).join('\n') + '\n');
+  const selected = query(directory, '--raw-param', '0x400000ae', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 2);
+  assert.equal(summary.emitted_count, 1);
 });
 
 test('saved roster key pair checks every row and source order after output limit', (t) => {

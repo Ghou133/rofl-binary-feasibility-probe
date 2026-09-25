@@ -11,9 +11,11 @@ const {
 } = require('./rofl_16_19_821_7343');
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
 } = require('./rofl_16_19_821_unit_apply_damage_packet_candidate');
 const {
   UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: RAW_PAIR_PROFILE,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821: RAW_PAIR_PROFILE_V1,
   associateUnitApplyDamageRosterKeys821,
 } = require('./rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const { PROFILES } = require('./rofl_16_19_821_float_stats_candidate');
@@ -24,7 +26,7 @@ const FIRST_ROSTER_KEY = 0x400000ae;
 const EVIDENCE_STATUS = 'CANDIDATE_821_HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE';
 const SNAPSHOT_PROFILE = PROFILES.hero_minions_killed_snapshot;
 
-const HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE = Object.freeze({
+const HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821 = Object.freeze({
   id: 'rofl-16.19.821.7343-kr-hero-death-damage-lookup-key-cooccurrence-candidate-v1',
   replay_version: BUILD,
   capability: 'hero_death_damage_lookup_key_cooccurrence',
@@ -50,6 +52,16 @@ const HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE = Object.freeze({
+  ...HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821,
+  id: 'rofl-16.19.821.7343-kr-hero-death-damage-lookup-key-cooccurrence-candidate-v2',
+  known_limits: Object.freeze([
+    ...HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821.known_limits.slice(0, 3),
+    'The death route is freshly decoded and the complete native-witnessed v4 damage and HeroStats sources are physically checked against the same Replay.',
+    ...HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821.known_limits.slice(4),
+  ]),
+});
+
 function sha(value) {
   return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
 }
@@ -67,7 +79,9 @@ function associateHeroDeathDamageLookupKeyCooccurrence821(replay, {
   minionsKilledSnapshotOutcome, validatedRawRosterPairOutcome,
   precollected = null,
 } = {}) {
-  const profile = HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE;
+  const profile = unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V3_ID
+    ? HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821
+    : HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE;
   const base = {
     profile_id: profile.id,
     depends_on: [...profile.depends_on],
@@ -147,7 +161,8 @@ function associateHeroDeathDamageLookupKeyCooccurrence821(replay, {
   const damage = unitApplyDamagePacketOutcome;
   const snapshot = minionsKilledSnapshotOutcome;
   if (death.profile_id !== DEATH_PROFILE.id
-      || damage.profile_id !== DAMAGE_PROFILE.id
+      || (damage.profile_id !== DAMAGE_PROFILE.id
+        && damage.profile_id !== DAMAGE_V3_ID)
       || snapshot.profile_id !== SNAPSHOT_PROFILE.id) {
     return fail('PROFILE_UNAVAILABLE', 'one or more exact 821 source profiles differ');
   }
@@ -171,7 +186,9 @@ function associateHeroDeathDamageLookupKeyCooccurrence821(replay, {
       dependency_error: rawPair.error ?? null,
     });
   }
-  if (rawPair.profile_id !== RAW_PAIR_PROFILE.id
+  const expectedRawPair = damage.profile_id === DAMAGE_PROFILE.id
+    ? RAW_PAIR_PROFILE : RAW_PAIR_PROFILE_V1;
+  if (rawPair.profile_id !== expectedRawPair.id
       || rawPair.damage_packet_count !== damage.event_count
       || rawPair.snapshot_count !== snapshot.event_count
       || rawPair.verified_raw_packet_count !== damage.event_count + snapshot.event_count) {
@@ -344,5 +361,6 @@ function associateHeroDeathDamageLookupKeyCooccurrence821(replay, {
 
 module.exports = {
   HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE,
+  HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821,
   associateHeroDeathDamageLookupKeyCooccurrence821,
 };

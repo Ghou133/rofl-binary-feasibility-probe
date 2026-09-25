@@ -8,10 +8,12 @@ const { isDeepStrictEqual } = require('node:util');
 const { replaySourceError } = require('./replay_source_integrity');
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
   decodeUnitApplyDamageLookupKeyFromRaw821,
 } = require('./rofl_16_19_821_unit_apply_damage_packet_candidate');
 const {
   UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: RAW_PAIR_PROFILE,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821: RAW_PAIR_PROFILE_V1,
   associateUnitApplyDamageRosterKeys821,
 } = require('./rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const { PROFILES } = require('./rofl_16_19_821_float_stats_candidate');
@@ -27,7 +29,7 @@ const EVIDENCE_STATUS =
 const RELATIONS = ['EQUAL', 'RAW_PARAM_IS_LOOKUP_PLUS_0X100', 'OTHER'];
 const SNAPSHOT_PROFILE = PROFILES.hero_minions_killed_snapshot;
 
-const UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE = Object.freeze({
+const UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821 = Object.freeze({
   id: 'rofl-16.19.821.7343-kr-unit-apply-damage-lookup-roster-key-candidate-v1',
   replay_version: BUILD,
   capability: 'unit_apply_damage_lookup_roster_key_pair',
@@ -48,6 +50,15 @@ const UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE = Object.freeze({
     'A raw_param +0x100 alias is included only when the independently decoded +0x24 full key matches a canonical roster key; no global alias normalization is applied.',
     'The referenced HeroStats packet is roster evidence from the first keyframe, not a contemporaneous damage observation.',
     'The complete native-witnessed v3 damage outcome, complete same-roster keyframes, and source-bound raw-key pair validation are required.',
+  ]),
+});
+
+const UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE = Object.freeze({
+  ...UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821,
+  id: 'rofl-16.19.821.7343-kr-unit-apply-damage-lookup-roster-key-candidate-v2',
+  known_limits: Object.freeze([
+    ...UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821.known_limits.slice(0, -1),
+    'The complete native-witnessed v4 damage outcome, complete same-roster keyframes, and source-bound raw-key pair validation are required.',
   ]),
 });
 
@@ -130,9 +141,11 @@ function checkedRoster(replay, snapshot, pair) {
 }
 
 function checkedPairMetadata(replay, damage, snapshot, pair) {
+  const expectedProfile = damage.profile_id === DAMAGE_PROFILE.id
+    ? RAW_PAIR_PROFILE : RAW_PAIR_PROFILE_V1;
   return pair?.status === 'CANDIDATE'
-    && pair.profile_id === RAW_PAIR_PROFILE.id
-    && pair.evidence_status === RAW_PAIR_PROFILE.evidence_status
+    && pair.profile_id === expectedProfile.id
+    && pair.evidence_status === expectedProfile.evidence_status
     && pair.replay_sha256 === replay.source_sha256
     && pair.runtime_image_status === 'MATCHED_USED'
     && pair.runtime_image_used === true
@@ -155,7 +168,9 @@ function associateUnitApplyDamageLookupRosterKeys821(replay, {
   unitApplyDamagePacketOutcome, minionsKilledSnapshotOutcome,
   validatedRawRosterPairOutcome,
 } = {}) {
-  const profile = UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE;
+  const profile = unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V3_ID
+    ? UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821
+    : UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE;
   const base = {
     profile_id: profile.id,
     depends_on: [...profile.depends_on],
@@ -210,8 +225,8 @@ function associateUnitApplyDamageLookupRosterKeys821(replay, {
       },
     });
   }
-  if (damage.profile_id !== DAMAGE_PROFILE.id) {
-    return fail('PROFILE_UNAVAILABLE', 'native +0x24 lookup-key association requires the exact 821 v3 damage profile');
+  if (damage.profile_id !== DAMAGE_PROFILE.id && damage.profile_id !== DAMAGE_V3_ID) {
+    return fail('PROFILE_UNAVAILABLE', 'native +0x24 lookup-key association requires an exact 821 v3 or v4 damage profile');
   }
   if (!count(damage.event_count, MAX_DAMAGE_ROWS) || damage.event_count === 0
       || !Array.isArray(damage.events)
@@ -226,13 +241,12 @@ function associateUnitApplyDamageLookupRosterKeys821(replay, {
         !== profile.evidence_lookup_key_0x24_table_sha256
       || damage.evidence_lookup_key_0x2c_table_sha256
         !== DAMAGE_PROFILE.evidence_lookup_key_0x2c_table_sha256) {
-    return fail('INCONSISTENT', 'native v3 damage lookup witness is incomplete or differs');
+    return fail('INCONSISTENT', 'native damage lookup witness is incomplete or differs');
   }
-  const pair = validatedRawRosterPairOutcome
-    ?? associateUnitApplyDamageRosterKeys821(replay, {
-      unitApplyDamagePacketOutcome: damage,
-      minionsKilledSnapshotOutcome: snapshot,
-    });
+  const pair = associateUnitApplyDamageRosterKeys821(replay, {
+    unitApplyDamagePacketOutcome: damage,
+    minionsKilledSnapshotOutcome: snapshot,
+  });
   if (pair?.status !== 'CANDIDATE') {
     const status = pair?.status ?? 'INCONSISTENT';
     return fail(status, 'source-bound raw-key roster pair is unavailable', {
@@ -242,6 +256,10 @@ function associateUnitApplyDamageLookupRosterKeys821(replay, {
   }
   if (!checkedPairMetadata(replay, damage, snapshot, pair)) {
     return fail('INCONSISTENT', 'source-bound raw-key pair result identity or counts differ');
+  }
+  if (validatedRawRosterPairOutcome
+      && !isDeepStrictEqual(pair, validatedRawRosterPairOutcome)) {
+    return fail('INCONSISTENT', 'cached raw-key roster pair differs from physical Replay proof');
   }
   const roster = checkedRoster(replay, snapshot, pair);
   if (!roster) return fail('INCONSISTENT', 'canonical ten-key HeroStats roster differs');
@@ -264,7 +282,7 @@ function associateUnitApplyDamageLookupRosterKeys821(replay, {
     const relation = expectedRelation(row?.raw_param, key24);
     if (row?.event_type !== 'UNIT_APPLY_DAMAGE_PACKET_CANDIDATE'
         || row.game_version !== BUILD || row.patch !== '16.19'
-        || row.build_profile !== DAMAGE_PROFILE.id
+        || row.build_profile !== damage.profile_id
         || row.replay_sha256 !== replay.source_sha256
         || row.replay_time_ms !== ref?.replay_time_ms
         || !u32(row.raw_param) || row.raw_param === 0
@@ -390,5 +408,6 @@ function associateUnitApplyDamageLookupRosterKeys821(replay, {
 
 module.exports = {
   UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE,
+  UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821,
   associateUnitApplyDamageLookupRosterKeys821,
 };

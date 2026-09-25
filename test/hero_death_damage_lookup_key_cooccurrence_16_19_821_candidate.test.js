@@ -21,12 +21,14 @@ const {
 } = require('../src/decoders/rofl_16_19_821_runtime_bytes');
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
   decodeUnitApplyDamagePacketCandidates821,
   decodeUnitApplyDamageCallbackF32FromRaw821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 const {
   HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE: profile,
+  HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821: v1Profile,
   associateHeroDeathDamageLookupKeyCooccurrence821: associate,
 } = require('../src/decoders/rofl_16_19_821_hero_death_damage_lookup_key_cooccurrence_candidate');
 
@@ -201,7 +203,7 @@ function fixture({ version = BUILD, firstKey24 = VICTIM_KEY,
     relations[relation] += 1;
     damageEvents.push({
       event_type: 'UNIT_APPLY_DAMAGE_PACKET_CANDIDATE',
-      game_version: BUILD, patch: '16.19', build_profile: DAMAGE_PROFILE.id,
+      game_version: BUILD, patch: '16.19', build_profile: DAMAGE_V3_ID,
       replay_sha256: replay.source_sha256, replay_time_ms: block.timestamp_ms,
       raw_param: block.param >>> 0,
       packet_name_candidate: DAMAGE_PROFILE.packet_name,
@@ -230,7 +232,7 @@ function fixture({ version = BUILD, firstKey24 = VICTIM_KEY,
     assert.equal(heroDeathOutcome.status, 'CANDIDATE', heroDeathOutcome.error);
   }
   const unitApplyDamagePacketOutcome = {
-    status: 'CANDIDATE', profile_id: DAMAGE_PROFILE.id,
+    status: 'CANDIDATE', profile_id: DAMAGE_V3_ID,
     evidence_status: DAMAGE_PROFILE.evidence_status,
     evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
     evidence_scalar_table_sha256: DAMAGE_PROFILE.evidence_scalar_table_sha256,
@@ -274,6 +276,7 @@ test('same chunk/ms victim key retains all before/after packets and exact source
   const result = associate(values.replay, values);
   assert.equal(profile.capability, 'hero_death_damage_lookup_key_cooccurrence');
   assert.equal(result.status, 'CANDIDATE', result.error);
+  assert.equal(result.profile_id, v1Profile.id);
   assert.equal(result.event_count, 1);
   assert.equal(result.damage_packet_count, 5);
   assert.equal(result.matched_victim_key24_packet_count, 2);

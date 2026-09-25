@@ -14,6 +14,7 @@ const {
 } = require('../src/decoders/rofl_16_19_821_runtime_bytes');
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
   decodeUnitApplyDamagePacketCandidates821,
   decodeUnitApplyDamageCallbackF32FromRaw821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
@@ -26,6 +27,7 @@ const {
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const {
   UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE: profile,
+  UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821: v1Profile,
   associateUnitApplyDamageLookupRosterKeys821: associate,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
 
@@ -171,7 +173,7 @@ function fixture({ version = BUILD, missingRosterKey = false,
     relations[relation] += 1;
     damageEvents.push({
       event_type: 'UNIT_APPLY_DAMAGE_PACKET_CANDIDATE',
-      game_version: BUILD, patch: '16.19', build_profile: DAMAGE_PROFILE.id,
+      game_version: BUILD, patch: '16.19', build_profile: DAMAGE_V3_ID,
       replay_sha256: replay.source_sha256, replay_time_ms: block.timestamp_ms,
       raw_param: block.param >>> 0,
       packet_name_candidate: DAMAGE_PROFILE.packet_name,
@@ -196,7 +198,7 @@ function fixture({ version = BUILD, missingRosterKey = false,
     });
   }, { strict: true });
   const unitApplyDamagePacketOutcome = {
-    status: 'CANDIDATE', profile_id: DAMAGE_PROFILE.id,
+    status: 'CANDIDATE', profile_id: DAMAGE_V3_ID,
     evidence_status: DAMAGE_PROFILE.evidence_status,
     evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
     evidence_scalar_table_sha256: DAMAGE_PROFILE.evidence_scalar_table_sha256,
@@ -247,6 +249,7 @@ test('821 native +0x24 roster association includes exact decoded aliases and oth
     'unit_apply_damage_roster_key_pair',
   ]);
   assert.equal(result.status, 'CANDIDATE', result.error);
+  assert.equal(result.profile_id, v1Profile.id);
   assert.equal(result.damage_packet_count, 5);
   assert.equal(result.snapshot_count, 10);
   assert.equal(result.matched_lookup_key_packet_count, 3);
