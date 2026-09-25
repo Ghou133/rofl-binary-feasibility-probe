@@ -156,11 +156,15 @@ const ASSOCIATION_EVENTS_821 = Object.freeze({
   }),
 });
 const EXACT_PACKET_EVENTS_821 = Object.freeze({
+  champion_double_kill_event_packet_candidates:
+    CHAMPION_DOUBLE_KILL_EVENT_PACKET_821_PROFILE,
   champion_triple_quadra_event_packet_candidates:
     CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_821_PROFILE,
 });
 const CHILD_EVENT_ID_FILTERS_821 = Object.freeze({
   stealth_event_packet_candidates: Object.freeze([0x0101, 0x0102]),
+  champion_double_kill_event_packet_candidates: Object.freeze([0x000b]),
+  champion_double_kill_multi_group_candidates: Object.freeze([0x000b]),
   champion_triple_quadra_event_packet_candidates: Object.freeze([0x000c, 0x000d]),
   champion_triple_quadra_multi_group_candidates: Object.freeze([0x000c, 0x000d]),
 });
@@ -238,7 +242,9 @@ function prepareExactPacketEvent(semantic, analysis, eventKey, result, profile) 
       || result.runtime_image_used !== true
       || result.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD'
       || result.input_packet_id !== 0x040a
-      || !isDeepStrictEqual(result.child_event_ids, [...profile.child_event_ids])
+      || (profile.child_event_ids
+        ? !isDeepStrictEqual(result.child_event_ids, [...profile.child_event_ids])
+        : result.child_event_id !== profile.child_event_id)
       || !isCount(result.event_count) || result.event_count === 0
       || result.target_packet_count !== result.event_count
       || !isCount(result.excluded_child_count)
@@ -391,10 +397,8 @@ function prepareNamedMultiGroupAssociation(semantic, analysis, eventKey,
         capability_status: child?.status ?? null, association: profile.capability,
         missing_input: child?.missing_input ?? null, error: child?.error ?? null });
   }
-  if (tripleQuadra) {
-    prepareExactPacketEvent(semantic, analysis,
-      'champion_triple_quadra_event_packet_candidates', child, namedProfile);
-  }
+  prepareExactPacketEvent(semantic, analysis,
+    `${namedCapability}_candidates`, child, namedProfile);
   const imageSha = profile.evidence_runtime_image_sha256;
   if (association.profile_id !== profile.id
       || association.evidence_runtime_image_sha256 !== imageSha
@@ -1022,17 +1026,23 @@ function namedMultiGroupRow(row, prepared, lineNumber, seenKeys,
   }
 }
 
-function exactTripleQuadraPacketRow(row, prepared, lineNumber, seenPacketPositions) {
+function exactNamedKillPacketRow(row, prepared, lineNumber, seenPacketPositions) {
   if (!prepared.exactPacketProfile) return;
+  const doubleKill = prepared.exactPacketProfile.capability
+    === 'champion_double_kill_event_packet';
   const invalid = (reason) => {
     throw new EventQueryError('INVALID_EVENT_ROW',
-      `Invalid champion_triple_quadra_event_packet row at JSONL line ${lineNumber}: ${reason}.`,
+      `Invalid ${prepared.exactPacketProfile.capability} row at JSONL line ${lineNumber}: ${reason}.`,
       { line_number: lineNumber });
   };
-  const child = new Map([[0x000c, ['OnChampionTripleKill', '0x49c8']],
-    [0x000d, ['OnChampionQuadraKill', '0x4988']]]).get(row.child_event_id);
+  const child = doubleKill
+    ? row.child_event_id === 0x000b ? ['OnChampionDoubleKill', '0x4968'] : null
+    : new Map([[0x000c, ['OnChampionTripleKill', '0x49c8']],
+      [0x000d, ['OnChampionQuadraKill', '0x4988']]]).get(row.child_event_id);
   const ref = row.raw_packet_ref;
-  if (row.event_type !== 'CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_CANDIDATE'
+  if (row.event_type !== (doubleKill
+    ? 'CHAMPION_DOUBLE_KILL_EVENT_PACKET_CANDIDATE'
+    : 'CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_CANDIDATE')
       || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
       || row.build_profile !== prepared.exactPacketProfile.id
       || row.confidence !== 'CANDIDATE'
@@ -1064,7 +1074,9 @@ function exactTripleQuadraPacketRow(row, prepared, lineNumber, seenPacketPositio
 
 function candidateChildEventId(row, eventKey, lineNumber) {
   const field = eventKey === 'champion_triple_quadra_multi_group_candidates'
-    ? 'on_champion_triple_quadra_child_event_id' : 'child_event_id';
+    ? 'on_champion_triple_quadra_child_event_id'
+    : eventKey === 'champion_double_kill_multi_group_candidates'
+      ? 'on_champion_double_kill_child_event_id' : 'child_event_id';
   const value = row[field];
   if (value == null) return { value: null, available: false };
   if (!Number.isSafeInteger(value)
@@ -1183,7 +1195,7 @@ async function streamEventQuery(prepared, options, emitLine) {
           `Event JSONL line ${lineNumber} has a different Replay SHA-256.`,
           { line_number: lineNumber });
       }
-      exactTripleQuadraPacketRow(row, prepared, lineNumber,
+      exactNamedKillPacketRow(row, prepared, lineNumber,
         associationPacketPositions);
       associationRow(row, prepared, lineNumber, associationKeys,
         associationPacketPositions);
@@ -1301,7 +1313,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   }
   if (childEventId != null && scannedCount > 0 && childEventIdAvailableCount === 0) {
     throw new EventQueryError('CHILD_EVENT_ID_UNAVAILABLE',
-      'This event stream has no decoded stealth child event ID for filtering.',
+      'This event stream has no decoded named child event ID for filtering.',
       { scanned_count: scannedCount,
         child_event_id_unavailable_count: childEventIdUnavailableCount,
         capability_status: prepared.capabilityStatus });

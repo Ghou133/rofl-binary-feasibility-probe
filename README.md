@@ -431,6 +431,8 @@ node src/cli.js query-events "work\16-19-821-stealth-reports\replays\KR_example"
 ```
 
 `--child-event-id` 对隐身候选接受 `0x0101/0x0102`，对
+`champion_double_kill_event_packet_candidates` 及
+`champion_double_kill_multi_group_candidates` 接受 `0x000b`，对
 `champion_triple_quadra_event_packet_candidates` 及
 `champion_triple_quadra_multi_group_candidates` 接受 `0x000c/0x000d`；
 也可输入对应十进制值。查询只匹配精确镜像解出的子 ID，包组使用其中命名子包的

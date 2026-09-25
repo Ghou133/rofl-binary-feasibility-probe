@@ -55,6 +55,7 @@ const TURRET_PLATE_PACKET_EVENT = 'turret_plate_event_packet_candidates';
 const DIE_PAIR_EVENT = 'champion_die_hero_death_pair_candidates';
 const KILL_GROUP_EVENT = 'champion_kill_die_hero_death_pair_candidates';
 const MULTI_GROUP_EVENT = 'champion_multiple_kill_die_hero_death_pair_candidates';
+const DOUBLE_PACKET_EVENT = 'champion_double_kill_event_packet_candidates';
 const DOUBLE_MULTI_GROUP_EVENT = 'champion_double_kill_multi_group_candidates';
 const TRIPLE_QUADRA_PACKET_EVENT = 'champion_triple_quadra_event_packet_candidates';
 const TRIPLE_QUADRA_MULTI_GROUP_EVENT = 'champion_triple_quadra_multi_group_candidates';
@@ -263,6 +264,9 @@ function doubleMultiAssociationArtifact(t) {
     semantic.requested_capabilities.push('champion_double_kill_event_packet');
     semantic.capability_results.champion_double_kill_event_packet = {
       status: 'CANDIDATE', profile_id: CHAMPION_DOUBLE_KILL_EVENT_PACKET_821_PROFILE.id,
+      evidence_status: 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD',
+      input_packet_id: 0x040a, child_event_id: 0x000b,
+      input_count: 1, target_packet_count: 1, excluded_child_count: 0,
       event_count: 1, evidence_runtime_image_sha256: imageSha,
       runtime_image_sha256: imageSha, runtime_image_status: 'MATCHED_USED',
       runtime_image_used: true,
@@ -279,6 +283,29 @@ function doubleMultiAssociationArtifact(t) {
   const line = JSON.stringify(row);
   fs.writeFileSync(eventPath, `${line}\n`);
   return { ...fixture, row, association, eventPath, line };
+}
+
+function doublePacketArtifact(t) {
+  const fixture = doubleMultiAssociationArtifact(t);
+  const ref = fixture.row.on_champion_double_kill_raw_packet_ref;
+  const row = {
+    event_type: 'CHAMPION_DOUBLE_KILL_EVENT_PACKET_CANDIDATE',
+    game_version: '16.19.821.7343', patch: '16.19',
+    build_profile: CHAMPION_DOUBLE_KILL_EVENT_PACKET_821_PROFILE.id,
+    replay_sha256: SHA, replay_time_ms: ref.replay_time_ms,
+    raw_param: ref.raw_param, child_event_id: 0x000b,
+    registered_event_name: 'OnChampionDoubleKill', raw_event_id_hex: '0x4968',
+    event_blob_sha256: 'c'.repeat(64), confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD',
+    raw_packet_ref: ref,
+  };
+  rewriteJson(fixture.analysisPath, (analysis) => {
+    analysis.event_jsonl_files[DOUBLE_PACKET_EVENT] = `${DOUBLE_PACKET_EVENT}.jsonl`;
+  });
+  const eventPath = path.join(fixture.replayDirectory, `${DOUBLE_PACKET_EVENT}.jsonl`);
+  const line = JSON.stringify(row);
+  fs.writeFileSync(eventPath, `${line}\n`);
+  return { ...fixture, packetRow: row, packetPath: eventPath, packetLine: line };
 }
 
 function tripleQuadraAssociationArtifact(t, childId = 0x000c) {
@@ -387,7 +414,7 @@ function artifact(t, rows = [
     CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
     CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT,
     RESURRECT_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
-    DOUBLE_MULTI_GROUP_EVENT, TRIPLE_QUADRA_PACKET_EVENT,
+    DOUBLE_PACKET_EVENT, DOUBLE_MULTI_GROUP_EVENT, TRIPLE_QUADRA_PACKET_EVENT,
     TRIPLE_QUADRA_MULTI_GROUP_EVENT,
     ...ASSOCIATION_EVENTS].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
@@ -603,6 +630,30 @@ test('query-events reads exact 821 named double-kill packet groups with candidat
   assert.equal(JSON.parse(absent.stderr).matched_count, 0);
 });
 
+test('query-events validates and filters exact 821 named double-kill packets and groups', (t) => {
+  const fixture = doublePacketArtifact(t);
+  for (const [eventKey, line] of [
+    [DOUBLE_PACKET_EVENT, fixture.packetLine],
+    [DOUBLE_MULTI_GROUP_EVENT, fixture.line],
+  ]) {
+    const selected = run(fixture.replayDirectory, '--event', eventKey,
+      '--child-event-id', '0x000b');
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, `${line}\n`);
+    assert.equal(JSON.parse(selected.stderr).child_event_id_unavailable_count, 0);
+    const invalid = run(fixture.replayDirectory, '--event', eventKey,
+      '--child-event-id', '0x000c');
+    assert.equal(invalid.status, 1);
+    assert.match(invalid.stderr, /--child-event-id must be 0x000b/);
+  }
+  const corrupt = structuredClone(fixture.packetRow);
+  corrupt.raw_event_id_hex = '0x49c8';
+  fs.writeFileSync(fixture.packetPath, `${JSON.stringify(corrupt)}\n`);
+  const bad = run(fixture.replayDirectory, '--event', DOUBLE_PACKET_EVENT);
+  assert.equal(bad.status, 2);
+  assert.equal(JSON.parse(bad.stderr).code, 'INVALID_EVENT_ROW');
+});
+
 test('query-events reads a batch of exact 821 named double-kill packet groups', (t) => {
   const fixture = doubleMultiAssociationArtifact(t);
   const relative = 'replays/synthetic';
@@ -726,7 +777,7 @@ test('query-events selects exact triple and quadra child IDs in packets and grou
   }
   const unrelated = doubleMultiAssociationArtifact(t);
   const rejected = run(unrelated.replayDirectory, '--event',
-    DOUBLE_MULTI_GROUP_EVENT, '--child-event-id', '0x000c');
+    MULTI_GROUP_EVENT, '--child-event-id', '0x000c');
   assert.equal(rejected.status, 1);
   assert.match(rejected.stderr, /--child-event-id requires/);
 });
