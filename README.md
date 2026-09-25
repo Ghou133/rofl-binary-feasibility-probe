@@ -806,6 +806,7 @@ node src/cli.js ward-events "D:\Data\ward_events.jsonl" `
 | `npm run test:16-19-revive-ally` | OnReviveAlly 候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
 | `npm run test:16-19-turret-die` | OnTurretDie 候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
 | `npm run test:16-19-turret-first-blood` | OnTurretFirstBlood 候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
+| `npm run test:16-19-hq-kill` | OnHQKill 包级候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
 | `npm run test:maintenance` | 本次新增定点维护测试；Node + Python 标准库 |
 | `npm run test:all` | 原完整 Node 套件；部分测试需要未公开的精确输入和本地证据 |
 | `npm run test:v3` / `npm run test:v4` | 数据库层单元测试，需安装对应 Python 依赖 |

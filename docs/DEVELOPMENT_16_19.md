@@ -4,6 +4,21 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed 821 OnHQKill packet candidate:** The exact-image `0x040a`
+  child `0x0046` now has a selected `hq_kill_event_packet` API/CLI output.
+  The 11 supplied KR Replays produced one candidate row each and retained
+  820 same-length foreign-child packet references, with zero framing errors.
+  An independent scout matched all 11 original packet references and native
+  blob hashes. `OnHQKill` is the image name; actual HQ destruction, winner,
+  actor and state change remain `UNKNOWN`. Evidence is ignored under
+  `artifacts/16_19_development/on_hq_kill_scout_20260925/` and
+  `artifacts/16_19_development/hq_kill_cli_batch_11_821/`.
+- **Completed opcode label cache check:** A bounded cache for repeated u16
+  packet labels preserved three inventory JSONLs and the packet inventory
+  byte-for-byte. An isolated before/after test on one exact-821 Replay
+  measured 795.58 ms versus 749.52 ms mean wall time (eight runs each);
+  this is a single-host observation, not a general speed claim. The ignored
+  measurements are in `artifacts/16_19_development/opcode_cache_benchmark_821/`.
 - **Completed 821 game Broadcast comparison query:** Saved
   `inventory_game_broadcast_keyframe_bracket_candidates` now accepts one of
   five exact endpoint-comparison labels, with optional slot and game item
