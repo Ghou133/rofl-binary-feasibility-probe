@@ -14,8 +14,10 @@ const {
 } = require('../src/decoders/rofl_16_19_821_runtime_bytes');
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821: DAMAGE_V2_ID,
   decodeUnitApplyDamagePacketCandidates821,
   decodeUnitApplyDamageCallbackF32FromRaw821,
+  decodeUnitApplyDamageLookupKeyFromRaw821,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 const {
   decodeHeroFloatSnapshotCandidates821,
@@ -82,6 +84,7 @@ function ref(replay, block, chunk) {
 // Synthetic source outcomes follow the two existing decoder schemas. The
 // association's own tests do not claim to re-run native code on these bytes.
 function fixture({ version = BUILD,
+  damageProfile = 'v2',
   statsKeys = Array.from({ length: 10 }, (_, i) => FIRST_PARAM + i),
   damageKeys = [FIRST_PARAM, FIRST_PARAM + 0x100,
     FIRST_PARAM + 0x200, 0x40004ff8],
@@ -93,8 +96,12 @@ function fixture({ version = BUILD,
   chunks.push({ stream: 1, body: Buffer.concat(damageKeys.map((rawParam, i) =>
     packet(0x005f, rawParam, COMMON_PAYLOAD, 1500 + i * 100))) });
   const replay = replayFromChunks(chunks, version);
+  const damageProfileId = damageProfile === 'v3' ? DAMAGE_PROFILE.id : DAMAGE_V2_ID;
   const damageEvents = [];
   const snapshotEvents = [];
+  const lookupRelationCounts = {
+    EQUAL: 0, RAW_PARAM_IS_LOOKUP_PLUS_0X100: 0, OTHER: 0,
+  };
   const nativeInput = crypto.createHash('sha256');
   const nativeHeader = Buffer.alloc(8);
   walkBlocks(replay, (block, chunk) => {
@@ -123,9 +130,15 @@ function fixture({ version = BUILD,
     nativeHeader.writeUInt32LE(block.payload.length, 4);
     nativeInput.update(nativeHeader);
     nativeInput.update(block.payload);
+    const lookupKey24 = decodeUnitApplyDamageLookupKeyFromRaw821('b7294929', 0x24);
+    const lookupKey2c = decodeUnitApplyDamageLookupKeyFromRaw821('39e504c3', 0x2c);
+    const lookupRelation = (block.param >>> 0) === lookupKey24 ? 'EQUAL'
+      : (block.param >>> 0) - lookupKey24 === 0x100
+        ? 'RAW_PARAM_IS_LOOKUP_PLUS_0X100' : 'OTHER';
+    if (damageProfile === 'v3') lookupRelationCounts[lookupRelation] += 1;
     damageEvents.push({
       event_type: 'UNIT_APPLY_DAMAGE_PACKET_CANDIDATE',
-      game_version: BUILD, patch: '16.19', build_profile: DAMAGE_PROFILE.id,
+      game_version: BUILD, patch: '16.19', build_profile: damageProfileId,
       replay_sha256: replay.source_sha256, replay_time_ms: block.timestamp_ms,
       raw_param: block.param >>> 0,
       packet_name_candidate: DAMAGE_PROFILE.packet_name,
@@ -137,6 +150,13 @@ function fixture({ version = BUILD,
       native_callback_f32_0x20_source: 'RAW_READER',
       native_callback_f32_0x20_raw_offset: 5,
       native_callback_f32_0x20_raw_bytes_hex: '083dbaef',
+      ...(damageProfile === 'v3' ? {
+        native_callback_lookup_key_u32_0x24_candidate: lookupKey24,
+        native_callback_lookup_key_0x24_encoded_bytes_hex: 'b7294929',
+        native_callback_lookup_key_u32_0x2c_candidate: lookupKey2c,
+        native_callback_lookup_key_0x2c_encoded_bytes_hex: '39e504c3',
+        native_callback_lookup_key_0x24_raw_param_relation: lookupRelation,
+      } : {}),
       semantic_effect_status: 'UNKNOWN',
       confidence: 'CANDIDATE',
       semantic_status: DAMAGE_PROFILE.evidence_status,
@@ -144,7 +164,7 @@ function fixture({ version = BUILD,
     });
   }, { strict: true });
   const unitApplyDamagePacketOutcome = {
-    status: 'CANDIDATE', profile_id: DAMAGE_PROFILE.id,
+    status: 'CANDIDATE', profile_id: damageProfileId,
     evidence_status: DAMAGE_PROFILE.evidence_status,
     evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
     evidence_scalar_table_sha256: DAMAGE_PROFILE.evidence_scalar_table_sha256,
@@ -160,6 +180,15 @@ function fixture({ version = BUILD,
       RAW_READER: damageEvents.length, CONSTANT_0: 0,
       CONSTANT_1: 0, CONSTANT_2: 0,
     },
+    ...(damageProfile === 'v3' ? {
+      evidence_lookup_key_0x24_table_sha256:
+        DAMAGE_PROFILE.evidence_lookup_key_0x24_table_sha256,
+      evidence_lookup_key_0x2c_table_sha256:
+        DAMAGE_PROFILE.evidence_lookup_key_0x2c_table_sha256,
+      native_callback_lookup_full_write_count: damageEvents.length,
+      native_callback_lookup_key_0x24_raw_param_relation_counts:
+        lookupRelationCounts,
+    } : {}),
     native_input_sha256: nativeInput.digest('hex'),
     events: damageEvents,
   };
@@ -209,6 +238,31 @@ test('821 UnitApplyDamage roster association uses the full key and excludes alia
     'actor_id', 'effective_health_loss']) {
     assert.equal(forbidden in event, false);
   }
+});
+
+test('821 UnitApplyDamage roster association accepts native v3 and validates lookup fields', () => {
+  const values = fixture({ damageProfile: 'v3',
+    damageKeys: [FIRST_PARAM, 0x40004007, 0x40004107, FIRST_PARAM + 0x100] });
+  const result = associate(values.replay, values);
+  assert.equal(result.status, 'CANDIDATE', result.error);
+  assert.equal(result.matched_full_key_packet_count, 1);
+  assert.equal(result.unmatched_packet_count, 3);
+  assert.equal(result.excluded_alias_0x100_packet_count, 1);
+  assert.deepEqual(values.unitApplyDamagePacketOutcome
+    .native_callback_lookup_key_0x24_raw_param_relation_counts, {
+    EQUAL: 1, RAW_PARAM_IS_LOOKUP_PLUS_0X100: 1, OTHER: 2,
+  });
+  const malformed = fixture({ damageProfile: 'v3' });
+  malformed.unitApplyDamagePacketOutcome.events[0]
+    .native_callback_lookup_key_0x24_encoded_bytes_hex = '00000000';
+  assert.equal(associate(malformed.replay, malformed).status, 'INCONSISTENT');
+  const incomplete = fixture({ damageProfile: 'v3' });
+  incomplete.unitApplyDamagePacketOutcome.native_callback_lookup_full_write_count -= 1;
+  assert.equal(associate(incomplete.replay, incomplete).status, 'INCONSISTENT');
+  const falseRelation = fixture({ damageProfile: 'v3' });
+  falseRelation.unitApplyDamagePacketOutcome.events[0]
+    .native_callback_lookup_key_0x24_raw_param_relation = 'EQUAL';
+  assert.equal(associate(falseRelation.replay, falseRelation).status, 'INCONSISTENT');
 });
 
 test('821 UnitApplyDamage roster association rejects wrong build or missing inputs', () => {

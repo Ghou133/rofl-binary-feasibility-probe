@@ -19,10 +19,42 @@ const MAX_IMAGE_SIZE = 64 * 1024 * 1024;
 const MAX_TOTAL_PACKETS = 100_000;
 const TABLE_RVA = 0x1ab62d0;
 const TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b';
+const LOOKUP_KEY_0X24_TABLE_SHA256 =
+  'fdc699513c7ecb8b85f86b8420a6eb3d0a90005495c0ce2a5d19bdeb2be5fa1f';
+const LOOKUP_KEY_0X2C_TABLE_SHA256 =
+  'dde1767c7329b3624d423418742a52991a43e357a75a426c9d895e0d4d1b8eb1';
 const EVIDENCE_STATUS = 'CANDIDATE_EXACT_821_UNIT_APPLY_DAMAGE_PACKET_FIELDS';
 const UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821 =
   'rofl-16.19.821.7343-kr-unit-apply-damage-packet-candidate-v1';
+const UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821 =
+  'rofl-16.19.821.7343-kr-unit-apply-damage-packet-candidate-v2';
 const CALLBACK_FLOAT_TABLE = runtimeByteLookupTable821();
+// Exact 821 callback byte helpers at RVAs 0x251ba0 and 0x251c30. These
+// complete 256-byte tables were obtained by executing the pinned image's
+// helpers, and are checked independently before any saved-row use.
+const LOOKUP_KEY_0X24_TABLE = Buffer.from([
+  '14da85b179222a05fbb4e49610ffccebc877e0d06e12a05a4ef427fd18ec6049',
+  '54357d5f0eed47c730408ea58f4fd82f5616ddf7591a7bae92ea6a872cc37186',
+  'e5254842ca1c4b19a40088368bd78a78b55defcb159edf635328e7520306a399',
+  'd21362f1c950b63f585bd3ced41d260d617e64b2685590db4311f3d9693a04c6',
+  'fc0f31bbde325ec16d749baf3d98839f0295d6c023bf386fe8174cb9a176e92e',
+  'f93bad0893a78029ba7ca29d8121aa41fe9a73bc51c56b077039d1be67d5b882',
+  'ac09bd5c45f6b7abe1f5a6656c1ef02beee62d3c343e2072f2758db0570c8946',
+  'e3cfb3a9cdc47a84e21b24c2010a334a9cfa974da8667f0b91f88cdc941f3744',
+].join(''), 'hex');
+const LOOKUP_KEY_0X2C_TABLE = Buffer.from([
+  '195685bb00770f43d8ad947beb23654b2e68c8c6efd7d5550e0a8b8335b07eec',
+  '4d8905ab3f8ae2db1c748f70c9e0f8a2da649fd2e11e4411989106b7a40cddb8',
+  '457a844e03a7719e123926503c08485bc337b5157f978129dc5861ae098e9b95',
+  'b48762a8a6a5ed4a6967f4b654c53404736c8c53880166906de3ba51c1ee3322',
+  'b11747994c6a93ce28809a2da15df1b91d27fa2549c4a95c6b3663d6426e5e78',
+  '72f0aa592b0daff775cf2cbcb2cb9df97d2abef3de31df6f078dd4d0d1f5d92f',
+  'bde94f40e7cdb3ea30862132e6c75f161aac3813ffd314603efde8107ccc5aa0',
+  'f6fc1f96fb46241bc0799282413a9c18f2e552bf3d0bfe57a376e40220ca3bc2',
+].join(''), 'hex');
+const LOOKUP_KEY_RELATIONS = Object.freeze([
+  'EQUAL', 'RAW_PARAM_IS_LOOKUP_PLUS_0X100', 'OTHER',
+]);
 const NATIVE_FLOAT_SOURCES = Object.freeze([
   'RAW_READER', 'CONSTANT_0', 'CONSTANT_1', 'CONSTANT_2',
 ]);
@@ -51,9 +83,16 @@ function sha256(bytes) {
 if (OBSERVED_SHAPES.length !== 1152 || sha256(OBSERVED_SHAPES) !== SHAPES_SHA256) {
   throw new Error('exact 821 UnitApplyDamage shape catalog differs');
 }
+if (LOOKUP_KEY_0X24_TABLE.length !== 256 || LOOKUP_KEY_0X2C_TABLE.length !== 256
+    || new Set(LOOKUP_KEY_0X24_TABLE).size !== 256
+    || new Set(LOOKUP_KEY_0X2C_TABLE).size !== 256
+    || sha256(LOOKUP_KEY_0X24_TABLE) !== LOOKUP_KEY_0X24_TABLE_SHA256
+    || sha256(LOOKUP_KEY_0X2C_TABLE) !== LOOKUP_KEY_0X2C_TABLE_SHA256) {
+  throw new Error('exact 821 UnitApplyDamage callback lookup tables differ');
+}
 
 const UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
-  id: 'rofl-16.19.821.7343-kr-unit-apply-damage-packet-candidate-v2',
+  id: 'rofl-16.19.821.7343-kr-unit-apply-damage-packet-candidate-v3',
   replay_version: BUILD,
   capability: CAPABILITY,
   status: 'CANDIDATE',
@@ -63,16 +102,20 @@ const UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
   packet_name: 'PKT_UnitApplyDamage_s',
   evidence_runtime_image_sha256: IMAGE_SHA256,
   evidence_scalar_table_sha256: TABLE_SHA256,
+  evidence_lookup_key_0x24_table_sha256: LOOKUP_KEY_0X24_TABLE_SHA256,
+  evidence_lookup_key_0x2c_table_sha256: LOOKUP_KEY_0X2C_TABLE_SHA256,
   evidence_shape_catalog_sha256: SHAPES_SHA256,
   evidence_registration_rva: '0x26efbc',
   evidence_callback_rva: '0x2ce150',
   evidence_constructor_rva: '0xecec40',
   evidence_deserializer_rva: '0xf49dd0',
   runtime_image_required: true,
-  evidence_scope: '628909/628909 game-stream 0x005f packets in 11 KR Replays natively fully consumed with explicit +0x20 write and finite native callback f32; 622951 raw-reader and 5958 constant-write packets; production checks every selected packet',
+  evidence_scope: '628909/628909 game-stream 0x005f packets in 11 KR Replays natively fully consumed with explicit +0x20, +0x24, and +0x2c writes; exact callback byte helpers yield two lookup-key candidates, with 622951 raw-reader and 5958 constant-write +0x20 packets; production checks every selected packet',
   known_limits: Object.freeze([
     'The packet name and callback-read float do not establish effective damage or health loss.',
-    'Object lookup results, source and target roles are not reconstructed.',
+    'The +0x24 FLOAT_RECEIVER_LOOKUP_CANDIDATE and +0x2c SECOND_LOOKUP_OBJECT_CANDIDATE are numeric lookup keys, not proof that lookup or runtime type conversion succeeded.',
+    'Source, target, actual damage, and health effects remain UNKNOWN; the callback can conditionally add another float to +0x20 before dispatch.',
+    'The raw_param relation is local to this packet and must not normalize aliases across other routes.',
     'The legacy callback_f32 fields remain limited to one native-calibrated 15-byte shape; new native_callback_f32 fields cover all accepted rows and label raw-reader or constant-write provenance.',
     'The runtime parser reports three exact header selectors but does not reproduce all native object fields.',
     'Every selected packet needs native full-consumption witness; an unseen shape, excess packet count, wrong image or damaged Replay fails the whole capability.',
@@ -101,6 +144,23 @@ function decodeUnitApplyDamageCallbackF32FromRaw821(rawBytesHex) {
   const decoded = Buffer.from(Array.from(raw, (byte) => decodeCallbackFloatByte(byte)));
   const value = decoded.readFloatLE(0);
   return Number.isFinite(value) ? value : null;
+}
+
+function decodeUnitApplyDamageLookupKeyFromRaw821(encodedBytesHex, objectOffset) {
+  const table = objectOffset === 0x24 ? LOOKUP_KEY_0X24_TABLE
+    : objectOffset === 0x2c ? LOOKUP_KEY_0X2C_TABLE : null;
+  if (!table || typeof encodedBytesHex !== 'string'
+      || !/^[0-9a-f]{8}$/.test(encodedBytesHex)) return null;
+  const encoded = Buffer.from(encodedBytesHex, 'hex');
+  const decoded = Buffer.from(Array.from(encoded, (byte) => table[byte]));
+  const value = decoded.readUInt32LE(0);
+  return value === 0 ? null : value;
+}
+
+function lookupKey24RawParamRelation(rawParam, key24) {
+  if (rawParam === key24) return 'EQUAL';
+  if (rawParam - key24 === 0x100) return 'RAW_PARAM_IS_LOOKUP_PLUS_0X100';
+  return 'OTHER';
 }
 
 function shapeTuple(payload) {
@@ -191,6 +251,8 @@ function decodeUnitApplyDamagePacketCandidates821(replay, {
     evidence_status: EVIDENCE_STATUS,
     evidence_runtime_image_sha256: IMAGE_SHA256,
     evidence_scalar_table_sha256: TABLE_SHA256,
+    evidence_lookup_key_0x24_table_sha256: LOOKUP_KEY_0X24_TABLE_SHA256,
+    evidence_lookup_key_0x2c_table_sha256: LOOKUP_KEY_0X2C_TABLE_SHA256,
     evidence_shape_catalog_sha256: SHAPES_SHA256,
   };
   const fail = (status, error, extra = {}) => ({
@@ -335,6 +397,11 @@ function decodeUnitApplyDamagePacketCandidates821(replay, {
       || !Number.isInteger(native.native_full_success_count)
       || !Array.isArray(native.float_rows)
       || !Array.isArray(native.native_float_rows)
+      || !Array.isArray(native.lookup_rows)
+      || !Number.isSafeInteger(native.native_lookup_full_write_count)
+      || native.lookup_table_sha256?.['0x24'] !== LOOKUP_KEY_0X24_TABLE_SHA256
+      || native.lookup_table_sha256?.['0x2c'] !== LOOKUP_KEY_0X2C_TABLE_SHA256
+      || Object.keys(native.lookup_table_sha256).sort().join(',') !== '0x24,0x2c'
       || native.native_float_source_counts === null
       || typeof native.native_float_source_counts !== 'object'
       || Array.isArray(native.native_float_source_counts)
@@ -379,12 +446,22 @@ function decodeUnitApplyDamagePacketCandidates821(replay, {
       native_witness_status: 'FAILED',
     });
   }
+  if (native.lookup_rows.length !== observedCount
+      || native.native_lookup_full_write_count !== observedCount) {
+    return fail('DECODE_FAILED', '0x005f native callback lookup row or write count differs', {
+      input_count: observedCount, scanned_block_count: scannedBlockCount,
+      runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+      native_witness_status: 'FAILED',
+    });
+  }
   const events = [];
   const shapeCounts = new Map();
   let callbackF32AvailableCount = 0;
   let nativeFloatIndex = 0;
   const nativeFloatSourceCounts = Object.fromEntries(
     NATIVE_FLOAT_SOURCES.map((source) => [source, 0]));
+  const lookupKey24RelationCounts = Object.fromEntries(
+    LOOKUP_KEY_RELATIONS.map((relation) => [relation, 0]));
   for (const [rowIndex, { block, chunk }] of rows.entries()) {
     const payload = block.payload;
     const selectors = shapeTuple(payload);
@@ -392,6 +469,26 @@ function decodeUnitApplyDamagePacketCandidates821(replay, {
     shapeCounts.set(shapeKey, (shapeCounts.get(shapeKey) ?? 0) + 1);
     const hasFloat = hasCallbackFloatShape(payload);
     const nativeFloatRow = native.native_float_rows[rowIndex];
+    const lookupRow = native.lookup_rows[rowIndex];
+    if (!Array.isArray(lookupRow) || lookupRow.length !== 5
+        || lookupRow[0] !== rowIndex
+        || typeof lookupRow[1] !== 'string' || !/^[0-9a-f]{8}$/.test(lookupRow[1])
+        || typeof lookupRow[3] !== 'string' || !/^[0-9a-f]{8}$/.test(lookupRow[3])
+        || !Number.isSafeInteger(lookupRow[2]) || lookupRow[2] <= 0
+        || lookupRow[2] > 0xffffffff
+        || !Number.isSafeInteger(lookupRow[4]) || lookupRow[4] <= 0
+        || lookupRow[4] > 0xffffffff
+        || decodeUnitApplyDamageLookupKeyFromRaw821(lookupRow[1], 0x24) !== lookupRow[2]
+        || decodeUnitApplyDamageLookupKeyFromRaw821(lookupRow[3], 0x2c) !== lookupRow[4]) {
+      return fail('DECODE_FAILED', '0x005f native callback lookup-key identity or transform differs', {
+        input_count: observedCount, scanned_block_count: scannedBlockCount,
+        runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+        native_witness_status: 'FAILED',
+        first_failed_packet_ref: packetRef(replay, block, chunk),
+      });
+    }
+    const lookupKey24Relation = lookupKey24RawParamRelation(block.param >>> 0, lookupRow[2]);
+    lookupKey24RelationCounts[lookupKey24Relation] += 1;
     const selector = selectors.header_selector_bits_3_5;
     const constant = NATIVE_FLOAT_CONSTANTS[selector];
     const expectedSource = constant?.source ?? 'RAW_READER';
@@ -487,6 +584,11 @@ function decodeUnitApplyDamagePacketCandidates821(replay, {
       native_callback_f32_0x20_source: expectedSource,
       native_callback_f32_0x20_raw_offset: nativeRawOffset,
       native_callback_f32_0x20_raw_bytes_hex: nativeRawBytes?.toString('hex') ?? null,
+      native_callback_lookup_key_u32_0x24_candidate: lookupRow[2],
+      native_callback_lookup_key_0x24_encoded_bytes_hex: lookupRow[1],
+      native_callback_lookup_key_u32_0x2c_candidate: lookupRow[4],
+      native_callback_lookup_key_0x2c_encoded_bytes_hex: lookupRow[3],
+      native_callback_lookup_key_0x24_raw_param_relation: lookupKey24Relation,
       semantic_effect_status: 'UNKNOWN',
       confidence: 'CANDIDATE',
       semantic_status: EVIDENCE_STATUS,
@@ -513,12 +615,17 @@ function decodeUnitApplyDamagePacketCandidates821(replay, {
       header_selector_bits_3_5: 'CANDIDATE_EXACT_RUNTIME_BIT_READER',
       callback_f32_0x20_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_TRANSFORM',
       native_callback_f32_0x20_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_TRANSFORM',
+      native_callback_lookup_key_u32_0x24_candidate: 'FLOAT_RECEIVER_LOOKUP_CANDIDATE',
+      native_callback_lookup_key_u32_0x2c_candidate: 'SECOND_LOOKUP_OBJECT_CANDIDATE',
+      native_callback_lookup_key_0x24_raw_param_relation: 'CANDIDATE_EXACT_RUNTIME_LOOKUP_KEY_RELATION',
     },
     observed_shape_family_count: shapeCounts.size,
     callback_f32_available_count: callbackF32AvailableCount,
     callback_f32_unavailable_count: events.length - callbackF32AvailableCount,
     native_callback_f32_available_count: events.length,
     native_callback_f32_source_counts: nativeFloatSourceCounts,
+    native_callback_lookup_full_write_count: native.native_lookup_full_write_count,
+    native_callback_lookup_key_0x24_raw_param_relation_counts: lookupKey24RelationCounts,
     native_witness_status: 'FULLY_CONSUMED_ALL',
     native_full_success_count: native.native_full_success_count,
     native_input_sha256: inputSha,
@@ -530,8 +637,10 @@ function decodeUnitApplyDamagePacketCandidates821(replay, {
 module.exports = {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821,
   decodeUnitApplyDamagePacketCandidates821,
   decodeUnitApplyDamageCallbackF32FromRaw821,
+  decodeUnitApplyDamageLookupKeyFromRaw821,
   decodeCallbackFloatByte,
   isObservedShape,
 };

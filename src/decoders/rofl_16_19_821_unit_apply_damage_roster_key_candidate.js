@@ -9,7 +9,9 @@ const { replaySourceError } = require('./replay_source_integrity');
 const { PROFILES } = require('./rofl_16_19_821_float_stats_candidate');
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821: DAMAGE_V2_ID,
   decodeUnitApplyDamageCallbackF32FromRaw821,
+  decodeUnitApplyDamageLookupKeyFromRaw821,
   isObservedShape,
 } = require('./rofl_16_19_821_unit_apply_damage_packet_candidate');
 const {
@@ -24,7 +26,21 @@ const MAX_DAMAGE_ROWS = 100_000;
 const MAX_SNAPSHOT_ROWS = 10_000;
 const EVIDENCE_STATUS = 'CANDIDATE_821_UNIT_APPLY_DAMAGE_HEROSTATS_FULL_KEY_COOCCURRENCE';
 const NATIVE_SOURCES = ['RAW_READER', 'CONSTANT_0', 'CONSTANT_1', 'CONSTANT_2'];
+const LOOKUP_RELATIONS = ['EQUAL', 'RAW_PARAM_IS_LOOKUP_PLUS_0X100', 'OTHER'];
 const CONSTANTS = { CONSTANT_0: 0, CONSTANT_1: 1, CONSTANT_2: 2 };
+const LOOKUP_ROW_FIELDS = [
+  'native_callback_lookup_key_u32_0x24_candidate',
+  'native_callback_lookup_key_0x24_encoded_bytes_hex',
+  'native_callback_lookup_key_u32_0x2c_candidate',
+  'native_callback_lookup_key_0x2c_encoded_bytes_hex',
+  'native_callback_lookup_key_0x24_raw_param_relation',
+];
+const LOOKUP_OUTCOME_FIELDS = [
+  'native_callback_lookup_full_write_count',
+  'native_callback_lookup_key_0x24_raw_param_relation_counts',
+  'evidence_lookup_key_0x24_table_sha256',
+  'evidence_lookup_key_0x2c_table_sha256',
+];
 
 const UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE = Object.freeze({
   id: 'rofl-16.19.821.7343-kr-unit-apply-damage-roster-key-candidate-v1',
@@ -41,6 +57,7 @@ const UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE = Object.freeze({
     'The HeroStats participant candidate comes from the 0x0089 keyframe roster, not from a decoded 0x005f actor field.',
     'The +0x100 aliases and all other nonmatching keys remain excluded and unassigned; low-byte matching is not used.',
     'Both source outcomes, every packet reference, all ten roster keys in every keyframe, and the exact native-witnessed 0x005f profile are required.',
+    'Native-gated 0x005f v2 and v3 source outcomes are accepted; v3 lookup keys do not change full raw-parameter roster matching or assign excluded aliases.',
   ]),
 });
 
@@ -107,7 +124,13 @@ function validSnapshotRow(replay, row) {
     && validRef(replay, ref, 0x0089, 'keyframe', 1263);
 }
 
-function validDamageRow(replay, row) {
+function lookupRelation(rawParam, key24) {
+  if (rawParam === key24) return 'EQUAL';
+  if (rawParam - key24 === 0x100) return 'RAW_PARAM_IS_LOOKUP_PLUS_0X100';
+  return 'OTHER';
+}
+
+function validDamageRow(replay, row, damageProfileId) {
   const ref = row?.raw_packet_ref;
   const hex = ref?.raw_payload_hex;
   if (!validRef(replay, ref, 0x005f, 'game_chunk', ref?.payload_length)
@@ -117,7 +140,7 @@ function validDamageRow(replay, row) {
       || sha256(Buffer.from(hex, 'hex')) !== ref.raw_payload_sha256
       || row.event_type !== 'UNIT_APPLY_DAMAGE_PACKET_CANDIDATE'
       || row.game_version !== BUILD || row.patch !== '16.19'
-      || row.build_profile !== DAMAGE_PROFILE.id
+      || row.build_profile !== damageProfileId
       || row.replay_sha256 !== replay.source_sha256
       || row.replay_time_ms !== ref.replay_time_ms
       || row.raw_param !== ref.raw_param || row.raw_param === 0
@@ -137,6 +160,19 @@ function validDamageRow(replay, row) {
   const expectedSource = ({ 3: 'CONSTANT_0', 5: 'CONSTANT_1',
     7: 'CONSTANT_2' })[selector3] ?? 'RAW_READER';
   if (row.native_callback_f32_0x20_source !== expectedSource) return false;
+  if (damageProfileId === DAMAGE_V2_ID) {
+    if (LOOKUP_ROW_FIELDS.some((field) => field in row)) return false;
+  } else {
+    const key24 = row.native_callback_lookup_key_u32_0x24_candidate;
+    const key2c = row.native_callback_lookup_key_u32_0x2c_candidate;
+    if (!u32(key24) || key24 === 0 || !u32(key2c) || key2c === 0
+        || decodeUnitApplyDamageLookupKeyFromRaw821(
+          row.native_callback_lookup_key_0x24_encoded_bytes_hex, 0x24) !== key24
+        || decodeUnitApplyDamageLookupKeyFromRaw821(
+          row.native_callback_lookup_key_0x2c_encoded_bytes_hex, 0x2c) !== key2c
+        || row.native_callback_lookup_key_0x24_raw_param_relation
+          !== lookupRelation(row.raw_param, key24)) return false;
+  }
   if (expectedSource !== 'RAW_READER') {
     return row.native_callback_f32_0x20_raw_offset === null
       && row.native_callback_f32_0x20_raw_bytes_hex === null
@@ -259,6 +295,8 @@ function associateUnitApplyDamageRosterKeys821(replay, {
   }
   const damage = unitApplyDamagePacketOutcome;
   const snapshot = minionsKilledSnapshotOutcome;
+  const damageIsV2 = damage.profile_id === DAMAGE_V2_ID;
+  const damageIsV3 = damage.profile_id === DAMAGE_PROFILE.id;
   if (damage.status !== 'CANDIDATE' || snapshot.status !== 'CANDIDATE') {
     const priority = ['DECODE_FAILED', 'INCONSISTENT', 'UNSUPPORTED',
       'MISSING_INPUT', 'PROFILE_UNAVAILABLE'];
@@ -271,7 +309,7 @@ function associateUnitApplyDamageRosterKeys821(replay, {
       },
     });
   }
-  if (damage.profile_id !== DAMAGE_PROFILE.id
+  if ((!damageIsV2 && !damageIsV3)
       || damage.evidence_status !== DAMAGE_PROFILE.evidence_status
       || damage.evidence_runtime_image_sha256 !== RUNTIME_IMAGE_SHA256
       || damage.evidence_scalar_table_sha256
@@ -296,6 +334,22 @@ function associateUnitApplyDamageRosterKeys821(replay, {
         !count(damage.native_callback_f32_source_counts[source], MAX_DAMAGE_ROWS))
       || NATIVE_SOURCES.reduce((sum, source) =>
         sum + damage.native_callback_f32_source_counts[source], 0) !== damage.event_count
+      || (damageIsV2 && LOOKUP_OUTCOME_FIELDS.some((field) => field in damage))
+      || (damageIsV3 && (
+        damage.evidence_lookup_key_0x24_table_sha256
+          !== DAMAGE_PROFILE.evidence_lookup_key_0x24_table_sha256
+        || damage.evidence_lookup_key_0x2c_table_sha256
+          !== DAMAGE_PROFILE.evidence_lookup_key_0x2c_table_sha256
+        || damage.native_callback_lookup_full_write_count !== damage.event_count
+        || !damage.native_callback_lookup_key_0x24_raw_param_relation_counts
+        || Object.keys(damage.native_callback_lookup_key_0x24_raw_param_relation_counts)
+          .sort().join(',') !== [...LOOKUP_RELATIONS].sort().join(',')
+        || LOOKUP_RELATIONS.some((relation) =>
+          !count(damage.native_callback_lookup_key_0x24_raw_param_relation_counts[
+            relation], MAX_DAMAGE_ROWS))
+        || LOOKUP_RELATIONS.reduce((sum, relation) => sum
+          + damage.native_callback_lookup_key_0x24_raw_param_relation_counts[
+            relation], 0) !== damage.event_count))
       || snapshot.profile_id !== SNAPSHOT_PROFILE.id
       || snapshot.evidence_runtime_image_sha256 !== RUNTIME_IMAGE_SHA256
       || snapshot.lookup_table_sha256 !== LOOKUP_TABLE_SHA256
@@ -348,17 +402,22 @@ function associateUnitApplyDamageRosterKeys821(replay, {
     }
   }
   const sourceCounts = Object.fromEntries(NATIVE_SOURCES.map((source) => [source, 0]));
+  const lookupRelationCounts = Object.fromEntries(
+    LOOKUP_RELATIONS.map((relation) => [relation, 0]));
   const events = [];
   let aliasCount = 0;
   let unmatchedCount = 0;
   const firstExcluded = { alias_0x100: null, unmatched_other: null };
   for (const [index, row] of damage.events.entries()) {
-    if (!validDamageRow(replay, row)) {
+    if (!validDamageRow(replay, row, damage.profile_id)) {
       return fail('INCONSISTENT', 'UnitApplyDamage row identity, native float, or source reference differs', {
         source: 'unit_apply_damage_packet', event_index: index,
       });
     }
     sourceCounts[row.native_callback_f32_0x20_source] += 1;
+    if (damageIsV3) {
+      lookupRelationCounts[row.native_callback_lookup_key_0x24_raw_param_relation] += 1;
+    }
     const rosterRow = roster.get(row.raw_param);
     if (!rosterRow) {
       unmatchedCount += 1;
@@ -395,6 +454,11 @@ function associateUnitApplyDamageRosterKeys821(replay, {
   if (NATIVE_SOURCES.some((source) =>
     sourceCounts[source] !== damage.native_callback_f32_source_counts[source])) {
     return fail('INCONSISTENT', 'UnitApplyDamage native float source counts differ');
+  }
+  if (damageIsV3 && LOOKUP_RELATIONS.some((relation) =>
+    lookupRelationCounts[relation]
+      !== damage.native_callback_lookup_key_0x24_raw_param_relation_counts[relation])) {
+    return fail('INCONSISTENT', 'UnitApplyDamage native lookup relation counts differ');
   }
   const physical = verifyPhysicalRefs(replay, damage.events, snapshot.events);
   if (physical.error) {

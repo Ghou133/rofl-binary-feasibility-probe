@@ -35,6 +35,12 @@ CONSTRUCTOR_RVA = 0xecec40
 VTABLE_RVA = 0x1ba21c8
 DESERIALIZER_RVA = 0xf49dd0
 CALLBACK_FLOAT_HELPER_RVA = 0x251c60
+LOOKUP_KEY_0X24_HELPER_RVA = 0x251ba0
+LOOKUP_KEY_0X2C_HELPER_RVA = 0x251c30
+LOOKUP_KEY_TABLE_SHA256 = {
+    0x24: 'fdc699513c7ecb8b85f86b8420a6eb3d0a90005495c0ce2a5d19bdeb2be5fa1f',
+    0x2c: 'dde1767c7329b3624d423418742a52991a43e357a75a426c9d895e0d4d1b8eb1',
+}
 RAW_FLOAT_READER_RVA = 0xe79810
 FLOAT_READ_CALL_RVAS = (0xf4a911, 0xf4a97f, 0xf4a9ef, 0xf4aa60)
 FLOAT_FINAL_WRITE_RVAS = {
@@ -53,12 +59,14 @@ PROFILE = {
     'constructor_rva': CONSTRUCTOR_RVA,
     'deserialize_rva': DESERIALIZER_RVA,
     'object_size': 0x30,
-    'fields': [{
-        'name': 'callback_f32_0x20',
-        'offset': 0x20,
-        'type': 'f32',
-        'byte_helper_rva': CALLBACK_FLOAT_HELPER_RVA,
-    }],
+    'fields': [
+        {'name': 'callback_f32_0x20', 'offset': 0x20, 'type': 'f32',
+         'byte_helper_rva': CALLBACK_FLOAT_HELPER_RVA},
+        {'name': 'lookup_key_u32_0x24', 'offset': 0x24, 'type': 'u32',
+         'byte_helper_rva': LOOKUP_KEY_0X24_HELPER_RVA},
+        {'name': 'lookup_key_u32_0x2c', 'offset': 0x2c, 'type': 'u32',
+         'byte_helper_rva': LOOKUP_KEY_0X2C_HELPER_RVA},
+    ],
 }
 
 
@@ -150,10 +158,10 @@ def validate_batch_tuple(packet):
 
 
 def make_damage_emulator(image):
-    """Trace only exact deserializer writes and its +0x20 raw float reader."""
+    """Trace exact deserializer field writes and its +0x20 raw float reader."""
     emulator, context = make_emulator(image)
     state = {'in_deserializer': False, 'float_write_rvas': set(),
-             'float_read_offsets': []}
+             'float_read_offsets': [], 'lookup_write_masks': {0x24: 0, 0x2c: 0}}
 
     def enter_deserializer(uc, _address, _size, _user_data):
         state['in_deserializer'] = True
@@ -167,12 +175,24 @@ def make_damage_emulator(image):
         payload_pointer = struct.unpack('<Q', bytes(uc.mem_read(cursor_address, 8)))[0]
         state['float_read_offsets'].append(payload_pointer - exact.PAYLOAD_ADDRESS)
 
+    def lookup_write(_uc, _access, address, size, _value, _user_data):
+        if not state['in_deserializer']:
+            return
+        for offset in (0x24, 0x2c):
+            for byte_index in range(4):
+                field_address = exact.OBJECT_ADDRESS + offset + byte_index
+                if address <= field_address < address + size:
+                    state['lookup_write_masks'][offset] |= 1 << byte_index
+
     emulator.emulator.hook_add(UC_HOOK_CODE, enter_deserializer,
                                begin=IMAGE_BASE + DESERIALIZER_RVA,
                                end=IMAGE_BASE + DESERIALIZER_RVA)
     emulator.emulator.hook_add(UC_HOOK_MEM_WRITE, float_write,
                                begin=exact.OBJECT_ADDRESS + 0x20,
                                end=exact.OBJECT_ADDRESS + 0x23)
+    emulator.emulator.hook_add(UC_HOOK_MEM_WRITE, lookup_write,
+                               begin=exact.OBJECT_ADDRESS + 0x24,
+                               end=exact.OBJECT_ADDRESS + 0x2f)
     for rva in FLOAT_READ_CALL_RVAS:
         emulator.emulator.hook_add(UC_HOOK_CODE, float_read,
                                    begin=IMAGE_BASE + rva, end=IMAGE_BASE + rva)
@@ -183,6 +203,36 @@ def reset_float_trace(state):
     state['in_deserializer'] = False
     state['float_write_rvas'].clear()
     state['float_read_offsets'].clear()
+    state['lookup_write_masks'][0x24] = 0
+    state['lookup_write_masks'][0x2c] = 0
+
+
+def checked_lookup_tables(emulator):
+    tables = emulator.prepare_profile(PROFILE)['byte_tables']
+    result = {}
+    for offset, helper in ((0x24, LOOKUP_KEY_0X24_HELPER_RVA),
+                           (0x2c, LOOKUP_KEY_0X2C_HELPER_RVA)):
+        table = tables[helper]
+        if (len(table) != 256 or len(set(table)) != 256
+                or hashlib.sha256(table).hexdigest() != LOOKUP_KEY_TABLE_SHA256[offset]):
+            raise ValueError(f'exact 821 +0x{offset:x} lookup-key helper table differs')
+        result[offset] = table
+    return result
+
+
+def inspect_lookup_keys(object_bytes, decoded_fields, state, tables):
+    """Bind callback lookup values to fully written native object bytes."""
+    values = []
+    for offset in (0x24, 0x2c):
+        if state['lookup_write_masks'][offset] != 0xf:
+            raise ValueError(f'821 +0x{offset:x} lookup key was not fully written')
+        encoded = object_bytes[offset:offset + 4]
+        name = f'lookup_key_u32_0x{offset:x}'
+        decoded = struct.unpack('<I', encoded.translate(tables[offset]))[0]
+        if decoded == 0 or decoded_fields[name] != decoded:
+            raise ValueError(f'821 +0x{offset:x} lookup key transform differs')
+        values.extend((encoded.hex(), decoded))
+    return values
 
 
 def inspect_callback_float(payload, object_bytes, decoded_value, state, byte_table):
@@ -216,9 +266,11 @@ def inspect_callback_float(payload, object_bytes, decoded_value, state, byte_tab
 def run_batch(packets, image, digest):
     emulator, context, trace = make_damage_emulator(image)
     float_table = emulator.prepare_profile(PROFILE)['byte_tables'][CALLBACK_FLOAT_HELPER_RVA]
+    lookup_tables = checked_lookup_tables(emulator)
     input_digest = hashlib.sha256()
     float_rows = []
     native_float_rows = []
+    lookup_rows = []
     native_float_source_counts = {'RAW_READER': 0, 'CONSTANT_0': 0,
                                   'CONSTANT_1': 0, 'CONSTANT_2': 0}
     accepted_count = 0
@@ -252,11 +304,14 @@ def run_batch(packets, image, digest):
             value = native['decoded_fields']['callback_f32_0x20']
             source, raw_offset = inspect_callback_float(
                 payload, object_bytes, value, trace, float_table)
+            lookup_values = inspect_lookup_keys(
+                object_bytes, native['decoded_fields'], trace, lookup_tables)
             if has_float and (source != 'RAW_READER' or raw_offset != 5):
                 first_failure = {'index': index,
                                  'reason': 'legacy 15-byte float family raw offset differs'}
                 continue
             native_float_rows.append([index, value, source, raw_offset])
+            lookup_rows.append([index, *lookup_values])
             native_float_source_counts[source] += 1
             if has_float:
                 float_rows.append([index, value])
@@ -274,6 +329,12 @@ def run_batch(packets, image, digest):
         'float_rows': float_rows,
         'native_float_rows': native_float_rows,
         'native_float_source_counts': native_float_source_counts,
+        'lookup_rows': lookup_rows,
+        'native_lookup_full_write_count': len(lookup_rows),
+        'lookup_table_sha256': {
+            '0x24': LOOKUP_KEY_TABLE_SHA256[0x24],
+            '0x2c': LOOKUP_KEY_TABLE_SHA256[0x2c],
+        },
     }, allow_nan=False))
 
 
@@ -290,6 +351,7 @@ def main():
         return
     emulator, context, trace = make_damage_emulator(image)
     float_table = emulator.prepare_profile(PROFILE)['byte_tables'][CALLBACK_FLOAT_HELPER_RVA]
+    lookup_tables = checked_lookup_tables(emulator)
     rows = []
     for index, packet in enumerate(packets):
         raw_param, payload = validate_packet(packet)
@@ -307,9 +369,12 @@ def main():
             value = native['decoded_fields']['callback_f32_0x20'] if accepted else None
             source = None
             raw_offset = None
+            lookup_values = None
             if accepted:
                 source, raw_offset = inspect_callback_float(
                     payload, object_bytes, value, trace, float_table)
+                lookup_values = inspect_lookup_keys(
+                    object_bytes, native['decoded_fields'], trace, lookup_tables)
             rows.append({
                 'index': index,
                 'status': 'DECODED' if accepted else 'FAILED',
@@ -322,6 +387,12 @@ def main():
                 'callback_f32_0x20_candidate': value,
                 'native_callback_f32_0x20_source': source,
                 'native_callback_f32_0x20_raw_offset': raw_offset,
+                'lookup_key_u32_0x24_encoded_bytes_hex': lookup_values[0] if lookup_values else None,
+                'lookup_key_u32_0x24_candidate': lookup_values[1] if lookup_values else None,
+                'lookup_key_u32_0x2c_encoded_bytes_hex': lookup_values[2] if lookup_values else None,
+                'lookup_key_u32_0x2c_candidate': lookup_values[3] if lookup_values else None,
+                'lookup_full_write': (trace['lookup_write_masks'][0x24] == 0xf
+                                      and trace['lookup_write_masks'][0x2c] == 0xf) if accepted else False,
             })
         except Exception as error:
             rows.append({'index': index, 'status': 'FAILED', 'error': str(error)})

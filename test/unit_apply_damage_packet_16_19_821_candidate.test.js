@@ -12,8 +12,10 @@ const { replayFromChunks } = require('./helpers/synthetic_replay');
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: profile,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821: v1ProfileId,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821: v2ProfileId,
   decodeUnitApplyDamagePacketCandidates821: decode,
   decodeUnitApplyDamageCallbackF32FromRaw821: decodeFloat,
+  decodeUnitApplyDamageLookupKeyFromRaw821: decodeLookupKey,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 
 const BUILD = '16.19.821.7343';
@@ -72,7 +74,8 @@ test('821 UnitApplyDamage emits packet selectors and only the native-matched fam
     const result = decode(fixture(), { runtimeImagePath: IMAGE_PATH });
     assert.equal(profile.evidence_status,
       'CANDIDATE_EXACT_821_UNIT_APPLY_DAMAGE_PACKET_FIELDS');
-    assert.equal(profile.id, `${v1ProfileId.slice(0, -1)}2`);
+    assert.equal(v2ProfileId, `${v1ProfileId.slice(0, -1)}2`);
+    assert.equal(profile.id, `${v1ProfileId.slice(0, -1)}3`);
     assert.equal(result.status, 'CANDIDATE');
     assert.equal(result.runtime_image_status, 'MATCHED_USED');
     assert.equal(result.input_count, 2);
@@ -82,6 +85,10 @@ test('821 UnitApplyDamage emits packet selectors and only the native-matched fam
     assert.equal(result.native_callback_f32_available_count, 2);
     assert.deepEqual(result.native_callback_f32_source_counts, {
       RAW_READER: 2, CONSTANT_0: 0, CONSTANT_1: 0, CONSTANT_2: 0,
+    });
+    assert.equal(result.native_callback_lookup_full_write_count, 2);
+    assert.deepEqual(result.native_callback_lookup_key_0x24_raw_param_relation_counts, {
+      EQUAL: 1, RAW_PARAM_IS_LOOKUP_PLUS_0X100: 0, OTHER: 1,
     });
     const [common, other] = result.events;
     assert.deepEqual([
@@ -96,12 +103,22 @@ test('821 UnitApplyDamage emits packet selectors and only the native-matched fam
     assert.equal(common.native_callback_f32_0x20_source, 'RAW_READER');
     assert.equal(common.native_callback_f32_0x20_raw_offset, 5);
     assert.equal(common.native_callback_f32_0x20_raw_bytes_hex, '083dbaef');
+    assert.equal(common.native_callback_lookup_key_u32_0x24_candidate, 0x40004007);
+    assert.equal(common.native_callback_lookup_key_0x24_encoded_bytes_hex, 'b7294929');
+    assert.equal(common.native_callback_lookup_key_u32_0x2c_candidate, 0x40004691);
+    assert.equal(common.native_callback_lookup_key_0x2c_encoded_bytes_hex, '39e504c3');
+    assert.equal(common.native_callback_lookup_key_0x24_raw_param_relation, 'EQUAL');
     assert.equal(other.callback_f32_0x20_candidate, null);
     assert.equal(other.callback_f32_0x20_status, 'UNAVAILABLE_SHAPE');
     assert.equal(other.native_callback_f32_0x20_candidate, 53.581398010253906);
     assert.equal(other.native_callback_f32_0x20_source, 'RAW_READER');
     assert.equal(other.native_callback_f32_0x20_raw_offset, 9);
     assert.equal(other.native_callback_f32_0x20_raw_bytes_hex, '6ef07c44');
+    assert.equal(other.native_callback_lookup_key_u32_0x24_candidate, 0x400000b3);
+    assert.equal(other.native_callback_lookup_key_0x24_encoded_bytes_hex, 'e2494929');
+    assert.equal(other.native_callback_lookup_key_u32_0x2c_candidate, 0x400000ae);
+    assert.equal(other.native_callback_lookup_key_0x2c_encoded_bytes_hex, '5b0404c3');
+    assert.equal(other.native_callback_lookup_key_0x24_raw_param_relation, 'OTHER');
     assert.equal(other.raw_packet_ref.raw_payload_hex, OTHER_PACKET_HEX);
     assert.equal(other.raw_packet_ref.packet_id, 0x005f);
     for (const row of result.events) {
@@ -117,6 +134,32 @@ test('saved callback float can be rederived from exact raw bytes without an imag
   assert.equal(decodeFloat('083DBAEF'), null);
   assert.equal(decodeFloat('083dba'), null);
 });
+
+test('saved callback lookup keys can be rederived from protected native object bytes', () => {
+  assert.equal(decodeLookupKey('b7294929', 0x24), 0x40004007);
+  assert.equal(decodeLookupKey('39e504c3', 0x2c), 0x40004691);
+  assert.equal(decodeLookupKey('e2494929', 0x24), 0x400000b3);
+  assert.notEqual(decodeLookupKey('e2494929', 0x2c), 0x400000b3);
+  assert.equal(decodeLookupKey('e2494929', 0x20), null);
+  assert.equal(decodeLookupKey('E2494929', 0x24), null);
+  assert.equal(decodeLookupKey('e24949', 0x24), null);
+});
+
+test('821 +0x100 raw route alias has a distinct exact callback lookup key',
+  { skip: !HAS_IMAGE && 'exact mapped 821 runtime image is unavailable' }, () => {
+    const result = decode(fixtureWithPackets([{
+      rawParam: 0x400001b3, payloadHex: OTHER_PACKET_HEX,
+    }]), { runtimeImagePath: IMAGE_PATH });
+    assert.equal(result.status, 'CANDIDATE');
+    assert.equal(result.events[0].raw_param, 0x400001b3);
+    assert.equal(result.events[0].native_callback_lookup_key_u32_0x24_candidate,
+      0x400000b3);
+    assert.equal(result.events[0].native_callback_lookup_key_u32_0x2c_candidate,
+      0x400000ae);
+    assert.equal(result.events[0].native_callback_lookup_key_0x24_raw_param_relation,
+      'RAW_PARAM_IS_LOOKUP_PLUS_0X100');
+    assert.equal(result.events[0].semantic_effect_status, 'UNKNOWN');
+  });
 
 test('821 native +0x20 field distinguishes explicit constants from raw-reader values',
   { skip: !HAS_IMAGE && 'exact mapped 821 runtime image is unavailable' }, () => {
@@ -262,6 +305,42 @@ test('821 UnitApplyDamage rejects a native callback offset mismatch atomically',
     assert.match(result.error, /native callback raw transform differs/);
   });
 
+test('821 UnitApplyDamage rejects a forged native lookup key atomically',
+  { skip: !HAS_IMAGE && 'exact mapped 821 runtime image is unavailable' }, (t) => {
+    const realSpawnSync = childProcess.spawnSync;
+    t.mock.method(childProcess, 'spawnSync', (...args) => {
+      const run = realSpawnSync(...args);
+      assert.equal(run.status, 0, run.stderr);
+      const native = JSON.parse(run.stdout);
+      native.lookup_rows[0][2] += 1;
+      return { ...run, stdout: JSON.stringify(native) };
+    });
+    const result = decode(fixture({ payloads: [COMMON_PACKET_HEX] }),
+      { runtimeImagePath: IMAGE_PATH });
+    assert.equal(result.status, 'DECODE_FAILED');
+    assert.equal(result.native_witness_status, 'FAILED');
+    assert.equal(result.events, null);
+    assert.match(result.error, /lookup-key identity or transform differs/);
+  });
+
+test('821 UnitApplyDamage rejects incomplete native lookup writes atomically',
+  { skip: !HAS_IMAGE && 'exact mapped 821 runtime image is unavailable' }, (t) => {
+    const realSpawnSync = childProcess.spawnSync;
+    t.mock.method(childProcess, 'spawnSync', (...args) => {
+      const run = realSpawnSync(...args);
+      assert.equal(run.status, 0, run.stderr);
+      const native = JSON.parse(run.stdout);
+      native.native_lookup_full_write_count = 0;
+      return { ...run, stdout: JSON.stringify(native) };
+    });
+    const result = decode(fixture({ payloads: [COMMON_PACKET_HEX] }),
+      { runtimeImagePath: IMAGE_PATH });
+    assert.equal(result.status, 'DECODE_FAILED');
+    assert.equal(result.native_witness_status, 'FAILED');
+    assert.equal(result.events, null);
+    assert.match(result.error, /lookup row or write count differs/);
+  });
+
 test('821 UnitApplyDamage rejects a different full build', () => {
   const result = decode(fixture({ version: '16.19.820.7193' }),
     { runtimeImagePath: IMAGE_PATH });
@@ -290,8 +369,13 @@ test('821 native witness accepts the calibrated packet and rejects truncation an
     assert.equal(native.rows[0].callback_f32_0x20_candidate, 0.5460192561149597);
     assert.equal(native.rows[0].native_callback_f32_0x20_source, 'RAW_READER');
     assert.equal(native.rows[0].native_callback_f32_0x20_raw_offset, 5);
+    assert.equal(native.rows[0].lookup_key_u32_0x24_candidate, 0x40004007);
+    assert.equal(native.rows[0].lookup_key_u32_0x2c_candidate, 0x40004691);
+    assert.equal(native.rows[0].lookup_full_write, true);
     assert.equal(native.rows[1].deserialize_return_al, 0);
+    assert.equal(native.rows[1].lookup_full_write, false);
     assert.equal(native.rows[2].fully_consumed, false);
+    assert.equal(native.rows[2].lookup_full_write, false);
   });
 
 test('one supplied KR Replay keeps every 0x005f packet and reports unavailable floats',
@@ -311,4 +395,12 @@ test('one supplied KR Replay keeps every 0x005f packet and reports unavailable f
     });
     assert.equal(result.observed_shape_family_count, 595);
     assert.equal(result.events[0].raw_packet_ref.raw_payload_hex, OTHER_PACKET_HEX);
+    assert.equal(result.native_callback_lookup_full_write_count, 64_824);
+    const alias = result.events.find((row) => row.raw_param === 0x400001b3
+      && row.raw_packet_ref.raw_payload_hex === OTHER_PACKET_HEX);
+    assert.ok(alias);
+    assert.equal(alias.native_callback_lookup_key_u32_0x24_candidate, 0x400000b3);
+    assert.equal(alias.native_callback_lookup_key_u32_0x2c_candidate, 0x400000ae);
+    assert.equal(alias.native_callback_lookup_key_0x24_raw_param_relation,
+      'RAW_PARAM_IS_LOOKUP_PLUS_0X100');
   });
