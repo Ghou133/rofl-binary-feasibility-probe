@@ -43,6 +43,8 @@ const { WARD_INVENTORY_KEYFRAME_PAIR_821_PROFILE } =
   require('./decoders/rofl_16_19_821_ward_inventory_keyframe_pair_candidate');
 const { INVENTORY_KEYFRAME_INTERVAL_DIFFERENCE_821_PROFILE } =
   require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
+const { EXPERIENCE_KEYFRAME_INTERVAL_DIFFERENCE_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_experience_keyframe_interval_difference_candidate');
 const { INVENTORY_GAME_BROADCAST_KEYFRAME_BRACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_inventory_game_broadcast_keyframe_bracket_candidate');
 const { INCREMENT_MINION_KEYFRAME_BRACKET_821_PROFILE } =
@@ -86,6 +88,22 @@ const { INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821,
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
 const MAX_MINION_BRACKET_SOURCE_ROWS_821 = 10_000;
+const MAX_EXPERIENCE_INTERVAL_SOURCE_ROWS_821 = 100_000;
+const EXPERIENCE_INTERVAL_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'previous_observation_time_ms', 'current_observation_time_ms',
+  'observation_interval_ms', 'previous_keyframe_chunk_index',
+  'current_keyframe_chunk_index', 'hero_raw_param', 'participant_id_candidate',
+  'previous_experience_raw_f32_candidate', 'current_experience_raw_f32_candidate',
+  'previous_experience_floor_candidate', 'current_experience_floor_candidate',
+  'experience_endpoint_delta_f32_candidate',
+  'experience_endpoint_delta_floor_candidate',
+  'previous_raw_payload_field_bytes_hex', 'current_raw_payload_field_bytes_hex',
+  'observation_kind', 'observation_scope', 'change_time_status',
+  'confidence', 'semantic_status', 'field_confidence', 'raw_packet_ref',
+  'previous_raw_packet_ref', 'current_raw_packet_ref', 'raw_packet_refs',
+  'known_limits',
+]);
 const INVENTORY_INTERVAL_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'previous_observation_time_ms', 'current_observation_time_ms',
@@ -159,6 +177,7 @@ const LATEST_PARTICIPANT_EVENTS_821 = new Set([
   'hero_death_episode_candidates',
   'ward_inventory_keyframe_pair_candidates',
   'inventory_keyframe_interval_difference_candidates',
+  'experience_keyframe_interval_difference_candidates',
   'face_direction_keyframe_roster_pair_candidates',
 ]);
 const OPAQUE_U32_FIELDS_821 = Object.freeze({
@@ -229,6 +248,12 @@ const OPAQUE_PAIR_FIELDS_821 = Object.freeze({
     Object.freeze(['opaque_u32_0x14', 'opaque_u8_0x18']),
 });
 const ASSOCIATION_EVENTS_821 = Object.freeze({
+  experience_keyframe_interval_difference_candidates: Object.freeze({
+    profile: EXPERIENCE_KEYFRAME_INTERVAL_DIFFERENCE_821_PROFILE,
+    eventType: 'EXPERIENCE_KEYFRAME_INTERVAL_DIFFERENCE_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_821_ADJACENT_KEYFRAME_EXPERIENCE_ENDPOINT_DIFFERENCE',
+    experienceInterval: true,
+  }),
   increment_minion_keyframe_bracket_candidates: Object.freeze({
     profile: INCREMENT_MINION_KEYFRAME_BRACKET_821_PROFILE,
     eventType: 'INCREMENT_MINION_KEYFRAME_BRACKET_CANDIDATE',
@@ -1329,7 +1354,89 @@ function prepareMinionBracketAssociation(semantic, analysis, eventKey,
   return association;
 }
 
+function prepareExperienceIntervalAssociation(semantic, analysis, eventKey,
+  { profile, evidenceStatus }) {
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`);
+  }
+  const association = semantic.candidate_associations?.[profile.capability];
+  if (association?.status !== 'CANDIDATE') {
+    throw new EventQueryError('ASSOCIATION_UNAVAILABLE',
+      `${profile.capability} is not an executed candidate association.`,
+      { capability: profile.capability, association_status: association?.status ?? null,
+        error: association?.error ?? null, semantic_run_status: semantic.status });
+  }
+  const dependency = 'hero_experience_snapshot';
+  if (!Array.isArray(semantic.requested_capabilities)
+      || !semantic.requested_capabilities.includes(dependency)) {
+    throw new EventQueryError('CAPABILITY_NOT_REQUESTED',
+      `${dependency} was not requested in this Replay artifact.`,
+      { capability: dependency, association: profile.capability });
+  }
+  const snapshot = semantic.capability_results?.[dependency];
+  if (snapshot?.status !== 'CANDIDATE') {
+    throw new EventQueryError('CAPABILITY_UNAVAILABLE',
+      `${dependency} is unavailable for ${profile.capability}.`,
+      { capability: dependency, capability_status: snapshot?.status ?? null,
+        association: profile.capability, missing_input: snapshot?.missing_input ?? null,
+        error: snapshot?.error ?? null });
+  }
+  const sourceProfile = FLOAT_STATS_821_PROFILES.hero_experience_snapshot;
+  const imageSha = profile.evidence_runtime_image_sha256;
+  if (association.profile_id !== profile.id
+      || association.evidence_runtime_image_sha256 !== imageSha
+      || association.lookup_table_sha256 !== profile.lookup_table_sha256
+      || association.evidence_status !== evidenceStatus
+      || association.replay_sha256 !== semantic.replay_sha256
+      || !isDeepStrictEqual(association.depends_on, [...profile.depends_on])
+      || !isDeepStrictEqual(association.known_limits, [...profile.known_limits])
+      || !isCount(association.input_count)
+      || association.input_count > MAX_EXPERIENCE_INTERVAL_SOURCE_ROWS_821
+      || !isCount(association.keyframe_count) || association.keyframe_count < 1
+      || association.input_count !== association.keyframe_count * 10
+      || association.observed_interval_count
+        !== (association.keyframe_count - 1) * 10
+      || !isCount(association.changed_interval_count)
+      || !isCount(association.unchanged_interval_count)
+      || association.changed_interval_count + association.unchanged_interval_count
+        !== association.observed_interval_count
+      || association.event_count !== association.changed_interval_count
+      || association.verified_raw_packet_count !== association.input_count
+      || analysis.event_counts?.[eventKey] !== association.event_count
+      || !isDeepStrictEqual(
+        analysis.semantic?.candidate_associations?.[profile.capability], association)
+      || snapshot.profile_id !== sourceProfile.id
+      || snapshot.evidence_runtime_image_sha256 !== imageSha
+      || snapshot.lookup_table_sha256 !== profile.lookup_table_sha256
+      || !isDeepStrictEqual(snapshot.known_limits, [...sourceProfile.known_limits])
+      || snapshot.evidence_status
+        !== 'CANDIDATE_821_RUNTIME_BYTE_KEYFRAME_F32_AND_REPLAY_TAIL'
+      || snapshot.input_packet_id !== profile.packet_id
+      || snapshot.input_count !== association.input_count
+      || snapshot.event_count !== association.input_count
+      || snapshot.keyframe_count !== association.keyframe_count
+      || snapshot.observed_participant_count !== 10
+      || snapshot.descent_count !== 0
+      || snapshot.runtime_image_used !== false
+      || !['STATIC_821_RUNTIME_TRANSFORM_EMBEDDED', 'PROVIDED_NOT_USED']
+        .includes(snapshot.runtime_image_status)
+      || analysis.event_counts?.hero_experience_snapshot_candidates
+        !== association.input_count
+      || !isDeepStrictEqual(
+        analysis.semantic?.capability_results?.[dependency], snapshot)) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      `${profile.capability} identity, source snapshots or interval counts differ.`,
+      { capability: profile.capability });
+  }
+  return association;
+}
+
 function prepareAssociation(semantic, analysis, eventKey, associationConfig) {
+  if (associationConfig.experienceInterval) {
+    return prepareExperienceIntervalAssociation(semantic, analysis, eventKey,
+      associationConfig);
+  }
   if (associationConfig.minionBracket) {
     return prepareMinionBracketAssociation(semantic, analysis, eventKey,
       associationConfig);
@@ -1702,6 +1809,9 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
     snapshot: prepareEventQueryFromDocuments(artifactDirectory,
       'hero_minions_killed_snapshot_candidates', semantic, analysis),
   } : null;
+  const experienceIntervalSource = associationConfig?.experienceInterval
+    ? prepareEventQueryFromDocuments(artifactDirectory,
+      'hero_experience_snapshot_candidates', semantic, analysis) : null;
   const objectiveBountyTurretPairSources = associationConfig?.objectiveBountyTurretPair
     ? Object.fromEntries(OBJECTIVE_BOUNTY_TURRET_PAIR_SOURCE_EVENTS_821.map(
       ({ eventKey: sourceEventKey }) => [sourceEventKey,
@@ -1710,7 +1820,8 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   const prepared = {
     artifactDirectory, inputPath, eventKey, eventStorage, capability, capabilityStatus,
     capabilityResult, declaredCount, replaySha, associationConfig, exactPacketProfile,
-    exactBlobPacketConfig, bracketSources, objectiveBountyTurretPairSources,
+    exactBlobPacketConfig, bracketSources, experienceIntervalSource,
+    objectiveBountyTurretPairSources,
     sourcePath: analysis.source_path,
     episodeAssistNativeStatus: associationConfig?.episode
       ? semantic.capability_results?.hero_assist?.native_child_identity_status : null,
@@ -1846,6 +1957,10 @@ function prepareBatchEventQuery(directory, eventKey) {
         for (const source of Object.values(prepared.bracketSources)) {
           checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
         }
+      }
+      if (prepared.experienceIntervalSource) {
+        const source = prepared.experienceIntervalSource;
+        checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
       }
       if (prepared.objectiveBountyTurretPairSources) {
         for (const source of Object.values(prepared.objectiveBountyTurretPairSources)) {
@@ -3026,6 +3141,182 @@ async function readMinionBracketSource(prepared) {
   return rows;
 }
 
+async function loadExperienceIntervalExpectedRows(prepared) {
+  const source = prepared.experienceIntervalSource;
+  const association = prepared.capabilityResult;
+  const sourceResult = source?.capabilityResult;
+  const sourceProfile = FLOAT_STATS_821_PROFILES.hero_experience_snapshot;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid experience keyframe interval source: ${reason}.`);
+  };
+  if (!source || source.replayVersion !== prepared.replayVersion
+      || source.replaySha !== prepared.replaySha
+      || source.capabilityStatus !== 'CANDIDATE'
+      || sourceResult?.profile_id !== sourceProfile.id
+      || source.declaredCount !== association.input_count) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      'Experience source artifact differs from interval association metadata.');
+  }
+  const frames = new Map();
+  const positions = new Set();
+  let scanned = 0;
+  const input = fs.createReadStream(source.inputPath, { encoding: 'utf8' });
+  const lines = readline.createInterface({ input, crlfDelay: Infinity });
+  try {
+    for await (const line of lines) {
+      scanned += 1;
+      if (scanned > MAX_EXPERIENCE_INTERVAL_SOURCE_ROWS_821) {
+        invalid('source row count exceeds exact decoder bound');
+      }
+      let row;
+      try {
+        row = JSON.parse(line);
+      } catch (error) {
+        invalid(`JSONL line ${scanned} is malformed: ${error.message}`);
+      }
+      const ref = row?.raw_packet_ref;
+      const rawParam = row?.hero_raw_param;
+      const participant = rawParam - 0x400000ae + 1;
+      const value = row?.experience_raw_f32_candidate;
+      const rawHex = row?.raw_payload_field_bytes_hex;
+      if (!row || typeof row !== 'object' || Array.isArray(row)
+          || row.event_type !== 'HERO_EXPERIENCE_SNAPSHOT_CANDIDATE'
+          || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+          || row.build_profile !== sourceProfile.id
+          || row.replay_sha256 !== prepared.replaySha
+          || row.confidence !== 'CANDIDATE'
+          || row.semantic_status !== sourceResult.evidence_status
+          || row.observation_kind !== 'KEYFRAME_SNAPSHOT'
+          || row.decreased_since_previous_snapshot !== false
+          || !isDeepStrictEqual(row.known_limits, [...sourceProfile.known_limits])
+          || !isDeepStrictEqual(row.field_confidence, {
+            replay_time_ms: 'VERIFIED_DIRECT', hero_raw_param: 'VERIFIED_DIRECT',
+            participant_id_candidate: 'CANDIDATE_KR_821_RAW_PARAM_TAIL_ALIGNMENT',
+            raw_payload_field_bytes_hex: 'VERIFIED_DIRECT',
+            experience_raw_f32_candidate: sourceResult.evidence_status,
+            experience_floor_candidate: sourceResult.evidence_status,
+            decreased_since_previous_snapshot: sourceResult.evidence_status,
+          })
+          || !minionBracketRef(ref, prepared, 0x0089, 'keyframe', 1263)
+          || row.replay_time_ms !== ref.replay_time_ms
+          || rawParam !== ref.raw_param
+          || row.participant_id_candidate !== participant
+          || !Number.isFinite(value) || value < 0
+          || !Number.isSafeInteger(Math.floor(value))
+          || row.experience_floor_candidate !== Math.floor(value)
+          || typeof rawHex !== 'string' || !/^[0-9a-f]{8}$/.test(rawHex)) {
+        invalid(`snapshot ${scanned} identity, value, or raw reference differs`);
+      }
+      const decoded = Buffer.from(rawHex, 'hex').reverse()
+        .map(decodeRuntimeCountByte).readFloatLE(0);
+      if (decoded !== value) invalid(`snapshot ${scanned} raw bytes do not decode to EXP`);
+      const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+      if (positions.has(position)) invalid(`duplicate source packet reference ${position}`);
+      positions.add(position);
+      const frame = frames.get(ref.chunk_index) ?? {
+        time: row.replay_time_ms, participants: new Map(),
+      };
+      if (frame.time !== row.replay_time_ms || frame.participants.has(participant)) {
+        invalid(`snapshot ${scanned} has an ambiguous keyframe roster`);
+      }
+      frame.participants.set(participant, {
+        hero_raw_param: rawParam, participant_id_candidate: participant,
+        experience_raw_f32_candidate: value,
+        experience_floor_candidate: row.experience_floor_candidate,
+        raw_payload_field_bytes_hex: rawHex, raw_packet_ref: ref,
+      });
+      frames.set(ref.chunk_index, frame);
+    }
+  } finally {
+    lines.close();
+    input.destroy();
+  }
+  if (scanned !== association.input_count
+      || frames.size !== association.keyframe_count
+      || positions.size !== association.verified_raw_packet_count
+      || [...frames.values()].some((frame) => frame.participants.size !== 10)) {
+    invalid('source counts or complete keyframe rosters differ');
+  }
+  const ordered = [...frames.entries()].sort(([a], [b]) => a - b);
+  if (ordered.some(([, frame], index) => index > 0
+      && frame.time <= ordered[index - 1][1].time)) {
+    invalid('keyframe times are not strictly increasing');
+  }
+  const expected = [];
+  let unchanged = 0;
+  for (let index = 0; index < ordered.length; index += 1) {
+    const [currentChunk, currentFrame] = ordered[index];
+    const [previousChunk, previousFrame] = index > 0 ? ordered[index - 1] : [null, null];
+    for (let participant = 1; participant <= 10; participant += 1) {
+      const current = currentFrame.participants.get(participant);
+      if (!previousFrame) {
+        if (current.experience_raw_f32_candidate !== 0) {
+          invalid('first keyframe EXP differs from zero');
+        }
+        continue;
+      }
+      const previous = previousFrame.participants.get(participant);
+      const priorValue = previous.experience_raw_f32_candidate;
+      const currentValue = current.experience_raw_f32_candidate;
+      const delta = currentValue - priorValue;
+      if (delta < 0) invalid('EXP candidate decreased between keyframes');
+      if (delta === 0) {
+        unchanged += 1;
+        continue;
+      }
+      const previousRef = previous.raw_packet_ref;
+      const currentRef = current.raw_packet_ref;
+      expected.push({
+        event_type: prepared.associationConfig.eventType,
+        game_version: prepared.replayVersion, patch: '16.19',
+        build_profile: prepared.associationConfig.profile.id,
+        replay_sha256: prepared.replaySha, replay_time_ms: currentFrame.time,
+        previous_observation_time_ms: previousFrame.time,
+        current_observation_time_ms: currentFrame.time,
+        observation_interval_ms: currentFrame.time - previousFrame.time,
+        previous_keyframe_chunk_index: previousChunk,
+        current_keyframe_chunk_index: currentChunk,
+        hero_raw_param: current.hero_raw_param,
+        participant_id_candidate: participant,
+        previous_experience_raw_f32_candidate: priorValue,
+        current_experience_raw_f32_candidate: currentValue,
+        previous_experience_floor_candidate: previous.experience_floor_candidate,
+        current_experience_floor_candidate: current.experience_floor_candidate,
+        experience_endpoint_delta_f32_candidate: delta,
+        experience_endpoint_delta_floor_candidate:
+          current.experience_floor_candidate - previous.experience_floor_candidate,
+        previous_raw_payload_field_bytes_hex: previous.raw_payload_field_bytes_hex,
+        current_raw_payload_field_bytes_hex: current.raw_payload_field_bytes_hex,
+        observation_kind: 'ADJACENT_KEYFRAME_SAMPLED_ENDPOINTS',
+        observation_scope: 'KEYFRAME_ENDPOINT_DIFFERENCE_ONLY',
+        change_time_status: 'UNRESOLVED_WITHIN_INTERVAL',
+        confidence: 'CANDIDATE', semantic_status: association.evidence_status,
+        field_confidence: {
+          previous_observation_time_ms: 'VERIFIED_DIRECT',
+          current_observation_time_ms: 'VERIFIED_DIRECT',
+          participant_id_candidate: 'CANDIDATE_KR_821_RAW_PARAM_TAIL_ALIGNMENT',
+          previous_raw_payload_field_bytes_hex: 'VERIFIED_DIRECT',
+          current_raw_payload_field_bytes_hex: 'VERIFIED_DIRECT',
+          previous_experience_raw_f32_candidate: sourceResult.evidence_status,
+          current_experience_raw_f32_candidate: sourceResult.evidence_status,
+          experience_endpoint_delta_f32_candidate: association.evidence_status,
+          experience_endpoint_delta_floor_candidate: association.evidence_status,
+        },
+        raw_packet_ref: currentRef, previous_raw_packet_ref: previousRef,
+        current_raw_packet_ref: currentRef,
+        raw_packet_refs: [previousRef, currentRef],
+        known_limits: [...prepared.associationConfig.profile.known_limits],
+      });
+    }
+  }
+  if (expected.length !== association.changed_interval_count
+      || unchanged !== association.unchanged_interval_count) {
+    invalid('positive and unchanged interval counts differ from association metadata');
+  }
+  return expected;
+}
+
 async function loadMinionBracketExpectedRows(prepared) {
   const association = prepared.capabilityResult;
   const packetPrepared = prepared.bracketSources.packet;
@@ -3181,9 +3472,20 @@ async function loadMinionBracketExpectedRows(prepared) {
 
 function associationRow(row, prepared, lineNumber, seenKeys, seenPacketPositions,
   episodePhysicalRefs, wardPairFrames, inventoryIntervalState,
-  minionBracketExpected) {
+  minionBracketExpected, experienceIntervalExpected) {
   const { associationConfig, capabilityResult, replaySha, replayVersion } = prepared;
   if (!associationConfig) return;
+  if (associationConfig.experienceInterval) {
+    const fields = Object.keys(row);
+    if (fields.length !== EXPERIENCE_INTERVAL_ROW_FIELDS_821.size
+        || fields.some((field) => !EXPERIENCE_INTERVAL_ROW_FIELDS_821.has(field))
+        || !isDeepStrictEqual(row, experienceIntervalExpected[lineNumber - 1])) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        `Invalid experience keyframe interval row at JSONL line ${lineNumber}.`,
+        { line_number: lineNumber });
+    }
+    return;
+  }
   if (associationConfig.minionBracket) {
     const fields = Object.keys(row);
     if (fields.length !== MINION_BRACKET_ROW_FIELDS_821.size
@@ -3999,6 +4301,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   const faceRosterPairState = { frames: new Map(), positions: new Set() };
   const minionBracketExpected = prepared.associationConfig?.minionBracket
     ? await loadMinionBracketExpectedRows(prepared) : null;
+  const experienceIntervalExpected = prepared.associationConfig?.experienceInterval
+    ? await loadExperienceIntervalExpectedRows(prepared) : null;
   const objectiveBountyTurretPairSourceRows =
     prepared.associationConfig?.objectiveBountyTurretPair
       ? await loadObjectiveBountyTurretPairSourceRows(prepared) : null;
@@ -4063,7 +4367,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       }
       associationRow(row, prepared, lineNumber, associationKeys,
         associationPacketPositions, episodePhysicalRefs, wardPairFrames,
-        inventoryIntervalState, minionBracketExpected);
+        inventoryIntervalState, minionBracketExpected, experienceIntervalExpected);
       if (objectiveBountyTurretPairSourceRows) {
         objectiveBountyTurretPairSourceRefs(row,
           objectiveBountyTurretPairSourceRows, lineNumber);

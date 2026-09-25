@@ -161,6 +161,8 @@ const { associateWardInventoryKeyframePairCandidates821 } =
   require('./decoders/rofl_16_19_821_ward_inventory_keyframe_pair_candidate');
 const { deriveInventoryKeyframeIntervalDifferenceCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
+const { deriveExperienceKeyframeIntervalDifferenceCandidates821 } =
+  require('./decoders/rofl_16_19_821_experience_keyframe_interval_difference_candidate');
 const { associateInventoryGameBroadcastKeyframeBracketCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_game_broadcast_keyframe_bracket_candidate');
 const { associateIncrementMinionKeyframeBracketCandidates821 } =
@@ -3071,6 +3073,24 @@ function decode1619821(replay, profile, options = {}) {
       }
     } catch (error) {
       candidateAssociations.inventory_game_broadcast_keyframe_bracket = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_experience_snapshot')) {
+    try {
+      const association = deriveExperienceKeyframeIntervalDifferenceCandidates821(replay, {
+        experienceSnapshotOutcome: outcomes.hero_experience_snapshot,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: intervalEvents, ...summary } = association;
+        candidateAssociations.experience_keyframe_interval_difference = summary;
+        events.experience_keyframe_interval_difference_candidates = intervalEvents;
+      } else {
+        candidateAssociations.experience_keyframe_interval_difference = association;
+      }
+    } catch (error) {
+      candidateAssociations.experience_keyframe_interval_difference = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }
