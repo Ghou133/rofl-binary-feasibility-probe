@@ -43,6 +43,7 @@ const CAPABILITIES = new Set([
   'set_spell_level_packet',
   'direct_input_movement_turn_packet',
   'set_movement_driver_packet',
+  'increment_minion_kills_packet',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
 const RESPAWN_ROUTES = new Set([0x0048, 0x018d]);
@@ -72,6 +73,7 @@ const MAX_TURRET_FIRST_BLOOD_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_PLATE_EVENT_PACKET_ROWS = 10_000;
 const MAX_DIRECT_INPUT_TURN_PACKET_ROWS = 20_000;
 const MAX_SET_MOVEMENT_DRIVER_PACKET_ROWS = 20_000;
+const MAX_INCREMENT_MINION_KILLS_PACKET_ROWS = 10_000;
 const SCAN_SOURCE = new WeakMap();
 
 function copyRow(block, chunk) {
@@ -139,6 +141,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     set_spell_level_packet: [],
     direct_input_movement_turn_packet: [],
     set_movement_driver_packet: [],
+    increment_minion_kills_packet: [],
     hero_deaths_snapshot: heroStatsRows,
     hero_champion_kills_snapshot: heroStatsRows,
     hero_assists_snapshot: heroStatsRows,
@@ -219,6 +222,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let turretPlateEventPacketCount = 0;
   let directInputTurnPacketCount = 0;
   let setMovementDriverPacketCount = 0;
+  let incrementMinionKillsPacketCount = 0;
   let finished = false;
   // Capability selection is fixed for this walk. Cache the packet-route
   // decisions instead of probing the Set for every framed block.
@@ -252,6 +256,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsSetSpellLevel = selected.has('set_spell_level_packet');
   const selectsDirectInputTurn = selected.has('direct_input_movement_turn_packet');
   const selectsSetMovementDriver = selected.has('set_movement_driver_packet');
+  const selectsIncrementMinionKills = selected.has('increment_minion_kills_packet');
   const selectsHeroLevelState = selected.has('hero_level_state');
   return Object.freeze({
     observe(block, chunk) {
@@ -458,6 +463,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
           rows.set_movement_driver_packet.push(copyRow(block, chunk));
         }
       }
+      if (selectsIncrementMinionKills && block.packet_id === 0x03a7) {
+        incrementMinionKillsPacketCount += 1;
+        if (rows.increment_minion_kills_packet.length
+            < MAX_INCREMENT_MINION_KILLS_PACKET_ROWS) {
+          rows.increment_minion_kills_packet.push(copyRow(block, chunk));
+        }
+      }
       if (selectsHeroStats && (chunk.stream_tag === 2 || chunk.stream_tag === 3)
           && block.packet_id === 0x0089) {
         heroStatsRows.push(copyRow(block, chunk));
@@ -508,6 +520,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         turretPlateEventPacketCount,
         directInputTurnPacketCount,
         setMovementDriverPacketCount,
+        incrementMinionKillsPacketCount,
         error: token.error,
       });
       return token;
@@ -736,6 +749,13 @@ function rowsFor821Capability(replay, token, capability) {
       && bound.setMovementDriverPacketCount > MAX_SET_MOVEMENT_DRIVER_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.setMovementDriverPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'increment_minion_kills_packet'
+      && bound.incrementMinionKillsPacketCount > MAX_INCREMENT_MINION_KILLS_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.incrementMinionKillsPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }

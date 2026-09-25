@@ -30,6 +30,7 @@
 | `16.19.821.7343 --events hero_ward_stats_snapshot,hero_inventory_broadcast_packet --runtime-image PATH` | 按同一关键帧、时间和规范英雄原始参数，将 `0x0089` 眼位累计候选与 `0x0357` 广播包内物品候选一一关联 | 另写入 `ward_inventory_keyframe_pair_candidates`；仅是同帧观察，不推导插眼、物品交易或包间持续状态；游戏流广播单独保留并排除关联 |
 | `16.19.821.7343 --events hero_missions_cannon_minions_killed_snapshot` | 同一关键帧字节 450 经精确 821 变换得到 `Missions_CannonMinionsKilled` 累计候选值；11 份回放共 3,270 个快照 | 仅写入 `hero_missions_cannon_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；不标为普通补刀或逐次炮车击杀；保留结算差值，字段语义仍为候选 |
 | `16.19.821.7343 --events hero_minions_killed_snapshot` | 精确 821 原生 `0x0089` 向量偏移 `0x3c` 的 `f32LE` 候选累计标准补刀数；11 份回放共 3,270 个快照，末帧 73/110 人与 `MINIONS_KILLED` 结算相等 | 仅写入 `hero_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；与偏移 `0x378` 的 `Missions_MinionsKilled` 区分，保留尾部差值，不推导逐次补刀或目标 |
+| `16.19.821.7343 --events increment_minion_kills_packet --runtime-image PATH` | 精确 821 镜像原生完整消费游戏流 `0x03a7` IncrementMinionKills 三字节包，解出回调对象查找键，并与回放原始参数逐包核对；现有 11 份回放共 279 包 | 仅写入 `increment_minion_kills_packet_candidates`，状态为 `CANDIDATE`；对象查找和条件写入是否实际发生仍是 `UNKNOWN`，不输出逐次补刀、补刀增量或参与者身份 |
 | `16.19.821.7343 --events hero_jungle_minions_killed_snapshot` | 精确 821 原生 `0x0089` 向量偏移 `0x40/0x44/0x48` 的三项野怪计数候选浮点快照；11 份回放共 3,270 条 | 仅写入 `hero_jungle_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；保留原始小数、取整值及三项结算尾差，不推断逐次击杀、野怪类型或位置 |
 | `16.19.821.7343 --events hero_experience_snapshot` | `0x0089` 关键帧反向字节向量的 `0x28` 浮点候选经验值；11 份回放共 3,270 个快照 | 仅写入 `hero_experience_snapshot_candidates`；保留与 `EXP` 结算的尾部差值，不推导升级阈值或经验来源 |
 | `16.19.821.7343 --events hero_vision_score_snapshot` | 同一向量 `0x1b0` 浮点候选视野分；11 份回放的 110 人均从零开始并不超过各自结算值 | 仅写入 `hero_vision_score_snapshot_candidates`；不推导守卫、探测或视野行为 |
@@ -452,6 +453,17 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 这是独立的候选汇总；单条移动事件不新增参与者字段。非标准完整参数变体仍不绑定，
 候选键共享的行数不证明每个包的行动者。缺少所选能力或证据不完整时，关联状态会明确为
 `UNAVAILABLE` 或 `DECODE_FAILED`。
+
+单独检查 821 IncrementMinionKills 包的候选协议字段：
+
+```powershell
+node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
+  --events increment_minion_kills_packet `
+  --runtime-image "D:\PrivateInputs\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --out-dir "work\16-19-821-increment-minion-kills"
+```
+
+输出保留每包的选择字节、原始参数、镜像回调生成的对象查找键和原始包引用；条件计数写入与实际补刀效果均保持 `UNKNOWN`。这 279 包不能代替回放结算中的补刀总数，也不用于推算未观察到的包间状态。
 
 对 HN 路由的同一完整 build，可单独选择计时候选，或用
 `--events hero_death,hero_death_timer` 一起运行。计时输出包含原始包引用、

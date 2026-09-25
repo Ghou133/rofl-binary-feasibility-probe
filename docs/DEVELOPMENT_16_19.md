@@ -4,6 +4,19 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed protocol candidate:** Exact-821 game route `0x03a7` is registered as
+  `PKT_S2C_IncrementMinionKills_s`. Its three-byte payload is consumed by the
+  pinned native constructor/deserializer; the callback-derived object lookup
+  key agrees with Replay `raw_param` for all 279 observed packets in the 11 KR
+  Replays. The candidate decoder emits selector, key, and raw packet ref with
+  conditional counter write and semantic CS effect `UNKNOWN`. Across these
+  Replays only seven of the ten canonical hero-family keys appeared, and 279
+  packets do not explain the 16,567 standard lane-CS tail total. The selected
+  CLI batch returned 11/11 `CANDIDATE`, zero framing errors, 279 JSONL rows,
+  and `MATCHED_USED` for the pinned image in every Replay; all 279 rows had
+  matching callback key/raw parameter and explicit `UNKNOWN` effect status.
+  Ignored output is under
+  `artifacts/16_19_development/increment_minion_kills_cli_batch_11_821/`.
 - **Completed query increment:** `query-events` reads saved exact-821
   `ward_inventory_keyframe_pair_candidates` with participant, time, raw-param,
   same-record item/slot and latest-observed filters. The saved association is

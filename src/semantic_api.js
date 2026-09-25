@@ -108,6 +108,8 @@ const {
   decodeSetMovementDriverPacketCandidates821,
 } =
   require('./decoders/rofl_16_19_821_set_movement_driver_packet_candidate');
+const { decodeIncrementMinionKillsPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_increment_minion_kills_packet_candidate');
 const { RUNTIME_IMAGE_SHA256: RUNTIME_IMAGE_SHA256_821 } =
   require('./decoders/rofl_16_19_821_runtime_bytes');
 const { decodeHeroDamageSnapshotCandidates821 } =
@@ -2374,6 +2376,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    increment_minion_kills_packet: (input, collected) =>
+      decodeIncrementMinionKillsPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -2436,6 +2444,7 @@ function decode1619821(replay, profile, options = {}) {
     set_spell_level_packet: 'set_spell_level_packet_candidates',
     direct_input_movement_turn_packet: 'direct_input_movement_turn_packet_candidates',
     set_movement_driver_packet: 'set_movement_driver_packet_candidates',
+    increment_minion_kills_packet: 'increment_minion_kills_packet_candidates',
   };
   const capabilityResults = {};
   const events = {};
@@ -2482,6 +2491,7 @@ function decode1619821(replay, profile, options = {}) {
     'set_spell_level_packet',
     'direct_input_movement_turn_packet',
     'set_movement_driver_packet',
+    'increment_minion_kills_packet',
   ]);
   const supported = capabilities.filter((capability) => sharedScanCapabilities.has(capability));
   let candidate821Scan = options.candidate821Scan ?? null;
@@ -2538,7 +2548,8 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'set_spell_timer_from_buff_packet'
         || capability === 'set_spell_level_packet'
         || capability === 'direct_input_movement_turn_packet'
-        || capability === 'set_movement_driver_packet') {
+        || capability === 'set_movement_driver_packet'
+        || capability === 'increment_minion_kills_packet') {
       result.runtime_image_status ??= options.runtimeImagePath
         ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
       result.runtime_image_used ??= false;
