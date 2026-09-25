@@ -61,6 +61,8 @@ const buffUpdateCountPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_buff_update_count_packet_candidate');
 const buffReplacePacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_buff_replace_packet_candidate');
+const setSpellTimerFromBuffPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_set_spell_timer_from_buff_packet_candidate');
 const directInputTurnPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_direct_input_turn_packet_candidate');
 const setMovementDriverPacketCandidate1619821 =
@@ -553,6 +555,7 @@ const BUILD_PROFILES = deepFreeze({
       npc_buff_update_num_counter_packet: 0x0194,
       npc_buff_update_count_packet: 0x02d9,
       npc_buff_replace_packet: 0x01ad,
+      set_spell_timer_from_buff_packet: 0x00fd,
       direct_input_movement_turn_packet: 0x00ba,
       set_movement_driver_packet: 0x0335,
     },
@@ -642,6 +645,8 @@ const BUILD_PROFILES = deepFreeze({
         buffUpdateCountPacketCandidate1619821.NPC_BUFF_UPDATE_COUNT_PACKET_CANDIDATE_PROFILE_821,
       npc_buff_replace_packet:
         buffReplacePacketCandidate1619821.NPC_BUFF_REPLACE_PACKET_CANDIDATE_PROFILE_821,
+      set_spell_timer_from_buff_packet:
+        setSpellTimerFromBuffPacketCandidate1619821.SET_SPELL_TIMER_FROM_BUFF_PACKET_CANDIDATE_PROFILE_821,
       direct_input_movement_turn_packet:
         directInputTurnPacketCandidate1619821.DIRECT_INPUT_MOVEMENT_TURN_PACKET_CANDIDATE_PROFILE_821,
       set_movement_driver_packet:
@@ -718,6 +723,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_NATIVE_BUFF_UPDATE_COUNT_OPAQUE_PACKET_FIELDS',
       npc_buff_replace_packet:
         'CANDIDATE_821_NATIVE_BUFF_REPLACE_OPAQUE_PACKET_FIELDS',
+      set_spell_timer_from_buff_packet:
+        'CANDIDATE_821_NATIVE_SET_SPELL_TIMER_FROM_BUFF_OPAQUE_PACKET_FIELDS',
       direct_input_movement_turn_packet:
         'CANDIDATE_821_NATIVE_DIRECT_INPUT_TURN_OPAQUE_PACKET_FIELDS',
       set_movement_driver_packet:
@@ -774,6 +781,7 @@ const BUILD_PROFILES = deepFreeze({
       npc_buff_update_num_counter_packet: 'exact 821 native 0x0194 BuffUpdateNumCounter constructor/deserializer and callback transforms for anonymous object offsets 0x10/0x14/0x18/0x1c; no owner, buff identity, target, counter meaning, or lifecycle inference',
       npc_buff_update_count_packet: 'exact 821 native 0x02d9 BuffUpdateCount constructor/deserializer and callback transforms for anonymous object offsets 0x10/0x11/0x14/0x18/0x1c; no owner, buff identity, target, counter meaning, or lifecycle inference',
       npc_buff_replace_packet: 'exact 821 native 0x01ad BuffReplace constructor/deserializer and callback transforms for anonymous object offsets 0x10/0x14/0x18/0x1c; no owner, buff identity, target, replacement effect, or lifecycle inference',
+      set_spell_timer_from_buff_packet: 'exact 821 native 0x00fd SetSpellTimerFromBuff constructor/deserializer and callback transforms for anonymous object offsets 0x10/0x11/0x14/0x18/0x1c/0x20; no owner, buff identity, spell identity, timer effect, or lifecycle inference',
       direct_input_movement_turn_packet: 'exact 821 native 0x00ba DirectInputMovementDriverServerTurnData constructor/deserializer and callback transform for three opaque f32 fields at object offsets 0x10/0x14/0x18; no world-position, hero-path or participant inference',
       set_movement_driver_packet: 'exact 821 native 0x0335 SetMovementDriver constructor/deserializer and callback transform for opaque byte at object offset 0x2a; no driver-state transition, position, path or participant inference',
     },
@@ -812,6 +820,7 @@ const BUILD_PROFILES = deepFreeze({
       'npc_buff_update_num_counter_packet',
       'npc_buff_update_count_packet',
       'npc_buff_replace_packet',
+      'set_spell_timer_from_buff_packet',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',
     ],

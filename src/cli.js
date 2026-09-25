@@ -150,6 +150,7 @@ turret_plate_event_packet emits a separate packet-local OnTurretPlateDestroyed c
 npc_buff_update_num_counter_packet emits an exact-821 packet-local opaque candidate.
 npc_buff_update_count_packet emits an exact-821 packet-local opaque candidate.
 npc_buff_replace_packet emits an exact-821 packet-local opaque candidate.
+set_spell_timer_from_buff_packet emits an exact-821 packet-local opaque candidate.
 Inspect reads the container and packet framing without a runtime image.
 Capabilities reads the container/build registry without packet framing or semantic decode.
 
@@ -734,6 +735,7 @@ function parseOne1619(replay, options, started) {
       'npc_buff_update_num_counter_packet',
       'npc_buff_update_count_packet',
       'npc_buff_replace_packet',
+      'set_spell_timer_from_buff_packet',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',
     ].includes(name)))] : [];
@@ -1949,6 +1951,8 @@ function capabilityQuery(replay, options = {}) {
         || (profile.game_version === '16.19.821.7343'
           && capability === 'npc_buff_replace_packet')
         || (profile.game_version === '16.19.821.7343'
+          && capability === 'set_spell_timer_from_buff_packet')
+        || (profile.game_version === '16.19.821.7343'
           && (capability === 'direct_input_movement_turn_packet'
             || capability === 'set_movement_driver_packet'));
       const tailStat = perCapabilityInputsAssessed
@@ -2297,6 +2301,11 @@ function capabilityQuery(replay, options = {}) {
           'callback-transformed anonymous fields and raw packet provenance; no owner, buff identity, replacement effect, or lifecycle inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'set_spell_timer_from_buff_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x00fd full packet consumption',
+          'callback-transformed anonymous fields and raw packet provenance; no owner, buff identity, spell identity, timer effect, or lifecycle inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'direct_input_movement_turn_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x00ba full packet consumption',
           'three callback-transformed opaque f32 fields and raw packet provenance; no world-position, general hero-path or participant inference');
@@ -2514,6 +2523,8 @@ function capabilityQuery(replay, options = {}) {
             npc_buff_update_count_packet:
               'npc_buff_update_count_packet_candidates',
             npc_buff_replace_packet: 'npc_buff_replace_packet_candidates',
+            set_spell_timer_from_buff_packet:
+              'set_spell_timer_from_buff_packet_candidates',
             direct_input_movement_turn_packet:
               'direct_input_movement_turn_packet_candidates',
             set_movement_driver_packet: 'set_movement_driver_packet_candidates',

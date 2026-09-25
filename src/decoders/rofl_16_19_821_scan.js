@@ -35,6 +35,7 @@ const CAPABILITIES = new Set([
   'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
   'npc_buff_update_num_counter_packet', 'npc_buff_update_count_packet',
   'npc_buff_replace_packet',
+  'set_spell_timer_from_buff_packet',
   'direct_input_movement_turn_packet',
   'set_movement_driver_packet',
 ]);
@@ -45,6 +46,7 @@ const MAX_BUFF_ADD_PACKET_ROWS = 50_000;
 const MAX_BUFF_UPDATE_NUM_COUNTER_PACKET_ROWS = 25_000;
 const MAX_BUFF_UPDATE_COUNT_PACKET_ROWS = 25_000;
 const MAX_BUFF_REPLACE_PACKET_ROWS = 10_000;
+const MAX_SET_SPELL_TIMER_FROM_BUFF_PACKET_ROWS = 10_000;
 const MAX_BROADCAST_PACKET_ROWS = 512;
 const MAX_SET_ITEM_PACKET_ROWS = 256;
 const MAX_PARAMS_HEAL_PACKET_ROWS = 20_000;
@@ -119,6 +121,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     npc_buff_update_num_counter_packet: [],
     npc_buff_update_count_packet: [],
     npc_buff_replace_packet: [],
+    set_spell_timer_from_buff_packet: [],
     direct_input_movement_turn_packet: [],
     set_movement_driver_packet: [],
     hero_deaths_snapshot: heroStatsRows,
@@ -180,6 +183,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let buffUpdateNumCounterPacketCount = 0;
   let buffUpdateCountPacketCount = 0;
   let buffReplacePacketCount = 0;
+  let setSpellTimerFromBuffPacketCount = 0;
   let broadcastPacketCount = 0;
   let setItemPacketCount = 0;
   let paramsHealPacketCount = 0;
@@ -220,6 +224,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsBuffUpdateNumCounter = selected.has('npc_buff_update_num_counter_packet');
   const selectsBuffUpdateCount = selected.has('npc_buff_update_count_packet');
   const selectsBuffReplace = selected.has('npc_buff_replace_packet');
+  const selectsSetSpellTimerFromBuff = selected.has('set_spell_timer_from_buff_packet');
   const selectsDirectInputTurn = selected.has('direct_input_movement_turn_packet');
   const selectsSetMovementDriver = selected.has('set_movement_driver_packet');
   const selectsHeroLevelState = selected.has('hero_level_state');
@@ -374,6 +379,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
           rows.npc_buff_replace_packet.push(copyRow(block, chunk));
         }
       }
+      if (selectsSetSpellTimerFromBuff && block.packet_id === 0x00fd) {
+        setSpellTimerFromBuffPacketCount += 1;
+        if (rows.set_spell_timer_from_buff_packet.length
+            < MAX_SET_SPELL_TIMER_FROM_BUFF_PACKET_ROWS) {
+          rows.set_spell_timer_from_buff_packet.push(copyRow(block, chunk));
+        }
+      }
       if (selectsDirectInputTurn && block.packet_id === 0x00ba) {
         directInputTurnPacketCount += 1;
         if (rows.direct_input_movement_turn_packet.length < MAX_DIRECT_INPUT_TURN_PACKET_ROWS) {
@@ -415,6 +427,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         selected, rows, blockCount, keyframeBlockCount,
         buffRemovePacketCount, buffAddPacketCount, buffUpdateNumCounterPacketCount,
         buffUpdateCountPacketCount, buffReplacePacketCount,
+        setSpellTimerFromBuffPacketCount,
         broadcastPacketCount,
         setItemPacketCount,
         paramsHealPacketCount,
@@ -601,6 +614,14 @@ function rowsFor821Capability(replay, token, capability) {
       && bound.buffReplacePacketCount > MAX_BUFF_REPLACE_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.buffReplacePacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'set_spell_timer_from_buff_packet'
+      && bound.setSpellTimerFromBuffPacketCount
+        > MAX_SET_SPELL_TIMER_FROM_BUFF_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.setSpellTimerFromBuffPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }
