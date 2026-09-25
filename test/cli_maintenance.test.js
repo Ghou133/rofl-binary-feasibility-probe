@@ -185,6 +185,26 @@ test('inventory MapView capability preflight requires an explicit image but no t
   assert.equal(present.semantic_decode_performed, false);
 });
 
+test('821 UnitApplyDamage preflight reports a missing Python and Unicorn runtime', () => {
+  const cli = loadCli();
+  // A malformed packet body must remain unread by the dependency preflight.
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.821.7343');
+  const unavailablePython = path.join(os.tmpdir(), 'rofl-821-python-does-not-exist');
+  const result = cli.capabilityQuery(replay, { python: unavailablePython });
+  const damage = result.capabilities.find((row) =>
+    row.capability === 'unit_apply_damage_packet');
+  assert.equal(result.packet_framing_inspected, false);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(damage.status, 'CANDIDATE');
+  assert.equal(damage.runtime_image_requirement, 'EXACT_IMAGE_REQUIRED');
+  assert.deepEqual(damage.required_inputs.map((input) => input.name),
+    ['replay', 'exact_runtime_image', 'python_unicorn']);
+  assert.deepEqual(damage.missing_inputs,
+    ['exact_runtime_image', 'python_unicorn']);
+  assert.equal(damage.required_inputs[2].command, unavailablePython);
+  assert.equal(damage.required_inputs[2].status, 'MISSING');
+});
+
 test('capabilities exposes missing Replay tail stats without treating it as zero events', (t) => {
   const cli = loadCli();
   const input = fixture(t, '16.19.820.7193');

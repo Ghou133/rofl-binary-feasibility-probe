@@ -13,7 +13,7 @@
 | 入口 / 层 | 当前提供 | 使用边界 |
 | --- | --- | --- |
 | `inspect` / `src/rofl.js` | RIOT 头、metadata、chunk/Zstd、packet framing、原始清单与锚点 | 容器结构可解析，不代表该版本语义已验证 |
-| `capabilities` | 从回放容器读取完整 build，查询已登记能力、入口及尾部字段输入预检 | 不解压 packet、不运行语义解码；候选能力仍需逐回放校验 |
+| `capabilities` | 从回放容器读取完整 build，查询已登记能力、入口及输入依赖预检 | 不解压 packet、不运行语义解码；候选能力仍需逐回放校验 |
 | `decode` / `analyze` / `batch` / `validate` | `16.15.801.3452` 旧版整合管线；16.19 精确 build 的指定能力实验入口 | 16.19 必须显式传 `--events`；16.16 语义 API 尚未由主 CLI 分发；`validate` 还会运行完整 Node 套件 |
 | `16.19.820.7193 --events hero_death` | HN/KR 结构指纹与回放尾部死亡总数同时匹配时，输出候选受害者和回放时间 | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；无杀手、助攻或重生推断，其他完整 build 不复用 |
 | `16.19.821.7343 --events hero_death` | KR `0x0259/0x0438/0x031b` 同刻路由与十名参与者回放尾部死亡数均匹配时，输出候选受害者和时间；精确 821 运行时变换还从 `0x0438` 解出来源 ID | 仅写入 `hero_death_candidates`，状态为 `CANDIDATE`；653 个英雄来源 ID 的计数与 110 人的击杀结算一致时才输出 `killer_participant_id_candidate`，2 个非英雄来源只保留原 ID。孤立 `0x0259` 不输出；单次助攻候选在独立入口，确认的死亡语义仍未知 |
@@ -856,7 +856,7 @@ node src/cli.js ward-events "D:\Data\ward_events.jsonl" `
 
 ## 命令与输出
 
-`16.15` 的 `decode` 与 `analyze` 共用旧管线。`16.19` 通过精确 build API 执行 `--events` 指定的实验能力；`capabilities` 可先查询精确 build 和外部输入缺项，不会创建输出目录。`batch` 逐回放记录成功、候选和失败，不以某项成功掩盖另一项失败。`validate` 额外运行完整 Node 回归，可用 `--details-dir` 做验证对照；Match Details 不进入解码规则。
+`16.15` 的 `decode` 与 `analyze` 共用旧管线。`16.19` 通过精确 build API 执行 `--events` 指定的实验能力；`capabilities` 可先查询精确 build 和外部输入缺项，不会创建输出目录。对 `unit_apply_damage_packet`，它还检查所选 Python 能否导入 Unicorn；镜像哈希和逐包原生解码仍留到实际 `decode`/`batch` 执行。`batch` 逐回放记录成功、候选和失败，不以某项成功掩盖另一项失败。`validate` 额外运行完整 Node 回归，可用 `--details-dir` 做验证对照；Match Details 不进入解码规则。
 
 默认时间线保留前 `--timeline-limit` 条。`--sample-stride` 仅为兼容旧命令保留，已弃用且不改变输出；不再计算最终会被截掉的间隔样本。
 

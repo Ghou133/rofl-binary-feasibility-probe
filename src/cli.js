@@ -186,7 +186,8 @@ establish damage amount or attribution.
 face_direction_keyframe_roster_pair pairs canonical keyframe FaceDirection packets
 with same-keyframe HeroStats roster candidates; the roster label does not identify the packet actor.
 Inspect reads the container and packet framing without a runtime image.
-Capabilities reads the container/build registry without packet framing or semantic decode.
+Capabilities reads the container/build registry and checks selected dependencies
+without packet framing or semantic decode.
 
 Options:
   --out-dir <path>              Independent output directory (default: artifacts)
@@ -2016,6 +2017,25 @@ function fileInputDependency(name, filePath) {
   }
 }
 
+function pythonUnicornDependency(command) {
+  const python = command || process.env.PYTHON || 'python';
+  const checked = childProcess.spawnSync(python, ['-B', '-c', 'import unicorn'], {
+    encoding: 'utf8', timeout: 5000, maxBuffer: 8192, windowsHide: true,
+  });
+  const detail = String(checked.error?.message || checked.stderr || '').trim();
+  const missing = checked.error?.code === 'ENOENT'
+    || /No module named ['"]unicorn['"]/.test(detail);
+  return {
+    name: 'python_unicorn',
+    status: checked.status === 0 && !checked.error ? 'PRESENT_UNVERIFIED'
+      : missing ? 'MISSING' : 'INVALID',
+    path: null,
+    command: python,
+    ...(checked.status === 0 && !checked.error ? {}
+      : { error: detail.slice(0, 300) || `exit ${checked.status}` }),
+  };
+}
+
 function capabilityQuery(replay, options = {}) {
   const resolved = resolveBuildProfile(replay);
   const profile = resolved.profile;
@@ -2286,6 +2306,8 @@ function capabilityQuery(replay, options = {}) {
           ? [dependencies[0], options.runtimeImage
             ? fileInputDependency('exact_runtime_image', options.runtimeImage)
             : { name: 'exact_runtime_image', status: 'MISSING', path: null },
+          ...(capability === 'unit_apply_damage_packet'
+            ? [pythonUnicornDependency(options.python ?? options.pythonExecutable)] : []),
           ...(capability === 'face_direction_keyframe_roster_pair'
             ? tailStatInput : [])]
           : [...dependencies, ...tailStatInput,
@@ -2872,7 +2894,7 @@ function runCapabilitiesCommand(parsed) {
   } else {
     process.stdout.write(`Replay: ${result.source_path}\nBuild: ${result.game_version}\n`);
     process.stdout.write(`Profile: ${result.profile_release_status ?? result.status}\n`);
-    process.stdout.write('Scope: container and registry only; packet framing and semantic decode not run.\n');
+    process.stdout.write('Scope: container, registry, and selected dependency checks; packet framing and semantic decode not run.\n');
     for (const row of result.capabilities) {
       const missing = row.missing_inputs === null ? 'not assessed per capability'
         : row.missing_inputs.length ? row.missing_inputs.join(', ') : 'none detected';
