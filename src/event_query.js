@@ -79,8 +79,10 @@ const { UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821,
   decodeUnitApplyDamageCallbackF32FromRaw821,
   decodeUnitApplyDamageCallbackU32FromRaw821,
+  decodeUnitApplyDamageCallbackF32At18FromEncoded821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
   isObservedShape: isObservedUnitApplyDamageShape821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
@@ -179,6 +181,15 @@ const UNIT_APPLY_DAMAGE_V4_ROW_FIELDS_821 = new Set([
   'native_callback_u32_0x10_encoded_bytes_hex',
   'native_callback_u32_0x10_source',
 ]);
+const UNIT_APPLY_DAMAGE_V5_ROW_FIELDS_821 = new Set([
+  ...UNIT_APPLY_DAMAGE_V4_ROW_FIELDS_821,
+  'header_selector_bits_6_8',
+  'native_callback_f32_0x18_candidate',
+  'native_callback_f32_0x18_encoded_bytes_hex',
+  'native_callback_f32_0x18_source',
+  'native_callback_f32_0x18_raw_offset',
+  'native_callback_f32_0x18_raw_bytes_hex',
+]);
 const UNIT_APPLY_DAMAGE_LOOKUP_RELATIONS_821 = Object.freeze([
   'EQUAL', 'RAW_PARAM_IS_LOOKUP_PLUS_0X100', 'OTHER',
 ]);
@@ -186,6 +197,9 @@ const UNIT_APPLY_DAMAGE_NATIVE_FLOAT_SOURCES_821 = Object.freeze([
   'RAW_READER', 'CONSTANT_0', 'CONSTANT_1', 'CONSTANT_2',
 ]);
 const UNIT_APPLY_DAMAGE_NATIVE_U32_SOURCES_821 = Object.freeze([
+  'RAW_READER', 'CONSTANT_0',
+]);
+const UNIT_APPLY_DAMAGE_NATIVE_F32_0X18_SOURCES_821 = Object.freeze([
   'RAW_READER', 'CONSTANT_0',
 ]);
 const UNIT_APPLY_DAMAGE_ROSTER_RESULT_FIELDS_821 = new Set([
@@ -2708,11 +2722,13 @@ function damageProfileIdsForAssociation(profile, allowHistoricalV2 = false) {
         UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821]
       : [UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821];
   }
-  return [UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id];
+  return [UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821,
+    UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id];
 }
 
 function validV4DamageU32Metadata(damage) {
-  if (damage.profile_id !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id) {
+  if (![UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821,
+    UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id].includes(damage.profile_id)) {
     return !['evidence_callback_u32_0x10_table_sha256',
       'native_callback_u32_0x10_full_write_count',
       'native_callback_u32_0x10_source_counts'].some((field) => field in damage);
@@ -2728,6 +2744,26 @@ function validV4DamageU32Metadata(damage) {
     && UNIT_APPLY_DAMAGE_NATIVE_U32_SOURCES_821.every((source) =>
       isCount(counts[source]))
     && UNIT_APPLY_DAMAGE_NATIVE_U32_SOURCES_821.reduce((sum, source) =>
+      sum + counts[source], 0) === damage.event_count;
+}
+
+function validV5DamageF32At18Metadata(damage) {
+  if (damage.profile_id !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id) {
+    return !['evidence_callback_f32_0x18_table_sha256',
+      'native_callback_f32_0x18_full_write_count',
+      'native_callback_f32_0x18_source_counts'].some((field) => field in damage);
+  }
+  const counts = damage.native_callback_f32_0x18_source_counts;
+  return damage.evidence_callback_f32_0x18_table_sha256
+      === UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821
+        .evidence_callback_f32_0x18_table_sha256
+    && damage.native_callback_f32_0x18_full_write_count === damage.event_count
+    && counts && typeof counts === 'object' && !Array.isArray(counts)
+    && isDeepStrictEqual(Object.keys(counts).sort(),
+      [...UNIT_APPLY_DAMAGE_NATIVE_F32_0X18_SOURCES_821].sort())
+    && UNIT_APPLY_DAMAGE_NATIVE_F32_0X18_SOURCES_821.every((source) =>
+      isCount(counts[source]))
+    && UNIT_APPLY_DAMAGE_NATIVE_F32_0X18_SOURCES_821.reduce((sum, source) =>
       sum + counts[source], 0) === damage.event_count;
 }
 
@@ -2805,7 +2841,8 @@ function prepareUnitApplyDamageRosterKeyEvent(semantic, analysis, eventKey, resu
         || damage.runtime_image_status !== 'MATCHED_USED'
         || damage.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
         || damage.native_witness_status !== 'FULLY_CONSUMED_ALL'
-        || !validV4DamageU32Metadata(damage)))
+        || !validV4DamageU32Metadata(damage)
+        || !validV5DamageF32At18Metadata(damage)))
       || (snapshot && (snapshot.status !== 'CANDIDATE'
         || snapshot.profile_id
           !== FLOAT_STATS_821_PROFILES.hero_minions_killed_snapshot.id
@@ -2915,7 +2952,8 @@ function prepareUnitApplyDamageLookupRosterKeyEvent(semantic, analysis,
         || damage.runtime_image_used !== true
         || damage.runtime_image_sha256
           !== profile.evidence_runtime_image_sha256
-        || !validV4DamageU32Metadata(damage)))
+        || !validV4DamageU32Metadata(damage)
+        || !validV5DamageF32At18Metadata(damage)))
       || (snapshot && (snapshot.status !== 'CANDIDATE'
         || snapshot.profile_id
           !== FLOAT_STATS_821_PROFILES.hero_minions_killed_snapshot.id
@@ -3050,7 +3088,8 @@ function prepareUnitApplyDamageLookup2cRosterKeyEvent(semantic, analysis,
         || damage.runtime_image_used !== true
         || damage.runtime_image_sha256
           !== profile.evidence_runtime_image_sha256
-        || !validV4DamageU32Metadata(damage)))
+        || !validV4DamageU32Metadata(damage)
+        || !validV5DamageF32At18Metadata(damage)))
       || (snapshot && (snapshot.status !== 'CANDIDATE'
         || snapshot.profile_id
           !== FLOAT_STATS_821_PROFILES.hero_minions_killed_snapshot.id
@@ -3221,7 +3260,8 @@ function prepareHeroDeathDamageLookupKeyCooccurrenceEvent(semantic, analysis,
         || damage.runtime_image_used !== true
         || damage.runtime_image_sha256
           !== profile.evidence_runtime_image_sha256
-        || !validV4DamageU32Metadata(damage)))
+        || !validV4DamageU32Metadata(damage)
+        || !validV5DamageF32At18Metadata(damage)))
       || (snapshot && (snapshot.status !== 'CANDIDATE'
         || snapshot.profile_id
           !== FLOAT_STATS_821_PROFILES.hero_minions_killed_snapshot.id
@@ -3489,11 +3529,13 @@ function prepareUnitApplyDamageCallbackF32(prepared) {
       '--damage-callback-f32-available requires an exact 16.19.821.7343 UnitApplyDamage packet candidate event.');
   }
   const result = prepared.capabilityResult;
-  const isV4 = result?.profile_id === profile.id;
+  const isV5 = result?.profile_id === profile.id;
+  const isV4 = result?.profile_id
+    === UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821;
   const isV3 = result?.profile_id
     === UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821;
   if (prepared.capabilityStatus !== 'CANDIDATE'
-      || (!isV4 && !isV3
+      || (!isV5 && !isV4 && !isV3
         && result?.profile_id !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821
         && result?.profile_id !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821)
       || result.input_packet_id !== profile.replay_block_packet_id
@@ -3534,7 +3576,7 @@ function prepareUnitApplyDamageCallbackF32(prepared) {
           || UNIT_APPLY_DAMAGE_NATIVE_FLOAT_SOURCES_821.reduce((sum, source) =>
             sum + result.native_callback_f32_source_counts[source], 0)
             !== result.event_count))
-      || ((isV3 || isV4)
+      || ((isV3 || isV4 || isV5)
         && (result.native_callback_lookup_full_write_count !== result.event_count
           || result.evidence_lookup_key_0x24_table_sha256
             !== profile.evidence_lookup_key_0x24_table_sha256
@@ -3552,10 +3594,10 @@ function prepareUnitApplyDamageCallbackF32(prepared) {
           || UNIT_APPLY_DAMAGE_LOOKUP_RELATIONS_821.reduce((sum, relation) =>
             sum + result.native_callback_lookup_key_0x24_raw_param_relation_counts[relation], 0)
             !== result.event_count))
-      || (!isV4 && ['evidence_callback_u32_0x10_table_sha256',
+      || (!(isV4 || isV5) && ['evidence_callback_u32_0x10_table_sha256',
         'native_callback_u32_0x10_full_write_count',
         'native_callback_u32_0x10_source_counts'].some((field) => field in result))
-      || (isV4 && (result.evidence_callback_u32_0x10_table_sha256
+      || ((isV4 || isV5) && (result.evidence_callback_u32_0x10_table_sha256
           !== profile.evidence_callback_u32_0x10_table_sha256
         || result.native_callback_u32_0x10_full_write_count
           !== result.event_count
@@ -3569,6 +3611,23 @@ function prepareUnitApplyDamageCallbackF32(prepared) {
           !isCount(result.native_callback_u32_0x10_source_counts[source]))
         || UNIT_APPLY_DAMAGE_NATIVE_U32_SOURCES_821.reduce((sum, source) =>
           sum + result.native_callback_u32_0x10_source_counts[source], 0)
+          !== result.event_count))
+      || (!isV5 && ['evidence_callback_f32_0x18_table_sha256',
+        'native_callback_f32_0x18_full_write_count',
+        'native_callback_f32_0x18_source_counts'].some((field) => field in result))
+      || (isV5 && (result.evidence_callback_f32_0x18_table_sha256
+          !== profile.evidence_callback_f32_0x18_table_sha256
+        || result.native_callback_f32_0x18_full_write_count !== result.event_count
+        || !result.native_callback_f32_0x18_source_counts
+        || typeof result.native_callback_f32_0x18_source_counts !== 'object'
+        || Array.isArray(result.native_callback_f32_0x18_source_counts)
+        || !isDeepStrictEqual(Object.keys(
+          result.native_callback_f32_0x18_source_counts).sort(),
+        [...UNIT_APPLY_DAMAGE_NATIVE_F32_0X18_SOURCES_821].sort())
+        || UNIT_APPLY_DAMAGE_NATIVE_F32_0X18_SOURCES_821.some((source) =>
+          !isCount(result.native_callback_f32_0x18_source_counts[source]))
+        || UNIT_APPLY_DAMAGE_NATIVE_F32_0X18_SOURCES_821.reduce((sum, source) =>
+          sum + result.native_callback_f32_0x18_source_counts[source], 0)
           !== result.event_count))) {
     throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
       'UnitApplyDamage packet metadata differs from its exact-build profile.');
@@ -3583,10 +3642,11 @@ function prepareUnitApplyDamageLookupKeys(prepared) {
       '--damage-lookup-key24 and --damage-lookup-key2c require an exact 16.19.821.7343 UnitApplyDamage packet candidate event.');
   }
   prepareUnitApplyDamageCallbackF32(prepared);
-  if (![UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821, profile.id]
+  if (![UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821,
+    UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821, profile.id]
     .includes(prepared.capabilityResult.profile_id)) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
-      '--damage-lookup-key24 and --damage-lookup-key2c require an exact 16.19.821.7343 UnitApplyDamage packet v3 or v4 profile.');
+      '--damage-lookup-key24 and --damage-lookup-key2c require an exact 16.19.821.7343 UnitApplyDamage packet v3-v5 profile.');
   }
 }
 
@@ -3598,15 +3658,26 @@ function prepareUnitApplyDamageCallbackU32At10(prepared) {
       '--damage-callback-u32-0x10 requires an exact 16.19.821.7343 UnitApplyDamage packet v4 event.');
   }
   prepareUnitApplyDamageCallbackF32(prepared);
-  if (prepared.capabilityResult.profile_id !== profile.id) {
+  if (![UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821, profile.id]
+    .includes(prepared.capabilityResult.profile_id)) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
-      '--damage-callback-u32-0x10 requires the exact 16.19.821.7343 UnitApplyDamage packet v4 profile.');
+      '--damage-callback-u32-0x10 requires the exact 16.19.821.7343 UnitApplyDamage packet v4 or v5 profile.');
+  }
+}
+
+function prepareUnitApplyDamageF32At18Raw(prepared) {
+  prepareUnitApplyDamageCallbackF32(prepared);
+  if (prepared.capabilityResult.profile_id
+      !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--damage-callback-f32-0x18-raw requires the exact 16.19.821.7343 UnitApplyDamage packet v5 profile.');
   }
 }
 
 function unitApplyDamageCallbackF32(row, prepared, lineNumber,
   packetPositions, shapeFamilies, nativeInputHash, nativeFloatSourceCounts,
-  nativeLookupRelationCounts, nativeU32SourceCounts) {
+  nativeLookupRelationCounts, nativeU32SourceCounts,
+  nativeF32At18SourceCounts) {
   const invalid = (reason) => {
     throw new EventQueryError('INVALID_EVENT_ROW',
       `Invalid UnitApplyDamage packet at JSONL line ${lineNumber}: ${reason}.`,
@@ -3614,12 +3685,15 @@ function unitApplyDamageCallbackF32(row, prepared, lineNumber,
   };
   const profile = UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821;
   const profileId = prepared.capabilityResult.profile_id;
-  const isV4 = profileId === profile.id;
-  const hasLookupKeys = isV4
+  const isV5 = profileId === profile.id;
+  const isV4 = profileId === UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821;
+  const hasU32At10 = isV4 || isV5;
+  const hasLookupKeys = hasU32At10
     || profileId === UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821;
   const hasNativeFloat = hasLookupKeys
     || profileId === UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821;
-  const allowedFields = isV4 ? UNIT_APPLY_DAMAGE_V4_ROW_FIELDS_821
+  const allowedFields = isV5 ? UNIT_APPLY_DAMAGE_V5_ROW_FIELDS_821
+    : isV4 ? UNIT_APPLY_DAMAGE_V4_ROW_FIELDS_821
     : hasLookupKeys ? UNIT_APPLY_DAMAGE_V3_ROW_FIELDS_821
     : hasNativeFloat ? UNIT_APPLY_DAMAGE_V2_ROW_FIELDS_821
       : UNIT_APPLY_DAMAGE_ROW_FIELDS_821;
@@ -3672,12 +3746,16 @@ function unitApplyDamageCallbackF32(row, prepared, lineNumber,
   const selector24 = payload[3] & 7;
   const selector0 = payload[0] & 7;
   const selector3 = (payload[0] >>> 3) & 7;
+  const selector6 = ((payload[0] >>> 6) | (payload[1] << 2)) & 7;
   if (row.header_selector_bits_24_26 !== selector24
       || row.header_selector_bits_0_2 !== selector0
       || row.header_selector_bits_3_5 !== selector3
       || !isObservedUnitApplyDamageShape821(payload.length,
         selector24, selector0, selector3)) {
     invalid('selectors or native-observed packet shape differ');
+  }
+  if (isV5 && row.header_selector_bits_6_8 !== selector6) {
+    invalid('native +0x18 selector differs from raw payload');
   }
   shapeFamilies.add(`${payload.length}:${selector24}:${selector0}:${selector3}`);
   const hasFloat = payload.length === 15 && selector24 === 6
@@ -3745,7 +3823,7 @@ function unitApplyDamageCallbackF32(row, prepared, lineNumber,
     }
     nativeLookupRelationCounts[relation] += 1;
   }
-  if (isV4) {
+  if (hasU32At10) {
     const expectedSource = selector24 === 6 ? 'CONSTANT_0' : 'RAW_READER';
     const value = row.native_callback_u32_0x10_candidate;
     const encoded = row.native_callback_u32_0x10_encoded_bytes_hex;
@@ -3759,6 +3837,34 @@ function unitApplyDamageCallbackF32(row, prepared, lineNumber,
       invalid('anonymous native callback u32 or source differs');
     }
     nativeU32SourceCounts[expectedSource] += 1;
+  }
+  if (isV5) {
+    const source = selector6 === 5 ? 'CONSTANT_0'
+      : [0, 2, 3, 6].includes(selector6) ? 'RAW_READER' : null;
+    const encoded = row.native_callback_f32_0x18_encoded_bytes_hex;
+    const value = row.native_callback_f32_0x18_candidate;
+    const offset = row.native_callback_f32_0x18_raw_offset;
+    const rawBytes = row.native_callback_f32_0x18_raw_bytes_hex;
+    if (source === null || row.native_callback_f32_0x18_source !== source
+        || typeof encoded !== 'string' || !/^[0-9a-f]{8}$/.test(encoded)
+        || !Number.isFinite(value)
+        || !Object.is(value,
+          decodeUnitApplyDamageCallbackF32At18FromEncoded821(encoded))) {
+      invalid('anonymous native +0x18 f32 or transform differs');
+    }
+    if (source === 'CONSTANT_0') {
+      if (encoded !== '3e3e3e3e' || !Object.is(value, 0)
+          || offset !== null || rawBytes !== null) {
+        invalid('anonymous native +0x18 constant-zero branch differs');
+      }
+    } else if (!Number.isSafeInteger(offset) || offset < 0
+        || offset + 4 > payload.length
+        || rawBytes !== payload.subarray(offset, offset + 4).toString('hex')
+        || encoded !== Buffer.from(payload.subarray(offset, offset + 4))
+          .reverse().toString('hex')) {
+      invalid('anonymous native +0x18 raw-reader bytes differ');
+    }
+    nativeF32At18SourceCounts[source] += 1;
   }
   return hasFloat;
 }
@@ -6506,6 +6612,7 @@ function validateFilters(options) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, damageCallbackF32Available = false,
+    damageCallbackF32At18Raw = false,
     damageLookupKey24 = null, damageLookupKey2c = null,
     damageCallbackU32At10 = null,
     dieSourceKey2cMatch = null,
@@ -6519,6 +6626,10 @@ function validateFilters(options) {
   if (typeof damageCallbackF32Available !== 'boolean') {
     throw new EventQueryError('INVALID_FILTER',
       'Invalid damageCallbackF32Available query filter.');
+  }
+  if (typeof damageCallbackF32At18Raw !== 'boolean') {
+    throw new EventQueryError('INVALID_FILTER',
+      'Invalid damageCallbackF32At18Raw query filter.');
   }
   if (typeof endpointReversedPairFilter !== 'boolean') {
     throw new EventQueryError('INVALID_FILTER', 'Invalid endpointReversedPair query filter.');
@@ -6579,6 +6690,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, damageCallbackF32Available = false,
+    damageCallbackF32At18Raw = false,
     damageLookupKey24 = null, damageLookupKey2c = null,
     damageCallbackU32At10 = null,
     dieSourceKey2cMatch = null,
@@ -6689,7 +6801,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   const damageLookupKeysRequested = damageLookupKey24 != null
     || damageLookupKey2c != null;
   const damagePacketCheck = damageCallbackF32Available || damageLookupKeysRequested
-    || damageCallbackU32At10 != null;
+    || damageCallbackU32At10 != null || damageCallbackF32At18Raw;
+  if (damageCallbackF32At18Raw) prepareUnitApplyDamageF32At18Raw(prepared);
   if (damageCallbackU32At10 != null) prepareUnitApplyDamageCallbackU32At10(prepared);
   if (damageLookupKeysRequested) prepareUnitApplyDamageLookupKeys(prepared);
   else if (damageCallbackF32Available) prepareUnitApplyDamageCallbackF32(prepared);
@@ -6747,6 +6860,8 @@ async function streamEventQuery(prepared, options, emitLine) {
     UNIT_APPLY_DAMAGE_LOOKUP_RELATIONS_821.map((relation) => [relation, 0]));
   const damageNativeU32SourceCounts = Object.fromEntries(
     UNIT_APPLY_DAMAGE_NATIVE_U32_SOURCES_821.map((source) => [source, 0]));
+  const damageNativeF32At18SourceCounts = Object.fromEntries(
+    UNIT_APPLY_DAMAGE_NATIVE_F32_0X18_SOURCES_821.map((source) => [source, 0]));
   const damageNativeInputHash = damagePacketCheck
     ? crypto.createHash('sha256') : null;
   const circularPacketPositions = new Set();
@@ -6962,7 +7077,7 @@ async function streamEventQuery(prepared, options, emitLine) {
         ? unitApplyDamageCallbackF32(row, prepared, lineNumber,
           damagePacketPositions, damageShapeFamilies, damageNativeInputHash,
           damageNativeFloatSourceCounts, damageNativeLookupRelationCounts,
-          damageNativeU32SourceCounts) : null;
+          damageNativeU32SourceCounts, damageNativeF32At18SourceCounts) : null;
       if (damagePacketCheck) {
         if (damageCallbackF32) damageCallbackF32AvailableCount += 1;
         else damageCallbackF32UnavailableCount += 1;
@@ -7055,6 +7170,8 @@ async function streamEventQuery(prepared, options, emitLine) {
               !== damageLookupKey2c)
           || (damageCallbackU32At10 != null
             && row.native_callback_u32_0x10_candidate !== damageCallbackU32At10)
+          || (damageCallbackF32At18Raw
+            && row.native_callback_f32_0x18_source !== 'RAW_READER')
           || (dieSourceKey2cMatch != null
             && row.die_source_key2c_match_status
               !== DIE_SOURCE_KEY2C_MATCH_FILTERS_821[dieSourceKey2cMatch])
@@ -7117,14 +7234,20 @@ async function streamEventQuery(prepared, options, emitLine) {
           && !isDeepStrictEqual(damageNativeFloatSourceCounts,
             prepared.capabilityResult.native_callback_f32_source_counts))
         || ([UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821,
+          UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821,
           UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id]
           .includes(prepared.capabilityResult.profile_id)
           && !isDeepStrictEqual(damageNativeLookupRelationCounts,
             prepared.capabilityResult.native_callback_lookup_key_0x24_raw_param_relation_counts))
-        || (prepared.capabilityResult.profile_id
-          === UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id
+        || ([UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821,
+          UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id]
+          .includes(prepared.capabilityResult.profile_id)
           && !isDeepStrictEqual(damageNativeU32SourceCounts,
             prepared.capabilityResult.native_callback_u32_0x10_source_counts))
+        || (prepared.capabilityResult.profile_id
+          === UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id
+          && !isDeepStrictEqual(damageNativeF32At18SourceCounts,
+            prepared.capabilityResult.native_callback_f32_0x18_source_counts))
         || damageNativeInputHash.digest('hex')
           !== prepared.capabilityResult.native_input_sha256)) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
@@ -7403,6 +7526,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       damage_callback_u32_0x10_checked_count: scannedCount,
       native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
     }),
+    ...(damageCallbackF32At18Raw ? {
+      damage_callback_f32_0x18_checked_count: scannedCount,
+      native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
+    } : {}),
     ...(packetRecordCount == null ? {} : {
       packet_record_count_checked_count: scannedCount,
       packet_record_count_unavailable_count: 0,
@@ -7441,6 +7568,8 @@ async function streamEventQuery(prepared, options, emitLine) {
         : { damage_lookup_key2c: damageLookupKey2c }),
       ...(damageCallbackU32At10 == null ? {}
         : { damage_callback_u32_0x10: damageCallbackU32At10 }),
+      ...(damageCallbackF32At18Raw
+        ? { damage_callback_f32_0x18_raw: true } : {}),
       ...(dieSourceKey2cMatch == null ? {}
         : { die_source_key2c_match: dieSourceKey2cMatch }),
       ...(packetRecordCount == null ? {} : { packet_record_count: packetRecordCount }),

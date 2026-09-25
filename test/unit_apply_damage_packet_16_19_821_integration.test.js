@@ -15,9 +15,9 @@ const BUILD = '16.19.821.7343';
 const CAPABILITY = 'unit_apply_damage_packet';
 const EVENTS = 'unit_apply_damage_packet_candidates';
 const CLI = path.resolve(__dirname, '..', 'src', 'cli.js');
-const IMAGE = path.resolve(__dirname, '..', 'artifacts', '16_19_development',
+const IMAGE = process.env.ROFL_821_RUNTIME_IMAGE || path.resolve(__dirname, '..', 'artifacts', '16_19_development',
   'kr_821_runtime_capture', 'LeagueOfLegends_16.19.821.7343.memory.bin');
-const REPLAY = path.resolve(__dirname, '..', '..', 'kr-rofl-batch-collector',
+const REPLAY = process.env.ROFL_821_REPLAY || path.resolve(__dirname, '..', '..', 'kr-rofl-batch-collector',
   'data', 'KR', '16.19', 'builds', BUILD, 'rofl', 'KR_8392938200.rofl');
 
 test('821 UnitApplyDamage candidate reaches API and CLI without losing raw rows', async (t) => {
@@ -45,6 +45,9 @@ test('821 UnitApplyDamage candidate reaches API and CLI without losing raw rows'
   assert.equal(result.native_callback_u32_0x10_full_write_count, result.event_count);
   assert.deepEqual(result.native_callback_u32_0x10_source_counts,
     { RAW_READER: 48718, CONSTANT_0: 16106 });
+  assert.equal(result.native_callback_f32_0x18_full_write_count, result.event_count);
+  assert.deepEqual(result.native_callback_f32_0x18_source_counts,
+    { RAW_READER: 82, CONSTANT_0: 64742 });
   assert.equal(Object.values(
     result.native_callback_lookup_key_0x24_raw_param_relation_counts)
     .reduce((sum, count) => sum + count, 0), result.event_count);
@@ -62,6 +65,9 @@ test('821 UnitApplyDamage candidate reaches API and CLI without losing raw rows'
       && row.native_callback_u32_0x10_candidate >= 0
       && /^[0-9a-f]{8}$/.test(row.native_callback_u32_0x10_encoded_bytes_hex)
       && ['RAW_READER', 'CONSTANT_0'].includes(row.native_callback_u32_0x10_source)
+      && Number.isFinite(row.native_callback_f32_0x18_candidate)
+      && /^[0-9a-f]{8}$/.test(row.native_callback_f32_0x18_encoded_bytes_hex)
+      && ['RAW_READER', 'CONSTANT_0'].includes(row.native_callback_f32_0x18_source)
       && Number.isSafeInteger(row.native_callback_lookup_key_u32_0x2c_candidate)
       && ['EQUAL', 'RAW_PARAM_IS_LOOKUP_PLUS_0X100', 'OTHER']
         .includes(row.native_callback_lookup_key_0x24_raw_param_relation)

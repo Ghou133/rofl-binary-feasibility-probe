@@ -239,9 +239,10 @@ Options:
   --cast-nested-bits <0..255|0xhex>  Exact decoded 821 CastSpellAns nested callback bits
   --damage-callback-f32-available  Exact 821 UnitApplyDamage rows with a native-matched anonymous +0x20 f32
                                 Checks saved witness metadata and raw bytes; does not rerun the native parser.
-  --damage-callback-u32-0x10 <uint32|0xhex>  Exact 821 v4 anonymous native +0x10 u32 (zero is valid)
-  --damage-lookup-key24 <uint32|0xhex>  Exact 821 UnitApplyDamage v3/v4 native +0x24 lookup key
-  --damage-lookup-key2c <uint32|0xhex>  Exact 821 UnitApplyDamage v3/v4 native +0x2c lookup key
+  --damage-callback-u32-0x10 <uint32|0xhex>  Exact 821 v4/v5 anonymous native +0x10 u32 (zero is valid)
+  --damage-callback-f32-0x18-raw  Exact 821 v5 anonymous native +0x18 f32 RAW_READER rows
+  --damage-lookup-key24 <uint32|0xhex>  Exact 821 UnitApplyDamage v3-v5 native +0x24 lookup key
+  --damage-lookup-key2c <uint32|0xhex>  Exact 821 UnitApplyDamage v3-v5 native +0x2c lookup key
                                 These anonymous object keys do not establish actor or damage roles.
   --die-source-key2c-match <has|none|unavailable>  Exact 821 death/damage
                                 cooccurrence status for the candidate source key
@@ -309,6 +310,7 @@ function parseArgs(argv) {
     castNestedBits: null,
     damageCallbackF32Available: false,
     damageCallbackU32At10: null,
+    damageCallbackF32At18Raw: false,
     damageLookupKey24: null,
     damageLookupKey2c: null,
     dieSourceKey2cMatch: null,
@@ -373,6 +375,10 @@ function parseArgs(argv) {
     }
     if (command === 'query-events' && token === '--damage-callback-f32-available') {
       options.damageCallbackF32Available = true;
+      continue;
+    }
+    if (command === 'query-events' && token === '--damage-callback-f32-0x18-raw') {
+      options.damageCallbackF32At18Raw = true;
       continue;
     }
     if (command === 'ward-events' && token === '--ally') {
@@ -590,6 +596,10 @@ function parseArgs(argv) {
     if (options.damageCallbackU32At10 !== null
         && options.event !== 'unit_apply_damage_packet_candidates') {
       throw new Error('--damage-callback-u32-0x10 requires an 821 unit_apply_damage_packet_candidates event');
+    }
+    if (options.damageCallbackF32At18Raw
+        && options.event !== 'unit_apply_damage_packet_candidates') {
+      throw new Error('--damage-callback-f32-0x18-raw requires an 821 unit_apply_damage_packet_candidates event');
     }
     if ((options.damageLookupKey24 !== null || options.damageLookupKey2c !== null)
         && options.event !== 'unit_apply_damage_packet_candidates') {
@@ -3118,6 +3128,7 @@ async function runQueryEventsCommand(parsed) {
       castNestedBits: options.castNestedBits,
       damageCallbackF32Available: options.damageCallbackF32Available,
       damageCallbackU32At10: options.damageCallbackU32At10,
+      damageCallbackF32At18Raw: options.damageCallbackF32At18Raw,
       damageLookupKey24: options.damageLookupKey24,
       damageLookupKey2c: options.damageLookupKey2c,
       dieSourceKey2cMatch: options.dieSourceKey2cMatch,
