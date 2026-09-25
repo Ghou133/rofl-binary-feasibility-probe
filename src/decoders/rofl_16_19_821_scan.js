@@ -165,6 +165,25 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let directInputTurnPacketCount = 0;
   let setMovementDriverPacketCount = 0;
   let finished = false;
+  // Capability selection is fixed for this walk. Cache the packet-route
+  // decisions instead of probing the Set for every framed block.
+  const selectsRespawn = selected.has('hero_respawn');
+  const selectsAssist = selected.has('hero_assist');
+  const selectsParamsHeal = selected.has('params_heal_packet');
+  const selectsShieldingParams = selected.has('shielding_params_packet_pair');
+  const selectsStealthEvent = selected.has('stealth_event_packet');
+  const selectsChampionDieEvent = selected.has('champion_die_event_packet');
+  const selectsChampionKillEvent = selected.has('champion_kill_event_packet');
+  const selectsChampionMultipleKillEvent = selected.has('champion_multiple_kill_event_packet');
+  const selectsInventoryPacket = selected.has('hero_inventory_packet');
+  const selectsInventoryBroadcast = selected.has('hero_inventory_broadcast_packet');
+  const selectsInventorySetItem = selected.has('hero_inventory_set_item_packet');
+  const selectsCastSpellAns = selected.has('cast_spell_ans_packet');
+  const selectsBuffRemove = selected.has('npc_buff_remove_packet');
+  const selectsBuffAdd = selected.has('npc_buff_add_packet');
+  const selectsDirectInputTurn = selected.has('direct_input_movement_turn_packet');
+  const selectsSetMovementDriver = selected.has('set_movement_driver_packet');
+  const selectsHeroLevelState = selected.has('hero_level_state');
   return Object.freeze({
     observe(block, chunk) {
       if (finished) throw new Error('821 route scan collector is already finished');
@@ -176,50 +195,50 @@ function create821ScanCollector(replay, selectedCapabilities) {
         rows.hero_death.push(row);
         rows.hero_death_timer.push(row);
       }
-      if (selected.has('hero_respawn') && chunk.stream_tag === 1
+      if (selectsRespawn && chunk.stream_tag === 1
           && RESPAWN_ROUTES.has(block.packet_id)) {
         rows.hero_respawn.push(copyRow(block, chunk));
       }
-      if (selected.has('hero_assist') && chunk.stream_tag === 1
+      if (selectsAssist && chunk.stream_tag === 1
           && block.packet_id === 0x040a && block.payload_length === 44) {
         rows.hero_assist.push(copyRow(block, chunk));
       }
-      if (selected.has('params_heal_packet')
+      if (selectsParamsHeal
           && block.packet_id === 0x040a && block.payload_length === 60) {
         paramsHealPacketCount += 1;
         if (rows.params_heal_packet.length < MAX_PARAMS_HEAL_PACKET_ROWS) {
           rows.params_heal_packet.push(copyRow(block, chunk));
         }
       }
-      if (selected.has('shielding_params_packet_pair')
+      if (selectsShieldingParams
           && block.packet_id === 0x040a && block.payload_length === 29) {
         shieldingParamsPacketCount += 1;
         if (rows.shielding_params_packet_pair.length < MAX_SHIELDING_PARAMS_PACKET_ROWS) {
           rows.shielding_params_packet_pair.push(copyRow(block, chunk));
         }
       }
-      if (selected.has('stealth_event_packet')
+      if (selectsStealthEvent
           && block.packet_id === 0x040a && block.payload_length === 17) {
         stealthEventPacketCount += 1;
         if (rows.stealth_event_packet.length < MAX_STEALTH_EVENT_PACKET_ROWS) {
           rows.stealth_event_packet.push(copyRow(block, chunk));
         }
       }
-      if (selected.has('champion_die_event_packet')
+      if (selectsChampionDieEvent
           && block.packet_id === 0x040a && block.payload_length === 116) {
         championDieEventPacketCount += 1;
         if (rows.champion_die_event_packet.length < MAX_CHAMPION_DIE_EVENT_PACKET_ROWS) {
           rows.champion_die_event_packet.push(copyRow(block, chunk));
         }
       }
-      if (selected.has('champion_kill_event_packet')
+      if (selectsChampionKillEvent
           && block.packet_id === 0x040a && block.payload_length === 104) {
         championKillEventPacketCount += 1;
         if (rows.champion_kill_event_packet.length < MAX_CHAMPION_KILL_EVENT_PACKET_ROWS) {
           rows.champion_kill_event_packet.push(copyRow(block, chunk));
         }
       }
-      if (selected.has('champion_multiple_kill_event_packet')
+      if (selectsChampionMultipleKillEvent
           && block.packet_id === 0x040a && block.payload_length === 88) {
         championMultipleKillEventPacketCount += 1;
         if (rows.champion_multiple_kill_event_packet.length
@@ -227,46 +246,46 @@ function create821ScanCollector(replay, selectedCapabilities) {
           rows.champion_multiple_kill_event_packet.push(copyRow(block, chunk));
         }
       }
-      if (selected.has('hero_inventory_packet') && chunk.stream_tag === 1
+      if (selectsInventoryPacket && chunk.stream_tag === 1
           && block.packet_id === 0x018d) {
         rows.hero_inventory_packet.push(copyRow(block, chunk));
       }
-      if (selected.has('hero_inventory_broadcast_packet')
+      if (selectsInventoryBroadcast
           && block.packet_id === 0x0357) {
         broadcastPacketCount += 1;
         if (rows.hero_inventory_broadcast_packet.length < MAX_BROADCAST_PACKET_ROWS) {
           rows.hero_inventory_broadcast_packet.push(copyRow(block, chunk));
         }
       }
-      if (selected.has('hero_inventory_set_item_packet')
+      if (selectsInventorySetItem
           && block.packet_id === 0x002d) {
         setItemPacketCount += 1;
         if (rows.hero_inventory_set_item_packet.length < MAX_SET_ITEM_PACKET_ROWS) {
           rows.hero_inventory_set_item_packet.push(copyRow(block, chunk));
         }
       }
-      if (selected.has('cast_spell_ans_packet') && block.packet_id === 0x01da) {
+      if (selectsCastSpellAns && block.packet_id === 0x01da) {
         rows.cast_spell_ans_packet.push(copyRow(block, chunk));
       }
-      if (selected.has('npc_buff_remove_packet') && block.packet_id === 0x047c) {
+      if (selectsBuffRemove && block.packet_id === 0x047c) {
         buffRemovePacketCount += 1;
         if (rows.npc_buff_remove_packet.length < MAX_BUFF_REMOVE_PACKET_ROWS) {
           rows.npc_buff_remove_packet.push(copyRow(block, chunk));
         }
       }
-      if (selected.has('npc_buff_add_packet') && block.packet_id === 0x00ae) {
+      if (selectsBuffAdd && block.packet_id === 0x00ae) {
         buffAddPacketCount += 1;
         if (rows.npc_buff_add_packet.length < MAX_BUFF_ADD_PACKET_ROWS) {
           rows.npc_buff_add_packet.push(copyRow(block, chunk));
         }
       }
-      if (selected.has('direct_input_movement_turn_packet') && block.packet_id === 0x00ba) {
+      if (selectsDirectInputTurn && block.packet_id === 0x00ba) {
         directInputTurnPacketCount += 1;
         if (rows.direct_input_movement_turn_packet.length < MAX_DIRECT_INPUT_TURN_PACKET_ROWS) {
           rows.direct_input_movement_turn_packet.push(copyRow(block, chunk));
         }
       }
-      if (selected.has('set_movement_driver_packet') && block.packet_id === 0x0335) {
+      if (selectsSetMovementDriver && block.packet_id === 0x0335) {
         setMovementDriverPacketCount += 1;
         if (rows.set_movement_driver_packet.length < MAX_SET_MOVEMENT_DRIVER_PACKET_ROWS) {
           rows.set_movement_driver_packet.push(copyRow(block, chunk));
@@ -276,7 +295,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
           && block.packet_id === 0x0089) {
         heroStatsRows.push(copyRow(block, chunk));
       }
-      if (selected.has('hero_level_state') && chunk.stream_tag === 1
+      if (selectsHeroLevelState && chunk.stream_tag === 1
           && block.packet_id === 0x0197) {
         rows.hero_level_state.push(copyRow(block, chunk));
       }
