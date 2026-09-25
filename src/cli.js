@@ -175,6 +175,7 @@ Options:
   Query event filters (query-events, 16.19 default or --event-jsonl-only artifacts):
   --from-ms/--to-ms <number>    Inclusive Replay millisecond bounds
   --participant <1..10>        Candidate subject participant; unknown rows do not match
+  --assisting-participant <1..10>  Member of exact-821 hero_assist candidate list
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
   --item-id <uint32|0xhex>     Exact decoded 821 inventory packet record item ID
   --slot <0..9>                Exact observed 821 inventory packet record slot
@@ -221,6 +222,7 @@ function parseArgs(argv) {
     event: null,
     eventJsonlOnly: false,
     participant: null,
+    assistingParticipant: null,
     rawParam: null,
     itemId: null,
     slot: null,
@@ -323,6 +325,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'from-ms') options.fromMs = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'to-ms') options.toMs = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'participant') options.participant = queryInteger(value, key);
+      else if (command === 'query-events' && key === 'assisting-participant') options.assistingParticipant = queryInteger(value, key);
       else if (command === 'query-events' && key === 'raw-param') options.rawParam = queryRawParam(value);
       else if (command === 'query-events' && key === 'item-id') options.itemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'slot') options.slot = queryInteger(value, key, true);
@@ -368,6 +371,11 @@ function parseArgs(argv) {
     }
     if (options.participant !== null && options.participant > 10) {
       throw new Error('--participant must be in 1..10');
+    }
+    if (options.assistingParticipant !== null
+        && (options.assistingParticipant > 10
+          || options.event !== 'hero_assist_candidates')) {
+      throw new Error('--assisting-participant requires hero_assist_candidates and 1..10');
     }
     if (options.fromMs !== null && options.toMs !== null && options.fromMs > options.toMs) {
       throw new Error('--from-ms must not exceed --to-ms');
@@ -2696,6 +2704,7 @@ async function runQueryEventsCommand(parsed) {
       fromMs: options.fromMs,
       toMs: options.toMs,
       participant: options.participant,
+      assistingParticipant: options.assistingParticipant,
       rawParam: options.rawParam,
       itemId: options.itemId,
       slot: options.slot,

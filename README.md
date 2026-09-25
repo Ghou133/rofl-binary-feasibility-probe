@@ -459,6 +459,18 @@ node src/cli.js query-events "work\16-19-821-triple-quadra-groups" `
   --output "work\quadra-named-packet-groups.jsonl"
 ```
 
+按 821 单次助攻候选的参与者列表查询，可输入单场或 `batch` 输出目录：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-assists" `
+  --event hero_assist_candidates --assisting-participant 2 --limit 20
+```
+
+`--assisting-participant` 只接受 `1..10`，仅匹配精确 `16.19.821.7343` 的
+`hero_assist_candidates`；输出保留原 JSONL 行。非英雄来源的 `null` 列表计入
+`assisting_participant_unavailable_count`，已核对的空列表是可用的零助攻候选。
+筛选不会把候选助攻提升为已确认的游戏事件。
+
 对已解码的 821 库存包按物品 ID 查询单包记录：
 
 ```powershell

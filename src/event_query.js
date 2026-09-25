@@ -31,6 +31,8 @@ const { ON_SHUTDOWN_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
 const { HERO_DEATH_CANDIDATE_PROFILE_821 } =
   require('./decoders/rofl_16_19_821_7343');
+const { HERO_ASSIST_CANDIDATE_PROFILE_821 } =
+  require('./decoders/rofl_16_19_821_assist_candidate');
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
@@ -1126,14 +1128,67 @@ function candidateChildEventId(row, eventKey, lineNumber) {
   return { value, available: true };
 }
 
+function assistingParticipantsCandidate(row, prepared, lineNumber) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid hero_assist candidate at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  if (row.event_type !== 'HERO_ASSIST_ATTRIBUTION_CANDIDATE'
+      || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+      || row.build_profile !== HERO_ASSIST_CANDIDATE_PROFILE_821.id
+      || row.confidence !== 'CANDIDATE') {
+    invalid('exact-build candidate identity differs');
+  }
+  const hasParticipants = Object.hasOwn(row, 'assisting_participant_ids_candidate');
+  const participants = row.assisting_participant_ids_candidate;
+  const killer = row.killer_participant_id_candidate;
+  const victim = row.victim_participant_id_candidate;
+  if (!Number.isSafeInteger(victim) || victim < 1 || victim > 10
+      || (killer != null && (!Number.isSafeInteger(killer)
+        || killer < 1 || killer > 10 || killer === victim))) {
+    invalid('victim or killer participant is invalid');
+  }
+  if (!hasParticipants) return { values: [], available: false };
+  if (participants == null) {
+    if (killer != null || row.assist_pair_count != null
+        || row.assist_observation_status !== 'UNAVAILABLE_NONHERO_SOURCE'
+        || row.semantic_status !== 'UNAVAILABLE_NONHERO_SOURCE') {
+      invalid('unavailable assist list conflicts with candidate status');
+    }
+    return { values: [], available: false };
+  }
+  if (!Array.isArray(participants)
+      || !Number.isSafeInteger(row.assist_pair_count)
+      || row.assist_pair_count !== participants.length
+      || killer == null
+      || row.assist_observation_status
+        !== 'CANDIDATE_821_CO_TIMED_ASSIST_PAIR_TAIL_ALIGNMENT'
+      || row.semantic_status
+        !== 'CANDIDATE_821_CO_TIMED_ASSIST_PAIR_TAIL_ALIGNMENT') {
+    invalid('available assist list or count conflicts with candidate status');
+  }
+  let previous = 0;
+  for (const participant of participants) {
+    if (!Number.isSafeInteger(participant) || participant < 1 || participant > 10
+        || participant <= previous || participant === victim || participant === killer) {
+      invalid('assisting participant IDs must be sorted, unique, and exclude victim and killer');
+    }
+    previous = participant;
+  }
+  return { values: participants, available: true };
+}
+
 function validateFilters(options) {
-  const { fromMs = null, toMs = null, participant = null, rawParam = null,
+  const { fromMs = null, toMs = null, participant = null,
+    assistingParticipant = null, rawParam = null,
     itemId = null, slot = null, opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     childEventId = null, limit = null } = options;
   for (const [name, value, minimum, maximum] of [
     ['fromMs', fromMs, 0, Number.MAX_SAFE_INTEGER],
     ['toMs', toMs, 0, Number.MAX_SAFE_INTEGER],
     ['participant', participant, 1, 10],
+    ['assistingParticipant', assistingParticipant, 1, 10],
     ['rawParam', rawParam, 0, 0xffffffff],
     ['itemId', itemId, 0, 0xffffffff],
     ['slot', slot, 0, 9],
@@ -1159,7 +1214,8 @@ function validateFilters(options) {
 
 async function streamEventQuery(prepared, options, emitLine) {
   validateFilters(options);
-  const { fromMs = null, toMs = null, participant = null, rawParam = null,
+  const { fromMs = null, toMs = null, participant = null,
+    assistingParticipant = null, rawParam = null,
     itemId = null, slot = null, opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     childEventId = null, limit = null } = options;
   const inventoryPacketEvent = [
@@ -1167,6 +1223,21 @@ async function streamEventQuery(prepared, options, emitLine) {
     'hero_inventory_broadcast_packet_candidates',
     'hero_inventory_set_item_packet_candidates',
   ].includes(prepared.eventKey);
+  if (assistingParticipant != null) {
+    if (prepared.eventKey !== 'hero_assist_candidates'
+        || prepared.replayVersion !== HERO_ASSIST_CANDIDATE_PROFILE_821.replay_version) {
+      throw new EventQueryError('UNSUPPORTED_FILTER',
+        '--assisting-participant requires exact 16.19.821.7343 hero_assist_candidates.');
+    }
+    if (prepared.capabilityStatus !== 'CANDIDATE'
+        || prepared.capabilityResult.profile_id !== HERO_ASSIST_CANDIDATE_PROFILE_821.id
+        || prepared.capabilityResult.evidence_status
+          !== 'CANDIDATE_821_CO_TIMED_ASSIST_PAIR_TAIL_ALIGNMENT') {
+      throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+        'hero_assist candidate identity differs from its exact-build profile.',
+        { capability: prepared.capability });
+    }
+  }
   if ((itemId != null || slot != null) && (!inventoryPacketEvent
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
@@ -1203,6 +1274,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   let matchedCount = 0;
   let emittedCount = 0;
   let participantUnavailableCount = 0;
+  let assistingParticipantUnavailableCount = 0;
+  let assistingParticipantAvailableCount = 0;
   let rawParamUnavailableCount = 0;
   let itemIdUnavailableCount = 0;
   let itemIdAvailableCount = 0;
@@ -1277,7 +1350,15 @@ async function streamEventQuery(prepared, options, emitLine) {
         : castSpellAnsOpaqueI32(row, lineNumber);
       const childId = childEventId == null ? null
         : candidateChildEventId(row, prepared.eventKey, lineNumber);
+      const assistingParticipants = assistingParticipant == null ? null
+        : assistingParticipantsCandidate(row, prepared, lineNumber);
       if (participant != null && subject.value == null) participantUnavailableCount += 1;
+      if (assistingParticipant != null && !assistingParticipants.available) {
+        assistingParticipantUnavailableCount += 1;
+      }
+      if (assistingParticipant != null && assistingParticipants.available) {
+        assistingParticipantAvailableCount += 1;
+      }
       if (rawParam != null && params.length === 0) rawParamUnavailableCount += 1;
       if (itemId != null && items.unavailable) itemIdUnavailableCount += 1;
       if (itemId != null && items.available) itemIdAvailableCount += 1;
@@ -1294,6 +1375,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       if ((fromMs != null && replayTime < fromMs)
           || (toMs != null && replayTime > toMs)
           || (participant != null && subject.value !== participant)
+          || (assistingParticipant != null
+            && !assistingParticipants.values.includes(assistingParticipant))
           || (rawParam != null && !params.includes(rawParam))
           || (itemId != null && !items.values.includes(itemId))
           || (slot != null && !slots.values.includes(slot))
@@ -1336,6 +1419,14 @@ async function streamEventQuery(prepared, options, emitLine) {
     throw new EventQueryError('PARTICIPANT_UNAVAILABLE',
       'This event stream has no resolved subject participant for filtering.',
       { scanned_count: scannedCount, participant_unavailable_count: participantUnavailableCount,
+        capability_status: prepared.capabilityStatus });
+  }
+  if (assistingParticipant != null && scannedCount > 0
+      && assistingParticipantAvailableCount === 0) {
+    throw new EventQueryError('ASSISTING_PARTICIPANT_UNAVAILABLE',
+      'This event stream has no available assist candidate list for filtering.',
+      { scanned_count: scannedCount,
+        assisting_participant_unavailable_count: assistingParticipantUnavailableCount,
         capability_status: prepared.capabilityStatus });
   }
   if (rawParam != null && scannedCount > 0 && rawParamUnavailableCount === scannedCount) {
@@ -1403,6 +1494,8 @@ async function streamEventQuery(prepared, options, emitLine) {
     matched_count: matchedCount,
     emitted_count: emittedCount,
     participant_unavailable_count: participantUnavailableCount,
+    ...(assistingParticipant == null ? {}
+      : { assisting_participant_unavailable_count: assistingParticipantUnavailableCount }),
     ...(rawParam == null ? {} : { raw_param_unavailable_count: rawParamUnavailableCount }),
     ...(itemId == null ? {} : { item_id_unavailable_count: itemIdUnavailableCount }),
     ...(slot == null ? {} : { slot_unavailable_count: slotUnavailableCount }),
@@ -1411,6 +1504,8 @@ async function streamEventQuery(prepared, options, emitLine) {
     ...(opaqueI32 == null ? {} : { opaque_i32_unavailable_count: opaqueI32UnavailableCount }),
     ...(childEventId == null ? {} : { child_event_id_unavailable_count: childEventIdUnavailableCount }),
     filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit,
+      ...(assistingParticipant == null ? {}
+        : { assisting_participant_id: assistingParticipant }),
       ...(rawParam == null ? {} : { raw_param: rawParam }),
       ...(itemId == null ? {} : { item_id: itemId }),
       ...(slot == null ? {} : { slot }),
@@ -1452,7 +1547,8 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         });
     } catch (error) {
       if (!(error instanceof EventQueryError)
-          || !['PARTICIPANT_UNAVAILABLE', 'RAW_PARAM_UNAVAILABLE',
+          || !['PARTICIPANT_UNAVAILABLE', 'ASSISTING_PARTICIPANT_UNAVAILABLE',
+            'RAW_PARAM_UNAVAILABLE',
             'ITEM_ID_UNAVAILABLE', 'SLOT_UNAVAILABLE', 'OPAQUE_U32_UNAVAILABLE',
             'OPAQUE_PAIR_UNAVAILABLE',
             'OPAQUE_I32_UNAVAILABLE', 'CHILD_EVENT_ID_UNAVAILABLE'].includes(error.code)) {

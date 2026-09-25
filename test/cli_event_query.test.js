@@ -33,6 +33,8 @@ const { ON_SHUTDOWN_EVENT_PACKET_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
 const { HERO_DEATH_CANDIDATE_PROFILE_821 } =
   require('../src/decoders/rofl_16_19_821_7343');
+const { HERO_ASSIST_CANDIDATE_PROFILE_821 } =
+  require('../src/decoders/rofl_16_19_821_assist_candidate');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const SHA = 'a'.repeat(64);
@@ -67,6 +69,8 @@ const DOUBLE_MULTI_GROUP_EVENT = 'champion_double_kill_multi_group_candidates';
 const TRIPLE_QUADRA_PACKET_EVENT = 'champion_triple_quadra_event_packet_candidates';
 const TRIPLE_QUADRA_MULTI_GROUP_EVENT = 'champion_triple_quadra_multi_group_candidates';
 const SHUTDOWN_GROUP_EVENT = 'on_shutdown_die_hero_death_pair_candidates';
+const HERO_ASSIST_EVENT = 'hero_assist_candidates';
+const HERO_ASSIST_EVIDENCE = 'CANDIDATE_821_CO_TIMED_ASSIST_PAIR_TAIL_ALIGNMENT';
 const ASSOCIATION_EVENTS = [DIE_PAIR_EVENT, KILL_GROUP_EVENT, MULTI_GROUP_EVENT,
   SHUTDOWN_GROUP_EVENT];
 
@@ -427,7 +431,7 @@ function artifact(t, rows = [
     RESURRECT_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
     DOUBLE_PACKET_EVENT, DOUBLE_MULTI_GROUP_EVENT, TRIPLE_QUADRA_PACKET_EVENT,
     TRIPLE_QUADRA_MULTI_GROUP_EVENT,
-    ...ASSOCIATION_EVENTS].includes(eventKey)
+    HERO_ASSIST_EVENT, ...ASSOCIATION_EVENTS].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -464,6 +468,32 @@ function run(...args) {
     { encoding: 'utf8', cwd: path.dirname(CLI) });
 }
 
+function assistRow(time, victim, killer, assistants) {
+  const available = assistants !== null;
+  return {
+    event_type: 'HERO_ASSIST_ATTRIBUTION_CANDIDATE',
+    game_version: HERO_ASSIST_CANDIDATE_PROFILE_821.replay_version,
+    patch: '16.19', build_profile: HERO_ASSIST_CANDIDATE_PROFILE_821.id,
+    replay_sha256: SHA, replay_time_ms: time,
+    victim_participant_id_candidate: victim,
+    killer_participant_id_candidate: killer,
+    assisting_participant_ids_candidate: assistants,
+    assist_pair_count: available ? assistants.length : null,
+    assist_observation_status: available ? HERO_ASSIST_EVIDENCE : 'UNAVAILABLE_NONHERO_SOURCE',
+    semantic_status: available ? HERO_ASSIST_EVIDENCE : 'UNAVAILABLE_NONHERO_SOURCE',
+    confidence: 'CANDIDATE',
+  };
+}
+
+function assistArtifact(t, rows) {
+  const fixture = artifact(t, rows, true, HERO_ASSIST_EVENT);
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.hero_assist.profile_id = HERO_ASSIST_CANDIDATE_PROFILE_821.id;
+    semantic.capability_results.hero_assist.evidence_status = HERO_ASSIST_EVIDENCE;
+  });
+  return fixture;
+}
+
 function batchArtifact(t) {
   const first = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 100,
     participant_id_candidate: 1 }]);
@@ -491,12 +521,12 @@ function batchArtifact(t) {
   return { root: first.root, first, secondDirectory, manifestPath };
 }
 
-function refreshBatchHashes(manifestPath) {
+function refreshBatchHashes(manifestPath, eventKey = EVENT) {
   rewriteJson(manifestPath, (manifest) => {
     const root = path.dirname(manifestPath);
     const hashes = {};
     for (const entry of manifest.replay_inputs) {
-      for (const name of ['semantic_run.json', 'replay_analysis.json', `${EVENT}.jsonl`]) {
+      for (const name of ['semantic_run.json', 'replay_analysis.json', `${eventKey}.jsonl`]) {
         const relative = `${entry.artifact_directory}/${name}`;
         const filename = path.join(root, relative);
         if (fs.existsSync(filename)) {
@@ -1035,6 +1065,153 @@ test('query-events keeps stdout as JSONL and puts its query summary on stderr', 
   assert.equal(summary.matched_count, 1);
   assert.equal(summary.emitted_count, 1);
   assert.equal(summary.output, '-');
+});
+
+test('query-events filters exact 821 assist candidates without changing JSONL rows', (t) => {
+  const rows = [
+    assistRow(100, 1, 6, [2, 3]),
+    assistRow(200, 2, 7, []),
+    assistRow(300, 3, null, null),
+    assistRow(400, 4, 8, [1]),
+  ];
+  const fixture = assistArtifact(t, rows);
+  const result = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant=2', '--participant=1', '--limit=1');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${fixture.lines[0]}\n`);
+  const summary = JSON.parse(result.stderr);
+  assert.equal(summary.scanned_count, 4);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.assisting_participant_unavailable_count, 1);
+  assert.equal(summary.filters.assisting_participant_id, 2);
+  assert.equal(summary.filters.participant_id, 1);
+  assert.equal(summary.rows_unmodified, true);
+
+  const noMatch = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '10');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(noMatch.stdout, '');
+  assert.equal(JSON.parse(noMatch.stderr).matched_count, 0);
+  assert.equal(JSON.parse(noMatch.stderr).assisting_participant_unavailable_count, 1);
+  const availableZero = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '1');
+  assert.equal(availableZero.status, 0, availableZero.stderr);
+  assert.equal(availableZero.stdout, `${fixture.lines[3]}\n`);
+});
+
+test('query-events distinguishes missing assist lists, available zero, and empty streams', (t) => {
+  const missing = assistRow(100, 1, 6, [2]);
+  delete missing.assisting_participant_ids_candidate;
+  const fixture = assistArtifact(t, [missing]);
+  const output = path.join(fixture.root, 'assist-query.jsonl');
+  const unavailable = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'ASSISTING_PARTICIPANT_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const zeroFixture = assistArtifact(t, [assistRow(100, 1, 6, [])]);
+  const zero = run(zeroFixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, '');
+  assert.equal(JSON.parse(zero.stderr).assisting_participant_unavailable_count, 0);
+
+  const emptyFixture = assistArtifact(t, []);
+  const empty = run(emptyFixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2');
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.equal(JSON.parse(empty.stderr).scanned_count, 0);
+});
+
+test('query-events rejects malformed present assist lists and exact-build mismatch', (t) => {
+  const fixture = assistArtifact(t, [assistRow(100, 1, 6, [2])]);
+  const eventPath = path.join(fixture.replayDirectory, `${HERO_ASSIST_EVENT}.jsonl`);
+  const output = path.join(fixture.root, 'assist-bad.jsonl');
+  for (const invalidList of [0, '2', {}, [0], [11], [2, 2], [3, 2], [6], [1], [2.5]]) {
+    fs.writeFileSync(eventPath, `${JSON.stringify({
+      ...assistRow(100, 1, 6, [2]),
+      assisting_participant_ids_candidate: invalidList,
+    })}\n`);
+    const result = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+      '--assisting-participant', '2', '--output', output);
+    assert.equal(result.status, 2, JSON.stringify(invalidList));
+    assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
+  fs.writeFileSync(eventPath, `${fixture.lines[0]}\n`);
+  const invalidParticipant = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '11');
+  assert.equal(invalidParticipant.status, 1);
+  const otherEventFixture = artifact(t);
+  const otherEvent = run(otherEventFixture.replayDirectory, '--event', EVENT,
+    '--assisting-participant', '2');
+  assert.equal(otherEvent.status, 1);
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.hero_assist.profile_id = 'foreign-profile';
+  });
+  const wrongProfile = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2');
+  assert.equal(wrongProfile.status, 2);
+  assert.equal(JSON.parse(wrongProfile.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.hero_assist.profile_id = HERO_ASSIST_CANDIDATE_PROFILE_821.id;
+    semantic.replay_version = VERSION;
+  });
+  rewriteJson(path.join(fixture.replayDirectory, 'replay_analysis.json'), (analysis) => {
+    analysis.replay_version = VERSION;
+  });
+  const wrongBuild = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2');
+  assert.equal(wrongBuild.status, 2);
+  assert.equal(JSON.parse(wrongBuild.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
+test('query-events marks an all-null assist candidate Replay unavailable within a batch', (t) => {
+  const first = assistArtifact(t, [assistRow(100, 1, 6, [2])]);
+  const secondDirectory = path.join(first.root, 'replays', 'unavailable');
+  fs.cpSync(first.replayDirectory, secondDirectory, { recursive: true });
+  const secondSha = 'b'.repeat(64);
+  rewriteJson(path.join(secondDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.replay_sha256 = secondSha;
+  });
+  rewriteJson(path.join(secondDirectory, 'replay_analysis.json'), (analysis) => {
+    analysis.replay_sha256 = secondSha;
+  });
+  fs.writeFileSync(path.join(secondDirectory, `${HERO_ASSIST_EVENT}.jsonl`),
+    `${JSON.stringify({ ...assistRow(200, 2, null, null), replay_sha256: secondSha })}\n`);
+  const manifestPath = path.join(first.root, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify({
+    command_args: ['batch', 'synthetic-input'],
+    replay_inputs: [
+      { sha256: SHA, version: HERO_ASSIST_CANDIDATE_PROFILE_821.replay_version,
+        artifact_directory: 'replays/synthetic' },
+      { sha256: secondSha, version: HERO_ASSIST_CANDIDATE_PROFILE_821.replay_version,
+        artifact_directory: 'replays/unavailable' },
+    ],
+  }));
+  refreshBatchHashes(manifestPath, HERO_ASSIST_EVENT);
+  const partial = run(first.root, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2');
+  assert.equal(partial.status, 0, partial.stderr);
+  assert.equal(partial.stdout, `${first.lines[0]}\n`);
+  const summary = JSON.parse(partial.stderr);
+  assert.equal(summary.query_status, 'PARTIAL');
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.unavailable_replay_count, 1);
+  assert.equal(summary.replay_results[1].code, 'ASSISTING_PARTICIPANT_UNAVAILABLE');
+
+  const missing = assistRow(100, 1, 6, [2]);
+  delete missing.assisting_participant_ids_candidate;
+  fs.writeFileSync(path.join(first.replayDirectory, `${HERO_ASSIST_EVENT}.jsonl`),
+    `${JSON.stringify(missing)}\n`);
+  refreshBatchHashes(manifestPath, HERO_ASSIST_EVENT);
+  const unavailable = run(first.root, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2');
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'BATCH_EVENT_UNAVAILABLE');
 });
 
 test('query-events filters recorded raw packet parameters without resolving participants', (t) => {

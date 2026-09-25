@@ -4,6 +4,25 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** `query-events --assisting-participant 1..10` filters exact
+  821 `hero_assist_candidates` without altering JSONL rows. A real 11-Replay
+  batch scanned 655 death rows and found 85 participant-2 matches; all 11
+  Replays remained queryable. Two nonhero rows had unavailable (`null`)
+  assist lists; 101 had available empty lists. The query reports these
+  separately from zero matches and fails on malformed candidate lists.
+- **Completed candidate:** Optional exact-image `hero_assist` validation now
+  checks native `0x040a/44` child IDs `0x0056/0x0057` and two anonymous field
+  equalities against the independently matched Hero_Die packet. All 11 KR 821
+  Replays returned `CANDIDATE`: 1,379 first children, 1,097 second children,
+  1,097 aligned pairs, 282 excluded first-only packets, and 655 death rows.
+  Of the paired child `+0x04` values, 1,047 equal the death raw parameter and
+  50 equal it after clearing `0x100`; second child `+0x20` equals the decoded
+  death source candidate in all 1,097. Candidate event times, participant
+  lists, pair counts, and exclusions remained unchanged. Image-free candidates
+  remain available with identity marked `NOT_CHECKED`; an image mismatch fails
+  only this capability. The fields and assist attribution remain candidates.
+  Ignored outputs are under
+  `artifacts/16_19_development/assist_native_field_join_cli_batch_11/`.
 - **Research boundary:** In the pinned 821 image, BuffUpdateCount `+0x14` and
   BuffReplace `+0x18` feed a runtime object-table lookup; their decoded byte
   fields, and BuffUpdateNumCounter `+0x18`, index a BuffManager vector. This
