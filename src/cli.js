@@ -190,11 +190,14 @@ Options:
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
   --item-id <uint32|0xhex>     Exact decoded 821 inventory record item ID, including ward/inventory pairs
   --slot <0..9>                Exact observed 821 inventory record slot, including ward/inventory pairs
+  Interval differences: --item-id is the CURRENT item ID on a changed slot (zero valid).
+                        With --slot, both must match the SAME changed slot.
   --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
   --opaque-pair <u32:u8>      Exact anonymous 821 Buff Add/Remove/Update pair
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
   --child-event-id <uint32|0xhex>  Exact 821 stealth or named multikill child ID
   --latest-per-participant    Last matching observed row per participant and Replay
+                                For interval differences: last matching observed difference.
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
   --output <path|->            Write unmodified JSONL rows (default: stdout)
                                 Query summary is JSON on stderr when output is stdout
@@ -411,12 +414,13 @@ function parseArgs(argv) {
       'hero_inventory_broadcast_packet_candidates',
       'hero_inventory_set_item_packet_candidates',
       'ward_inventory_keyframe_pair_candidates',
+      'inventory_keyframe_interval_difference_candidates',
     ].includes(options.event);
     if (options.itemId !== null && !inventoryQueryEvent) {
-      throw new Error('--item-id requires an 821 inventory packet event or ward/inventory keyframe pair event');
+      throw new Error('--item-id requires an 821 inventory packet event, ward/inventory keyframe pair event, or inventory keyframe interval difference event');
     }
     if (options.slot !== null && !inventoryQueryEvent) {
-      throw new Error('--slot requires an 821 inventory packet event or ward/inventory keyframe pair event');
+      throw new Error('--slot requires an 821 inventory packet event, ward/inventory keyframe pair event, or inventory keyframe interval difference event');
     }
     if (options.slot !== null && options.slot > 9) {
       throw new Error('--slot must be in 0..9');

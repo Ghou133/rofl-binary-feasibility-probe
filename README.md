@@ -523,6 +523,16 @@ node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
 
 只选择 `hero_inventory_broadcast_packet` 也会生成 `inventory_keyframe_interval_difference_candidates.jsonl`。每行列出同一候选参与者的前后关键帧时间、不同槽位的两个候选物品键，以及两端原始包引用；`semantic_run.json` 的 `candidate_associations.inventory_keyframe_interval_difference` 分别记录端点不同、端点相同和排除的游戏流包数。端点相同不证明区间内没有变化；端点不同也不表示发生了一次特定交易。
 
+保存的区间差异可按参与者、当前端点时间、原始参数、差异槽位和该槽位**当前端点**的物品键查询：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-ward-inventory" `
+  --event inventory_keyframe_interval_difference_candidates `
+  --participant 1 --slot 7 --item-id 2001 --limit 20
+```
+
+`--slot` 和 `--item-id` 必须匹配同一条差异槽位记录；`--item-id 0` 可匹配当前端点解出的零值。`--latest-per-participant --to-ms 600000` 取截止时间前每场每人最后一条符合筛选条件的差异记录，仍不表示截止时的持续库存状态。查询校验保存的关联元数据与行来源，缺镜像的场次标为不可查询。
+
 只读取已观察到的 HN HeroStats keyframe 候选快照：
 
 ```powershell

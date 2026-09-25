@@ -4,6 +4,20 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed candidate query:** Saved exact-821
+  `inventory_keyframe_interval_difference_candidates` can be filtered by
+  candidate participant, current endpoint time, raw parameter, differing
+  slot, and the current item key on that same slot (including zero).
+  `--latest-per-participant` selects the last matching sampled difference,
+  never a sustained inventory state. The query validates exact build/image,
+  source association, row references and counts; missing-image batch entries
+  remain unavailable. In the saved 11-Replay batch, all 1,759 rows scanned:
+  participant 1 / slot 7 / current item 2001 matched 6 (output SHA-256
+  `80be3c89d3903e6316e50056c9d3d82a83c4af981d7081ad75b781e26afb3074`),
+  participant 1 / slot 0 / current item 0 matched 2
+  (`89e12e0779f6417081386ce46c70ee183601b8b6d63790913418c449b50ccf6c`),
+  and `--latest-per-participant --to-ms 600000` matched 543 and selected 110
+  (`434ed1bcaa67d85af4720f11c6c4f441818b0f6526c1a5a84c55a32b518d4e56`).
 - **Completed candidate interval output:** Selecting exact-821
   `hero_inventory_broadcast_packet` now also emits
   `inventory_keyframe_interval_difference_candidates` for slots whose values

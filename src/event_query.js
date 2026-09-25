@@ -41,6 +41,8 @@ const { HERO_DEATH_EPISODE_821_PROFILE } =
   require('./decoders/rofl_16_19_821_hero_death_episode_candidate');
 const { WARD_INVENTORY_KEYFRAME_PAIR_821_PROFILE } =
   require('./decoders/rofl_16_19_821_ward_inventory_keyframe_pair_candidate');
+const { INVENTORY_KEYFRAME_INTERVAL_DIFFERENCE_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
 const { HERO_WARD_STATS_SNAPSHOT_821_CANDIDATE_PROFILE } =
   require('./decoders/rofl_16_19_821_aux_counts_candidate');
 const { HERO_INVENTORY_BROADCAST_PACKET_CANDIDATE_PROFILE_821 } =
@@ -64,6 +66,16 @@ const { INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821,
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
+const INVENTORY_INTERVAL_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'previous_observation_time_ms', 'current_observation_time_ms',
+  'observation_interval_ms', 'previous_keyframe_chunk_index',
+  'current_keyframe_chunk_index', 'hero_raw_param', 'participant_id_candidate',
+  'observation_kind', 'observation_scope', 'change_time_status',
+  'changed_slot_count', 'changed_slots_candidate', 'confidence', 'semantic_status',
+  'field_confidence', 'raw_packet_ref', 'previous_raw_packet_ref',
+  'current_raw_packet_ref', 'raw_packet_refs',
+]);
 const INCREMENT_MINION_KILLS_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'raw_param', 'raw_payload_hex', 'raw_selector_byte',
@@ -88,6 +100,7 @@ const LATEST_PARTICIPANT_EVENTS_821 = new Set([
   'hero_damage_self_mitigated_snapshot_candidates',
   'hero_death_episode_candidates',
   'ward_inventory_keyframe_pair_candidates',
+  'inventory_keyframe_interval_difference_candidates',
 ]);
 const OPAQUE_U32_FIELDS_821 = Object.freeze({
   npc_buff_add_packet_candidates: Object.freeze(['opaque_u32_0x10']),
@@ -151,6 +164,12 @@ const OPAQUE_PAIR_FIELDS_821 = Object.freeze({
     Object.freeze(['opaque_u32_0x14', 'opaque_u8_0x18']),
 });
 const ASSOCIATION_EVENTS_821 = Object.freeze({
+  inventory_keyframe_interval_difference_candidates: Object.freeze({
+    profile: INVENTORY_KEYFRAME_INTERVAL_DIFFERENCE_821_PROFILE,
+    eventType: 'INVENTORY_KEYFRAME_INTERVAL_DIFFERENCE_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_821_ADJACENT_KEYFRAME_INVENTORY_SLOT_DIFFERENCE',
+    inventoryInterval: true,
+  }),
   ward_inventory_keyframe_pair_candidates: Object.freeze({
     profile: WARD_INVENTORY_KEYFRAME_PAIR_821_PROFILE,
     eventType: 'WARD_INVENTORY_KEYFRAME_PAIR_CANDIDATE',
@@ -624,6 +643,96 @@ function prepareHeroDeathEpisodeAssociation(semantic, analysis, eventKey,
   return association;
 }
 
+function prepareInventoryKeyframeIntervalDifferenceAssociation(semantic, analysis, eventKey,
+  { profile, evidenceStatus }) {
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`,
+      { replay_version: semantic.replay_version,
+        required_replay_version: profile.replay_version });
+  }
+  const association = semantic.candidate_associations?.[profile.capability];
+  if (association?.status !== 'CANDIDATE') {
+    throw new EventQueryError('ASSOCIATION_UNAVAILABLE',
+      `${profile.capability} is not an executed candidate association.`,
+      { capability: profile.capability, association_status: association?.status ?? null,
+        error: association?.error ?? null, semantic_run_status: semantic.status });
+  }
+  const dependency = 'hero_inventory_broadcast_packet';
+  if (!Array.isArray(semantic.requested_capabilities)
+      || !semantic.requested_capabilities.includes(dependency)) {
+    throw new EventQueryError('CAPABILITY_NOT_REQUESTED',
+      `${dependency} was not requested in this Replay artifact.`,
+      { capability: dependency, association: profile.capability });
+  }
+  const broadcast = semantic.capability_results?.[dependency];
+  if (broadcast?.status !== 'CANDIDATE') {
+    throw new EventQueryError('CAPABILITY_UNAVAILABLE',
+      `${dependency} is unavailable for ${profile.capability}.`,
+      { capability: dependency, capability_status: broadcast?.status ?? null,
+        association: profile.capability, missing_input: broadcast?.missing_input ?? null,
+        error: broadcast?.error ?? null });
+  }
+  const imageSha = profile.evidence_runtime_image_sha256;
+  if (association.profile_id !== profile.id
+      || association.evidence_runtime_image_sha256 !== imageSha
+      || association.evidence_status !== evidenceStatus
+      || association.replay_sha256 !== semantic.replay_sha256
+      || !isDeepStrictEqual(association.depends_on, [...profile.depends_on])
+      || !isDeepStrictEqual(association.known_limits, [...profile.known_limits])
+      || !isCount(association.input_count)
+      || !isCount(association.keyframe_count) || association.keyframe_count < 1
+      || !isCount(association.broadcast_keyframe_packet_count)
+      || association.broadcast_keyframe_packet_count
+        !== 10 * association.keyframe_count
+      || !isCount(association.excluded_game_broadcast_count)
+      || association.input_count !== association.broadcast_keyframe_packet_count
+        + association.excluded_game_broadcast_count
+      || !isCount(association.observed_interval_count)
+      || association.observed_interval_count
+        !== 10 * (association.keyframe_count - 1)
+      || !isCount(association.changed_interval_count)
+      || !isCount(association.unchanged_interval_count)
+      || association.changed_interval_count + association.unchanged_interval_count
+        !== association.observed_interval_count
+      || !isCount(association.changed_slot_count)
+      || association.changed_slot_count < association.changed_interval_count
+      || association.changed_slot_count > 10 * association.changed_interval_count
+      || !isCount(association.verified_raw_packet_count)
+      || association.verified_raw_packet_count !== association.input_count
+      || association.event_count !== association.changed_interval_count
+      || analysis.event_counts?.[eventKey] !== association.event_count
+      || !isDeepStrictEqual(
+        analysis.semantic?.candidate_associations?.[profile.capability], association)
+      || broadcast.profile_id
+        !== HERO_INVENTORY_BROADCAST_PACKET_CANDIDATE_PROFILE_821.id
+      || broadcast.evidence_runtime_image_sha256 !== imageSha
+      || broadcast.runtime_image_sha256 !== imageSha
+      || broadcast.runtime_image_status !== 'MATCHED_USED'
+      || broadcast.runtime_image_used !== true
+      || broadcast.evidence_status
+        !== 'CANDIDATE_EXACT_RUNTIME_BROADCAST_PACKET_FIELDS'
+      || broadcast.input_packet_id !== profile.packet_id
+      || broadcast.input_count !== association.input_count
+      || broadcast.event_count !== association.input_count
+      || !isCount(broadcast.decoded_record_count)
+      || broadcast.decoded_record_count
+        < association.broadcast_keyframe_packet_count * 10
+          + association.excluded_game_broadcast_count * 6
+      || broadcast.decoded_record_count
+        > association.broadcast_keyframe_packet_count * 10
+          + association.excluded_game_broadcast_count * 9
+      || analysis.event_counts?.hero_inventory_broadcast_packet_candidates
+        !== broadcast.event_count
+      || !isDeepStrictEqual(
+        analysis.semantic?.capability_results?.[dependency], broadcast)) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      `${profile.capability} identity, source Broadcast, or interval counts differ.`,
+      { capability: profile.capability });
+  }
+  return association;
+}
+
 function prepareWardInventoryKeyframePairAssociation(semantic, analysis, eventKey,
   { profile, evidenceStatus }) {
   if (semantic.replay_version !== profile.replay_version) {
@@ -717,6 +826,10 @@ function prepareWardInventoryKeyframePairAssociation(semantic, analysis, eventKe
 }
 
 function prepareAssociation(semantic, analysis, eventKey, associationConfig) {
+  if (associationConfig.inventoryInterval) {
+    return prepareInventoryKeyframeIntervalDifferenceAssociation(semantic, analysis,
+      eventKey, associationConfig);
+  }
   if (associationConfig.wardPair) {
     return prepareWardInventoryKeyframePairAssociation(semantic, analysis, eventKey,
       associationConfig);
@@ -1582,6 +1695,123 @@ function heroDeathEpisodeRow(row, prepared, lineNumber, seenPrimaryPositions,
   }
 }
 
+function inventoryKeyframeIntervalDifferenceRow(row, prepared, lineNumber, state) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid inventory_keyframe_interval_difference row at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const fields = Object.keys(row);
+  const previousRef = row.previous_raw_packet_ref;
+  const currentRef = row.current_raw_packet_ref;
+  const rawParam = row.hero_raw_param;
+  const previousTime = row.previous_observation_time_ms;
+  const currentTime = row.current_observation_time_ms;
+  if (fields.length !== INVENTORY_INTERVAL_ROW_FIELDS_821.size
+      || fields.some((field) => !INVENTORY_INTERVAL_ROW_FIELDS_821.has(field))
+      || row.event_type !== prepared.associationConfig.eventType
+      || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+      || row.build_profile !== prepared.associationConfig.profile.id
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== prepared.capabilityResult.evidence_status
+      || row.observation_kind !== 'ADJACENT_KEYFRAME_SAMPLED_ENDPOINTS'
+      || row.observation_scope !== 'KEYFRAME_ENDPOINT_DIFFERENCE_ONLY'
+      || row.change_time_status !== 'UNRESOLVED_WITHIN_INTERVAL'
+      || !Number.isSafeInteger(rawParam)
+      || rawParam < 0x400000ae || rawParam > 0x400000b7
+      || row.participant_id_candidate !== rawParam - 0x400000ae + 1
+      || !Number.isSafeInteger(previousTime) || previousTime < 0
+      || !Number.isSafeInteger(currentTime) || currentTime <= previousTime
+      || row.replay_time_ms !== currentTime
+      || row.observation_interval_ms !== currentTime - previousTime
+      || !Array.isArray(row.raw_packet_refs) || row.raw_packet_refs.length !== 2
+      || !isDeepStrictEqual(row.raw_packet_ref, currentRef)
+      || !isDeepStrictEqual(row.raw_packet_refs, [previousRef, currentRef])
+      || !isDeepStrictEqual(row.field_confidence, {
+        previous_observation_time_ms: 'VERIFIED_DIRECT',
+        current_observation_time_ms: 'VERIFIED_DIRECT',
+        participant_id_candidate: 'CANDIDATE_KR_821_RAW_PARAM_TAIL_ALIGNMENT',
+        changed_slots_candidate: 'CANDIDATE_EXACT_RUNTIME_BROADCAST_PACKET_FIELDS',
+      })) {
+    invalid('exact-build observation, interval timing or named references differ');
+  }
+  const validRef = (ref, time, chunkIndex) =>
+    !!ref && typeof ref === 'object' && !Array.isArray(ref)
+    && ref.replay_sha256 === prepared.replaySha
+    && (ref.source_path === null
+      || (typeof ref.source_path === 'string' && ref.source_path.length > 0))
+    && (prepared.sourcePath === undefined || ref.source_path === prepared.sourcePath)
+    && ref.chunk_stream === 'keyframe'
+    && Number.isSafeInteger(ref.chunk_index) && ref.chunk_index === chunkIndex
+    && Number.isSafeInteger(ref.chunk_id) && ref.chunk_id >= 0
+    && Number.isSafeInteger(ref.chunk_file_offset) && ref.chunk_file_offset >= 0
+    && Number.isSafeInteger(ref.decompressed_block_offset)
+    && ref.decompressed_block_offset >= 0
+    && Number.isSafeInteger(ref.decompressed_payload_offset)
+    && ref.decompressed_payload_offset > ref.decompressed_block_offset
+    && ref.packet_id === 0x0357 && ref.replay_time_ms === time
+    && Number.isSafeInteger(ref.payload_length)
+    && ref.payload_length >= 76 && ref.payload_length <= 166
+    && ref.raw_param === rawParam && REPLAY_SHA.test(ref.raw_payload_sha256);
+  if (!Number.isSafeInteger(row.previous_keyframe_chunk_index)
+      || !Number.isSafeInteger(row.current_keyframe_chunk_index)
+      || row.previous_keyframe_chunk_index < 0
+      || row.current_keyframe_chunk_index <= row.previous_keyframe_chunk_index
+      || !validRef(previousRef, previousTime, row.previous_keyframe_chunk_index)
+      || !validRef(currentRef, currentTime, row.current_keyframe_chunk_index)
+      || previousRef.source_path !== currentRef.source_path) {
+    invalid('previous/current keyframe packet identity or order differs');
+  }
+  const changes = row.changed_slots_candidate;
+  if (!Array.isArray(changes) || changes.length < 1 || changes.length > 10
+      || row.changed_slot_count !== changes.length) {
+    invalid('changed slot count or list differs');
+  }
+  let previousSlot = -1;
+  for (const change of changes) {
+    const keys = change && typeof change === 'object' && !Array.isArray(change)
+      ? Object.keys(change) : [];
+    if (keys.length !== 3 || !keys.includes('slot_candidate')
+        || !keys.includes('previous_item_id_candidate')
+        || !keys.includes('current_item_id_candidate')
+        || !Number.isSafeInteger(change.slot_candidate)
+        || change.slot_candidate <= previousSlot || change.slot_candidate > 9
+        || !Number.isSafeInteger(change.previous_item_id_candidate)
+        || change.previous_item_id_candidate < 0
+        || change.previous_item_id_candidate > 0xffffffff
+        || !Number.isSafeInteger(change.current_item_id_candidate)
+        || change.current_item_id_candidate < 0
+        || change.current_item_id_candidate > 0xffffffff
+        || change.previous_item_id_candidate === change.current_item_id_candidate) {
+      invalid('changed slot keys, order or endpoint item IDs differ');
+    }
+    previousSlot = change.slot_candidate;
+  }
+  const pairKey = `${row.previous_keyframe_chunk_index}/${row.current_keyframe_chunk_index}`;
+  const framePair = state.pairs.get(pairKey)
+    ?? { previousTime, currentTime, participants: new Set() };
+  if (framePair.previousTime !== previousTime || framePair.currentTime !== currentTime
+      || framePair.participants.has(row.participant_id_candidate)) {
+    invalid('frame pair has conflicting times or duplicate participant');
+  }
+  framePair.participants.add(row.participant_id_candidate);
+  state.pairs.set(pairKey, framePair);
+  for (const [ref, time] of [[previousRef, previousTime], [currentRef, currentTime]]) {
+    const frameTime = state.frameTimes.get(ref.chunk_index);
+    if (frameTime !== undefined && frameTime !== time) {
+      invalid('keyframe time differs across participant observations');
+    }
+    state.frameTimes.set(ref.chunk_index, time);
+    const endpointKey = `${ref.chunk_index}/${row.participant_id_candidate}`;
+    const existingRef = state.endpoints.get(endpointKey);
+    if (existingRef && !isDeepStrictEqual(existingRef, ref)) {
+      invalid('participant keyframe endpoint reference differs across intervals');
+    }
+    state.endpoints.set(endpointKey, ref);
+  }
+  state.changedSlotCount += changes.length;
+}
+
 function wardInventoryKeyframePairRow(row, prepared, lineNumber, seenKeys,
   seenPacketPositions, frames) {
   const invalid = (reason) => {
@@ -1696,9 +1926,14 @@ function wardInventoryKeyframePairRow(row, prepared, lineNumber, seenKeys,
 }
 
 function associationRow(row, prepared, lineNumber, seenKeys, seenPacketPositions,
-  episodePhysicalRefs, wardPairFrames) {
+  episodePhysicalRefs, wardPairFrames, inventoryIntervalState) {
   const { associationConfig, capabilityResult, replaySha, replayVersion } = prepared;
   if (!associationConfig) return;
+  if (associationConfig.inventoryInterval) {
+    inventoryKeyframeIntervalDifferenceRow(row, prepared, lineNumber,
+      inventoryIntervalState);
+    return;
+  }
   if (associationConfig.wardPair) {
     wardInventoryKeyframePairRow(row, prepared, lineNumber, seenKeys,
       seenPacketPositions, wardPairFrames);
@@ -2200,6 +2435,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     'hero_inventory_broadcast_packet_candidates',
     'hero_inventory_set_item_packet_candidates',
     'ward_inventory_keyframe_pair_candidates',
+    'inventory_keyframe_interval_difference_candidates',
   ].includes(prepared.eventKey);
   const killerConfig = KILLER_PARTICIPANT_EVENTS_821[prepared.eventKey] ?? null;
   if (killerParticipant != null) {
@@ -2238,7 +2474,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   if ((itemId != null || slot != null) && (!inventoryPacketEvent
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
-      '--item-id and --slot require a 16.19.821.7343 inventory packet or ward/inventory keyframe pair candidate event.');
+      '--item-id and --slot require an exact-821 inventory packet, ward/inventory pair, or keyframe interval difference candidate event.');
   }
   const opaqueU32Fields = OPAQUE_U32_FIELDS_821[prepared.eventKey] ?? null;
   if (opaqueU32 != null && (!opaqueU32Fields
@@ -2298,6 +2534,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   const associationPacketPositions = new Set();
   const episodePhysicalRefs = new Map();
   const wardPairFrames = new Map();
+  const inventoryIntervalState = { pairs: new Map(), frameTimes: new Map(),
+    endpoints: new Map(), changedSlotCount: 0 };
   const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
   try {
@@ -2352,7 +2590,8 @@ async function streamEventQuery(prepared, options, emitLine) {
           { line_number: lineNumber });
       }
       associationRow(row, prepared, lineNumber, associationKeys,
-        associationPacketPositions, episodePhysicalRefs, wardPairFrames);
+        associationPacketPositions, episodePhysicalRefs, wardPairFrames,
+        inventoryIntervalState);
       if (prepared.eventKey === 'hero_death_episode_candidates') {
         if (row.return_observation_status === 'OBSERVED_RETURN') observedReturnCount += 1;
         else terminalUnobservedCount += 1;
@@ -2366,15 +2605,22 @@ async function streamEventQuery(prepared, options, emitLine) {
       }
       const params = rawParam == null ? null : rawPacketParams(row, lineNumber);
       const inventoryRecordRow = prepared.eventKey
-        === 'ward_inventory_keyframe_pair_candidates'
-        ? { records_candidate: row.inventory_records_candidate,
-          record_count: row.inventory_record_count } : row;
+        === 'inventory_keyframe_interval_difference_candidates'
+        ? { records_candidate: row.changed_slots_candidate.map((change) => ({
+          slot_candidate: change.slot_candidate,
+          item_id_candidate: change.current_item_id_candidate,
+        })), record_count: row.changed_slot_count }
+        : prepared.eventKey === 'ward_inventory_keyframe_pair_candidates'
+          ? { records_candidate: row.inventory_records_candidate,
+            record_count: row.inventory_record_count } : row;
       const items = itemId == null ? null
         : prepared.eventKey === 'hero_inventory_set_item_packet_candidates'
           ? packetScalarItemId(row, lineNumber)
           : packetRecordItemIds(inventoryRecordRow, lineNumber,
             ['hero_inventory_broadcast_packet_candidates',
-              'ward_inventory_keyframe_pair_candidates'].includes(prepared.eventKey));
+              'ward_inventory_keyframe_pair_candidates',
+              'inventory_keyframe_interval_difference_candidates']
+              .includes(prepared.eventKey));
       const slots = slot == null ? null
         : prepared.eventKey === 'hero_inventory_set_item_packet_candidates'
           ? packetScalarSlot(row, lineNumber)
@@ -2487,6 +2733,22 @@ async function streamEventQuery(prepared, options, emitLine) {
       'Ward/inventory keyframes lack complete participant rosters or unique paired refs.',
       { scanned_count: scannedCount, keyframe_count: wardPairFrames.size,
         unique_raw_packet_count: associationPacketPositions.size });
+  }
+  if (prepared.eventKey === 'inventory_keyframe_interval_difference_candidates') {
+    const association = prepared.capabilityResult;
+    const frameTimes = [...inventoryIntervalState.frameTimes.entries()]
+      .sort(([a], [b]) => a - b);
+    if (inventoryIntervalState.changedSlotCount !== association.changed_slot_count
+        || inventoryIntervalState.pairs.size > association.keyframe_count - 1
+        || inventoryIntervalState.frameTimes.size > association.keyframe_count
+        || frameTimes.some(([, time], index) => index > 0
+          && time <= frameTimes[index - 1][1])) {
+      throw new EventQueryError('EVENT_COUNT_MISMATCH',
+        'Inventory interval rows disagree with changed slots or ordered keyframes.',
+        { changed_slot_count: inventoryIntervalState.changedSlotCount,
+          frame_pair_count: inventoryIntervalState.pairs.size,
+          observed_frame_count: inventoryIntervalState.frameTimes.size });
+    }
   }
   if (prepared.eventKey === 'champion_triple_quadra_multi_group_candidates'
       && (tripleGroupCount
