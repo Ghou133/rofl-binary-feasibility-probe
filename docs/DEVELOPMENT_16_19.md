@@ -188,6 +188,17 @@ Current progress (older notes below retain their original research context):
   No purchase, sale, between-packet state or participant identity for four
   noncanonical raw-param variants is inferred. Ignored proof and native
   summaries are under `artifacts/16_19_development/inventory_routes_821/`.
+- **821 inventory cross-route NO-GO:** A combined exact-image CLI run on all
+  11 KR Replays emitted 671 MapView, 3,331 Broadcast and 177 SetItem packet
+  candidates without framing errors. No MapView packet shared both raw param
+  and replay time with a Broadcast or SetItem packet. The 110 SetItem rows at
+  time zero shared actor and time with Broadcast rows but came from different
+  chunks and had different observed slot-8 item keys (positive versus zero).
+  Among 174 SetItem rows with a later same-param MapView row, only 95 first
+  later rows had the same observed slot/item key. These routes are not joined
+  into inventory changes or transactions. The comparisons and original JSONL
+  are retained under ignored
+  `artifacts/16_19_development/inventory_three_routes_cli_batch_821/`.
 - **Completed:** KR 821 `cast_spell_ans_packet` profile v3 also retains the
   protected native byte and decoded anonymous u8 at packet object `+0x140`.
   An exact-image inverse table is SHA-pinned and recomputed at the JS
