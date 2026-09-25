@@ -14,16 +14,18 @@ const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821: v1ProfileId,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821: v2ProfileId,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: v3ProfileId,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: v4ProfileId,
   decodeUnitApplyDamagePacketCandidates821: decode,
   decodeUnitApplyDamageCallbackF32FromRaw821: decodeFloat,
   decodeUnitApplyDamageCallbackU32FromRaw821: decodeU32,
+  decodeUnitApplyDamageCallbackF32At18FromEncoded821: decodeF32At18,
   decodeUnitApplyDamageLookupKeyFromRaw821: decodeLookupKey,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 
 const BUILD = '16.19.821.7343';
-const IMAGE_PATH = path.resolve(__dirname, '..', 'artifacts', '16_19_development',
+const IMAGE_PATH = process.env.ROFL_821_RUNTIME_IMAGE || path.resolve(__dirname, '..', 'artifacts', '16_19_development',
   'kr_821_runtime_capture', 'LeagueOfLegends_16.19.821.7343.memory.bin');
-const REPLAY_PATH = path.resolve(__dirname, '..', '..', 'kr-rofl-batch-collector',
+const REPLAY_PATH = process.env.ROFL_821_REPLAY || path.resolve(__dirname, '..', '..', 'kr-rofl-batch-collector',
   'data', 'KR', '16.19', 'builds', BUILD, 'rofl', 'KR_8392938200.rofl');
 const HAS_IMAGE = fs.existsSync(IMAGE_PATH);
 const HAS_REPLAY = fs.existsSync(REPLAY_PATH);
@@ -61,6 +63,22 @@ const SELECTOR_0X10_PACKETS = [
     payloadHex: OTHER_PACKET_HEX,
     encoded: '8687909e', value: 252051715, source: 'RAW_READER' },
 ];
+const SELECTOR_0X18_PACKETS = [
+  { selector: 0, rawParam: 1073742258,
+    payloadHex: '3706a54411d863b80b68bb01d1ca1e9bde73ec6b75',
+    encoded: 'd101bb68', value: 68.66241455078125, offset: 9 },
+  { selector: 2, rawParam: 1073742263,
+    payloadHex: 'a4069f40173506860b68324545e37969dec6ec8075',
+    encoded: '45453268', value: 38.54999923706055, offset: 9 },
+  { selector: 3, rawParam: 1073742006,
+    payloadHex: 'e286df40173506860b68984545da0185de66ec8075',
+    encoded: '45459868', value: 56.29999923706055, offset: 9 },
+  { selector: 5, rawParam: 1073742259, payloadHex: OTHER_PACKET_HEX,
+    encoded: '3e3e3e3e', value: 0, offset: null },
+  { selector: 6, rawParam: 1073742007,
+    payloadHex: '9207e540131162b10b68d425deb7c0abdec6ecac75',
+    encoded: 'de25d468', value: 45.70000076293945, offset: 9 },
+];
 
 function packet(rawParam, payloadHex, timeMs = 1500) {
   const payload = Buffer.from(payloadHex, 'hex');
@@ -95,8 +113,11 @@ test('821 UnitApplyDamage emits packet selectors and only the native-matched fam
       'CANDIDATE_EXACT_821_UNIT_APPLY_DAMAGE_PACKET_FIELDS');
     assert.equal(v2ProfileId, `${v1ProfileId.slice(0, -1)}2`);
     assert.equal(v3ProfileId, `${v1ProfileId.slice(0, -1)}3`);
-    assert.equal(profile.id, `${v1ProfileId.slice(0, -1)}4`);
+    assert.equal(v4ProfileId, `${v1ProfileId.slice(0, -1)}4`);
+    assert.equal(profile.id, `${v1ProfileId.slice(0, -1)}5`);
     assert.equal(result.status, 'CANDIDATE');
+    assert.equal(result.evidence_callback_f32_0x18_table_sha256,
+      profile.evidence_callback_f32_0x18_table_sha256);
     assert.equal(result.runtime_image_status, 'MATCHED_USED');
     assert.equal(result.input_count, 2);
     assert.equal(result.event_count, 2);
@@ -110,6 +131,9 @@ test('821 UnitApplyDamage emits packet selectors and only the native-matched fam
     assert.equal(result.native_callback_u32_0x10_full_write_count, 2);
     assert.deepEqual(result.native_callback_u32_0x10_source_counts,
       { RAW_READER: 1, CONSTANT_0: 1 });
+    assert.equal(result.native_callback_f32_0x18_full_write_count, 2);
+    assert.deepEqual(result.native_callback_f32_0x18_source_counts,
+      { RAW_READER: 0, CONSTANT_0: 2 });
     assert.deepEqual(result.native_callback_lookup_key_0x24_raw_param_relation_counts, {
       EQUAL: 1, RAW_PARAM_IS_LOOKUP_PLUS_0X100: 0, OTHER: 1,
     });
@@ -129,6 +153,8 @@ test('821 UnitApplyDamage emits packet selectors and only the native-matched fam
     assert.equal(common.native_callback_u32_0x10_candidate, 0);
     assert.equal(common.native_callback_u32_0x10_encoded_bytes_hex, '85858585');
     assert.equal(common.native_callback_u32_0x10_source, 'CONSTANT_0');
+    assert.equal(common.native_callback_f32_0x18_candidate, 0);
+    assert.equal(common.native_callback_f32_0x18_source, 'CONSTANT_0');
     assert.equal(common.native_callback_lookup_key_u32_0x24_candidate, 0x40004007);
     assert.equal(common.native_callback_lookup_key_0x24_encoded_bytes_hex, 'b7294929');
     assert.equal(common.native_callback_lookup_key_u32_0x2c_candidate, 0x40004691);
@@ -143,6 +169,8 @@ test('821 UnitApplyDamage emits packet selectors and only the native-matched fam
     assert.equal(other.native_callback_u32_0x10_candidate, 252051715);
     assert.equal(other.native_callback_u32_0x10_encoded_bytes_hex, '8687909e');
     assert.equal(other.native_callback_u32_0x10_source, 'RAW_READER');
+    assert.equal(other.native_callback_f32_0x18_candidate, 0);
+    assert.equal(other.native_callback_f32_0x18_encoded_bytes_hex, '3e3e3e3e');
     assert.equal(other.native_callback_lookup_key_u32_0x24_candidate, 0x400000b3);
     assert.equal(other.native_callback_lookup_key_0x24_encoded_bytes_hex, 'e2494929');
     assert.equal(other.native_callback_lookup_key_u32_0x2c_candidate, 0x400000ae);
@@ -171,6 +199,37 @@ test('saved anonymous +0x10 u32 can be rederived from protected native bytes', (
   assert.equal(decodeU32('8687909E'), null);
   assert.equal(decodeU32('868790'), null);
 });
+
+test('saved anonymous +0x18 f32 can be rederived from protected native bytes', () => {
+  assert.equal(decodeF32At18('d101bb68'), 68.66241455078125);
+  assert.equal(decodeF32At18('3e3e3e3e'), 0);
+  assert.equal(decodeF32At18('D101BB68'), null);
+  assert.equal(decodeF32At18('d101bb'), null);
+});
+
+test('821 native +0x18 f32 accepts every observed fourth-selector branch',
+  { skip: !HAS_IMAGE && 'exact mapped 821 runtime image is unavailable' }, () => {
+    const result = decode(fixtureWithPackets(SELECTOR_0X18_PACKETS),
+      { runtimeImagePath: IMAGE_PATH });
+    assert.equal(result.status, 'CANDIDATE', result.error);
+    assert.equal(result.native_callback_f32_0x18_full_write_count, 5);
+    assert.deepEqual(result.native_callback_f32_0x18_source_counts,
+      { RAW_READER: 4, CONSTANT_0: 1 });
+    for (const [index, expected] of SELECTOR_0X18_PACKETS.entries()) {
+      const row = result.events[index];
+      assert.equal(row.header_selector_bits_6_8, expected.selector);
+      assert.equal(row.native_callback_f32_0x18_candidate, expected.value);
+      assert.equal(row.native_callback_f32_0x18_encoded_bytes_hex, expected.encoded);
+      assert.equal(row.native_callback_f32_0x18_source,
+        expected.selector === 5 ? 'CONSTANT_0' : 'RAW_READER');
+      assert.equal(row.native_callback_f32_0x18_raw_offset, expected.offset);
+      assert.equal(row.native_callback_f32_0x18_raw_bytes_hex,
+        expected.offset === null ? null
+          : Buffer.from(expected.payloadHex, 'hex')
+            .subarray(expected.offset, expected.offset + 4).toString('hex'));
+      assert.equal(row.semantic_effect_status, 'UNKNOWN');
+    }
+  });
 
 test('821 native +0x10 u32 accepts all five observed first-selector branches',
   { skip: !HAS_IMAGE && 'exact mapped 821 runtime image is unavailable' }, () => {
@@ -416,6 +475,33 @@ test('821 UnitApplyDamage rejects forged native +0x10 value and incomplete write
       assert.equal(result.native_witness_status, 'FAILED');
       assert.equal(result.events, null);
       assert.match(result.error, /\+0x10 callback/);
+      t.mock.restoreAll();
+    }
+  });
+
+test('821 UnitApplyDamage rejects forged +0x18 native value, source, bytes and write counts',
+  { skip: !HAS_IMAGE && 'exact mapped 821 runtime image is unavailable' }, (t) => {
+    const realSpawnSync = childProcess.spawnSync;
+    for (const change of ['value', 'encoded', 'source', 'offset', 'write_count',
+      'table_hash']) {
+      t.mock.method(childProcess, 'spawnSync', (...args) => {
+        const run = realSpawnSync(...args);
+        assert.equal(run.status, 0, run.stderr);
+        const native = JSON.parse(run.stdout);
+        const at18 = native.native_f32_0x18_rows[0];
+        if (change === 'value') at18[2] += 1;
+        if (change === 'encoded') at18[1] = '00000000';
+        if (change === 'source') at18[3] = 'CONSTANT_0';
+        if (change === 'offset') at18[4] += 1;
+        if (change === 'write_count') native.native_f32_0x18_full_write_count -= 1;
+        if (change === 'table_hash') native.callback_f32_0x18_table_sha256 = '0'.repeat(64);
+        return { ...run, stdout: JSON.stringify(native) };
+      });
+      const result = decode(fixtureWithPackets([SELECTOR_0X18_PACKETS[0]]),
+        { runtimeImagePath: IMAGE_PATH });
+      assert.equal(result.status, 'DECODE_FAILED', change);
+      assert.equal(result.native_witness_status, 'FAILED', change);
+      assert.equal(result.events, null, change);
       t.mock.restoreAll();
     }
   });
