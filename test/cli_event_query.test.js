@@ -737,6 +737,76 @@ test('query-events reads batch JSONL with a global limit and per-Replay counts',
   assert.deepEqual(summary.replay_results.map((entry) => entry.emitted_count), [1, 0]);
 });
 
+test('query-events reads a multi-Replay decode output with the same hash checks', (t) => {
+  const decoded = batchArtifact(t);
+  rewriteJson(decoded.manifestPath, (manifest) => {
+    manifest.command_args = ['decode', 'synthetic-input-directory', '--events', CAPABILITY];
+  });
+  const complete = run(decoded.root, '--event', EVENT);
+  assert.equal(complete.status, 0, complete.stderr);
+  assert.equal(complete.stdout,
+    `${decoded.first.lines[0]}\n${JSON.stringify({
+      replay_sha256: 'b'.repeat(64), replay_time_ms: 200,
+      participant_id_candidate: 2,
+    })}\n`);
+  const summary = JSON.parse(complete.stderr);
+  assert.equal(summary.query_status, 'COMPLETE');
+  assert.equal(summary.replay_count, 2);
+  assert.equal(summary.completed_replay_count, 2);
+  assert.equal(summary.scanned_count, 2);
+  assert.equal(summary.emitted_count, 2);
+
+  rewriteJson(path.join(decoded.secondDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results[CAPABILITY] = {
+      status: 'PROFILE_UNAVAILABLE', event_count: null,
+      missing_input: 'exact runtime image',
+    };
+  });
+  fs.rmSync(path.join(decoded.secondDirectory, `${EVENT}.jsonl`));
+  refreshBatchHashes(decoded.manifestPath);
+  const partial = run(decoded.root, '--event', EVENT);
+  assert.equal(partial.status, 0, partial.stderr);
+  assert.equal(partial.stdout, `${decoded.first.lines[0]}\n`);
+  assert.equal(JSON.parse(partial.stderr).query_status, 'PARTIAL');
+  assert.equal(JSON.parse(partial.stderr).replay_results[1].code,
+    'CAPABILITY_UNAVAILABLE');
+
+  fs.appendFileSync(path.join(decoded.first.replayDirectory, `${EVENT}.jsonl`), '{}\n');
+  const corrupt = run(decoded.root, '--event', EVENT);
+  assert.equal(corrupt.status, 2);
+  assert.equal(JSON.parse(corrupt.stderr).code, 'ARTIFACT_HASH_MISMATCH');
+
+  rewriteJson(decoded.manifestPath, (manifest) => {
+    manifest.command_args[0] = 'analyze';
+  });
+  const wrongCommand = run(decoded.root, '--event', EVENT);
+  assert.equal(wrongCommand.status, 2);
+  assert.equal(JSON.parse(wrongCommand.stderr).code, 'INVALID_BATCH_METADATA');
+});
+
+test('query-events reads a single-Replay decode root and rejects malformed roots', (t) => {
+  const decoded = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 100,
+    participant_id_candidate: 1 }]);
+  const manifestPath = path.join(decoded.root, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify({
+    command_args: ['decode', 'synthetic.rofl'],
+    replay_inputs: [{ sha256: SHA, version: VERSION,
+      artifact_directory: 'replays/synthetic' }],
+  }));
+  refreshBatchHashes(manifestPath);
+  const complete = run(decoded.root, '--event', EVENT);
+  assert.equal(complete.status, 0, complete.stderr);
+  assert.equal(complete.stdout, `${decoded.lines[0]}\n`);
+  assert.equal(JSON.parse(complete.stderr).replay_count, 1);
+
+  rewriteJson(manifestPath, (manifest) => {
+    manifest.replay_inputs[0].artifact_directory = 'replays/../outside';
+  });
+  const malformed = run(decoded.root, '--event', EVENT);
+  assert.equal(malformed.status, 2);
+  assert.equal(JSON.parse(malformed.stderr).code, 'INVALID_BATCH_METADATA');
+});
+
 test('query-events marks unavailable batch Replays and refuses an all-unavailable batch', (t) => {
   const batch = batchArtifact(t);
   rewriteJson(path.join(batch.secondDirectory, 'semantic_run.json'), (semantic) => {

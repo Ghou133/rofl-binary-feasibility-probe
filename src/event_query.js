@@ -1546,11 +1546,14 @@ function prepareBatchEventQuery(directory, eventKey) {
   const artifactDirectory = path.resolve(directory);
   const manifest = readArtifactJson(artifactDirectory, 'manifest.json');
   const hashes = manifest.output_hashes_excluding_manifest;
-  if (manifest.command_args?.[0] !== 'batch'
-      || !Array.isArray(manifest.replay_inputs) || manifest.replay_inputs.length === 0
+  const replayCount = Array.isArray(manifest.replay_inputs)
+    ? manifest.replay_inputs.length : 0;
+  const command = Array.isArray(manifest.command_args)
+    ? manifest.command_args[0] : null;
+  if (!(['batch', 'decode'].includes(command) && replayCount > 0)
       || !hashes || typeof hashes !== 'object' || Array.isArray(hashes)) {
     throw new EventQueryError('INVALID_BATCH_METADATA',
-      'manifest.json must identify a nonempty batch run with output hashes.');
+      'manifest.json must identify a nonempty batch or decode run with output hashes.');
   }
   const replayRoot = path.join(artifactDirectory, 'replays');
   let replayRootStat;
