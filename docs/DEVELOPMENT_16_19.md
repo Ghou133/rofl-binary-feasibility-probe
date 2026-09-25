@@ -4,6 +4,16 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `champion_die_event_packet` is an unpublished
+  selected CLI/API candidate for exact-image OnEvent child `0x0004`. The
+  exact name table labels it OnChampionDie, and the ParamsDie callback
+  directly reads anonymous child `+0x04` u32. Native decoding fully consumed
+  all 831 observed 116-byte OnEvent packets in 11 KR Replays, yielding
+  655 target packets and 176 same-length controls. The packet marker and
+  field do not prove an effective death, a victim, or a killer. A combined
+  CLI smoke on `KR_8392938200` emitted 71 candidates and excluded 24
+  controls without framing errors. Ignored independent evidence is under
+  `artifacts/16_19_development/on_event_remaining_821/`.
 - **Completed:** KR 821 `stealth_event_packet` is an unpublished selected
   CLI/API candidate for exact-image OnEvent children `0x0101/0x0102`.
   The exact 821 event-name table labels them OnEnterStealth and OnExitStealth.

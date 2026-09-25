@@ -33,6 +33,8 @@ const shieldingParamsPacketPairCandidate1619821 =
   require('./decoders/rofl_16_19_821_shielding_params_packet_pair_candidate');
 const stealthEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_stealth_event_packet_candidate');
+const championDieEventPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_champion_die_event_packet_candidate');
 const castSpellAnsCandidate1619821 =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const buffRemovePacketCandidate1619821 =
@@ -517,6 +519,7 @@ const BUILD_PROFILES = deepFreeze({
       params_heal_packet: 0x040a,
       shielding_params_packet_pair: 0x040a,
       stealth_event_packet: 0x040a,
+      champion_die_event_packet: 0x040a,
       cast_spell_ans_packet: 0x01da,
       npc_buff_remove_packet: 0x047c,
       npc_buff_add_packet: 0x00ae,
@@ -581,6 +584,8 @@ const BUILD_PROFILES = deepFreeze({
         shieldingParamsPacketPairCandidate1619821.SHIELDING_PARAMS_PACKET_PAIR_821_PROFILE,
       stealth_event_packet:
         stealthEventPacketCandidate1619821.STEALTH_EVENT_PACKET_CANDIDATE_PROFILE_821,
+      champion_die_event_packet:
+        championDieEventPacketCandidate1619821.CHAMPION_DIE_EVENT_PACKET_821_PROFILE,
       cast_spell_ans_packet:
         castSpellAnsCandidate1619821.CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
       npc_buff_remove_packet:
@@ -638,6 +643,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_NATIVE_ON_EVENT_SHIELDING_PARAMS_PAIRED_REPORTS',
       stealth_event_packet:
         'CANDIDATE_821_NATIVE_ON_EVENT_STEALTH_NAMED_PACKET_FIELDS',
+      champion_die_event_packet:
+        'CANDIDATE_821_NATIVE_ON_CHAMPION_DIE_NAMED_PACKET_FIELD',
       cast_spell_ans_packet: 'CANDIDATE_821_NATIVE_CAST_SPELL_ANS_OPAQUE_PACKET_FIELDS',
       npc_buff_remove_packet: 'CANDIDATE_821_NATIVE_BUFF_REMOVE2_OPAQUE_PACKET_FIELDS',
       npc_buff_add_packet: 'CANDIDATE_821_NATIVE_BUFF_ADD2_OPAQUE_PACKET_FIELDS',
@@ -683,6 +690,7 @@ const BUILD_PROFILES = deepFreeze({
       params_heal_packet: 'exact 821 native 0x040a OnEvent packet and registered child 0x004b ParamsHeal; handler reads reported f32 at child +0x18; two u32 fields remain anonymous, with no effective-heal, caster, or target inference',
       shielding_params_packet_pair: 'exact 821 native 0x040a OnEvent child 0x00ef/0x00f0 registration and one-to-one packet-local blob pairing; callback reads anonymous fields, while raw f32 at child +0x10 is opaque; no shield generation, absorption, actor, or target inference',
       stealth_event_packet: 'exact 821 native 0x040a OnEvent child 0x0101/0x0102 registrations and event-name table; callback reads anonymous child +0x04 u32; no participant, visibility, or transition lifecycle inference',
+      champion_die_event_packet: 'exact 821 native 0x040a OnEvent child 0x0004 ParamsDie registration and OnChampionDie name table; callback reads anonymous child +0x04 u32; no effective death, actor, or state transition inference',
       cast_spell_ans_packet: 'exact 821 native 0x01da packet constructor/deserializer, callback transforms for opaque object offsets 0x148/0x14c, nested protected float at +0xe0 and byte at +0x140; no successful-cast, owner, target, spell, slot or field-meaning inference',
       npc_buff_remove_packet: 'exact 821 native 0x047c BuffRemove2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14/0x18; no owner, buff identity, target or lifecycle inference',
       npc_buff_add_packet: 'exact 821 native 0x00ae BuffAdd2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14; no owner, buff identity, target or lifecycle inference',
@@ -712,6 +720,7 @@ const BUILD_PROFILES = deepFreeze({
       'params_heal_packet',
       'shielding_params_packet_pair',
       'stealth_event_packet',
+      'champion_die_event_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',
