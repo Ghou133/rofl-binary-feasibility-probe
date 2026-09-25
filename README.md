@@ -229,6 +229,15 @@ node src/cli.js query-events "work\16-19-821-inventory\replays\KR_example" `
 
 `--item-id` 接受十进制或 `0x` 十六进制 uint32，只匹配 821 MapView/Broadcast 当包 `records_candidate[].item_id_candidate` 或 SetItem 当包 `item_id_candidate`，不查询回调空槽、包间库存或买卖事件。Broadcast 中解出的物品 `0` 可以精确查询；当前 SetItem 样本只观察到正值。输出仍是未修改的原始 JSONL 行；汇总中的 `item_id_unavailable_count` 区分字段不可用与已检查后的零命中。其他事件流不能使用此过滤器。
 
+对 821 治疗上报或护盾双包中的匿名整数精确查询：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-heal-report\replays\KR_example" `
+  --event params_heal_packet_candidates --opaque-u32 0x400000b3 --limit 20
+```
+
+`--opaque-u32` 同时支持 `shielding_params_packet_pair_candidates`，匹配各记录中任一已解码匿名 u32 字段；它不使用外层 `raw_param` 代替字段，也不赋予治疗者、受治疗者、施盾者或目标角色。十进制、十六进制和 `0` 均可精确查询；汇总保留字段不可用数与已检查后的零命中。
+
 执行 **16.15.801.3452** 的旧版整合语义分析：
 
 ```powershell

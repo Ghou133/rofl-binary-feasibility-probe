@@ -4,6 +4,14 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** `query-events --opaque-u32` searches either decoded
+  anonymous u32 in exact 821 `params_heal_packet_candidates` or
+  `shielding_params_packet_pair_candidates`. It preserves JSONL rows,
+  reports missing fields separately from zero matches, and never substitutes
+  outer `raw_param` or assigns entity roles. A real KR Replay query scanned
+  6,059 heal rows and 164 shield pairs, matching 321 and 100 respectively
+  for two selected exact u32 values. Ignored query output is under
+  `artifacts/16_19_development/opaque_u32_query_821/`.
 - **Completed:** KR 821 `shielding_params_packet_pair` is an unpublished
   selected CLI/API candidate for exact-image OnEvent children `0x00f0`
   and `0x00ef`, both registered as `ShieldingParams`. Native decoding fully

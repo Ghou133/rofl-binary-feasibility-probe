@@ -15,6 +15,8 @@ const CAPABILITY = 'hero_level_state';
 const INVENTORY_EVENT = 'hero_inventory_packet_candidates';
 const BROADCAST_EVENT = 'hero_inventory_broadcast_packet_candidates';
 const SET_ITEM_EVENT = 'hero_inventory_set_item_packet_candidates';
+const HEAL_PACKET_EVENT = 'params_heal_packet_candidates';
+const SHIELD_PAIR_EVENT = 'shielding_params_packet_pair_candidates';
 
 function artifact(t, rows = [
   { replay_sha256: SHA, replay_time_ms: 0, participant_id_candidate: 1,
@@ -27,7 +29,8 @@ function artifact(t, rows = [
     confidence: 'CANDIDATE', raw_packet_ref: { replay_sha256: SHA } },
 ], compact = true, eventKey = EVENT) {
   const capability = eventKey.slice(0, -'_candidates'.length);
-  const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT].includes(eventKey)
+  const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT,
+    HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -272,6 +275,88 @@ test('query-events filters the decoded scalar item key in 821 SetItem packets', 
   assert.equal(JSON.parse(unavailable.stderr).code, 'ITEM_ID_UNAVAILABLE');
 });
 
+test('query-events filters either anonymous 821 heal or shield u32 without inferring a role', (t) => {
+  const healRows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 7,
+      event_entity_u32_0x04: 0x400000ae, event_entity_u32_0x14: 0x400000af },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000af,
+      event_entity_u32_0x04: 0, event_entity_u32_0x14: 0x400000b0 },
+  ];
+  const heal = artifact(t, healRows, true, HEAL_PACKET_EVENT);
+  const selectedHeal = run(heal.replayDirectory, '--event', HEAL_PACKET_EVENT,
+    '--opaque-u32', '0x400000af');
+  assert.equal(selectedHeal.status, 0, selectedHeal.stderr);
+  assert.equal(selectedHeal.stdout, `${heal.lines[0]}\n`);
+  assert.equal(JSON.parse(selectedHeal.stderr).matched_count, 1);
+  const zero = run(heal.replayDirectory, '--event', HEAL_PACKET_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${heal.lines[1]}\n`);
+
+  const shieldRows = [
+    { replay_sha256: SHA, replay_time_ms: 30,
+      event_u32_0x08: 0x400000b4, event_u32_0x0c: 0x400000b5,
+      raw_packet_refs: [{ replay_sha256: SHA, raw_param: 1 },
+        { replay_sha256: SHA, raw_param: 2 }] },
+    { replay_sha256: SHA, replay_time_ms: 40,
+      event_u32_0x08: 0x400000b6, event_u32_0x0c: 0x400000b7 },
+  ];
+  const shield = artifact(t, shieldRows, true, SHIELD_PAIR_EVENT);
+  const selectedShield = run(shield.replayDirectory, '--event', SHIELD_PAIR_EVENT,
+    '--opaque-u32', String(0x400000b5));
+  assert.equal(selectedShield.status, 0, selectedShield.stderr);
+  assert.equal(selectedShield.stdout, `${shield.lines[0]}\n`);
+  assert.equal(JSON.parse(selectedShield.stderr).filters.opaque_u32, 0x400000b5);
+});
+
+test('query-events distinguishes missing anonymous u32 fields from zero matches', (t) => {
+  const missing = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10 },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      event_entity_u32_0x04: null, event_entity_u32_0x14: null },
+  ], true, HEAL_PACKET_EVENT);
+  const output = path.join(missing.root, 'missing-u32.jsonl');
+  const unavailable = run(missing.replayDirectory, '--event', HEAL_PACKET_EVENT,
+    '--opaque-u32', '1', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const partial = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      event_entity_u32_0x04: 5, event_entity_u32_0x14: null },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      event_entity_u32_0x04: 7, event_entity_u32_0x14: 8 },
+  ], true, HEAL_PACKET_EVENT);
+  const noMatch = run(partial.replayDirectory, '--event', HEAL_PACKET_EVENT,
+    '--opaque-u32', '9');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(noMatch.stdout, '');
+  const summary = JSON.parse(noMatch.stderr);
+  assert.equal(summary.matched_count, 0);
+  assert.equal(summary.opaque_u32_unavailable_count, 1);
+});
+
+test('query-events rejects opaque-u32 on other streams and invalid anonymous fields', (t) => {
+  const unsupported = artifact(t);
+  const wrongEvent = run(unsupported.replayDirectory, '--event', EVENT,
+    '--opaque-u32', '1');
+  assert.equal(wrongEvent.status, 1);
+  assert.match(wrongEvent.stderr, /--opaque-u32 requires an 821 ParamsHeal/);
+  const corrupt = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      event_entity_u32_0x04: 1, event_entity_u32_0x14: 2 },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      event_entity_u32_0x04: -1, event_entity_u32_0x14: 3 },
+  ], true, HEAL_PACKET_EVENT);
+  const output = path.join(corrupt.root, 'invalid-u32.jsonl');
+  const result = run(corrupt.replayDirectory, '--event', HEAL_PACKET_EVENT,
+    '--opaque-u32', '1', '--output', output);
+  assert.equal(result.status, 2);
+  assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
+});
+
 test('query-events rejects item ID filters on other streams and corrupt inventory records', (t) => {
   const unsupported = artifact(t);
   const wrongEvent = run(unsupported.replayDirectory, '--event', EVENT, '--item-id', '1001');
@@ -392,6 +477,8 @@ test('query-events rejects malformed numeric filters before scanning', (t) => {
     ['--raw-param', '4294967296'], ['--raw-param', '0xgg'],
     ['--item-id', '-1'], ['--item-id', '0x100000000'],
     ['--item-id', '4294967296'], ['--item-id', '0xgg'],
+    ['--opaque-u32', '-1'], ['--opaque-u32', '0x100000000'],
+    ['--opaque-u32', '4294967296'], ['--opaque-u32', '0xgg'],
   ]) {
     const result = run(fixture.replayDirectory, '--event', EVENT, ...args);
     assert.equal(result.status, 1, args.join(' '));

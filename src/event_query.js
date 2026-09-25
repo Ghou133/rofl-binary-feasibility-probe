@@ -12,6 +12,14 @@ const SUBJECT_PARTICIPANT_FIELDS = [
   'owner_participant_id_candidate', 'owner_participant_id',
   'target_participant_id',
 ];
+const OPAQUE_U32_FIELDS_821 = Object.freeze({
+  params_heal_packet_candidates: Object.freeze([
+    'event_entity_u32_0x04', 'event_entity_u32_0x14',
+  ]),
+  shielding_params_packet_pair_candidates: Object.freeze([
+    'event_u32_0x08', 'event_u32_0x0c',
+  ]),
+});
 
 class EventQueryError extends Error {
   constructor(code, message, details = {}) {
@@ -259,15 +267,34 @@ function packetScalarItemId(row, lineNumber) {
   return { values: [itemId], unavailable: false, available: true };
 }
 
+function opaqueU32Values(row, lineNumber, fields) {
+  const values = [];
+  let unavailable = false;
+  for (const field of fields) {
+    const value = row[field];
+    if (value == null) {
+      unavailable = true;
+      continue;
+    }
+    if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        `Invalid ${field} at JSONL line ${lineNumber}.`, { line_number: lineNumber });
+    }
+    values.push(value);
+  }
+  return { values, unavailable, available: values.length > 0 };
+}
+
 function validateFilters(options) {
   const { fromMs = null, toMs = null, participant = null, rawParam = null,
-    itemId = null, limit = null } = options;
+    itemId = null, opaqueU32 = null, limit = null } = options;
   for (const [name, value, minimum, maximum] of [
     ['fromMs', fromMs, 0, Number.MAX_SAFE_INTEGER],
     ['toMs', toMs, 0, Number.MAX_SAFE_INTEGER],
     ['participant', participant, 1, 10],
     ['rawParam', rawParam, 0, 0xffffffff],
     ['itemId', itemId, 0, 0xffffffff],
+    ['opaqueU32', opaqueU32, 0, 0xffffffff],
     ['limit', limit, 1, Number.MAX_SAFE_INTEGER],
   ]) {
     if (value != null && (!Number.isSafeInteger(value) || value < minimum || value > maximum)) {
@@ -282,7 +309,7 @@ function validateFilters(options) {
 async function streamEventQuery(prepared, options, emitLine) {
   validateFilters(options);
   const { fromMs = null, toMs = null, participant = null, rawParam = null,
-    itemId = null, limit = null } = options;
+    itemId = null, opaqueU32 = null, limit = null } = options;
   const inventoryPacketEvent = [
     'hero_inventory_packet_candidates',
     'hero_inventory_broadcast_packet_candidates',
@@ -293,6 +320,12 @@ async function streamEventQuery(prepared, options, emitLine) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--item-id requires a 16.19.821.7343 inventory packet candidate event.');
   }
+  const opaqueU32Fields = OPAQUE_U32_FIELDS_821[prepared.eventKey] ?? null;
+  if (opaqueU32 != null && (!opaqueU32Fields
+      || prepared.replayVersion !== '16.19.821.7343')) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--opaque-u32 requires an 821 ParamsHeal or ShieldingParams packet candidate event.');
+  }
   let scannedCount = 0;
   let matchedCount = 0;
   let emittedCount = 0;
@@ -300,6 +333,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   let rawParamUnavailableCount = 0;
   let itemIdUnavailableCount = 0;
   let itemIdAvailableCount = 0;
+  let opaqueU32UnavailableCount = 0;
+  let opaqueU32AvailableCount = 0;
   const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
   try {
@@ -334,15 +369,20 @@ async function streamEventQuery(prepared, options, emitLine) {
           ? packetScalarItemId(row, lineNumber)
           : packetRecordItemIds(row, lineNumber,
             prepared.eventKey === 'hero_inventory_broadcast_packet_candidates');
+      const opaqueValues = opaqueU32 == null ? null
+        : opaqueU32Values(row, lineNumber, opaqueU32Fields);
       if (participant != null && subject.value == null) participantUnavailableCount += 1;
       if (rawParam != null && params.length === 0) rawParamUnavailableCount += 1;
       if (itemId != null && items.unavailable) itemIdUnavailableCount += 1;
       if (itemId != null && items.available) itemIdAvailableCount += 1;
+      if (opaqueU32 != null && opaqueValues.unavailable) opaqueU32UnavailableCount += 1;
+      if (opaqueU32 != null && opaqueValues.available) opaqueU32AvailableCount += 1;
       if ((fromMs != null && replayTime < fromMs)
           || (toMs != null && replayTime > toMs)
           || (participant != null && subject.value !== participant)
           || (rawParam != null && !params.includes(rawParam))
-          || (itemId != null && !items.values.includes(itemId))) continue;
+          || (itemId != null && !items.values.includes(itemId))
+          || (opaqueU32 != null && !opaqueValues.values.includes(opaqueU32))) continue;
       matchedCount += 1;
       if (limit == null || emittedCount < limit) {
         // Reuse the original line so candidate grades, provenance, and field order survive.
@@ -377,6 +417,13 @@ async function streamEventQuery(prepared, options, emitLine) {
       { scanned_count: scannedCount, item_id_unavailable_count: itemIdUnavailableCount,
         capability_status: prepared.capabilityStatus });
   }
+  if (opaqueU32 != null && scannedCount > 0 && opaqueU32AvailableCount === 0) {
+    throw new EventQueryError('OPAQUE_U32_UNAVAILABLE',
+      'This event stream has no decoded anonymous u32 field for filtering.',
+      { scanned_count: scannedCount,
+        opaque_u32_unavailable_count: opaqueU32UnavailableCount,
+        capability_status: prepared.capabilityStatus });
+  }
   return {
     schema_version: 1,
     command: 'query-events',
@@ -398,9 +445,11 @@ async function streamEventQuery(prepared, options, emitLine) {
     participant_unavailable_count: participantUnavailableCount,
     ...(rawParam == null ? {} : { raw_param_unavailable_count: rawParamUnavailableCount }),
     ...(itemId == null ? {} : { item_id_unavailable_count: itemIdUnavailableCount }),
+    ...(opaqueU32 == null ? {} : { opaque_u32_unavailable_count: opaqueU32UnavailableCount }),
     filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit,
       ...(rawParam == null ? {} : { raw_param: rawParam }),
-      ...(itemId == null ? {} : { item_id: itemId }) },
+      ...(itemId == null ? {} : { item_id: itemId }),
+      ...(opaqueU32 == null ? {} : { opaque_u32: opaqueU32 }) },
     rows_unmodified: true,
   };
 }

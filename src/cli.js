@@ -164,6 +164,7 @@ Options:
   --participant <1..10>        Candidate subject participant; unknown rows do not match
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
   --item-id <uint32|0xhex>     Exact decoded 821 inventory packet record item ID
+  --opaque-u32 <uint32|0xhex>  Exact anonymous 821 heal/shield packet field value
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
   --output <path|->            Write unmodified JSONL rows (default: stdout)
                                 Query summary is JSON on stderr when output is stdout
@@ -205,6 +206,7 @@ function parseArgs(argv) {
     participant: null,
     rawParam: null,
     itemId: null,
+    opaqueU32: null,
     limit: null,
     python: null,
     wardSpawns: null,
@@ -302,6 +304,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'participant') options.participant = queryInteger(value, key);
       else if (command === 'query-events' && key === 'raw-param') options.rawParam = queryRawParam(value);
       else if (command === 'query-events' && key === 'item-id') options.itemId = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'opaque-u32') options.opaqueU32 = queryUint32(value, key);
       else if (command === 'query-events' && key === 'limit') options.limit = queryInteger(value, key);
       else if (command === 'ward-events' && key === 'format') options.format = String(value).toLowerCase();
       else if (command === 'ward-events' && key === 'collection') options.collection = value;
@@ -350,6 +353,12 @@ function parseArgs(argv) {
       'hero_inventory_set_item_packet_candidates',
     ].includes(options.event)) {
       throw new Error('--item-id requires an 821 inventory packet event');
+    }
+    if (options.opaqueU32 !== null && ![
+      'params_heal_packet_candidates',
+      'shielding_params_packet_pair_candidates',
+    ].includes(options.event)) {
+      throw new Error('--opaque-u32 requires an 821 ParamsHeal or ShieldingParams packet event');
     }
     if (options.output === '') throw new Error('--output must be a path or -');
   }
@@ -2455,6 +2464,7 @@ async function runQueryEventsCommand(parsed) {
       participant: options.participant,
       rawParam: options.rawParam,
       itemId: options.itemId,
+      opaqueU32: options.opaqueU32,
       limit: options.limit,
     }, async (line) => {
       if (!writer.write(line)) await once(writer, 'drain');
