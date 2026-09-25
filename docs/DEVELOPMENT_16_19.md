@@ -4,6 +4,17 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `champion_kill_event_packet` is an unpublished
+  selected CLI/API candidate for exact-image OnEvent child `0x0007`. The
+  exact name table labels it OnChampionKill, and the registered callback
+  directly reads anonymous child `+0x04/+0x58/+0x5c` u32 values. Native
+  decoding fully consumed all 654 observed 104-byte OnEvent packets in 11
+  KR Replays, yielding 581 target packets and 73 same-length controls.
+  The latter two u32 fields were constant `0xffffffff` and zero in these
+  samples. No effective kill, killer, victim, or transition is inferred.
+  A combined CLI smoke on `KR_8392938200` emitted 63 candidates and
+  excluded four controls without framing errors. Ignored evidence is
+  under `artifacts/16_19_development/champion_kill_event_validation_821/`.
 - **Completed:** KR 821 `champion_die_event_packet` is an unpublished
   selected CLI/API candidate for exact-image OnEvent child `0x0004`. The
   exact name table labels it OnChampionDie, and the ParamsDie callback

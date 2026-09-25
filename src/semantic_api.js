@@ -56,6 +56,8 @@ const { decodeStealthEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_stealth_event_packet_candidate');
 const { decodeChampionDieEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_die_event_packet_candidate');
+const { decodeChampionKillEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_kill_event_packet_candidate');
 const { decodeCastSpellAnsPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const { decodeNpcBuffRemovePacketCandidates821 } =
@@ -2144,6 +2146,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    champion_kill_event_packet: (input, collected) =>
+      decodeChampionKillEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     cast_spell_ans_packet: (input, collected) =>
       decodeCastSpellAnsPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2215,6 +2223,7 @@ function decode1619821(replay, profile, options = {}) {
     shielding_params_packet_pair: 'shielding_params_packet_pair_candidates',
     stealth_event_packet: 'stealth_event_packet_candidates',
     champion_die_event_packet: 'champion_die_event_packet_candidates',
+    champion_kill_event_packet: 'champion_kill_event_packet_candidates',
     cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
     npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
     npc_buff_add_packet: 'npc_buff_add_packet_candidates',
@@ -2244,6 +2253,7 @@ function decode1619821(replay, profile, options = {}) {
     'shielding_params_packet_pair',
     'stealth_event_packet',
     'champion_die_event_packet',
+    'champion_kill_event_packet',
     'cast_spell_ans_packet',
     'npc_buff_remove_packet',
     'npc_buff_add_packet',
@@ -2284,6 +2294,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'shielding_params_packet_pair'
         || capability === 'stealth_event_packet'
         || capability === 'champion_die_event_packet'
+        || capability === 'champion_kill_event_packet'
         || capability === 'cast_spell_ans_packet'
         || capability === 'npc_buff_remove_packet' || capability === 'npc_buff_add_packet'
         || capability === 'direct_input_movement_turn_packet'
@@ -2316,11 +2327,15 @@ function decode1619821(replay, profile, options = {}) {
         : capability === 'stealth_event_packet'
           ? '0x040a/child_0101_0102'
           : capability === 'champion_die_event_packet'
-            ? '0x040a/child_0004' : result.input_packet_id;
+            ? '0x040a/child_0004'
+            : capability === 'champion_kill_event_packet'
+              ? '0x040a/child_0007' : result.input_packet_id;
     const decodedCount = capability === 'stealth_event_packet'
       ? result.target_packet_count
       : capability === 'champion_die_event_packet'
-        ? result.event_count : result.input_count;
+        ? result.event_count
+        : capability === 'champion_kill_event_packet'
+          ? result.target_packet_count : result.input_count;
     uniqueDecodedInputCounts.set(packetGroup,
       Math.max(uniqueDecodedInputCounts.get(packetGroup) ?? 0, decodedCount));
   }

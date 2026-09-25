@@ -625,6 +625,7 @@ function parseOne1619(replay, options, started) {
       'shielding_params_packet_pair',
       'stealth_event_packet',
       'champion_die_event_packet',
+      'champion_kill_event_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',
@@ -1824,6 +1825,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'shielding_params_packet_pair'
             || capability === 'stealth_event_packet'
             || capability === 'champion_die_event_packet'
+            || capability === 'champion_kill_event_packet'
             || capability === 'cast_spell_ans_packet'))
         || capability === 'npc_buff_remove_packet'
         || capability === 'npc_buff_add_packet'
@@ -2111,6 +2113,11 @@ function capabilityQuery(replay, options = {}) {
           'OnChampionDie image label and anonymous u32 field; no effective death, actor, or lifecycle inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'champion_kill_event_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x0007 packet consumption',
+          'OnChampionKill image label and anonymous u32 fields; no effective kill, actor, or lifecycle inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'cast_spell_ans_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x01da full packet consumption',
           'callback-transformed opaque fields and raw packet provenance; no successful-cast or spell identity inference');
@@ -2328,6 +2335,7 @@ function capabilityQuery(replay, options = {}) {
             shielding_params_packet_pair: 'shielding_params_packet_pair_candidates',
             stealth_event_packet: 'stealth_event_packet_candidates',
             champion_die_event_packet: 'champion_die_event_packet_candidates',
+            champion_kill_event_packet: 'champion_kill_event_packet_candidates',
             cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
             npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
             npc_buff_add_packet: 'npc_buff_add_packet_candidates',

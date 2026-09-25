@@ -25,6 +25,7 @@ const CAPABILITIES = new Set([
   'shielding_params_packet_pair',
   'stealth_event_packet',
   'champion_die_event_packet',
+  'champion_kill_event_packet',
   'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
   'direct_input_movement_turn_packet',
   'set_movement_driver_packet',
@@ -39,6 +40,7 @@ const MAX_PARAMS_HEAL_PACKET_ROWS = 20_000;
 const MAX_SHIELDING_PARAMS_PACKET_ROWS = 10_000;
 const MAX_STEALTH_EVENT_PACKET_ROWS = 5_000;
 const MAX_CHAMPION_DIE_EVENT_PACKET_ROWS = 10_000;
+const MAX_CHAMPION_KILL_EVENT_PACKET_ROWS = 2_000;
 const MAX_DIRECT_INPUT_TURN_PACKET_ROWS = 20_000;
 const MAX_SET_MOVEMENT_DRIVER_PACKET_ROWS = 20_000;
 const SCAN_SOURCE = new WeakMap();
@@ -87,6 +89,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     shielding_params_packet_pair: [],
     stealth_event_packet: [],
     champion_die_event_packet: [],
+    champion_kill_event_packet: [],
     cast_spell_ans_packet: [],
     npc_buff_remove_packet: [],
     npc_buff_add_packet: [],
@@ -154,6 +157,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let shieldingParamsPacketCount = 0;
   let stealthEventPacketCount = 0;
   let championDieEventPacketCount = 0;
+  let championKillEventPacketCount = 0;
   let directInputTurnPacketCount = 0;
   let setMovementDriverPacketCount = 0;
   let finished = false;
@@ -202,6 +206,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
         championDieEventPacketCount += 1;
         if (rows.champion_die_event_packet.length < MAX_CHAMPION_DIE_EVENT_PACKET_ROWS) {
           rows.champion_die_event_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selected.has('champion_kill_event_packet')
+          && block.packet_id === 0x040a && block.payload_length === 104) {
+        championKillEventPacketCount += 1;
+        if (rows.champion_kill_event_packet.length < MAX_CHAMPION_KILL_EVENT_PACKET_ROWS) {
+          rows.champion_kill_event_packet.push(copyRow(block, chunk));
         }
       }
       if (selected.has('hero_inventory_packet') && chunk.stream_tag === 1
@@ -282,6 +293,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         shieldingParamsPacketCount,
         stealthEventPacketCount,
         championDieEventPacketCount,
+        championKillEventPacketCount,
         directInputTurnPacketCount,
         setMovementDriverPacketCount,
         error: token.error,
@@ -367,6 +379,13 @@ function rowsFor821Capability(replay, token, capability) {
       && bound.championDieEventPacketCount > MAX_CHAMPION_DIE_EVENT_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.championDieEventPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'champion_kill_event_packet'
+      && bound.championKillEventPacketCount > MAX_CHAMPION_KILL_EVENT_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.championKillEventPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }
