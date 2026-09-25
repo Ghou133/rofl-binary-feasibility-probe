@@ -11,6 +11,7 @@ const { HERO_DEATH_TIMER_CANDIDATE_PROFILE_821 } =
   require('./rofl_16_19_821_death_timer_candidate');
 const { HERO_RESPAWN_CANDIDATE_PROFILE_821 } =
   require('./rofl_16_19_821_respawn_candidate');
+const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
 const { RUNTIME_IMAGE_SHA256 } = require('./rofl_16_19_821_runtime_bytes');
 
 const BUILD = '16.19.821.7343';
@@ -113,7 +114,7 @@ function validOutcome(outcome, profile, packetId) {
     && count(outcome.input_count);
 }
 
-function verifyPacketRefs(replay, refs) {
+function expectedPacketRefs(refs) {
   const expected = new Map();
   const neededChunks = new Set();
   for (const ref of refs) {
@@ -125,6 +126,12 @@ function verifyPacketRefs(replay, refs) {
     expected.set(position, ref);
     neededChunks.add(ref.chunk_index);
   }
+  return { expected, neededChunks };
+}
+
+function verifyPacketRefs(replay, refs) {
+  const { expected, neededChunks, error } = expectedPacketRefs(refs);
+  if (error) return { error };
   const verifiedCount = expected.size;
   try {
     for (const chunkIndex of neededChunks) {
@@ -160,6 +167,50 @@ function verifyPacketRefs(replay, refs) {
   return { verified_count: verifiedCount };
 }
 
+function verifyPacketRefsFromScan(replay, refs, token) {
+  const { expected, error } = expectedPacketRefs(refs);
+  if (error) return { error };
+  // The selected 821 scan retains all packet families used by the episode:
+  // death/corroboration, 0x040a/44 assist, and 0x0048/0x018d return.
+  // rowsFor821Capability validates the private token's Replay binding and
+  // source bytes before returning fresh copies of the scanned raw packets.
+  const sourceRows = [];
+  for (const capability of ['hero_death', 'hero_assist', 'hero_respawn']) {
+    const selected = rowsFor821Capability(replay, token, capability);
+    if (selected.error || !Array.isArray(selected.rows)) {
+      return { error: `source-bound 821 route scan failed for ${capability}: ${selected.error ?? 'rows unavailable'}`,
+        scan_error: true };
+    }
+    sourceRows.push(...selected.rows);
+  }
+  const found = new Set();
+  for (const { block, chunk } of sourceRows) {
+    const position = `${chunk.index}/${block.offset}`;
+    if (!expected.has(position)) continue;
+    if (found.has(position)) {
+      return { error: `duplicate Replay block in 821 route scan at ${position}`, scan_error: true };
+    }
+    found.add(position);
+    const ref = expected.get(position);
+    const payloadSha = crypto.createHash('sha256').update(block.payload).digest('hex');
+    if (chunk.chunk_id !== ref.chunk_id || chunk.stream !== ref.chunk_stream
+        || chunk.stream_tag !== 1 || chunk.offset !== ref.chunk_file_offset
+        || block.packet_id !== ref.packet_id
+        || block.timestamp_ms !== ref.replay_time_ms
+        || (block.param >>> 0) !== ref.raw_param
+        || block.payload_offset !== ref.decompressed_payload_offset
+        || block.payload_length !== ref.payload_length
+        || payloadSha !== ref.raw_payload_sha256) {
+      return { error: `raw packet reference differs from Replay block at ${position}` };
+    }
+  }
+  if (found.size !== expected.size) {
+    const missing = [...expected.keys()].find((position) => !found.has(position));
+    return { error: `raw packet reference is absent from 821 route scan at ${missing}` };
+  }
+  return { verified_count: expected.size };
+}
+
 function unionRefs(groups) {
   const refs = new Map();
   for (const group of groups) {
@@ -175,6 +226,7 @@ function unionRefs(groups) {
 
 function associateHeroDeathEpisodeCandidates821(replay, {
   heroAssistOutcome, heroDeathTimerOutcome, heroRespawnOutcome,
+  precollected = null,
 } = {}) {
   const profile = HERO_DEATH_EPISODE_821_PROFILE;
   const base = {
@@ -374,7 +426,9 @@ function associateHeroDeathEpisodeCandidates821(replay, {
   if (observedReturns.size + terminalDeaths.size !== deathRows.size) {
     return fail('INCONSISTENT', 'observed and terminal returns do not partition all death primaries');
   }
-  const checked = verifyPacketRefs(replay, physicalRefs);
+  const checked = precollected === null
+    ? verifyPacketRefs(replay, physicalRefs)
+    : verifyPacketRefsFromScan(replay, physicalRefs, precollected);
   if (checked.error) {
     return fail(checked.scan_error ? 'DECODE_FAILED' : 'INCONSISTENT', checked.error);
   }

@@ -4,6 +4,15 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed efficiency increment:** The exact-821 death-episode association
+  reuses the source-bound route scan's retained packet copies to verify all
+  original references; standalone calls still reframe Replay chunks. A warmed
+  one-Replay comparison measured 174.765 ms for reframe verification versus
+  5.728 ms for scan reuse (six calls each), with identical association JSON.
+  A fresh 11-Replay CLI batch remained 11/11 `CANDIDATE`, zero framing errors;
+  all 44 source/association JSONL files and 11 association summaries matched
+  the previous batch exactly. This is a local measurement, not a throughput
+  guarantee for other selections or machines.
 - **Completed query:** `query-events --latest-per-participant [--to-ms T]`
   selects the last original matching exact-821 candidate row for each mapped
   participant within each Replay. It validates the full artifact before output,

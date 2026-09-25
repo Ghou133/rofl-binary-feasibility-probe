@@ -15,6 +15,7 @@ const { HERO_RESPAWN_CANDIDATE_PROFILE_821 } =
   require('../src/decoders/rofl_16_19_821_respawn_candidate');
 const { RUNTIME_IMAGE_SHA256 } =
   require('../src/decoders/rofl_16_19_821_runtime_bytes');
+const { collect821Routes } = require('../src/decoders/rofl_16_19_821_scan');
 const { HERO_DEATH_EPISODE_821_PROFILE,
   associateHeroDeathEpisodeCandidates821: associate } =
   require('../src/decoders/rofl_16_19_821_hero_death_episode_candidate');
@@ -51,20 +52,36 @@ function ref(replay, block, chunk) {
   };
 }
 
-function fixture() {
-  const replay = replayFromChunks([{ stream: 1, body: Buffer.concat([
-    packet(0x0259, 0x400000ae, 1000, 0x11),
-    packet(0x0048, 0x400000ae, 1500, 0x48, 9),
-    packet(0x0259, 0x400000af, 2000, 0x22),
-  ]) }], BUILD);
+function fixture({ allRefRoles = false } = {}) {
+  const packets = [packet(0x0259, 0x400000ae, 1000, 0x11)];
+  if (allRefRoles) {
+    packets.push(packet(0x0438, 0x400000ae, 1000, 0x38));
+    packets.push(packet(0x031b, 0x400000ae, 1000, 0x1b));
+    packets.push(packet(0x03d4, 0x400000ae, 1000, 0xd4));
+    packets.push(packet(0x040a, 0x400000ae, 1000, 0x0a, 44));
+  }
+  packets.push(packet(0x0048, 0x400000ae, 1500, 0x48, 9));
+  if (allRefRoles) packets.push(packet(0x018d, 0x400000ae, 1500, 0x8d));
+  packets.push(packet(0x0259, 0x400000af, 2000, 0x22));
+  const replay = replayFromChunks([{ stream: 1, body: Buffer.concat(packets) }], BUILD);
   const blocks = [];
   walkBlocks(replay, (block, chunk) => blocks.push({ block, chunk }), { strict: true });
   const first = ref(replay, blocks[0].block, blocks[0].chunk);
-  const returned = ref(replay, blocks[1].block, blocks[1].chunk);
-  const second = ref(replay, blocks[2].block, blocks[2].chunk);
+  const returnBlock = blocks.find(({ block }) => block.packet_id === 0x0048);
+  const returned = ref(replay, returnBlock.block, returnBlock.chunk);
+  const last = blocks.at(-1);
+  const second = ref(replay, last.block, last.chunk);
+  const extraRefs = allRefRoles
+    ? blocks.filter(({ block }) => [0x0438, 0x031b, 0x03d4, 0x040a]
+      .includes(block.packet_id)).map(({ block, chunk }) => ref(replay, block, chunk))
+    : [];
+  const returnExtraRefs = allRefRoles
+    ? blocks.filter(({ block }) => block.packet_id === 0x018d)
+      .map(({ block, chunk }) => ref(replay, block, chunk))
+    : [];
   const deathRows = [
-    { primary: first, victim: 1, killer: 6, assists: [] },
-    { primary: second, victim: 2, killer: null, assists: null },
+    { primary: first, victim: 1, killer: 6, assists: [], refs: [first, ...extraRefs] },
+    { primary: second, victim: 2, killer: null, assists: null, refs: [second] },
   ];
   const heroAssistOutcome = {
     status: 'CANDIDATE', profile_id: HERO_ASSIST_CANDIDATE_PROFILE_821.id,
@@ -72,7 +89,7 @@ function fixture() {
     runtime_image_used: false, native_child_identity_status: 'NOT_CHECKED',
     input_packet_id: 0x040a, input_count: 0,
     event_count: 2, matched_death_count: 2,
-    events: deathRows.map(({ primary, victim, killer, assists }) => ({
+    events: deathRows.map(({ primary, victim, killer, assists, refs }) => ({
       event_type: 'HERO_ASSIST_ATTRIBUTION_CANDIDATE', game_version: BUILD,
       build_profile: HERO_ASSIST_CANDIDATE_PROFILE_821.id,
       replay_sha256: replay.source_sha256,
@@ -85,7 +102,7 @@ function fixture() {
         ? 'UNAVAILABLE_NONHERO_SOURCE'
         : 'CANDIDATE_821_CO_TIMED_ASSIST_PAIR_TAIL_ALIGNMENT',
       field_confidence: {},
-      raw_packet_ref: primary, raw_packet_refs: [primary],
+      raw_packet_ref: primary, raw_packet_refs: refs,
     })),
   };
   const heroDeathTimerOutcome = {
@@ -124,7 +141,8 @@ function fixture() {
       participant_id_candidate: 1,
       matched_death_replay_time_ms_candidate: first.replay_time_ms,
       observed_death_to_return_ms_candidate: 500,
-      raw_packet_ref: returned, raw_packet_refs: [returned, first],
+      raw_packet_ref: returned,
+      raw_packet_refs: [returned, first, ...returnExtraRefs],
     }],
   };
   return { replay, heroAssistOutcome, heroDeathTimerOutcome, heroRespawnOutcome };
@@ -158,6 +176,52 @@ test('exact 821 episode joins observed and terminal deaths without timer predict
     assert.equal('predicted_return_time_ms' in row, false);
     assert.equal('actual_death' in row, false);
   }
+});
+
+test('source-bound 821 scan verifies every episode packet role with identical output', () => {
+  const values = fixture({ allRefRoles: true });
+  const standalone = associate(values.replay, values);
+  const precollected = collect821Routes(values.replay,
+    ['hero_assist', 'hero_death_timer', 'hero_respawn']);
+  const reused = associate(values.replay, { ...values, precollected });
+  assert.equal(reused.status, 'CANDIDATE', reused.error);
+  assert.deepEqual(reused, standalone);
+  assert.deepEqual(new Set(reused.events[0].raw_packet_refs.map((refRow) => refRow.packet_id)),
+    new Set([0x0259, 0x0438, 0x031b, 0x03d4, 0x040a, 0x0048, 0x018d]));
+  assert.equal(reused.verified_raw_packet_count, 8);
+});
+
+test('source-bound 821 scan rejects missing routes, a foreign token and forged bytes', () => {
+  const missing = fixture();
+  const incompleteToken = collect821Routes(missing.replay, ['hero_death_timer']);
+  let result = associate(missing.replay, { ...missing, precollected: incompleteToken });
+  assert.equal(result.status, 'DECODE_FAILED');
+  assert.equal(result.events, null);
+
+  const foreign = fixture();
+  const foreignToken = collect821Routes(foreign.replay,
+    ['hero_assist', 'hero_death_timer', 'hero_respawn']);
+  const other = fixture();
+  result = associate(other.replay, { ...other, precollected: foreignToken });
+  assert.equal(result.status, 'DECODE_FAILED');
+  assert.equal(result.events, null);
+
+  const forged = fixture({ allRefRoles: true });
+  const token = collect821Routes(forged.replay,
+    ['hero_assist', 'hero_death_timer', 'hero_respawn']);
+  forged.heroAssistOutcome.events[0].raw_packet_refs[1].raw_payload_sha256 = 'f'.repeat(64);
+  result = associate(forged.replay, { ...forged, precollected: token });
+  assert.equal(result.status, 'INCONSISTENT');
+  assert.match(result.error, /Replay block/);
+  assert.equal(result.events, null);
+
+  const changed = fixture();
+  const changedToken = collect821Routes(changed.replay,
+    ['hero_assist', 'hero_death_timer', 'hero_respawn']);
+  changed.replay.buffer[0] ^= 1;
+  result = associate(changed.replay, { ...changed, precollected: changedToken });
+  assert.equal(result.status, 'DECODE_FAILED');
+  assert.equal(result.events, null);
 });
 
 test('exact 821 episode rejects unavailable, wrong-build, and wrong-profile outcomes', () => {

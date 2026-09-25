@@ -2888,6 +2888,7 @@ function decode1619821(replay, profile, options = {}) {
         heroAssistOutcome: outcomes.hero_assist,
         heroDeathTimerOutcome: outcomes.hero_death_timer,
         heroRespawnOutcome: outcomes.hero_respawn,
+        precollected: candidate821Scan,
       });
       if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
         const { events: episodeEvents, ...summary } = association;
