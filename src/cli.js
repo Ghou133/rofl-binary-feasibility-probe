@@ -390,6 +390,7 @@ function parseArgs(argv) {
       'champion_die_hero_death_pair_candidates',
       'champion_kill_die_hero_death_pair_candidates',
       'champion_multiple_kill_die_hero_death_pair_candidates',
+      'champion_double_kill_multi_group_candidates',
       'on_shutdown_die_hero_death_pair_candidates',
     ].includes(options.event)) {
       throw new Error('--opaque-u32 requires a supported 821 packet or packet-group candidate event');

@@ -113,6 +113,8 @@ const { associateChampionKillDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_kill_die_hero_death_pair_candidate');
 const { associateChampionMultipleKillDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_multiple_kill_die_hero_death_pair_candidate');
+const { associateChampionDoubleKillMultiGroupCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_double_kill_multi_group_candidate');
 const { associateOnShutdownDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_on_shutdown_die_hero_death_pair_candidate');
 const { analyzeMovementParticipantAssociations821 } =
@@ -2596,6 +2598,7 @@ function decode1619821(replay, profile, options = {}) {
       };
     }
   }
+  let multipleKillGroupOutcome = null;
   if (capabilities.includes('hero_death')
       && capabilities.includes('champion_die_event_packet')
       && capabilities.includes('champion_multiple_kill_event_packet')) {
@@ -2605,6 +2608,7 @@ function decode1619821(replay, profile, options = {}) {
         championDieEventPacketOutcome: outcomes.champion_die_event_packet,
         heroDeathOutcome: outcomes.hero_death,
       });
+      multipleKillGroupOutcome = association;
       if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
         const { events: groupEvents, ...summary } = association;
         candidateAssociations.champion_multiple_kill_die_hero_death_pair = summary;
@@ -2613,7 +2617,31 @@ function decode1619821(replay, profile, options = {}) {
         candidateAssociations.champion_multiple_kill_die_hero_death_pair = association;
       }
     } catch (error) {
-      candidateAssociations.champion_multiple_kill_die_hero_death_pair = {
+      multipleKillGroupOutcome = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+      candidateAssociations.champion_multiple_kill_die_hero_death_pair =
+        multipleKillGroupOutcome;
+    }
+  }
+  if (capabilities.includes('hero_death')
+      && capabilities.includes('champion_die_event_packet')
+      && capabilities.includes('champion_multiple_kill_event_packet')
+      && capabilities.includes('champion_double_kill_event_packet')) {
+    try {
+      const association = associateChampionDoubleKillMultiGroupCandidates821(replay, {
+        championDoubleKillEventPacketOutcome: outcomes.champion_double_kill_event_packet,
+        championMultipleKillDieHeroDeathPairOutcome: multipleKillGroupOutcome,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: groupEvents, ...summary } = association;
+        candidateAssociations.champion_double_kill_multi_group = summary;
+        events.champion_double_kill_multi_group_candidates = groupEvents;
+      } else {
+        candidateAssociations.champion_double_kill_multi_group = association;
+      }
+    } catch (error) {
+      candidateAssociations.champion_double_kill_multi_group = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }

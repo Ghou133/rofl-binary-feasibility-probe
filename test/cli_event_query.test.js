@@ -13,6 +13,8 @@ const { CHAMPION_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_champion_kill_die_hero_death_pair_candidate');
 const { CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_champion_multiple_kill_die_hero_death_pair_candidate');
+const { CHAMPION_DOUBLE_KILL_MULTI_GROUP_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_double_kill_multi_group_candidate');
 const { ON_SHUTDOWN_DIE_HERO_DEATH_PAIR_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_on_shutdown_die_hero_death_pair_candidate');
 const { CHAMPION_DIE_EVENT_PACKET_821_PROFILE } =
@@ -21,6 +23,8 @@ const { CHAMPION_KILL_EVENT_PACKET_CANDIDATE_PROFILE_821 } =
   require('../src/decoders/rofl_16_19_821_champion_kill_event_packet_candidate');
 const { CHAMPION_MULTIPLE_KILL_EVENT_PACKET_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_champion_multiple_kill_event_packet_candidate');
+const { CHAMPION_DOUBLE_KILL_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_double_kill_event_packet_candidate');
 const { ON_SHUTDOWN_EVENT_PACKET_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
 const { HERO_DEATH_CANDIDATE_PROFILE_821 } =
@@ -47,6 +51,7 @@ const TURRET_PLATE_PACKET_EVENT = 'turret_plate_event_packet_candidates';
 const DIE_PAIR_EVENT = 'champion_die_hero_death_pair_candidates';
 const KILL_GROUP_EVENT = 'champion_kill_die_hero_death_pair_candidates';
 const MULTI_GROUP_EVENT = 'champion_multiple_kill_die_hero_death_pair_candidates';
+const DOUBLE_MULTI_GROUP_EVENT = 'champion_double_kill_multi_group_candidates';
 const SHUTDOWN_GROUP_EVENT = 'on_shutdown_die_hero_death_pair_candidates';
 const ASSOCIATION_EVENTS = [DIE_PAIR_EVENT, KILL_GROUP_EVENT, MULTI_GROUP_EVENT,
   SHUTDOWN_GROUP_EVENT];
@@ -200,6 +205,76 @@ function associationArtifact(t, eventKey) {
     eventPath: path.join(fixture.replayDirectory, `${eventKey}.jsonl`) };
 }
 
+function doubleMultiAssociationArtifact(t) {
+  const fixture = associationArtifact(t, MULTI_GROUP_EVENT);
+  const profile = CHAMPION_DOUBLE_KILL_MULTI_GROUP_821_PROFILE;
+  const imageSha = profile.evidence_runtime_image_sha256;
+  const source = 0x400000af;
+  const victim = 0x400000ae;
+  const ref = (offset, packetId, payloadLength, rawParam) => ({
+    source_path: 'synthetic.rofl', replay_sha256: SHA,
+    chunk_index: 1, chunk_id: 2, chunk_stream: 'game_chunk', chunk_file_offset: 8,
+    decompressed_block_offset: offset, decompressed_payload_offset: offset + 6,
+    packet_id: packetId, replay_time_ms: 100, payload_length: payloadLength,
+    raw_param: rawParam, raw_payload_sha256: 'b'.repeat(64),
+  });
+  const die = ref(10, 0x040a, 116, victim);
+  const named = ref(20, 0x040a, 104, source);
+  const multi = ref(30, 0x040a, 88, source);
+  const heroes = [ref(40, 0x0259, 5, victim), ref(50, 0x0438, 12, victim)];
+  const row = {
+    event_type: 'CHAMPION_DOUBLE_KILL_MULTI_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE',
+    game_version: profile.replay_version, patch: '16.19', build_profile: profile.id,
+    replay_sha256: SHA, replay_time_ms: 100,
+    on_champion_double_kill_child_event_id: 0x000b,
+    on_champion_double_kill_registered_event_name: 'OnChampionDoubleKill',
+    on_champion_double_kill_raw_param: source,
+    on_champion_double_kill_event_blob_sha256: 'c'.repeat(64),
+    on_champion_multiple_kill_child_event_id: 0x0009,
+    on_champion_multiple_kill_raw_param: source,
+    on_champion_multiple_kill_opaque_u32_0x08: 2,
+    upstream_multi_group_profile_id:
+      CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE.id,
+    raw_packet_ref: named, on_champion_double_kill_raw_packet_ref: named,
+    on_champion_multiple_kill_raw_packet_ref: multi,
+    on_champion_die_raw_packet_ref: die, hero_death_raw_packet_refs: heroes,
+    raw_packet_refs: [die, named, multi, ...heroes],
+    confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_821_DOUBLE_KILL_NAMED_MULTI_DIE_HERO_PACKET_GROUP',
+  };
+  const association = {
+    profile_id: profile.id, evidence_runtime_image_sha256: imageSha,
+    depends_on: [...profile.depends_on], known_limits: [...profile.known_limits],
+    status: 'CANDIDATE', evidence_status: row.semantic_status,
+    replay_sha256: SHA, on_champion_double_kill_count: 1,
+    on_champion_multiple_kill_group_count: 1,
+    matched_multi_u32_0x08_2_count: 1,
+    excluded_other_multi_u32_0x08_count: 0,
+    unmatched_on_champion_double_kill_count: 0,
+    unpaired_multi_u32_0x08_2_count: 0, pair_count: 1, event_count: 1,
+  };
+  rewriteJson(fixture.semanticPath, (semantic) => {
+    semantic.requested_capabilities.push('champion_double_kill_event_packet');
+    semantic.capability_results.champion_double_kill_event_packet = {
+      status: 'CANDIDATE', profile_id: CHAMPION_DOUBLE_KILL_EVENT_PACKET_821_PROFILE.id,
+      event_count: 1, evidence_runtime_image_sha256: imageSha,
+      runtime_image_sha256: imageSha, runtime_image_status: 'MATCHED_USED',
+      runtime_image_used: true,
+    };
+    semantic.candidate_associations[profile.capability] = association;
+  });
+  rewriteJson(fixture.analysisPath, (analysis) => {
+    analysis.event_counts.champion_double_kill_event_packet_candidates = 1;
+    analysis.event_counts[DOUBLE_MULTI_GROUP_EVENT] = 1;
+    analysis.event_jsonl_files[DOUBLE_MULTI_GROUP_EVENT] = `${DOUBLE_MULTI_GROUP_EVENT}.jsonl`;
+    analysis.semantic.candidate_associations[profile.capability] = association;
+  });
+  const eventPath = path.join(fixture.replayDirectory, `${DOUBLE_MULTI_GROUP_EVENT}.jsonl`);
+  const line = JSON.stringify(row);
+  fs.writeFileSync(eventPath, `${line}\n`);
+  return { ...fixture, row, association, eventPath, line };
+}
+
 function artifact(t, rows = [
   { replay_sha256: SHA, replay_time_ms: 0, participant_id_candidate: 1,
     confidence: 'CANDIDATE', field_confidence: { level: 'CANDIDATE' } },
@@ -216,6 +291,7 @@ function artifact(t, rows = [
     CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
     CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT,
     RESURRECT_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
+    DOUBLE_MULTI_GROUP_EVENT,
     ...ASSOCIATION_EVENTS].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
@@ -407,6 +483,103 @@ test('query-events filters exact 821 pair and group association rows without mod
     assert.equal(dieChild.stdout, `${fixture.lines[0]}\n`);
     assert.equal(fs.readFileSync(fixture.eventPath, 'utf8'), `${fixture.lines[0]}\n`);
   }
+});
+
+test('query-events reads exact 821 named double-kill packet groups with candidate filters', (t) => {
+  const fixture = doubleMultiAssociationArtifact(t);
+  const selected = run(fixture.replayDirectory, '--event', DOUBLE_MULTI_GROUP_EVENT,
+    '--from-ms', '100', '--to-ms', '100', '--raw-param', '0x400000af',
+    '--opaque-u32', '2');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.line}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.capability_status, 'CANDIDATE');
+  assert.equal(summary.declared_event_count, 1);
+  assert.equal(summary.scanned_count, 1);
+  assert.equal(summary.opaque_u32_unavailable_count, 0);
+  assert.equal(fs.readFileSync(fixture.eventPath, 'utf8'), `${fixture.line}\n`);
+
+  const absent = run(fixture.replayDirectory, '--event', DOUBLE_MULTI_GROUP_EVENT,
+    '--opaque-u32', '3');
+  assert.equal(absent.status, 0, absent.stderr);
+  assert.equal(absent.stdout, '');
+  assert.equal(JSON.parse(absent.stderr).matched_count, 0);
+});
+
+test('query-events reads a batch of exact 821 named double-kill packet groups', (t) => {
+  const fixture = doubleMultiAssociationArtifact(t);
+  const relative = 'replays/synthetic';
+  const hashes = {};
+  for (const basename of ['semantic_run.json', 'replay_analysis.json',
+    `${DOUBLE_MULTI_GROUP_EVENT}.jsonl`]) {
+    hashes[`${relative}/${basename}`] = crypto.createHash('sha256')
+      .update(fs.readFileSync(path.join(fixture.replayDirectory, basename)))
+      .digest('hex');
+  }
+  fs.writeFileSync(path.join(fixture.root, 'manifest.json'), JSON.stringify({
+    command_args: ['batch', 'synthetic-input'],
+    replay_inputs: [{ sha256: SHA, version: '16.19.821.7343',
+      artifact_directory: relative }],
+    output_hashes_excluding_manifest: hashes,
+  }));
+  const result = run(fixture.root, '--event', DOUBLE_MULTI_GROUP_EVENT,
+    '--opaque-u32', '2');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${fixture.line}\n`);
+  const summary = JSON.parse(result.stderr);
+  assert.equal(summary.query_status, 'COMPLETE');
+  assert.equal(summary.completed_replay_count, 1);
+  assert.equal(summary.scanned_count, 1);
+
+  const changed = { ...fixture.row, replay_time_ms: 101 };
+  fs.writeFileSync(fixture.eventPath, `${JSON.stringify(changed)}\n`);
+  const output = path.join(fixture.root, 'changed-batch-row.jsonl');
+  const tampered = run(fixture.root, '--event', DOUBLE_MULTI_GROUP_EVENT,
+    '--output', output);
+  assert.equal(tampered.status, 2);
+  assert.equal(JSON.parse(tampered.stderr).code, 'ARTIFACT_HASH_MISMATCH');
+  assert.equal(fs.existsSync(output), false);
+});
+
+test('query-events fails closed on 821 named double-kill group metadata and row corruption', (t) => {
+  const wrongBuild = doubleMultiAssociationArtifact(t);
+  rewriteJson(wrongBuild.semanticPath, (semantic) => {
+    semantic.replay_version = VERSION;
+  });
+  rewriteJson(wrongBuild.analysisPath, (analysis) => {
+    analysis.replay_version = VERSION;
+  });
+  const oldBuild = run(wrongBuild.replayDirectory, '--event', DOUBLE_MULTI_GROUP_EVENT);
+  assert.equal(oldBuild.status, 2);
+  assert.equal(JSON.parse(oldBuild.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+
+  const unavailable = doubleMultiAssociationArtifact(t);
+  rewriteJson(unavailable.semanticPath, (semantic) => {
+    semantic.candidate_associations.champion_double_kill_multi_group.status = 'INCONSISTENT';
+  });
+  const failed = run(unavailable.replayDirectory, '--event', DOUBLE_MULTI_GROUP_EVENT);
+  assert.equal(failed.status, 2);
+  assert.equal(JSON.parse(failed.stderr).code, 'ASSOCIATION_UNAVAILABLE');
+
+  const count = doubleMultiAssociationArtifact(t);
+  rewriteJson(count.semanticPath, (semantic) => {
+    semantic.candidate_associations.champion_double_kill_multi_group
+      .matched_multi_u32_0x08_2_count = 0;
+  });
+  const wrongCount = run(count.replayDirectory, '--event', DOUBLE_MULTI_GROUP_EVENT);
+  assert.equal(wrongCount.status, 2);
+  assert.equal(JSON.parse(wrongCount.stderr).code, 'ASSOCIATION_METADATA_MISMATCH');
+
+  const corrupt = doubleMultiAssociationArtifact(t);
+  const row = structuredClone(corrupt.row);
+  row.on_champion_multiple_kill_raw_packet_ref.decompressed_block_offset = 15;
+  fs.writeFileSync(corrupt.eventPath, `${JSON.stringify(row)}\n`);
+  const output = path.join(corrupt.root, 'bad-double-multi.jsonl');
+  const bad = run(corrupt.replayDirectory, '--event', DOUBLE_MULTI_GROUP_EVENT,
+    '--output', output);
+  assert.equal(bad.status, 2);
+  assert.equal(JSON.parse(bad.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
 });
 
 test('query-events rejects wrong-build or unavailable 821 association without treating it as zero', (t) => {

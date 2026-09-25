@@ -197,6 +197,10 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events champion_double_kill_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-double-kill-markers"
+node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
+  --events hero_death,champion_die_event_packet,champion_multiple_kill_event_packet,champion_double_kill_event_packet `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-double-kill-groups"
 node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events hero_death,champion_die_event_packet,on_shutdown_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
@@ -241,6 +245,15 @@ OnChampionDoubleKill 的 `0x000b` 当包标记。11 份 KR 821 回放中 654 个
 63 个目标、591 个其他子事件；目标 63 个均能与已有 Multi/Die/Hero 候选包组
 同回放、同 chunk、同毫秒唯一对应，但此入口不写入已确认的双杀或对象字段。
 原生子包仅保留 SHA-256 摘要和来源，不把匿名偏移解释为回调字段。
+
+同时选择 `hero_death,champion_die_event_packet,champion_multiple_kill_event_packet,champion_double_kill_event_packet`
+后，`champion_double_kill_multi_group_candidates.jsonl` 写入这项独立的候选包组关联，
+汇总与拒绝原因位于 `semantic_run.json` 的
+`candidate_associations.champion_double_kill_multi_group`。当前 11 份 KR 821 回放
+均为 `CANDIDATE`，共 63/63 个 `0x000b` 标记与 Multi/Die/Hero 包组一一对应；
+关联还要求相同外层参数、Die/`0x000b`/Multi/Hero 原始包顺序，且匹配的 Multi
+匿名 `+0x08` 为 `2`。其余 590 个 Multi 包组不满足该匿名值。
+这只报告精确 build 的包级关系，不确认实际双杀、计数含义或参与者角色。
 
 同时选择 `hero_death,champion_die_event_packet,on_shutdown_event_packet`
 后，`on_shutdown_die_hero_death_pair_candidates.jsonl` 记录第三种候选包组，
