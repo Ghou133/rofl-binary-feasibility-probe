@@ -24,9 +24,18 @@ Current progress (older notes below retain their original research context):
 - **Completed:** `query-events --opaque-u32` now filters the decoded 821
   BuffUpdateCount `+0x14` field. A real KR Replay query scanned 7,629 rows,
   matched 1,750, and emitted three unmodified rows with `--limit 3`.
-- **Current:** Select the next 821 route from bounded exact-image and Replay
-  evidence. Unavailable virtual callback receivers still block the promoted
-  owner/target/effect claims for several existing event candidates.
+- **Completed candidate:** Exact-image KR 821 `0x01ad` BuffReplace is selectable
+  through CLI/API with four anonymous callback fields, raw object bytes, and
+  packet provenance. Independent native checks fully consumed 23,351/23,351
+  packets across 11 supplied Replays; the real CLI batch also produced 23,351
+  JSONL rows with 11/11 `CANDIDATE`, matched image, and zero framing errors.
+  Truncation, appended-byte, and four foreign-route controls did not pass as
+  full target packets. No buff replacement, owner, slot, or lifecycle claim is
+  made. Ignored output is in
+  `artifacts/16_19_development/buff_replace_cli_batch_11/`.
+- **Current:** Continue selected packet queries and exact-build field research.
+  Unavailable virtual callback receivers still block owner/target/effect
+  promotion for several existing event candidates.
 
 - **Completed candidate marker:** Exact KR 821 CLI/API now selects native
   `0x040a` child `0x000b`, named `OnChampionDoubleKill` in the pinned image.

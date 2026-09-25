@@ -64,6 +64,7 @@
 | `16.19.821.7343 --events npc_buff_add_packet,npc_buff_remove_packet --runtime-image PATH` | 分别解码 KR `0x00ae/0x047c` 原生包，并在两项均成功时汇总相同不透明 `(u32, u8)` 键的重合与时序歧义 | 逐包候选分别写入两个 JSONL；`candidate_associations.npc_buff_add_remove_opaque_key` 仅含回放内统计，不配对单个包，不推断 Buff 名称、归属或生命周期 |
 | `16.19.821.7343 --events npc_buff_update_num_counter_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x0194` BuffUpdateNumCounter 包，保留四个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_update_num_counter_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 名称、归属、计数含义或生命周期 |
 | `16.19.821.7343 --events npc_buff_update_count_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x02d9` BuffUpdateCount 包，保留五个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_update_count_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 名称、归属、计数含义或生命周期 |
+| `16.19.821.7343 --events npc_buff_replace_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x01ad` BuffReplace 包，保留四个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_replace_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 替换、名称、归属或生命周期 |
 | `16.19.820.7193 --events hero_death_timer` | HN 路由的计时 float、同刻 Hero_Die 和后续复活时间相互校验时，输出候选计时秒数 | 仅写入 `hero_death_timer_candidates`；该 profile 仅用于 820 HN 路由，821 KR 使用独立精确版本的候选 profile；不产生确认的死亡或重生事件 |
 | `16.19.820.7193 --events hero_respawn` | 将 HN 已观察且与计时包唯一配对的 `0x0357` 包输出为候选复活时点 | 仅写入 `hero_respawn_candidates`；依赖完整的 HN 计时候选校验，不补造回放结束后的复活 |
 | `16.19.820.7193 --events hero_level_state` | HN `0x02b3` 包中观察到的候选英雄等级值及原始包来源 | 仅写入 `hero_level_state_candidates`；同等级的独立包保留为重复观测，不补造升级事件；KR 路由未适配 |
@@ -325,6 +326,14 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 11 份均为 `CANDIDATE`，容器 framing 错误为零。
 `query-events --event npc_buff_update_count_packet_candidates --opaque-u32 VALUE`
 可按解码后的匿名 `+0x14` 整数筛选，仍输出原始候选行。
+
+821 的 BuffReplace 可独立选择 `--events npc_buff_replace_packet`，
+并用同 build 的 `--runtime-image` 输出 `npc_buff_replace_packet_candidates.jsonl`。
+`0x01ad` 候选保留 `+0x10` 匿名字节、`+0x14/+0x1c` 匿名浮点、
+`+0x18` 匿名整数及原始对象字节。镜像中的包名及回调调用不足以证明
+游戏内 Buff 替换或其实体归属。
+11 份 KR 821 回放的实际 CLI 批处理得到 23,351/23,351 个候选包，
+11 份均为 `CANDIDATE`，容器 framing 错误为零。
 
 821 的 `hero_inventory_packet`、`hero_deaths_snapshot` 与至少一种移动包路由一起选择时，
 `semantic_run.json` 和 API 的 `candidate_associations.movement_full_param_participant_candidate`

@@ -84,6 +84,8 @@ const { decodeNpcBuffUpdateNumCounterPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_buff_update_num_counter_packet_candidate');
 const { decodeNpcBuffUpdateCountPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_buff_update_count_packet_candidate');
+const { decodeNpcBuffReplacePacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_buff_replace_packet_candidate');
 const {
   DIRECT_INPUT_MOVEMENT_TURN_PACKET_CANDIDATE_PROFILE_821,
   decodeDirectInputMovementTurnPacketCandidates821,
@@ -2297,6 +2299,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    npc_buff_replace_packet: (input, collected) =>
+      decodeNpcBuffReplacePacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     direct_input_movement_turn_packet: (input, collected) =>
       decodeDirectInputMovementTurnPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2362,6 +2370,7 @@ function decode1619821(replay, profile, options = {}) {
     npc_buff_add_packet: 'npc_buff_add_packet_candidates',
     npc_buff_update_num_counter_packet: 'npc_buff_update_num_counter_packet_candidates',
     npc_buff_update_count_packet: 'npc_buff_update_count_packet_candidates',
+    npc_buff_replace_packet: 'npc_buff_replace_packet_candidates',
     direct_input_movement_turn_packet: 'direct_input_movement_turn_packet_candidates',
     set_movement_driver_packet: 'set_movement_driver_packet_candidates',
   };
@@ -2401,6 +2410,7 @@ function decode1619821(replay, profile, options = {}) {
     'npc_buff_add_packet',
     'npc_buff_update_num_counter_packet',
     'npc_buff_update_count_packet',
+    'npc_buff_replace_packet',
     'direct_input_movement_turn_packet',
     'set_movement_driver_packet',
   ]);
@@ -2450,6 +2460,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'npc_buff_remove_packet' || capability === 'npc_buff_add_packet'
         || capability === 'npc_buff_update_num_counter_packet'
         || capability === 'npc_buff_update_count_packet'
+        || capability === 'npc_buff_replace_packet'
         || capability === 'direct_input_movement_turn_packet'
         || capability === 'set_movement_driver_packet') {
       result.runtime_image_status ??= options.runtimeImagePath
