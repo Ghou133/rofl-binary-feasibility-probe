@@ -31,6 +31,14 @@ Current progress (older notes below retain their original research context):
   `artifacts/16_19_development/objective_bounty_scout_20260925/`,
   `artifacts/16_19_development/objective_bounty_claimed_cli_batch_11_821/`,
   and `artifacts/16_19_development/objective_bounty_turret_pair_cli_batch_11_821/`.
+- **Next sibling route stop-loss:** The exact-image `OnObjectiveBountySoon`
+  child `0x0114` and `OnObjectiveBountyEnded` child `0x0115` were rechecked
+  with native full consumption on 12 and six original packets. Their 18
+  child blobs and outer parameters are identical, with no same-ms or
+  adjacent-ms claim/plate/die match and no stable ordering around claim.
+  No separate selectable lifecycle capability is added from these names
+  alone; roles and effects remain `UNKNOWN`. Ignored negative evidence is
+  under `artifacts/16_19_development/objective_bounty_phase_scout_20260925/`.
 - **Completed saved decode-root query:** `query-events` now accepts a valid
   single- or multi-Replay `decode` output root as well as `batch`, retaining
   manifest, Replay identity, directory and requested-event hash checks.
