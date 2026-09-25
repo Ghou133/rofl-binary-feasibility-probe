@@ -676,7 +676,7 @@ node src/cli.js query-events "work\16-19-821-objective-bounty-turret-pairs" `
 `dampener_die_event_packet_candidates` 也可按时间或原始参数查询；批量结果会单独列出
 `PROFILE_UNAVAILABLE` 的回放，不能把它当作零命中。
 `hq_kill_event_packet_candidates` 还可按时间、原始参数或精确子事件 ID `0x0046` 查询，输出保持原 JSONL 行。查询校验完整 `16.19.821.7343`、已保存的镜像哈希/候选元数据、`0x4918`、匿名子包哈希和原始包引用；批量查询另校验 manifest 文件哈希。这里校验的是保存产物及来源引用，**不会重新打开原始 ROFL 逐字节核对**。`OnHQKill` 只是精确镜像的标签；不据此断言主基地实际毁坏、胜者、行动者或状态变化。缺镜像或无目标包的场次仍标为不可用。
-`objective_bounty_claimed_packet_candidates` 可按匿名 `blob_u32_0x04`、时间、原始参数或子事件 ID `0x0113` 查询；三包关联可按相等的匿名整数、时间或三包任一原始参数查询。保存产物查询核对精确 build、镜像、来源能力、计数和逐行引用，输出原 JSONL 行；不在查询时重新解码回放。未匹配 claim 不会误报成三包关联，缺少目标子事件的回放仍列为不可用。
+`objective_bounty_claimed_packet_candidates` 可按匿名 `blob_u32_0x04`、时间、原始参数或子事件 ID `0x0113` 查询；三包关联可按相等的匿名整数、时间或三包任一原始参数查询。关联查询逐条核对 claim、plate、die 三份保存的候选包 JSONL 的字段、子包哈希和原始包引用；批量入口还核对三份源文件的 manifest 哈希。它输出原 JSONL 行，不在查询时重新解码回放。未匹配 claim 不会误报成三包关联，缺少目标子事件的回放仍列为不可用。
 
 按 821 单次助攻候选的参与者列表查询，可输入单场或 `batch` 输出目录：
 

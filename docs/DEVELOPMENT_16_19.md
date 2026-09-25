@@ -24,9 +24,13 @@ Current progress (older notes below retain their original research context):
   The 11-Replay CLI batch yielded 10 triples and one unmatched claim
   (`NO_SAME_KEY_PLATE_OR_DIE`), preserving that claim in its packet stream.
   Four claim-free Replays retain `MISSING_INPUT` for the association and make
-  the batch `PARTIAL`. Saved-artifact query checked 10 triple rows, with seven
-  queryable and four unavailable Replays; searching the unmatched claim word
-  returned zero triples. This is a packet relation, not a gameplay effect.
+  the batch `PARTIAL`. Saved-artifact query checked 10 triple rows against all
+  three source JSONLs and, for batch roots, their manifest hashes. Seven
+  Replays were queryable and four unavailable; searching the unmatched claim
+  word returned zero triples. A changed triple word that disagrees with its
+  source packet is rejected before output. The public suite after this fix
+  passed 956 Node tests and 16 Python tests, with one existing portability
+  skip and zero failures. This is a packet relation, not a gameplay effect.
   Ignored evidence is under
   `artifacts/16_19_development/objective_bounty_scout_20260925/`,
   `artifacts/16_19_development/objective_bounty_claimed_cli_batch_11_821/`,
