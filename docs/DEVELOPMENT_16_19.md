@@ -4,6 +4,17 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed candidate association:** Selecting `hero_assist,hero_death_timer,hero_respawn`
+  for exact KR 821 also writes `hero_death_episode_candidates` and
+  `candidate_associations.hero_death_episode`. Each row joins the three
+  independently decoded outcomes by its original `0x0259` death packet and
+  physically verifies all source packet references. The real 11-Replay CLI
+  batch scanned 18,235,209 blocks with zero framing errors: all 11 were
+  `CANDIDATE`, yielding 655 episode rows, 607 observed `0x0048` returns, and
+  48 deaths with no observed return before Replay end. Missing or conflicting
+  sources fail the association while independent successful outputs remain.
+  Timer values do not predict return. Ignored local output is under
+  `artifacts/16_19_development/hero_death_episode_cli_batch_11/`.
 - **Completed query:** `query-events --event dampener_die_event_packet_candidates`
   checks the exact build, pinned image, native child identity, counts, blob
   hash and raw packet references before filtering unchanged rows by time or

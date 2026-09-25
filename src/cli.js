@@ -143,6 +143,7 @@ is not dispatched by this CLI; see docs/PUBLIC_DEVELOPMENT.md.
 For 821, hero_death with champion_die_event_packet emits a candidate packet pair;
 adding champion_kill_event_packet, champion_multiple_kill_event_packet, or
 on_shutdown_event_packet emits the corresponding candidate three-route packet group.
+hero_assist,hero_death_timer,hero_respawn together emit candidate death episodes.
 champion_double_kill_event_packet emits a separate packet-local named child marker.
 champion_triple_quadra_event_packet emits exact-image 0x000c/0x000d packet markers.
 resurrect_event_packet emits a separate packet-local OnResurrect candidate.

@@ -143,6 +143,8 @@ const { associateOnShutdownDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_on_shutdown_die_hero_death_pair_candidate');
 const { associateTurretFirstBloodDieCandidates821 } =
   require('./decoders/rofl_16_19_821_turret_first_blood_die_pair_candidate');
+const { associateHeroDeathEpisodeCandidates821 } =
+  require('./decoders/rofl_16_19_821_hero_death_episode_candidate');
 const { analyzeMovementParticipantAssociations821 } =
   require('./decoders/rofl_16_19_821_movement_participant_association_candidate');
 const {
@@ -2874,6 +2876,28 @@ function decode1619821(replay, profile, options = {}) {
       }
     } catch (error) {
       candidateAssociations.turret_first_blood_die_pair = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_assist')
+      && capabilities.includes('hero_death_timer')
+      && capabilities.includes('hero_respawn')) {
+    try {
+      const association = associateHeroDeathEpisodeCandidates821(replay, {
+        heroAssistOutcome: outcomes.hero_assist,
+        heroDeathTimerOutcome: outcomes.hero_death_timer,
+        heroRespawnOutcome: outcomes.hero_respawn,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: episodeEvents, ...summary } = association;
+        candidateAssociations.hero_death_episode = summary;
+        events.hero_death_episode_candidates = episodeEvents;
+      } else {
+        candidateAssociations.hero_death_episode = association;
+      }
+    } catch (error) {
+      candidateAssociations.hero_death_episode = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }

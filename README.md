@@ -20,6 +20,7 @@
 | `16.19.821.7343 --events hero_assist [--runtime-image PATH]` | 在已校验的死亡核心旁配对两种同参与者、同时间的 `0x040a/44` 包，并与十人 `ASSISTS` 结算核对，输出每次死亡的候选助攻参与者列表；提供同 build 镜像时，还原生核对两种子包 ID `0x0056/0x0057` | 仅写入 `hero_assist_candidates`，状态为 `CANDIDATE`；两个非英雄来源的列表保持未知；孤立或单一形状 `0x040a` 仍被排除；子包身份不证明有效助攻或参与者角色 |
 | `16.19.821.7343 --events hero_respawn` | KR `0x0048` 经精确 821 运行时确认为 `PKT_HeroReincarnateAlive_s` 路由；解出两项浮点值和一项可选浮点值，并与候选死亡核心、结算 `TOTAL_TIME_SPENT_DEAD` 对照 | 仅写入 `hero_respawn_candidates`，状态为 `CANDIDATE`；浮点值的游戏含义和回调的具体状态效果未确定。同刻 `0x018d` 实为库存 MapView 结构指纹；保留时间差、未返回的末次死亡与额外库存包，不以计时值预测返回 |
 | `16.19.821.7343 --events hero_death_timer` | KR `0x0259` 五字节载荷经精确 821 镜像反序列化与浮点变换，655 个已匹配死亡核心输出候选计时秒数；两包孤立 `0x0259` 排除 | 仅写入 `hero_death_timer_candidates`，状态为 `CANDIDATE`；607 次观察到的返回中有两次显著早于计时值，故不将计时值当作返回预测；48 个末次未返回计时越过回放结束 |
+| `16.19.821.7343 --events hero_assist,hero_death_timer,hero_respawn` | 按同一原始 `0x0259` 死亡包引用关联三项独立候选，将受害者、来源、助攻列表、计时值以及观察到的返回或回放结束前未返回状态放入逐次记录 | 另写入 `hero_death_episode_candidates` 和关联状态，仍为 `CANDIDATE`；不以计时值预测返回，也不把参与者映射或游戏效果升级为确认语义 |
 | `16.19.821.7343 --events hero_deaths_snapshot` | KR `0x0089` 关键帧字节 1182 与精确 821 镜像中的计数字节变换相符，输出候选累计死亡次数快照 | 仅写入 `hero_deaths_snapshot_candidates`；末帧与结算可差 1 并保留差值；不是逐次死亡事件。精确镜像已验证完整载荷和字节向量，字段语义仍为候选 |
 | `16.19.821.7343 --events hero_champion_kills_snapshot` | KR `0x0089` 关键帧原始字节 434/1186 镜像，并按精确 821 镜像的计数字节变换输出候选累计英雄击杀数快照 | 仅写入 `hero_champion_kills_snapshot_candidates`；旧有限编码表以外的高值已可解，字段语义仍为候选；保留结算差值，不推断击杀时点或击杀者 |
 | `16.19.821.7343 --events hero_assists_snapshot` | KR `0x0089` 关键帧原始字节 1178 按精确 821 镜像的计数字节变换输出候选累计助攻数快照 | 仅写入 `hero_assists_snapshot_candidates`；五份回放中旧编码表无法识别的高值已可解，字段语义仍为候选；不推断单次助攻或参与者关系 |
@@ -474,6 +475,16 @@ node src/cli.js batch "D:\Replays\HN-example.rofl" "D:\Replays\KR-example.rofl" 
 ```
 
 有能力不可用的回放会保留已成功的候选输出，汇总状态为 `PARTIAL`。
+
+对完整 build `16.19.821.7343` 的 KR 回放，可一次输出逐次死亡的三个独立候选来源及关联记录：
+
+```powershell
+node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
+  --events hero_assist,hero_death_timer,hero_respawn --event-jsonl-only `
+  --out-dir "work\16-19-821-death-episodes"
+```
+
+每场的 `hero_death_episode_candidates.jsonl` 按原始 `0x0259` 包连接候选受害者、来源、助攻列表和计时值；`return_observation_status` 区分已观察到的 `0x0048` 返回与回放结束前未观察到返回。`semantic_run.json` 的 `candidate_associations.hero_death_episode` 记录关联状态。三项来源中任一不可用时，关联不可用，已成功的来源事件仍保留。计时值不用于推算返回时点。
 
 只读取已观察到的 HN HeroStats keyframe 候选快照：
 
