@@ -4,6 +4,16 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed packet candidate:** Exact KR 821 `0x040a/16` child `0x002c`,
+  named `OnReviveAlly` in the pinned runtime image, is selectable through
+  CLI/API with the exact image SHA-256 gate. One of the 11 supplied Replays
+  yielded three packets that passed native full consumption and child identity
+  checks; nine same-length foreign children were retained as exclusions.
+  The other ten Replays reported `PROFILE_UNAVAILABLE`, so the 11-Replay batch
+  is `PARTIAL`, with zero framing errors. Rows preserve the anonymous native
+  child `+0x04` u32, raw bytes, and packet provenance. No actual revive,
+  actor/recipient role, or state change is established. Ignored real CLI
+  output is under `artifacts/16_19_development/revive_ally_cli_batch_11/`.
 - **Completed:** `query-events --killer-participant 1..10` filters exact 821
   death and assist candidate rows by the independently decoded killer
   participant candidate. A real KR Replay had 71 death rows, three matches
