@@ -1,0 +1,60 @@
+name: Public acceptance
+
+on:
+  push:
+    branches: [main, 'codex/16-19-development']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-acceptance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Runtime versions
+        run: |
+          node --version
+          python --version
+      - name: Public tests (no private replay or runtime image required)
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee public-tests.log
+      - name: Exact-build registry regression
+        shell: bash
+        run: |
+          set -o pipefail
+          node --test test/multi_build_registry.test.js test/capability_manifest.test.js 2>&1 | tee registry-tests.log
+      - name: Build and verify public source package
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run package:source 2>&1 | tee package-tests.log
+          npm run verify:source 2>&1 | tee -a package-tests.log
+      - name: Preserve acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-acceptance-${{ github.sha }}
+          path: |
+            public-tests.log
+            registry-tests.log
+            package-tests.log
+            dist/rofl-analyzer-source.zip
+          if-no-files-found: warn
+          retention-days: 14
