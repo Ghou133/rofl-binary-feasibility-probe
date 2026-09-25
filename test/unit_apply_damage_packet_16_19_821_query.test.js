@@ -16,6 +16,7 @@ const {
   decodeUnitApplyDamageLookupKeyFromRaw821,
   isObservedShape,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
+const { prepareEventQuery, streamEventQuery } = require('../src/event_query');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const EVENT = 'unit_apply_damage_packet_candidates';
@@ -108,10 +109,9 @@ function v2Row(index, payloadHex = FLOAT_PACKET) {
   return entry;
 }
 
-function v3Row(index, payloadHex = FLOAT_PACKET, relation = 'EQUAL') {
+function v3Row(index, payloadHex = FLOAT_PACKET, relation = 'EQUAL',
+  encoded24 = '01020304', encoded2c = '05060708') {
   const entry = v2Row(index, payloadHex);
-  const encoded24 = '01020304';
-  const encoded2c = '05060708';
   const key24 = decodeUnitApplyDamageLookupKeyFromRaw821(encoded24, 0x24);
   const key2c = decodeUnitApplyDamageLookupKeyFromRaw821(encoded2c, 0x2c);
   entry.build_profile = profile.id;
@@ -125,6 +125,13 @@ function v3Row(index, payloadHex = FLOAT_PACKET, relation = 'EQUAL') {
   entry.native_callback_lookup_key_0x2c_encoded_bytes_hex = encoded2c;
   entry.native_callback_lookup_key_0x24_raw_param_relation = relation;
   return entry;
+}
+
+async function queryLibrary(directory, options) {
+  const lines = [];
+  const summary = await streamEventQuery(prepareEventQuery(directory, EVENT), options,
+    async (line) => lines.push(line));
+  return { lines, summary };
 }
 
 function writeReplay(root, name, rows, {
@@ -280,6 +287,102 @@ test('query-events checks v3 native lookup keys and relation counts after output
   const badCounts = command(badMetadata, '--damage-callback-f32-available');
   assert.equal(badCounts.status, 2, badCounts.stderr);
   assert.equal(JSON.parse(badCounts.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+});
+
+test('saved v3 query filters exact +0x24 and +0x2c keys independently and together', async (t) => {
+  const rows = [v3Row(0),
+    v3Row(1, OTHER_PACKET, 'RAW_PARAM_IS_LOOKUP_PLUS_0X100',
+      '090a0b0c', '05060708'),
+    v3Row(2, CONSTANT_PACKETS[0][0], 'OTHER',
+      '01020304', '0d0e0f10')];
+  const { directory, lines } = fixture(t, rows);
+  const key24 = rows[0].native_callback_lookup_key_u32_0x24_candidate;
+  const key2c = rows[0].native_callback_lookup_key_u32_0x2c_candidate;
+  const by24 = await queryLibrary(directory, { damageLookupKey24: key24 });
+  assert.deepEqual(by24.lines, [`${lines[0]}\n`, `${lines[2]}\n`]);
+  assert.equal(by24.summary.scanned_count, 3);
+  assert.equal(by24.summary.matched_count, 2);
+  assert.equal(by24.summary.damage_lookup_keys_checked_count, 3);
+  assert.equal(by24.summary.native_witness_check,
+    'PERSISTED_METADATA_AND_RAW_BYTES');
+  assert.deepEqual(by24.summary.filters.damage_lookup_key24, key24);
+  assert.equal(by24.summary.rows_unmodified, true);
+  const by2c = await queryLibrary(directory, { damageLookupKey2c: key2c });
+  assert.deepEqual(by2c.lines, [`${lines[0]}\n`, `${lines[1]}\n`]);
+  const both = await queryLibrary(directory, {
+    damageLookupKey24: key24, damageLookupKey2c: key2c, limit: 1,
+  });
+  assert.deepEqual(both.lines, [`${lines[0]}\n`]);
+  assert.equal(both.summary.scanned_count, 3);
+  assert.equal(both.summary.matched_count, 1);
+  assert.equal(both.summary.emitted_count, 1);
+  assert.equal(both.summary.filters.damage_lookup_key2c, key2c);
+  const none = await queryLibrary(directory, { damageLookupKey24: 0 });
+  assert.equal(none.summary.matched_count, 0);
+  assert.equal(none.summary.damage_lookup_keys_checked_count, 3);
+});
+
+test('CLI exposes v3 lookup key filters without changing saved candidate rows', (t) => {
+  const rows = [v3Row(0),
+    v3Row(1, OTHER_PACKET, 'RAW_PARAM_IS_LOOKUP_PLUS_0X100',
+      '090a0b0c', '05060708'),
+    v3Row(2, CONSTANT_PACKETS[0][0], 'OTHER',
+      '01020304', '0d0e0f10')];
+  const { directory, lines } = fixture(t, rows);
+  const key24 = rows[0].native_callback_lookup_key_u32_0x24_candidate;
+  const key2c = rows[0].native_callback_lookup_key_u32_0x2c_candidate;
+  const selected = command(directory,
+    '--damage-lookup-key24', `0x${key24.toString(16)}`,
+    '--damage-lookup-key2c', String(key2c), '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${lines[0]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 3);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.damage_lookup_keys_checked_count, 3);
+  assert.equal(summary.filters.damage_lookup_key24, key24);
+  assert.equal(summary.filters.damage_lookup_key2c, key2c);
+  assert.equal(summary.native_witness_check,
+    'PERSISTED_METADATA_AND_RAW_BYTES');
+  assert.equal(summary.rows_unmodified, true);
+});
+
+test('saved v3 lookup filter validates every row after limit and rejects damaged metadata', async (t) => {
+  const rows = [v3Row(0), v3Row(1, OTHER_PACKET), v3Row(2)];
+  const key24 = rows[0].native_callback_lookup_key_u32_0x24_candidate;
+  const damagedRows = rows.map((entry) => structuredClone(entry));
+  damagedRows[2].native_callback_lookup_key_0x2c_encoded_bytes_hex = '00000000';
+  const damaged = fixture(t, damagedRows);
+  await assert.rejects(queryLibrary(damaged.directory,
+    { damageLookupKey24: key24, limit: 1 }),
+  (error) => error.code === 'INVALID_EVENT_ROW');
+  const badMetadata = fixture(t, rows);
+  const semanticFile = path.join(badMetadata.directory, 'semantic_run.json');
+  const semantic = JSON.parse(fs.readFileSync(semanticFile, 'utf8'));
+  semantic.capability_results[CAPABILITY].evidence_lookup_key_0x2c_table_sha256 =
+    '0'.repeat(64);
+  fs.writeFileSync(semanticFile, JSON.stringify(semantic));
+  await assert.rejects(queryLibrary(badMetadata.directory,
+    { damageLookupKey2c: rows[0].native_callback_lookup_key_u32_0x2c_candidate }),
+  (error) => error.code === 'CAPABILITY_METADATA_MISMATCH');
+});
+
+test('saved lookup filter accepts only exact 821 v3 packet artifacts and uint32 keys', async (t) => {
+  const v1 = fixture(t, [row(0)]);
+  const v2 = fixture(t, [v2Row(0)]);
+  const foreign = fixture(t, [v3Row(0)], {
+    replayVersion: '16.19.820.7193',
+  });
+  for (const directory of [v1.directory, v2.directory, foreign.directory]) {
+    await assert.rejects(queryLibrary(directory, { damageLookupKey24: 1 }),
+      (error) => error.code === 'UNSUPPORTED_FILTER');
+  }
+  const v3 = fixture(t, [v3Row(0)]);
+  for (const invalid of [-1, 0x100000000, 1.5, '1']) {
+    await assert.rejects(queryLibrary(v3.directory,
+      { damageLookupKey2c: invalid }),
+    (error) => error.code === 'INVALID_FILTER');
+  }
 });
 
 test('query-events distinguishes zero available floats from unavailable shapes and capability', (t) => {

@@ -3094,6 +3094,20 @@ function prepareUnitApplyDamageCallbackF32(prepared) {
   }
 }
 
+function prepareUnitApplyDamageLookupKeys(prepared) {
+  const profile = UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821;
+  if (prepared.eventKey !== 'unit_apply_damage_packet_candidates'
+      || prepared.replayVersion !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--damage-lookup-key24 and --damage-lookup-key2c require an exact 16.19.821.7343 UnitApplyDamage packet candidate event.');
+  }
+  prepareUnitApplyDamageCallbackF32(prepared);
+  if (prepared.capabilityResult.profile_id !== profile.id) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--damage-lookup-key24 and --damage-lookup-key2c require the exact 16.19.821.7343 UnitApplyDamage packet v3 profile.');
+  }
+}
+
 function unitApplyDamageCallbackF32(row, prepared, lineNumber,
   packetPositions, shapeFamilies, nativeInputHash, nativeFloatSourceCounts,
   nativeLookupRelationCounts) {
@@ -5639,6 +5653,7 @@ function validateFilters(options) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, damageCallbackF32Available = false,
+    damageLookupKey24 = null, damageLookupKey2c = null,
     packetRecordCount = null, showHealthZeroFlag = null, levelAfter = null,
     childEventId = null, limit = null, latestPerParticipant = false,
     endpointReversedPair: endpointReversedPairFilter = false,
@@ -5665,6 +5680,8 @@ function validateFilters(options) {
     ['killerParticipant', killerParticipant, 1, 10],
     ['assistingParticipant', assistingParticipant, 1, 10],
     ['rawParam', rawParam, 0, 0xffffffff],
+    ['damageLookupKey24', damageLookupKey24, 0, 0xffffffff],
+    ['damageLookupKey2c', damageLookupKey2c, 0, 0xffffffff],
     ['itemId', itemId, 0, 0xffffffff],
     ['previousItemId', previousItemId, 0, 0xffffffff],
     ['slot', slot, 0, 9],
@@ -5699,6 +5716,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, damageCallbackF32Available = false,
+    damageLookupKey24 = null, damageLookupKey2c = null,
     packetRecordCount = null, showHealthZeroFlag = null, levelAfter = null,
     childEventId = null, limit = null, latestPerParticipant = false,
     endpointReversedPair: endpointReversedPairFilter = false,
@@ -5795,7 +5813,11 @@ async function streamEventQuery(prepared, options, emitLine) {
       '--opaque-i32 requires a 16.19.821.7343 CastSpellAns packet candidate event.');
   }
   if (castNestedBits != null) prepareCastSpellAnsNestedBits(prepared);
-  if (damageCallbackF32Available) prepareUnitApplyDamageCallbackF32(prepared);
+  const damageLookupKeysRequested = damageLookupKey24 != null
+    || damageLookupKey2c != null;
+  const damagePacketCheck = damageCallbackF32Available || damageLookupKeysRequested;
+  if (damageLookupKeysRequested) prepareUnitApplyDamageLookupKeys(prepared);
+  else if (damageCallbackF32Available) prepareUnitApplyDamageCallbackF32(prepared);
   if (packetRecordCount != null) {
     prepareCircularMovementRestrictionRecordCount(prepared);
   }
@@ -5848,7 +5870,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     UNIT_APPLY_DAMAGE_NATIVE_FLOAT_SOURCES_821.map((source) => [source, 0]));
   const damageNativeLookupRelationCounts = Object.fromEntries(
     UNIT_APPLY_DAMAGE_LOOKUP_RELATIONS_821.map((relation) => [relation, 0]));
-  const damageNativeInputHash = damageCallbackF32Available
+  const damageNativeInputHash = damagePacketCheck
     ? crypto.createHash('sha256') : null;
   const circularPacketPositions = new Set();
   const circularShapeCounts = { empty1: 0, record24: 0 };
@@ -6030,11 +6052,11 @@ async function streamEventQuery(prepared, options, emitLine) {
         : castSpellAnsNestedBits(row, prepared, lineNumber,
           castNestedBitsPacketPositions);
       if (castNestedBits != null) castNestedBitsCheckedCount += 1;
-      const damageCallbackF32 = damageCallbackF32Available
+      const damageCallbackF32 = damagePacketCheck
         ? unitApplyDamageCallbackF32(row, prepared, lineNumber,
           damagePacketPositions, damageShapeFamilies, damageNativeInputHash,
           damageNativeFloatSourceCounts, damageNativeLookupRelationCounts) : null;
-      if (damageCallbackF32Available) {
+      if (damagePacketCheck) {
         if (damageCallbackF32) damageCallbackF32AvailableCount += 1;
         else damageCallbackF32UnavailableCount += 1;
       }
@@ -6118,6 +6140,12 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (opaqueI32 != null && opaqueI32Field.value !== opaqueI32)
           || (castNestedBits != null && nestedBits !== castNestedBits)
           || (damageCallbackF32Available && !damageCallbackF32)
+          || (damageLookupKey24 != null
+            && row.native_callback_lookup_key_u32_0x24_candidate
+              !== damageLookupKey24)
+          || (damageLookupKey2c != null
+            && row.native_callback_lookup_key_u32_0x2c_candidate
+              !== damageLookupKey2c)
           || (packetRecordCount != null && circularRecordCount !== packetRecordCount)
           || (showHealthZeroFlag != null && showHealthFlag !== showHealthZeroFlag)
           || (levelAfter != null && row.level_after_candidate !== levelAfter)
@@ -6165,7 +6193,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       'ShowHealthBar raw payload counts or ordered native input digest differ from capability metadata.',
       { observed_payload_counts: showHealthState.observedPayloadCounts });
   }
-  if (damageCallbackF32Available
+  if (damagePacketCheck
       && (damageCallbackF32AvailableCount
           !== prepared.capabilityResult.callback_f32_available_count
         || damageCallbackF32UnavailableCount
@@ -6405,6 +6433,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       damage_callback_f32_checked_count: scannedCount,
       native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
     } : {}),
+    ...(damageLookupKeysRequested ? {
+      damage_lookup_keys_checked_count: scannedCount,
+      native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
+    } : {}),
     ...(packetRecordCount == null ? {} : {
       packet_record_count_checked_count: scannedCount,
       packet_record_count_unavailable_count: 0,
@@ -6437,6 +6469,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       ...(opaqueI32 == null ? {} : { opaque_i32: opaqueI32 }),
       ...(castNestedBits == null ? {} : { cast_nested_bits: castNestedBits }),
       ...(damageCallbackF32Available ? { damage_callback_f32_available: true } : {}),
+      ...(damageLookupKey24 == null ? {}
+        : { damage_lookup_key24: damageLookupKey24 }),
+      ...(damageLookupKey2c == null ? {}
+        : { damage_lookup_key2c: damageLookupKey2c }),
       ...(packetRecordCount == null ? {} : { packet_record_count: packetRecordCount }),
       ...(showHealthZeroFlag == null ? {} : {
         show_health_zero_flag: showHealthZeroFlag,
@@ -6484,6 +6520,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   let damageCallbackF32CheckedCount = 0;
   let damageCallbackF32AvailableCount = 0;
   let damageCallbackF32UnavailableCount = 0;
+  let damageLookupKeysCheckedCount = 0;
   let packetRecordCountCheckedCount = 0;
   let showHealthZeroFlagCheckedCount = 0;
   let levelAfterCheckedCount = 0;
@@ -6540,6 +6577,9 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       damageCallbackF32AvailableCount += summary.damage_callback_f32_available_count;
       damageCallbackF32UnavailableCount += summary.damage_callback_f32_unavailable_count;
     }
+    if (options.damageLookupKey24 != null || options.damageLookupKey2c != null) {
+      damageLookupKeysCheckedCount += summary.damage_lookup_keys_checked_count;
+    }
     if (options.packetRecordCount != null) {
       packetRecordCountCheckedCount += summary.packet_record_count_checked_count;
     }
@@ -6572,6 +6612,11 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         damage_callback_f32_unavailable_count: summary.damage_callback_f32_unavailable_count,
         native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
       } : {}),
+      ...(options.damageLookupKey24 == null && options.damageLookupKey2c == null
+        ? {} : {
+          damage_lookup_keys_checked_count: summary.damage_lookup_keys_checked_count,
+          native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
+        }),
       ...(options.packetRecordCount == null ? {} : {
         packet_record_count_checked_count:
           summary.packet_record_count_checked_count,
@@ -6624,6 +6669,13 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         prepared.replays.length - completedCount,
       native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
     } : {}),
+    ...(options.damageLookupKey24 == null && options.damageLookupKey2c == null
+      ? {} : {
+        damage_lookup_keys_checked_count: damageLookupKeysCheckedCount,
+        damage_lookup_keys_unavailable_replay_count:
+          prepared.replays.length - completedCount,
+        native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
+      }),
     ...(options.packetRecordCount == null ? {} : {
       packet_record_count_checked_count: packetRecordCountCheckedCount,
       packet_record_count_unavailable_replay_count:

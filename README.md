@@ -834,6 +834,17 @@ node src/cli.js query-events "work\16-19-821-unit-damage" `
   --damage-callback-f32-available --limit 20
 ```
 
+v3 伤害包保存结果还可按两个独立的原生对象查找键筛选。以下两个条件同时给出时，必须由同一包满足；`--raw-param` 仍单独表示原始包参数：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-unit-damage" `
+  --event unit_apply_damage_packet_candidates `
+  --damage-lookup-key24 0x400000ae --damage-lookup-key2c 0x400000b3 `
+  --limit 20
+```
+
+查询仅接受精确 `16.19.821.7343` 的 v3 保存产物，核对全部行、原始字节和原生见证元数据，`--limit` 不缩短核对范围；缺失或旧版产物会明确拒绝。两个键可分别筛选，不能据此认定伤害包的施加者、目标、致死关系或实际伤害。
+
 查询校验精确 build、镜像和变换标识、保存的全包原生见证状态与有序输入摘要，以及每行原始包哈希与来源引用；v2 校验全部匿名原生浮点值的读取偏移或常量来源，v3 另校验两项查找键的固定字节变换和 `raw_param` 关系汇总；旧 v1/v2 产物仍按各自合同读取。达到输出上限后仍检查余下行，不重新运行原生解码或打开原始回放。该筛选保留原来较窄的 `callback_f32_*` 含义：11 份回放共 628,909 行，其中 6,501 行可用，622,408 行为 `UNAVAILABLE_SHAPE`；保存的 v1、v2、v3 三版分别完整扫描 628,909 行，均筛出 6,501 行。新版 `native_callback_f32_*` 在全部已验证包可用，仍不代表实际伤害量。
 
 血条显示包的匿名回调零标记可在保存结果中筛选：

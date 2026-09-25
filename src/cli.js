@@ -232,6 +232,9 @@ Options:
   --cast-nested-bits <0..255|0xhex>  Exact decoded 821 CastSpellAns nested callback bits
   --damage-callback-f32-available  Exact 821 UnitApplyDamage rows with a native-matched anonymous +0x20 f32
                                 Checks saved witness metadata and raw bytes; does not rerun the native parser.
+  --damage-lookup-key24 <uint32|0xhex>  Exact 821 UnitApplyDamage v3 native +0x24 lookup key
+  --damage-lookup-key2c <uint32|0xhex>  Exact 821 UnitApplyDamage v3 native +0x2c lookup key
+                                These anonymous object keys do not establish actor or damage roles.
   --show-health-zero-flag <0|1>  Exact 821 ShowHealthBar callback zero-flag candidate
                                 Checks saved witness metadata and raw bytes; does not infer display effect.
   --packet-record-count <0|1>  Exact 821 circular movement restriction packet record count
@@ -295,6 +298,8 @@ function parseArgs(argv) {
     opaqueI32: null,
     castNestedBits: null,
     damageCallbackF32Available: false,
+    damageLookupKey24: null,
+    damageLookupKey2c: null,
     showHealthZeroFlag: null,
     packetRecordCount: null,
     levelAfter: null,
@@ -420,6 +425,8 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'opaque-pair') options.opaquePair = queryOpaquePair(value);
       else if (command === 'query-events' && key === 'opaque-i32') options.opaqueI32 = queryInt32(value, key);
       else if (command === 'query-events' && key === 'cast-nested-bits') options.castNestedBits = queryByte(value, key);
+      else if (command === 'query-events' && key === 'damage-lookup-key24') options.damageLookupKey24 = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'damage-lookup-key2c') options.damageLookupKey2c = queryUint32(value, key);
       else if (command === 'query-events' && key === 'show-health-zero-flag') options.showHealthZeroFlag = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'packet-record-count') options.packetRecordCount = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'level-after') options.levelAfter = queryInteger(value, key);
@@ -557,6 +564,10 @@ function parseArgs(argv) {
     if (options.damageCallbackF32Available
         && options.event !== 'unit_apply_damage_packet_candidates') {
       throw new Error('--damage-callback-f32-available requires an 821 unit_apply_damage_packet_candidates event');
+    }
+    if ((options.damageLookupKey24 !== null || options.damageLookupKey2c !== null)
+        && options.event !== 'unit_apply_damage_packet_candidates') {
+      throw new Error('--damage-lookup-key24 and --damage-lookup-key2c require an 821 unit_apply_damage_packet_candidates event');
     }
     if (options.showHealthZeroFlag !== null
         && (options.event !== 'show_health_bar_packet_candidates'
@@ -3041,6 +3052,8 @@ async function runQueryEventsCommand(parsed) {
       opaqueI32: options.opaqueI32,
       castNestedBits: options.castNestedBits,
       damageCallbackF32Available: options.damageCallbackF32Available,
+      damageLookupKey24: options.damageLookupKey24,
+      damageLookupKey2c: options.damageLookupKey2c,
       showHealthZeroFlag: options.showHealthZeroFlag,
       packetRecordCount: options.packetRecordCount,
       levelAfter: options.levelAfter,
