@@ -175,7 +175,7 @@ Options:
   --slot <0..9>                Exact observed 821 inventory packet record slot
   --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
-  --child-event-id <uint32|0xhex>  Exact 821 stealth child ID (0x0101 or 0x0102)
+  --child-event-id <uint32|0xhex>  Exact 821 stealth or Triple/Quadra child ID
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
   --output <path|->            Write unmodified JSONL rows (default: stdout)
                                 Query summary is JSON on stderr when output is stdout
@@ -401,11 +401,18 @@ function parseArgs(argv) {
       throw new Error('--opaque-i32 requires an 821 cast_spell_ans_packet_candidates event');
     }
     if (options.childEventId !== null) {
-      if (options.event !== 'stealth_event_packet_candidates') {
-        throw new Error('--child-event-id requires an 821 stealth_event_packet_candidates event');
+      const ids = options.event === 'stealth_event_packet_candidates'
+        ? [0x0101, 0x0102]
+        : ['champion_triple_quadra_event_packet_candidates',
+          'champion_triple_quadra_multi_group_candidates'].includes(options.event)
+          ? [0x000c, 0x000d] : null;
+      if (!ids) {
+        throw new Error('--child-event-id requires an 821 stealth or Triple/Quadra candidate event');
       }
-      if (![0x0101, 0x0102].includes(options.childEventId)) {
-        throw new Error('--child-event-id must be 0x0101 (OnEnterStealth) or 0x0102 (OnExitStealth)');
+      if (!ids.includes(options.childEventId)) {
+        throw new Error(options.event === 'stealth_event_packet_candidates'
+          ? '--child-event-id must be 0x0101 (OnEnterStealth) or 0x0102 (OnExitStealth)'
+          : '--child-event-id must be 0x000c (OnChampionTripleKill) or 0x000d (OnChampionQuadraKill)');
       }
     }
     if (options.output === '') throw new Error('--output must be a path or -');

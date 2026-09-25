@@ -378,7 +378,7 @@ node src/cli.js query-events "work\16-19-821-batch" `
   --event resurrect_event_packet_candidates --limit 20 `
   --output "work\resurrect-query.jsonl"
 node src/cli.js query-events "work\16-19-821-triple-quadra-groups" `
-  --event champion_triple_quadra_multi_group_candidates --opaque-u32 4 `
+  --event champion_triple_quadra_multi_group_candidates --child-event-id 0x000d `
   --output "work\quadra-named-packet-groups.jsonl"
 ```
 
@@ -430,7 +430,13 @@ node src/cli.js query-events "work\16-19-821-stealth-reports\replays\KR_example"
   --event stealth_event_packet_candidates --child-event-id 0x0101 --limit 20
 ```
 
-`--child-event-id` 只用于 `stealth_event_packet_candidates`，接受十进制 `257`/`258` 或十六进制 `0x0101`/`0x0102`；分别匹配镜像注册名 OnEnterStealth/OnExitStealth 的子包。它按已解码的 `child_event_id` 筛选，不从外层 `raw_param` 推断。汇总保留 `child_event_id_unavailable_count`，输出是未经修改的原始 JSONL 行；标签不证明实际可见性变化或隐身持续状态。
+`--child-event-id` 对隐身候选接受 `0x0101/0x0102`，对
+`champion_triple_quadra_event_packet_candidates` 及
+`champion_triple_quadra_multi_group_candidates` 接受 `0x000c/0x000d`；
+也可输入对应十进制值。查询只匹配精确镜像解出的子 ID，包组使用其中命名子包的
+ID，不从外层 `raw_param` 或 Multi 的匿名 `+0x08` 推断。
+汇总保留 `child_event_id_unavailable_count`，输出未经修改的 JSONL 行。
+这些镜像标签不证明隐身状态或实际连续击杀。
 
 执行 **16.15.801.3452** 的旧版整合语义分析：
 

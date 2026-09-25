@@ -701,6 +701,36 @@ test('query-events reads exact 821 triple and quadra packet and group candidates
   }
 });
 
+test('query-events selects exact triple and quadra child IDs in packets and groups', (t) => {
+  for (const childId of [0x000c, 0x000d]) {
+    const fixture = tripleQuadraAssociationArtifact(t, childId);
+    for (const [eventKey, line] of [
+      [TRIPLE_QUADRA_PACKET_EVENT, fixture.packetLine],
+      [TRIPLE_QUADRA_MULTI_GROUP_EVENT, fixture.groupLine],
+    ]) {
+      const matched = run(fixture.replayDirectory, '--event', eventKey,
+        '--child-event-id', `0x${childId.toString(16).padStart(4, '0')}`);
+      assert.equal(matched.status, 0, matched.stderr);
+      assert.equal(matched.stdout, `${line}\n`);
+      assert.equal(JSON.parse(matched.stderr).matched_count, 1);
+      const absent = run(fixture.replayDirectory, '--event', eventKey,
+        '--child-event-id', childId === 0x000c ? '0x000d' : '0x000c');
+      assert.equal(absent.status, 0, absent.stderr);
+      assert.equal(absent.stdout, '');
+      assert.equal(JSON.parse(absent.stderr).matched_count, 0);
+    }
+    const invalid = run(fixture.replayDirectory, '--event',
+      TRIPLE_QUADRA_PACKET_EVENT, '--child-event-id', '0x0101');
+    assert.equal(invalid.status, 1);
+    assert.match(invalid.stderr, /--child-event-id must be 0x000c/);
+  }
+  const unrelated = doubleMultiAssociationArtifact(t);
+  const rejected = run(unrelated.replayDirectory, '--event',
+    DOUBLE_MULTI_GROUP_EVENT, '--child-event-id', '0x000c');
+  assert.equal(rejected.status, 1);
+  assert.match(rejected.stderr, /--child-event-id requires/);
+});
+
 test('query-events fails closed on 821 triple and quadra identity or packet order corruption', (t) => {
   const wrongBuild = tripleQuadraAssociationArtifact(t);
   rewriteJson(wrongBuild.semanticPath, (semantic) => {

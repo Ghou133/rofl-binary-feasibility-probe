@@ -159,6 +159,11 @@ const EXACT_PACKET_EVENTS_821 = Object.freeze({
   champion_triple_quadra_event_packet_candidates:
     CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_821_PROFILE,
 });
+const CHILD_EVENT_ID_FILTERS_821 = Object.freeze({
+  stealth_event_packet_candidates: Object.freeze([0x0101, 0x0102]),
+  champion_triple_quadra_event_packet_candidates: Object.freeze([0x000c, 0x000d]),
+  champion_triple_quadra_multi_group_candidates: Object.freeze([0x000c, 0x000d]),
+});
 
 class EventQueryError extends Error {
   constructor(code, message, details = {}) {
@@ -1057,12 +1062,15 @@ function exactTripleQuadraPacketRow(row, prepared, lineNumber, seenPacketPositio
   seenPacketPositions.add(position);
 }
 
-function stealthChildEventId(row, lineNumber) {
-  const value = row.child_event_id;
+function candidateChildEventId(row, eventKey, lineNumber) {
+  const field = eventKey === 'champion_triple_quadra_multi_group_candidates'
+    ? 'on_champion_triple_quadra_child_event_id' : 'child_event_id';
+  const value = row[field];
   if (value == null) return { value: null, available: false };
-  if (!Number.isSafeInteger(value) || ![0x0101, 0x0102].includes(value)) {
+  if (!Number.isSafeInteger(value)
+      || !CHILD_EVENT_ID_FILTERS_821[eventKey].includes(value)) {
     throw new EventQueryError('INVALID_EVENT_ROW',
-      `Invalid child_event_id at JSONL line ${lineNumber}.`, { line_number: lineNumber });
+      `Invalid ${field} at JSONL line ${lineNumber}.`, { line_number: lineNumber });
   }
   return { value, available: true };
 }
@@ -1089,10 +1097,6 @@ function validateFilters(options) {
   }
   if (fromMs != null && toMs != null && fromMs > toMs) {
     throw new EventQueryError('INVALID_FILTER', 'fromMs must not exceed toMs.');
-  }
-  if (childEventId != null && ![0x0101, 0x0102].includes(childEventId)) {
-    throw new EventQueryError('INVALID_FILTER',
-      'childEventId must be 0x0101 (OnEnterStealth) or 0x0102 (OnExitStealth).');
   }
 }
 
@@ -1122,10 +1126,15 @@ async function streamEventQuery(prepared, options, emitLine) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--opaque-i32 requires a 16.19.821.7343 CastSpellAns packet candidate event.');
   }
-  if (childEventId != null && (prepared.eventKey !== 'stealth_event_packet_candidates'
+  const allowedChildIds = CHILD_EVENT_ID_FILTERS_821[prepared.eventKey] ?? null;
+  if (childEventId != null && (!allowedChildIds
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
-      '--child-event-id requires a 16.19.821.7343 stealth packet candidate event.');
+      '--child-event-id requires a supported 16.19.821.7343 named child candidate event.');
+  }
+  if (childEventId != null && !allowedChildIds.includes(childEventId)) {
+    throw new EventQueryError('INVALID_FILTER',
+      '--child-event-id is not one of the selected event\'s exact child IDs.');
   }
   let scannedCount = 0;
   let matchedCount = 0;
@@ -1200,7 +1209,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       const opaqueI32Field = opaqueI32 == null ? null
         : castSpellAnsOpaqueI32(row, lineNumber);
       const childId = childEventId == null ? null
-        : stealthChildEventId(row, lineNumber);
+        : candidateChildEventId(row, prepared.eventKey, lineNumber);
       if (participant != null && subject.value == null) participantUnavailableCount += 1;
       if (rawParam != null && params.length === 0) rawParamUnavailableCount += 1;
       if (itemId != null && items.unavailable) itemIdUnavailableCount += 1;
