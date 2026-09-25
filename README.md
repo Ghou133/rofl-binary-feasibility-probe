@@ -50,8 +50,8 @@
 | `16.19.821.7343 --events params_heal_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` OnEvent 的注册子事件 `0x004b` ParamsHeal，输出处理函数读取的候选上报浮点值、两个匿名整数和原始包来源 | 仅写入 `params_heal_packet_candidates`，状态为 `CANDIDATE`；不推断有效治疗量、施法者或目标；与同路由的 44 字节助攻候选包分别计数 |
 | `16.19.821.7343 --events shielding_params_packet_pair --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x00f0/0x00ef` 两种 ShieldingParams 子包，以相同时间和载荷形成候选配对，保留两包来源、匿名整数和不透明浮点字段 | 仅写入 `shielding_params_packet_pair_candidates`，状态为 `CANDIDATE`；不把浮点字段解释为生成或吸收的护盾量，也不推断施加者或接收者 |
 | `16.19.821.7343 --events stealth_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0101/0x0102` 子包，保留镜像事件名表中的 OnEnterStealth/OnExitStealth 标签、匿名 `+0x04` 整数和原始包来源 | 仅写入 `stealth_event_packet_candidates`，状态为 `CANDIDATE`；同长度其他子事件明确排除，不推断参与者、实际可见性变化或隐身持续状态 |
-| `16.19.821.7343 --events champion_die_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0004` 子包，保留 OnChampionDie 镜像名表标签、回调读取的匿名 `+0x04` 整数和原始包来源 | 仅写入 `champion_die_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断实际死亡、受害者、击杀者或状态变化 |
-| `16.19.821.7343 --events champion_kill_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0007` 子包，保留 OnChampionKill 镜像名表标签、回调读取的匿名 `+0x04/+0x58/+0x5c` 整数和原始包来源 | 仅写入 `champion_kill_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断实际击杀、击杀者、受害者或状态变化 |
+| `16.19.821.7343 --events champion_die_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0004` 子包，保留 OnChampionDie 镜像名表标签、回调用作对象树查找键的 `+0x04` 整数和原始包来源 | 仅写入 `champion_die_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断实际死亡、对象查找成功、受害者、击杀者或状态变化 |
+| `16.19.821.7343 --events champion_kill_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0007` 子包，保留 OnChampionKill 镜像名表标签、回调用作同一对象树查找键的 `+0x04` 及匿名 `+0x58/+0x5c` 整数和原始包来源 | 仅写入 `champion_kill_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断实际击杀、对象查找成功、击杀者、受害者或状态变化 |
 | `16.19.821.7343 --events champion_multiple_kill_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0009` 子包，保留 OnChampionMultipleKill 镜像名表标签、回调读取的匿名 `+0x04/+0x08/+0x0c` 整数和原始包来源 | 仅写入 `champion_multiple_kill_event_packet_candidates`，状态为 `CANDIDATE`；不把包标记或整数解释为实际多杀、等级、击杀者、受害者或状态变化 |
 | `16.19.821.7343 --events cast_spell_ans_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x01da` CastSpellAns 包，输出原始包来源、两个回调变换后的不透明字段，以及嵌套对象 `+0xe0` 的受保护浮点与 `+0x140` 的受保护字节候选值及其原始字节 | 仅写入 `cast_spell_ans_packet_candidates`；不声称一次成功施法，也不推断技能、槽位、施法者、目标或这两个字段的游戏含义；镜像按完整 SHA-256 校验 |
 | `16.19.821.7343 --events direct_input_movement_turn_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x00ba` DirectInputMovementDriverServerTurnData 包，输出三个回调变换后的匿名 f32 字段与原始包来源 | 仅写入 `direct_input_movement_turn_packet_candidates`，状态为 `CANDIDATE`；不将字段标为世界坐标、英雄路径或参与者位置；仅接受已观察到的 13 字节 `0x85` 形状 |
@@ -170,6 +170,10 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-champion-die-reports"
 node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
+  --events hero_death,champion_die_event_packet `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-death-pairs"
+node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events champion_kill_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-champion-kill-reports"
@@ -178,6 +182,14 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-multiple-kill-reports"
 ```
+
+同时选择 `hero_death,champion_die_event_packet` 后，成功的逐包关联写入
+`champion_die_hero_death_pair_candidates.jsonl`，汇总和拒绝原因写入
+`semantic_run.json` 的 `candidate_associations.champion_die_hero_death_pair`。
+关联要求同一回放、同一 chunk 和毫秒唯一配对，`+0x04` 与 Hero_Die 来源候选值相等，
+且外层参数低字节相等；任一行冲突时整份回放不输出关联候选。
+11 份 KR 821 回放有 655/655 个候选配对，完整外层参数仅 333/655 相等。
+这仍不是已确认的死亡或对象、击杀者身份。
 
 821 的候选死亡记录保留原始包来源及未配对路由的负例计数。该 build 的运行时镜像已从真实回放进程捕获；当前死亡包的计时浮点和 Hero_Die 来源 ID 均有独立候选解码，单次助攻候选在 `hero_assist` 入口。可追加 `hero_assist,hero_respawn,hero_death_timer,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_assists_snapshot,hero_missions_minions_killed_snapshot,hero_ward_stats_snapshot,hero_missions_cannon_minions_killed_snapshot,hero_experience_snapshot,hero_vision_score_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_damage_totals_snapshot,hero_damage_taken_from_champions_snapshot,hero_damage_self_mitigated_snapshot,hero_structure_objective_damage_snapshot,hero_longest_living_time_snapshot,hero_total_time_spent_dead_snapshot,hero_total_heal_snapshot,hero_total_units_healed_snapshot,hero_epic_monster_damage_snapshot,hero_crowd_control_time_snapshot,hero_level_state` 到 `--events`；计数、浮点、计时和等级使用已固定的精确镜像变换，CLI 运行时无需再次提供镜像。库存 `hero_inventory_packet`、广播包 `hero_inventory_broadcast_packet`、单包 `hero_inventory_set_item_packet`、治疗上报包 `params_heal_packet`、护盾配对包 `shielding_params_packet_pair`、隐身名表子包 `stealth_event_packet`、CastSpellAns 包 `cast_spell_ans_packet`、DirectInput turn 包 `direct_input_movement_turn_packet`、SetMovementDriver 包 `set_movement_driver_packet`、OnChampionDie 子包 `champion_die_event_packet` 和 OnChampionKill 子包 `champion_kill_event_packet` 需要 `--runtime-image` 指向同一完整 build 的镜像。各能力独立报告状态；载荷形状超出已验证范围、解码值违反参与者结算上界等情况仍会保留其他已通过能力的候选输出，并明确标出失败项。11 份现有 KR 回放中的等级 20 和高击杀/助攻编码均已被相应变换覆盖。计时值不用于预测返回时点。
 

@@ -4,6 +4,31 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** Selecting KR 821 `hero_death,champion_die_event_packet`
+  together now emits `champion_die_hero_death_pair_candidates.jsonl` through
+  the shared CLI/API. The exact-build association requires a unique same
+  Replay, chunk, and millisecond join, equality between OnChampionDie child
+  `+0x04` and the independently decoded Hero_Die source candidate, and
+  equality of outer raw-parameter low bytes. The real 11-Replay CLI batch
+  produced 655/655 candidate pairs with no framing or association failures;
+  only 333/655 full raw parameters matched. Shifted-time controls produced
+  no dual-field exact-time match; rotated-ID controls yielded at most seven
+  such matches per Replay, rather than a complete association. Any conflicting
+  row fails the association locally and leaves the independent event candidates
+  intact. Exact-image static tracing shows child `+0x04` is used as a 32-bit
+  object-tree lookup key in both OnChampionDie and OnChampionKill callbacks,
+  but lookup success, object type, effective death, and actor roles remain
+  unverified. Ignored raw/negative evidence is under
+  `artifacts/16_19_development/champion_die_hero_death_link_821/`,
+  `artifacts/16_19_development/champion_die_field_identity_821/`, and
+  `artifacts/16_19_development/death_die_pair_jsonl_batch_821/`.
+- **Completed:** A real four-capability CLI batch over the same 11 KR 821
+  Replays emitted 4,913 stealth, 655 OnChampionDie, 581 OnChampionKill, and
+  653 OnChampionMultipleKill packet candidates. All 44 capability results
+  remained `CANDIDATE`, with zero framing errors and a matched exact image.
+  This verifies the selected CLI/API path for these packet candidates, not
+  their gameplay effects. Ignored output is under
+  `artifacts/16_19_development/onevent_four_batch_821/`.
 - **Completed:** KR 821 `champion_multiple_kill_event_packet` is an
   unpublished selected CLI/API candidate for exact-image OnEvent child
   `0x0009`, named OnChampionMultipleKill in the image table. The registered

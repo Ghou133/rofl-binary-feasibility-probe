@@ -87,6 +87,8 @@ const { analyzeBuffPacketKeyCompatibility } =
   require('./decoders/rofl_16_19_buff_key_compatibility');
 const { analyzeBuffPacketKeyCompatibility821 } =
   require('./decoders/rofl_16_19_821_buff_key_compatibility');
+const { associateChampionDieHeroDeathCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_die_hero_death_pair_candidate');
 const {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   decodeHeroStatsSnapshotCandidateSet,
@@ -2241,6 +2243,7 @@ function decode1619821(replay, profile, options = {}) {
   };
   const capabilityResults = {};
   const events = {};
+  const outcomes = {};
   const sharedScanCapabilities = new Set([
     'hero_death', 'hero_assist', 'hero_death_timer', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
     'hero_assists_snapshot', 'hero_level_state', 'hero_respawn',
@@ -2296,6 +2299,7 @@ function decode1619821(replay, profile, options = {}) {
           error: error.message || String(error), events: null };
       }
     }
+    outcomes[capability] = outcome;
     const { events: candidateEvents, ...result } = outcome;
     if (capability === 'hero_inventory_packet'
         || capability === 'hero_inventory_broadcast_packet'
@@ -2378,6 +2382,27 @@ function decode1619821(replay, profile, options = {}) {
           npc_buff_add_packet: capabilityResults.npc_buff_add_packet?.status ?? 'UNEXECUTED',
           npc_buff_remove_packet: capabilityResults.npc_buff_remove_packet?.status ?? 'UNEXECUTED',
         },
+      };
+    }
+  }
+  if (capabilities.includes('hero_death')
+      && capabilities.includes('champion_die_event_packet')) {
+    try {
+      const association = associateChampionDieHeroDeathCandidates821(replay, {
+        championDieEventPacketOutcome: outcomes.champion_die_event_packet,
+        heroDeathOutcome: outcomes.hero_death,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: pairEvents, ...summary } = association;
+        candidateAssociations.champion_die_hero_death_pair = summary;
+        events.champion_die_hero_death_pair_candidates = pairEvents;
+      } else {
+        candidateAssociations.champion_die_hero_death_pair = association;
+      }
+    } catch (error) {
+      candidateAssociations.champion_die_hero_death_pair = {
+        status: 'DECODE_FAILED',
+        error: error.message || String(error),
       };
     }
   }
