@@ -190,6 +190,7 @@ Options:
   --opaque-pair <u32:u8>      Exact anonymous 821 Buff Add/Remove/Update pair
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
   --child-event-id <uint32|0xhex>  Exact 821 stealth or named multikill child ID
+  --latest-per-participant    Last matching observed row per participant and Replay
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
   --output <path|->            Write unmodified JSONL rows (default: stdout)
                                 Query summary is JSON on stderr when output is stdout
@@ -238,6 +239,7 @@ function parseArgs(argv) {
     opaquePair: null,
     opaqueI32: null,
     childEventId: null,
+    latestPerParticipant: false,
     limit: null,
     python: null,
     wardSpawns: null,
@@ -280,6 +282,10 @@ function parseArgs(argv) {
     }
     if (token === '--event-jsonl-only') {
       options.eventJsonlOnly = true;
+      continue;
+    }
+    if (command === 'query-events' && token === '--latest-per-participant') {
+      options.latestPerParticipant = true;
       continue;
     }
     if (command === 'ward-events' && token === '--ally') {
@@ -2762,6 +2768,7 @@ async function runQueryEventsCommand(parsed) {
       opaquePair: options.opaquePair,
       opaqueI32: options.opaqueI32,
       childEventId: options.childEventId,
+      latestPerParticipant: options.latestPerParticipant,
       limit: options.limit,
     };
     const emitLine = async (line) => {

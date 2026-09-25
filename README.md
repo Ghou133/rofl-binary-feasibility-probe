@@ -575,6 +575,17 @@ node src/cli.js query-events "work\16-19-821-death-episodes" `
 
 查询核对三项来源能力、关联计数和逐行包引用，输出原 JSONL 行；缺少任一来源的回放在批量结果中单独标为不可查询。筛选值仍是候选参与者映射。
 
+对精确 821 的物品包、等级、经验、三种伤害快照及逐死亡候选，可在每场回放里取每位已映射参与者截止时间前最后一条**已观察到**的记录：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-inventory-batch" `
+  --event hero_inventory_broadcast_packet_candidates `
+  --latest-per-participant --to-ms 600000 `
+  --output "work\latest-observed-inventory.jsonl"
+```
+
+结果按场次、参与者排列，同一时间取原 JSONL 中较晚的一行；不提供 `--to-ms` 则取回放内最后观察。`matched_count` 统计过滤后的所有行，`selected_count` 统计每场每人选中的行，`latest_participant_unavailable_count` 统计过滤后无法映射参与者的行，`--limit` 仅限制写出行数。与物品或槽位筛选合用时，选择的是最后一条**符合筛选条件的观察**，不表示物品在截止时间仍然存在；任何结果都不填补观察之间的状态。
+
 对已解码的 821 库存包按物品 ID 查询单包记录：
 
 ```powershell

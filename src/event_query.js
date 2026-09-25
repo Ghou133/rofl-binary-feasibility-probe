@@ -58,6 +58,17 @@ const SUBJECT_PARTICIPANT_FIELDS = [
   'owner_participant_id_candidate', 'owner_participant_id',
   'target_participant_id',
 ];
+const LATEST_PARTICIPANT_EVENTS_821 = new Set([
+  'hero_inventory_packet_candidates',
+  'hero_inventory_broadcast_packet_candidates',
+  'hero_inventory_set_item_packet_candidates',
+  'hero_level_state_candidates',
+  'hero_experience_snapshot_candidates',
+  'hero_damage_totals_snapshot_candidates',
+  'hero_damage_taken_from_champions_snapshot_candidates',
+  'hero_damage_self_mitigated_snapshot_candidates',
+  'hero_death_episode_candidates',
+]);
 const OPAQUE_U32_FIELDS_821 = Object.freeze({
   npc_buff_add_packet_candidates: Object.freeze(['opaque_u32_0x10']),
   npc_buff_remove_packet_candidates: Object.freeze(['opaque_u32_0x10']),
@@ -1795,7 +1806,10 @@ function validateFilters(options) {
   const { fromMs = null, toMs = null, participant = null,
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, slot = null, opaqueU32 = null, opaquePair = null, opaqueI32 = null,
-    childEventId = null, limit = null } = options;
+    childEventId = null, limit = null, latestPerParticipant = false } = options;
+  if (typeof latestPerParticipant !== 'boolean') {
+    throw new EventQueryError('INVALID_FILTER', 'Invalid latestPerParticipant query filter.');
+  }
   for (const [name, value, minimum, maximum] of [
     ['fromMs', fromMs, 0, Number.MAX_SAFE_INTEGER],
     ['toMs', toMs, 0, Number.MAX_SAFE_INTEGER],
@@ -1830,7 +1844,14 @@ async function streamEventQuery(prepared, options, emitLine) {
   const { fromMs = null, toMs = null, participant = null,
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, slot = null, opaqueU32 = null, opaquePair = null, opaqueI32 = null,
-    childEventId = null, limit = null } = options;
+    childEventId = null, limit = null, latestPerParticipant = false } = options;
+  if (latestPerParticipant
+      && (prepared.replayVersion !== '16.19.821.7343'
+        || prepared.capabilityStatus !== 'CANDIDATE'
+        || !LATEST_PARTICIPANT_EVENTS_821.has(prepared.eventKey))) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--latest-per-participant requires a supported exact 16.19.821.7343 participant candidate event.');
+  }
   const inventoryPacketEvent = [
     'hero_inventory_packet_candidates',
     'hero_inventory_broadcast_packet_candidates',
@@ -1905,6 +1926,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   let scannedCount = 0;
   let matchedCount = 0;
   let emittedCount = 0;
+  let latestParticipantUnavailableCount = 0;
+  const latestByParticipant = new Map();
   let participantUnavailableCount = 0;
   let killerParticipantUnavailableCount = 0;
   let killerParticipantAvailableCount = 0;
@@ -1949,6 +1972,11 @@ async function streamEventQuery(prepared, options, emitLine) {
       }
       const replayTime = rowReplayTime(row, lineNumber);
       const subject = subjectParticipant(row, lineNumber);
+      if (latestPerParticipant && !subject.observed) {
+        throw new EventQueryError('INVALID_EVENT_ROW',
+          `Missing subject participant field at JSONL line ${lineNumber}.`,
+          { line_number: lineNumber });
+      }
       if (row.replay_sha256 !== prepared.replaySha
           || (row.raw_packet_ref != null
             && row.raw_packet_ref.replay_sha256 !== prepared.replaySha)
@@ -2060,6 +2088,17 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (opaqueI32 != null && opaqueI32Field.value !== opaqueI32)
           || (childEventId != null && childId.value !== childEventId)) continue;
       matchedCount += 1;
+      if (latestPerParticipant) {
+        if (subject.value === null) {
+          latestParticipantUnavailableCount += 1;
+        } else {
+          const previous = latestByParticipant.get(subject.value);
+          if (!previous || replayTime >= previous.replayTime) {
+            latestByParticipant.set(subject.value, { replayTime, lineNumber, line });
+          }
+        }
+        continue;
+      }
       if (limit == null || emittedCount < limit) {
         // Reuse the original line so candidate grades, provenance, and field order survive.
         await emitLine(`${line}\n`);
@@ -2164,6 +2203,14 @@ async function streamEventQuery(prepared, options, emitLine) {
         child_event_id_unavailable_count: childEventIdUnavailableCount,
         capability_status: prepared.capabilityStatus });
   }
+  if (latestPerParticipant) {
+    for (const participantId of [...latestByParticipant.keys()].sort((a, b) => a - b)) {
+      if (limit != null && emittedCount >= limit) break;
+      // Emit the winning source line unchanged, after the entire artifact passes validation.
+      await emitLine(`${latestByParticipant.get(participantId).line}\n`);
+      emittedCount += 1;
+    }
+  }
   return {
     schema_version: 1,
     command: 'query-events',
@@ -2182,6 +2229,10 @@ async function streamEventQuery(prepared, options, emitLine) {
     scanned_count: scannedCount,
     matched_count: matchedCount,
     emitted_count: emittedCount,
+    ...(latestPerParticipant ? {
+      selected_count: latestByParticipant.size,
+      latest_participant_unavailable_count: latestParticipantUnavailableCount,
+    } : {}),
     participant_unavailable_count: participantUnavailableCount,
     ...(killerParticipant == null ? {}
       : { killer_participant_unavailable_count: killerParticipantUnavailableCount }),
@@ -2195,6 +2246,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     ...(opaqueI32 == null ? {} : { opaque_i32_unavailable_count: opaqueI32UnavailableCount }),
     ...(childEventId == null ? {} : { child_event_id_unavailable_count: childEventIdUnavailableCount }),
     filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit,
+      ...(latestPerParticipant ? { latest_per_participant: true } : {}),
       ...(killerParticipant == null ? {}
         : { killer_participant_id: killerParticipant }),
       ...(assistingParticipant == null ? {}
@@ -2215,6 +2267,8 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   let scannedCount = 0;
   let matchedCount = 0;
   let emittedCount = 0;
+  let selectedCount = 0;
+  let latestParticipantUnavailableCount = 0;
   let completedCount = 0;
   let filters = null;
   const replayResults = [];
@@ -2256,11 +2310,19 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     filters ??= { ...summary.filters, limit: options.limit ?? null };
     scannedCount += summary.scanned_count;
     matchedCount += summary.matched_count;
+    if (options.latestPerParticipant) {
+      selectedCount += summary.selected_count;
+      latestParticipantUnavailableCount += summary.latest_participant_unavailable_count;
+    }
     replayResults.push({ ...identity, query_status: 'COMPLETE',
       capability_status: summary.capability_status,
       declared_event_count: summary.declared_event_count,
       scanned_count: summary.scanned_count,
       matched_count: summary.matched_count,
+      ...(options.latestPerParticipant ? {
+        selected_count: summary.selected_count,
+        latest_participant_unavailable_count: summary.latest_participant_unavailable_count,
+      } : {}),
       emitted_count: replayEmittedCount });
   }
   if (completedCount === 0) {
@@ -2274,6 +2336,10 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     replay_count: prepared.replays.length, completed_replay_count: completedCount,
     unavailable_replay_count: prepared.replays.length - completedCount,
     scanned_count: scannedCount, matched_count: matchedCount,
+    ...(options.latestPerParticipant ? {
+      selected_count: selectedCount,
+      latest_participant_unavailable_count: latestParticipantUnavailableCount,
+    } : {}),
     emitted_count: emittedCount, filters,
     replay_results: replayResults, rows_unmodified: true };
 }

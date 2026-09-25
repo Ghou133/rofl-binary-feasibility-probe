@@ -4,6 +4,16 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed query:** `query-events --latest-per-participant [--to-ms T]`
+  selects the last original matching exact-821 candidate row for each mapped
+  participant within each Replay. It validates the full artifact before output,
+  chooses the later source line on a timestamp tie, and reports matching,
+  selected, emitted, and unavailable-participant counts separately. The saved
+  11-Replay Broadcast artifact at 600,000 ms scanned 3,331 rows, matched 1,115,
+  counted one unmapped row, and emitted 110 rows; the selected raw-line set hash
+  matched an independent source JSONL scan. A level candidate batch at the same
+  cutoff selected 110 rows from 703 matches. This reports latest observations,
+  not carried-forward inventory, experience, level, or damage state.
 - **Completed query:** `query-events --event hero_death_episode_candidates`
   validates the exact 821 association, all three source capability results,
   count partition, and stored packet references before filtering unchanged
