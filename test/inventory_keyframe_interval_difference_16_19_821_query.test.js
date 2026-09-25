@@ -596,3 +596,37 @@ test('batch endpoint reversed pair counts inspected and unavailable Replays', (t
   assert.equal(tampered.status, 2, tampered.stderr);
   assert.equal(JSON.parse(tampered.stderr).code, 'ARTIFACT_HASH_MISMATCH');
 });
+
+test('batch endpoint preparation reads each Replay metadata only once', (t) => {
+  const { root } = fixture(t,
+    { batch: true, reversalKind: 'positive' });
+  const script = `
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const query = require(process.argv[1]);
+    const counts = { 'semantic_run.json': 0, 'replay_analysis.json': 0 };
+    const readFileSync = fs.readFileSync;
+    fs.readFileSync = function (filename, ...args) {
+      const basename = path.basename(String(filename));
+      if (Object.hasOwn(counts, basename)) counts[basename] += 1;
+      return readFileSync.call(this, filename, ...args);
+    };
+    const prepared = query.prepareBatchEventQuery(process.argv[2],
+      'inventory_keyframe_interval_difference_candidates');
+    query.streamBatchEventQuery(prepared,
+      { endpointReversedPair: true, limit: 1 }, async () => {})
+      .then((summary) => console.log(JSON.stringify({ counts, summary })))
+      .catch((error) => { console.error(error); process.exitCode = 1; });
+  `;
+  const result = spawnSync(process.execPath,
+    ['-e', script, path.resolve(__dirname, '../src/event_query.js'), root],
+    { encoding: 'utf8', cwd: path.dirname(CLI) });
+  assert.equal(result.status, 0, result.stderr);
+  const { counts, summary } = JSON.parse(result.stdout);
+  assert.deepEqual(counts,
+    { 'semantic_run.json': 2, 'replay_analysis.json': 2 });
+  assert.equal(summary.query_status, 'COMPLETE');
+  assert.equal(summary.scanned_count, 8);
+  assert.equal(summary.matched_count, 2);
+  assert.equal(summary.emitted_count, 1);
+});

@@ -1245,6 +1245,8 @@ function prepareNamedMultiGroupAssociation(semantic, analysis, eventKey,
   return association;
 }
 
+const PREPARED_REPLAY_METADATA = Symbol('prepared replay metadata');
+
 function prepareEventQuery(directory, eventKey) {
   if (typeof eventKey !== 'string' || !EVENT_KEY.test(eventKey)) {
     throw new EventQueryError('INVALID_EVENT_KEY',
@@ -1253,6 +1255,14 @@ function prepareEventQuery(directory, eventKey) {
   const artifactDirectory = path.resolve(directory);
   const semantic = readArtifactJson(artifactDirectory, 'semantic_run.json');
   const analysis = readArtifactJson(artifactDirectory, 'replay_analysis.json');
+  return prepareEventQueryFromDocuments(artifactDirectory, eventKey,
+    semantic, analysis);
+}
+
+// Secondary streams belong to the same Replay. Reuse its already checked
+// metadata; each source still gets its own capability and JSONL file checks.
+function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
+  semantic, analysis) {
   const replaySha = semantic.replay_sha256;
   if (!REPLAY_SHA.test(replaySha)
       || !/^16\.19\.[0-9]+\.[0-9]+$/.test(semantic.replay_version)
@@ -1391,12 +1401,12 @@ function prepareEventQuery(directory, eventKey) {
       { filename: inputPath });
   }
   const bracketSources = associationConfig?.minionBracket ? {
-    packet: prepareEventQuery(artifactDirectory,
-      'increment_minion_kills_packet_candidates'),
-    snapshot: prepareEventQuery(artifactDirectory,
-      'hero_minions_killed_snapshot_candidates'),
+    packet: prepareEventQueryFromDocuments(artifactDirectory,
+      'increment_minion_kills_packet_candidates', semantic, analysis),
+    snapshot: prepareEventQueryFromDocuments(artifactDirectory,
+      'hero_minions_killed_snapshot_candidates', semantic, analysis),
   } : null;
-  return {
+  const prepared = {
     artifactDirectory, inputPath, eventKey, eventStorage, capability, capabilityStatus,
     capabilityResult, declaredCount, replaySha, associationConfig, exactPacketProfile,
     exactBlobPacketConfig, bracketSources,
@@ -1406,6 +1416,21 @@ function prepareEventQuery(directory, eventKey) {
     replayVersion: semantic.replay_version, semanticRunStatus: semantic.status,
     semanticApiStatus: semantic.api_status ?? null,
   };
+  Object.defineProperty(prepared, PREPARED_REPLAY_METADATA,
+    { value: { semantic, analysis, inventoryIntervalSource: null } });
+  return prepared;
+}
+
+function prepareInventoryIntervalSource(prepared) {
+  const metadata = prepared[PREPARED_REPLAY_METADATA];
+  if (!metadata) {
+    throw new EventQueryError('INVALID_METADATA',
+      'Inventory interval query lacks its prepared Replay metadata.');
+  }
+  metadata.inventoryIntervalSource ??= prepareEventQueryFromDocuments(
+    prepared.artifactDirectory, 'hero_inventory_broadcast_packet_candidates',
+    metadata.semantic, metadata.analysis);
+  return metadata.inventoryIntervalSource;
 }
 
 function prepareBatchEventQuery(directory, eventKey) {
@@ -2063,8 +2088,7 @@ function inventoryKeyframeIntervalDifferenceRow(row, prepared, lineNumber, state
 }
 
 async function loadInventoryIntervalEndpointSnapshots(prepared) {
-  const source = prepareEventQuery(prepared.artifactDirectory,
-    'hero_inventory_broadcast_packet_candidates');
+  const source = prepareInventoryIntervalSource(prepared);
   const association = prepared.capabilityResult;
   const sourceResult = source?.capabilityResult;
   const invalid = (reason) => {
@@ -3665,8 +3689,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   if (options.endpointReversedPair) {
     for (const replay of prepared.replays) {
       if (!replay.prepared) continue;
-      const source = prepareEventQuery(replay.replayDirectory,
-        'hero_inventory_broadcast_packet_candidates');
+      const source = prepareInventoryIntervalSource(replay.prepared);
       const relative = `${replay.relative}/${source.eventKey}.jsonl`;
       const expected = prepared.outputHashes?.[relative];
       if (!REPLAY_SHA.test(expected) || sha256File(source.inputPath) !== expected) {
