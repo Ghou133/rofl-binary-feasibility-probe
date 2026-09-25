@@ -176,13 +176,20 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
       'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
       'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
-      'hero_level_state', 'hero_inventory_packet', 'cast_spell_ans_packet',
+      'hero_level_state', 'hero_inventory_packet', 'hero_inventory_broadcast_packet',
+      'cast_spell_ans_packet',
       'npc_buff_remove_packet', 'npc_buff_add_packet',
       'direct_input_movement_turn_packet', 'set_movement_driver_packet']);
   const queried = Object.fromEntries(query.capabilities.map((row) => [row.capability, row]));
   assert.equal(queried.hero_death.runtime_image_requirement, 'NOT_REQUIRED');
   assert.equal(queried.hero_inventory_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.hero_inventory_broadcast_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.deepEqual(queried.hero_inventory_broadcast_packet.missing_inputs,
+    ['exact_runtime_image']);
+  assert.equal(queried.hero_inventory_broadcast_packet.output,
+    'hero_inventory_broadcast_packet_candidates');
   assert.equal(queried.cast_spell_ans_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
   assert.deepEqual(queried.cast_spell_ans_packet.missing_inputs, ['exact_runtime_image']);

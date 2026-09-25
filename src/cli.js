@@ -163,7 +163,7 @@ Options:
   --from-ms/--to-ms <number>    Inclusive Replay millisecond bounds
   --participant <1..10>        Candidate subject participant; unknown rows do not match
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
-  --item-id <uint32|0xhex>     Exact decoded packet record item ID (hero_inventory_packet only)
+  --item-id <uint32|0xhex>     Exact decoded 821 inventory packet record item ID
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
   --output <path|->            Write unmodified JSONL rows (default: stdout)
                                 Query summary is JSON on stderr when output is stdout
@@ -344,8 +344,11 @@ function parseArgs(argv) {
     if (options.fromMs !== null && options.toMs !== null && options.fromMs > options.toMs) {
       throw new Error('--from-ms must not exceed --to-ms');
     }
-    if (options.itemId !== null && options.event !== 'hero_inventory_packet_candidates') {
-      throw new Error('--item-id requires --event hero_inventory_packet_candidates');
+    if (options.itemId !== null && ![
+      'hero_inventory_packet_candidates',
+      'hero_inventory_broadcast_packet_candidates',
+    ].includes(options.event)) {
+      throw new Error('--item-id requires an 821 inventory packet event');
     }
     if (options.output === '') throw new Error('--output must be a path or -');
   }
@@ -605,7 +608,7 @@ function parseOne1619(replay, options, started) {
       'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
       'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
       'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
-      'hero_level_state', 'hero_inventory_packet',
+      'hero_level_state', 'hero_inventory_packet', 'hero_inventory_broadcast_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',
@@ -1799,6 +1802,7 @@ function capabilityQuery(replay, options = {}) {
         || capability === 'hero_inventory_broadcast'
         || (profile.game_version === '16.19.821.7343'
           && (capability === 'hero_inventory_packet'
+            || capability === 'hero_inventory_broadcast_packet'
             || capability === 'cast_spell_ans_packet'))
         || capability === 'npc_buff_remove_packet'
         || capability === 'npc_buff_add_packet'
@@ -2056,6 +2060,11 @@ function capabilityQuery(replay, options = {}) {
           'per-packet slot/item record transform, exact-image callback reset/apply action, and raw-param provenance; no transaction or between-packet inventory-state inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_inventory_broadcast_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x0357 Broadcast packet consumption',
+          'per-packet slot/item record transform and shared callback reset/apply action; no transaction or between-packet inventory-state inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'cast_spell_ans_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x01da full packet consumption',
           'callback-transformed opaque fields and raw packet provenance; no successful-cast or spell identity inference');
@@ -2267,6 +2276,7 @@ function capabilityQuery(replay, options = {}) {
             hero_gold_spent_snapshot: 'hero_gold_spent_snapshot_candidates',
             hero_level_state: 'hero_level_state_candidates',
             hero_inventory_packet: 'hero_inventory_packet_candidates',
+            hero_inventory_broadcast_packet: 'hero_inventory_broadcast_packet_candidates',
             cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
             npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
             npc_buff_add_packet: 'npc_buff_add_packet_candidates',

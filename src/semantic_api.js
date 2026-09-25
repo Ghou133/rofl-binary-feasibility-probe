@@ -44,6 +44,8 @@ const { decodeHeroAssistCandidates821 } =
   require('./decoders/rofl_16_19_821_assist_candidate');
 const { decodeHeroInventoryPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_packet_candidate');
+const { decodeHeroInventoryBroadcastPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_inventory_broadcast_packet_candidate');
 const { decodeCastSpellAnsPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const { decodeNpcBuffRemovePacketCandidates821 } =
@@ -2096,6 +2098,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    hero_inventory_broadcast_packet: (input, collected) =>
+      decodeHeroInventoryBroadcastPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     cast_spell_ans_packet: (input, collected) =>
       decodeCastSpellAnsPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2161,6 +2169,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_crowd_control_time_snapshot: 'hero_crowd_control_time_snapshot_candidates',
     hero_level_state: 'hero_level_state_candidates',
     hero_inventory_packet: 'hero_inventory_packet_candidates',
+    hero_inventory_broadcast_packet: 'hero_inventory_broadcast_packet_candidates',
     cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
     npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
     npc_buff_add_packet: 'npc_buff_add_packet_candidates',
@@ -2184,7 +2193,7 @@ function decode1619821(replay, profile, options = {}) {
     'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
     'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
     'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
-    'hero_inventory_packet',
+    'hero_inventory_packet', 'hero_inventory_broadcast_packet',
     'cast_spell_ans_packet',
     'npc_buff_remove_packet',
     'npc_buff_add_packet',
@@ -2218,7 +2227,9 @@ function decode1619821(replay, profile, options = {}) {
       }
     }
     const { events: candidateEvents, ...result } = outcome;
-    if (capability === 'hero_inventory_packet' || capability === 'cast_spell_ans_packet'
+    if (capability === 'hero_inventory_packet'
+        || capability === 'hero_inventory_broadcast_packet'
+        || capability === 'cast_spell_ans_packet'
         || capability === 'npc_buff_remove_packet' || capability === 'npc_buff_add_packet'
         || capability === 'direct_input_movement_turn_packet'
         || capability === 'set_movement_driver_packet') {

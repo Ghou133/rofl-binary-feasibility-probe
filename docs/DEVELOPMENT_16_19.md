@@ -4,6 +4,19 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `hero_inventory_broadcast_packet` is an unpublished
+  selected CLI/API candidate for the exact-image `0x0357` Broadcast route.
+  The independent factory, constructor, class descriptor and registration
+  distinguish it from `0x018d` MapView; both registrations use the same
+  inventory receive callback. Native decoding fully consumed 3,331/3,331
+  packets from 11 exact-build Replays. It retains every packet record,
+  including decoded item key `0`, and a callback-based packet-local slots
+  0–9 candidate snapshot; absent records remain `null`. One real selected
+  CLI run emitted 341 packet rows and 3,388 records with zero framing errors.
+  `query-events --item-id` can filter Broadcast records, including zero.
+  No purchase, sale, between-packet state or participant identity for four
+  noncanonical raw-param variants is inferred. Ignored proof and native
+  summaries are under `artifacts/16_19_development/inventory_routes_821/`.
 - **Completed:** KR 821 `cast_spell_ans_packet` profile v3 also retains the
   protected native byte and decoded anonymous u8 at packet object `+0x140`.
   An exact-image inverse table is SHA-pinned and recomputed at the JS

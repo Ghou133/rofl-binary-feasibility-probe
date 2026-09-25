@@ -23,6 +23,8 @@ const assistCandidate1619821 =
   require('./decoders/rofl_16_19_821_assist_candidate');
 const inventoryPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_inventory_packet_candidate');
+const inventoryBroadcastPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_inventory_broadcast_packet_candidate');
 const castSpellAnsCandidate1619821 =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const buffRemovePacketCandidate1619821 =
@@ -502,6 +504,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_crowd_control_time_snapshot: 0x0089,
       hero_level_state: 0x0197,
       hero_inventory_packet: 0x018d,
+      hero_inventory_broadcast_packet: 0x0357,
       cast_spell_ans_packet: 0x01da,
       npc_buff_remove_packet: 0x047c,
       npc_buff_add_packet: 0x00ae,
@@ -556,6 +559,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_level_state: levelCandidate1619821.HERO_LEVEL_CANDIDATE_PROFILE_821,
       hero_inventory_packet:
         inventoryPacketCandidate1619821.HERO_INVENTORY_PACKET_CANDIDATE_PROFILE_821,
+      hero_inventory_broadcast_packet:
+        inventoryBroadcastPacketCandidate1619821.HERO_INVENTORY_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
       cast_spell_ans_packet:
         castSpellAnsCandidate1619821.CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
       npc_buff_remove_packet:
@@ -603,6 +608,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_crowd_control_time_snapshot: 'CANDIDATE_821_NATIVE_F32_CROWD_CONTROL_TAIL',
       hero_level_state: 'CANDIDATE_821_RUNTIME_LEVEL_BYTE_AND_REPLAY_TAIL',
       hero_inventory_packet: 'CANDIDATE_821_NATIVE_MAPVIEW_SLOT_ITEM_RECORDS',
+      hero_inventory_broadcast_packet:
+        'CANDIDATE_821_NATIVE_BROADCAST_SLOT_ITEM_RECORDS',
       cast_spell_ans_packet: 'CANDIDATE_821_NATIVE_CAST_SPELL_ANS_OPAQUE_PACKET_FIELDS',
       npc_buff_remove_packet: 'CANDIDATE_821_NATIVE_BUFF_REMOVE2_OPAQUE_PACKET_FIELDS',
       npc_buff_add_packet: 'CANDIDATE_821_NATIVE_BUFF_ADD2_OPAQUE_PACKET_FIELDS',
@@ -643,6 +650,7 @@ const BUILD_PROFILES = deepFreeze({
         'exact 821 native 0x0089 carrier and reversed vector at offsets 0x244/0x248/0x234/0x23c/0x21c/0x230; Replay-tail labels candidate only',
       level_state: 'exact 821 PKT_NPC_LevelUp_s route and +0x11 byte transform; participant alignment and event interpretation candidate only',
       inventory_packet: 'exact 821 native 0x018d MapView record vector and slot/item transforms; exact-image callback resets slots 0–9 then applies records to a packet-local candidate slot snapshot; raw-param participant mapping candidate, with no between-packet state or transaction inference',
+      inventory_broadcast_packet: 'exact 821 native 0x0357 SetInventory_Broadcast record vector and slot/item transforms; shared exact-image callback resets slots 0–9 then applies packet records; raw zero item values and omitted slots remain distinct, with no between-packet state or transaction inference',
       cast_spell_ans_packet: 'exact 821 native 0x01da packet constructor/deserializer, callback transforms for opaque object offsets 0x148/0x14c, nested protected float at +0xe0 and byte at +0x140; no successful-cast, owner, target, spell, slot or field-meaning inference',
       npc_buff_remove_packet: 'exact 821 native 0x047c BuffRemove2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14/0x18; no owner, buff identity, target or lifecycle inference',
       npc_buff_add_packet: 'exact 821 native 0x00ae BuffAdd2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14; no owner, buff identity, target or lifecycle inference',
@@ -667,6 +675,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
       'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
       'hero_level_state', 'hero_inventory_packet',
+      'hero_inventory_broadcast_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',

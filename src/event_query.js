@@ -215,7 +215,7 @@ function rawPacketParams(row, lineNumber) {
   return values;
 }
 
-function packetRecordItemIds(row, lineNumber) {
+function packetRecordItemIds(row, lineNumber, allowZero) {
   const records = row.records_candidate;
   if (records == null) return { values: [], unavailable: true, available: false };
   if (!Array.isArray(records)
@@ -237,7 +237,8 @@ function packetRecordItemIds(row, lineNumber) {
       continue;
     }
     const itemId = record.item_id_candidate;
-    if (!Number.isSafeInteger(itemId) || itemId < 1 || itemId > 0xffffffff) {
+    if (!Number.isSafeInteger(itemId) || itemId < (allowZero ? 0 : 1)
+        || itemId > 0xffffffff) {
       throw new EventQueryError('INVALID_EVENT_ROW',
         `Invalid records_candidate[${index}].item_id_candidate at JSONL line ${lineNumber}.`,
         { line_number: lineNumber });
@@ -271,10 +272,14 @@ async function streamEventQuery(prepared, options, emitLine) {
   validateFilters(options);
   const { fromMs = null, toMs = null, participant = null, rawParam = null,
     itemId = null, limit = null } = options;
-  if (itemId != null && (prepared.eventKey !== 'hero_inventory_packet_candidates'
+  const inventoryPacketEvent = [
+    'hero_inventory_packet_candidates',
+    'hero_inventory_broadcast_packet_candidates',
+  ].includes(prepared.eventKey);
+  if (itemId != null && (!inventoryPacketEvent
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
-      '--item-id requires 16.19.821.7343 hero_inventory_packet_candidates.');
+      '--item-id requires a 16.19.821.7343 inventory packet candidate event.');
   }
   let scannedCount = 0;
   let matchedCount = 0;
@@ -312,7 +317,8 @@ async function streamEventQuery(prepared, options, emitLine) {
           { line_number: lineNumber });
       }
       const params = rawParam == null ? null : rawPacketParams(row, lineNumber);
-      const items = itemId == null ? null : packetRecordItemIds(row, lineNumber);
+      const items = itemId == null ? null : packetRecordItemIds(row, lineNumber,
+        prepared.eventKey === 'hero_inventory_broadcast_packet_candidates');
       if (participant != null && subject.value == null) participantUnavailableCount += 1;
       if (rawParam != null && params.length === 0) rawParamUnavailableCount += 1;
       if (itemId != null && items.unavailable) itemIdUnavailableCount += 1;

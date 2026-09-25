@@ -45,6 +45,7 @@
 | `16.19.821.7343 --events hero_structure_objective_damage_snapshot` | 同一原生向量 `0x210/0x214` 的相同建筑类伤害候选值，以及 `0x218` 的目标伤害候选值；末帧各有 82/110 人与结算取整值一致 | 仅写入 `hero_structure_objective_damage_snapshot_candidates`；11 份回放中建筑与防御塔结算均相同，不能区分两个镜像槽位的语义；保留尾差，不推断单次伤害或目标 |
 | `16.19.821.7343 --events hero_level_state` | KR `0x0197` 精确 821 运行时解码器及查表变换输出观察到的候选等级值，覆盖等级 1–20 | 仅写入 `hero_level_state_candidates`；覆盖 1,613 个选定英雄包的 76 种载荷形状经完整消费验证，重复观测与一个中间等级缺口保留；参与者映射仍是候选，不补造升级事件 |
 | `16.19.821.7343 --events hero_inventory_packet --runtime-image PATH` | 精确 821 镜像原生反序列化 KR `0x018d` MapView，逐包输出候选槽位与物品 ID 记录，以及回调先清空再应用记录所得的 0–9 槽单包候选快照 | 仅写入 `hero_inventory_packet_candidates`；无记录的槽位为 `null` 并注明回调清空依据；不推断购买、出售或包间持续库存状态；额外原始参数变体不映射参与者 |
+| `16.19.821.7343 --events hero_inventory_broadcast_packet --runtime-image PATH` | 精确 821 镜像原生反序列化 KR `0x0357` Broadcast，逐包输出候选槽位与物品 ID 记录及 0–9 槽单包候选快照 | 仅写入 `hero_inventory_broadcast_packet_candidates`；包内物品 `0` 与未列出的 `null` 槽位分开保留；不推断购买、出售或包间持续库存状态；非典型原始参数不映射参与者 |
 | `16.19.821.7343 --events cast_spell_ans_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x01da` CastSpellAns 包，输出原始包来源、两个回调变换后的不透明字段，以及嵌套对象 `+0xe0` 的受保护浮点与 `+0x140` 的受保护字节候选值及其原始字节 | 仅写入 `cast_spell_ans_packet_candidates`；不声称一次成功施法，也不推断技能、槽位、施法者、目标或这两个字段的游戏含义；镜像按完整 SHA-256 校验 |
 | `16.19.821.7343 --events direct_input_movement_turn_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x00ba` DirectInputMovementDriverServerTurnData 包，输出三个回调变换后的匿名 f32 字段与原始包来源 | 仅写入 `direct_input_movement_turn_packet_candidates`，状态为 `CANDIDATE`；不将字段标为世界坐标、英雄路径或参与者位置；仅接受已观察到的 13 字节 `0x85` 形状 |
 | `16.19.821.7343 --events set_movement_driver_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x0335` SetMovementDriver 包，输出回调变换后的匿名分发字节和原始包来源 | 仅写入 `set_movement_driver_packet_candidates`，状态为 `CANDIDATE`；不声称驱动状态已改变，也不推断位置、路径或参与者；仅接受两种已观察到的包形状 |
@@ -147,7 +148,7 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events hero_death --out-dir "work\16-19-821-death-candidate"
 ```
 
-821 的候选死亡记录保留原始包来源及未配对路由的负例计数。该 build 的运行时镜像已从真实回放进程捕获；当前死亡包的计时浮点和 Hero_Die 来源 ID 均有独立候选解码，单次助攻候选在 `hero_assist` 入口。可追加 `hero_assist,hero_respawn,hero_death_timer,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_assists_snapshot,hero_missions_minions_killed_snapshot,hero_ward_stats_snapshot,hero_missions_cannon_minions_killed_snapshot,hero_experience_snapshot,hero_vision_score_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_damage_totals_snapshot,hero_damage_taken_from_champions_snapshot,hero_damage_self_mitigated_snapshot,hero_structure_objective_damage_snapshot,hero_longest_living_time_snapshot,hero_total_time_spent_dead_snapshot,hero_total_heal_snapshot,hero_total_units_healed_snapshot,hero_epic_monster_damage_snapshot,hero_crowd_control_time_snapshot,hero_level_state` 到 `--events`；计数、浮点、计时和等级使用已固定的精确镜像变换，CLI 运行时无需再次提供镜像。库存 `hero_inventory_packet`、CastSpellAns 包 `cast_spell_ans_packet`、DirectInput turn 包 `direct_input_movement_turn_packet` 和 SetMovementDriver 包 `set_movement_driver_packet` 需要 `--runtime-image` 指向同一完整 build 的镜像。各能力独立报告状态；载荷形状超出已验证范围、解码值违反参与者结算上界等情况仍会保留其他已通过能力的候选输出，并明确标出失败项。11 份现有 KR 回放中的等级 20 和高击杀/助攻编码均已被相应变换覆盖。计时值不用于预测返回时点。
+821 的候选死亡记录保留原始包来源及未配对路由的负例计数。该 build 的运行时镜像已从真实回放进程捕获；当前死亡包的计时浮点和 Hero_Die 来源 ID 均有独立候选解码，单次助攻候选在 `hero_assist` 入口。可追加 `hero_assist,hero_respawn,hero_death_timer,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_assists_snapshot,hero_missions_minions_killed_snapshot,hero_ward_stats_snapshot,hero_missions_cannon_minions_killed_snapshot,hero_experience_snapshot,hero_vision_score_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_damage_totals_snapshot,hero_damage_taken_from_champions_snapshot,hero_damage_self_mitigated_snapshot,hero_structure_objective_damage_snapshot,hero_longest_living_time_snapshot,hero_total_time_spent_dead_snapshot,hero_total_heal_snapshot,hero_total_units_healed_snapshot,hero_epic_monster_damage_snapshot,hero_crowd_control_time_snapshot,hero_level_state` 到 `--events`；计数、浮点、计时和等级使用已固定的精确镜像变换，CLI 运行时无需再次提供镜像。库存 `hero_inventory_packet`、广播包 `hero_inventory_broadcast_packet`、CastSpellAns 包 `cast_spell_ans_packet`、DirectInput turn 包 `direct_input_movement_turn_packet` 和 SetMovementDriver 包 `set_movement_driver_packet` 需要 `--runtime-image` 指向同一完整 build 的镜像。各能力独立报告状态；载荷形状超出已验证范围、解码值违反参与者结算上界等情况仍会保留其他已通过能力的候选输出，并明确标出失败项。11 份现有 KR 回放中的等级 20 和高击杀/助攻编码均已被相应变换覆盖。计时值不用于预测返回时点。
 
 对 HN 路由的同一完整 build，可单独选择计时候选，或用
 `--events hero_death,hero_death_timer` 一起运行。计时输出包含原始包引用、
@@ -215,7 +216,7 @@ node src/cli.js query-events "work\16-19-821-inventory\replays\KR_example" `
   --event hero_inventory_packet_candidates --item-id 3340 --limit 20
 ```
 
-`--item-id` 接受十进制或 `0x` 十六进制 uint32，只匹配当包 `records_candidate[].item_id_candidate`，不查询回调空槽、包间库存或买卖事件。输出仍是未修改的原始 JSONL 行；汇总中的 `item_id_unavailable_count` 区分字段不可用与已检查后的零命中。其他事件流不能使用此过滤器。
+`--item-id` 接受十进制或 `0x` 十六进制 uint32，只匹配 821 MapView 或 Broadcast 当包 `records_candidate[].item_id_candidate`，不查询回调空槽、包间库存或买卖事件。Broadcast 中解出的物品 `0` 可以精确查询；MapView 的候选物品 ID 为正值。输出仍是未修改的原始 JSONL 行；汇总中的 `item_id_unavailable_count` 区分字段不可用与已检查后的零命中。其他事件流不能使用此过滤器。
 
 执行 **16.15.801.3452** 的旧版整合语义分析：
 
