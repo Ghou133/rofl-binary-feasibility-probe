@@ -72,6 +72,9 @@ const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
 const { CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE_PROFILE_821,
   decodeCircularMovementRestrictionPayload821 } =
   require('./decoders/rofl_16_19_821_circular_movement_restriction_packet_candidate');
+const { UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821,
+  decodeUnitApplyDamageCallbackF32FromRaw821, isObservedShape: isObservedUnitApplyDamageShape821 } =
+  require('./decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
 const { TURRET_FIRST_BLOOD_DIE_PAIR_821_PROFILE } =
@@ -105,6 +108,14 @@ const CIRCULAR_MOVEMENT_RESTRICTION_ROW_FIELDS_821 = new Set([
   'callback_scalar_bytes_hex', 'callback_vector_bytes_hex',
   'anonymous_scalar_f32_candidate', 'anonymous_vector_xyz_f32_candidate',
   'semantic_effect_status', 'confidence', 'semantic_status', 'raw_packet_ref',
+]);
+const UNIT_APPLY_DAMAGE_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile',
+  'replay_sha256', 'replay_time_ms', 'raw_param', 'packet_name_candidate',
+  'header_selector_bits_24_26', 'header_selector_bits_0_2',
+  'header_selector_bits_3_5', 'callback_f32_0x20_candidate',
+  'callback_f32_0x20_status', 'callback_f32_0x20_raw_bytes_hex',
+  'confidence', 'semantic_status', 'semantic_effect_status', 'raw_packet_ref',
 ]);
 const MAX_MINION_BRACKET_SOURCE_ROWS_821 = 10_000;
 const MAX_EXPERIENCE_INTERVAL_SOURCE_ROWS_821 = 100_000;
@@ -2518,6 +2529,130 @@ function circularMovementRestrictionRecordCount(row, prepared, lineNumber,
   return inspected.packet_record_count_candidate;
 }
 
+function prepareUnitApplyDamageCallbackF32(prepared) {
+  const profile = UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821;
+  if (prepared.eventKey !== 'unit_apply_damage_packet_candidates'
+      || prepared.replayVersion !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--damage-callback-f32-available requires an exact 16.19.821.7343 UnitApplyDamage packet candidate event.');
+  }
+  const result = prepared.capabilityResult;
+  if (prepared.capabilityStatus !== 'CANDIDATE'
+      || result?.profile_id !== profile.id
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || result.evidence_status !== profile.evidence_status
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.evidence_scalar_table_sha256
+        !== profile.evidence_scalar_table_sha256
+      || result.evidence_shape_catalog_sha256
+        !== profile.evidence_shape_catalog_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || result.native_witness_status !== 'FULLY_CONSUMED_ALL'
+      || !REPLAY_SHA.test(result.native_input_sha256 ?? '')
+      || !isCount(result.native_full_success_count)
+      || !isCount(result.input_count) || result.input_count === 0
+      || result.event_count !== result.input_count
+      || result.event_count !== prepared.declaredCount
+      || result.native_full_success_count !== result.event_count
+      || !isCount(result.callback_f32_available_count)
+      || !isCount(result.callback_f32_unavailable_count)
+      || result.callback_f32_available_count + result.callback_f32_unavailable_count
+        !== result.event_count
+      || !isCount(result.observed_shape_family_count)
+      || result.observed_shape_family_count < 1
+      || result.observed_shape_family_count > result.event_count) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'UnitApplyDamage packet metadata differs from its exact-build profile.');
+  }
+}
+
+function unitApplyDamageCallbackF32(row, prepared, lineNumber,
+  packetPositions, shapeFamilies, nativeInputHash) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid UnitApplyDamage packet at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const profile = UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821;
+  const fields = Object.keys(row);
+  const ref = row.raw_packet_ref;
+  if (fields.length !== UNIT_APPLY_DAMAGE_ROW_FIELDS_821.size
+      || fields.some((field) => !UNIT_APPLY_DAMAGE_ROW_FIELDS_821.has(field))
+      || row.event_type !== 'UNIT_APPLY_DAMAGE_PACKET_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.replay_sha256 !== prepared.replaySha
+      || row.packet_name_candidate !== profile.packet_name
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== profile.evidence_status
+      || row.semantic_effect_status !== 'UNKNOWN'
+      || !Number.isSafeInteger(row.raw_param) || row.raw_param <= 0
+      || row.raw_param > 0xffffffff
+      || !ref || typeof ref !== 'object' || Array.isArray(ref)
+      || ref.source_path !== (prepared.sourcePath ?? null)
+      || ref.replay_sha256 !== prepared.replaySha
+      || ref.chunk_stream !== 'game_chunk'
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== profile.replay_block_packet_id
+      || ref.replay_time_ms !== row.replay_time_ms
+      || !Number.isSafeInteger(ref.payload_length)
+      || ref.payload_length < 8 || ref.payload_length > 25
+      || ref.raw_param !== row.raw_param
+      || typeof ref.raw_payload_hex !== 'string'
+      || !/^(?:[0-9a-f]{2})+$/.test(ref.raw_payload_hex)
+      || ref.raw_payload_hex.length / 2 !== ref.payload_length
+      || !REPLAY_SHA.test(ref.raw_payload_sha256 ?? '')) {
+    invalid('profile, source packet reference, or raw payload differs');
+  }
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (packetPositions.has(position)) invalid('duplicate raw packet position');
+  packetPositions.add(position);
+  const payload = Buffer.from(ref.raw_payload_hex, 'hex');
+  const payloadHash = crypto.createHash('sha256').update(payload).digest('hex');
+  if (ref.raw_payload_sha256 !== payloadHash) invalid('raw packet payload hash differs');
+  const nativeInputHeader = Buffer.allocUnsafe(8);
+  nativeInputHeader.writeUInt32LE(row.raw_param, 0);
+  nativeInputHeader.writeUInt32LE(payload.length, 4);
+  nativeInputHash.update(nativeInputHeader).update(payload);
+  const selector24 = payload[3] & 7;
+  const selector0 = payload[0] & 7;
+  const selector3 = (payload[0] >>> 3) & 7;
+  if (row.header_selector_bits_24_26 !== selector24
+      || row.header_selector_bits_0_2 !== selector0
+      || row.header_selector_bits_3_5 !== selector3
+      || !isObservedUnitApplyDamageShape821(payload.length,
+        selector24, selector0, selector3)) {
+    invalid('selectors or native-observed packet shape differ');
+  }
+  shapeFamilies.add(`${payload.length}:${selector24}:${selector0}:${selector3}`);
+  const hasFloat = payload.length === 15 && selector24 === 6
+    && selector0 === 1 && selector3 === 6;
+  if (hasFloat) {
+    const rawBytes = payload.subarray(5, 9).toString('hex');
+    const decoded = decodeUnitApplyDamageCallbackF32FromRaw821(rawBytes);
+    if (row.callback_f32_0x20_status !== 'NATIVE_MATCHED_SHAPE'
+        || row.callback_f32_0x20_raw_bytes_hex !== rawBytes
+        || decoded === null
+        || row.callback_f32_0x20_candidate !== decoded) {
+      invalid('anonymous callback float differs from the exact 821 byte transform');
+    }
+  } else if (row.callback_f32_0x20_status !== 'UNAVAILABLE_SHAPE'
+      || row.callback_f32_0x20_raw_bytes_hex !== null
+      || row.callback_f32_0x20_candidate !== null) {
+    invalid('unavailable callback float shape is not explicitly null');
+  }
+  return hasFloat;
+}
+
 function turretPairRow(row, prepared, lineNumber, seenKeys, seenPacketPositions) {
   const { associationConfig, capabilityResult, replaySha, replayVersion } = prepared;
   const invalid = (reason) => {
@@ -4751,12 +4886,17 @@ function validateFilters(options) {
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
-    castNestedBits = null, packetRecordCount = null, levelAfter = null,
+    castNestedBits = null, damageCallbackF32Available = false,
+    packetRecordCount = null, levelAfter = null,
     childEventId = null, limit = null, latestPerParticipant = false,
     endpointReversedPair: endpointReversedPairFilter = false,
     comparisonToEndpoints = null } = options;
   if (typeof latestPerParticipant !== 'boolean') {
     throw new EventQueryError('INVALID_FILTER', 'Invalid latestPerParticipant query filter.');
+  }
+  if (typeof damageCallbackF32Available !== 'boolean') {
+    throw new EventQueryError('INVALID_FILTER',
+      'Invalid damageCallbackF32Available query filter.');
   }
   if (typeof endpointReversedPairFilter !== 'boolean') {
     throw new EventQueryError('INVALID_FILTER', 'Invalid endpointReversedPair query filter.');
@@ -4805,7 +4945,8 @@ async function streamEventQuery(prepared, options, emitLine) {
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
-    castNestedBits = null, packetRecordCount = null, levelAfter = null,
+    castNestedBits = null, damageCallbackF32Available = false,
+    packetRecordCount = null, levelAfter = null,
     childEventId = null, limit = null, latestPerParticipant = false,
     endpointReversedPair: endpointReversedPairFilter = false,
     comparisonToEndpoints = null } = options;
@@ -4901,6 +5042,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       '--opaque-i32 requires a 16.19.821.7343 CastSpellAns packet candidate event.');
   }
   if (castNestedBits != null) prepareCastSpellAnsNestedBits(prepared);
+  if (damageCallbackF32Available) prepareUnitApplyDamageCallbackF32(prepared);
   if (packetRecordCount != null) {
     prepareCircularMovementRestrictionRecordCount(prepared);
   }
@@ -4944,6 +5086,12 @@ async function streamEventQuery(prepared, options, emitLine) {
   let opaqueI32AvailableCount = 0;
   let castNestedBitsCheckedCount = 0;
   const castNestedBitsPacketPositions = new Set();
+  let damageCallbackF32AvailableCount = 0;
+  let damageCallbackF32UnavailableCount = 0;
+  const damagePacketPositions = new Set();
+  const damageShapeFamilies = new Set();
+  const damageNativeInputHash = damageCallbackF32Available
+    ? crypto.createHash('sha256') : null;
   const circularPacketPositions = new Set();
   const circularShapeCounts = { empty1: 0, record24: 0 };
   let childEventIdUnavailableCount = 0;
@@ -5100,6 +5248,13 @@ async function streamEventQuery(prepared, options, emitLine) {
         : castSpellAnsNestedBits(row, prepared, lineNumber,
           castNestedBitsPacketPositions);
       if (castNestedBits != null) castNestedBitsCheckedCount += 1;
+      const damageCallbackF32 = damageCallbackF32Available
+        ? unitApplyDamageCallbackF32(row, prepared, lineNumber,
+          damagePacketPositions, damageShapeFamilies, damageNativeInputHash) : null;
+      if (damageCallbackF32Available) {
+        if (damageCallbackF32) damageCallbackF32AvailableCount += 1;
+        else damageCallbackF32UnavailableCount += 1;
+      }
       const circularRecordCount = packetRecordCount == null ? null
         : circularMovementRestrictionRecordCount(row, prepared, lineNumber,
           circularPacketPositions);
@@ -5177,6 +5332,7 @@ async function streamEventQuery(prepared, options, emitLine) {
             || pairValue.u32 !== opaquePair.u32 || pairValue.u8 !== opaquePair.u8))
           || (opaqueI32 != null && opaqueI32Field.value !== opaqueI32)
           || (castNestedBits != null && nestedBits !== castNestedBits)
+          || (damageCallbackF32Available && !damageCallbackF32)
           || (packetRecordCount != null && circularRecordCount !== packetRecordCount)
           || (levelAfter != null && row.level_after_candidate !== levelAfter)
           || (childEventId != null && childId.value !== childEventId)) continue;
@@ -5213,6 +5369,21 @@ async function streamEventQuery(prepared, options, emitLine) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
       'Circular movement restriction row shapes differ from capability metadata.',
       { observed_shape_counts: circularShapeCounts });
+  }
+  if (damageCallbackF32Available
+      && (damageCallbackF32AvailableCount
+          !== prepared.capabilityResult.callback_f32_available_count
+        || damageCallbackF32UnavailableCount
+          !== prepared.capabilityResult.callback_f32_unavailable_count
+        || damageShapeFamilies.size
+          !== prepared.capabilityResult.observed_shape_family_count
+        || damageNativeInputHash.digest('hex')
+          !== prepared.capabilityResult.native_input_sha256)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'UnitApplyDamage row shapes, float availability, or ordered native input digest differ from capability metadata.',
+      { callback_f32_available_count: damageCallbackF32AvailableCount,
+        callback_f32_unavailable_count: damageCallbackF32UnavailableCount,
+        observed_shape_family_count: damageShapeFamilies.size });
   }
   if (prepared.eventKey === 'hero_death_episode_candidates'
       && (observedReturnCount !== prepared.capabilityResult.observed_return_count
@@ -5400,6 +5571,12 @@ async function streamEventQuery(prepared, options, emitLine) {
       cast_nested_bits_checked_count: castNestedBitsCheckedCount,
       cast_nested_bits_unavailable_count: 0,
     }),
+    ...(damageCallbackF32Available ? {
+      damage_callback_f32_available_count: damageCallbackF32AvailableCount,
+      damage_callback_f32_unavailable_count: damageCallbackF32UnavailableCount,
+      damage_callback_f32_checked_count: scannedCount,
+      native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
+    } : {}),
     ...(packetRecordCount == null ? {} : {
       packet_record_count_checked_count: scannedCount,
       packet_record_count_unavailable_count: 0,
@@ -5426,6 +5603,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       ...(opaquePair == null ? {} : { opaque_pair: opaquePair }),
       ...(opaqueI32 == null ? {} : { opaque_i32: opaqueI32 }),
       ...(castNestedBits == null ? {} : { cast_nested_bits: castNestedBits }),
+      ...(damageCallbackF32Available ? { damage_callback_f32_available: true } : {}),
       ...(packetRecordCount == null ? {} : { packet_record_count: packetRecordCount }),
       ...(levelAfter == null ? {} : { level_after: levelAfter }),
       ...(childEventId == null ? {} : { child_event_id: childEventId }) },
@@ -5467,6 +5645,9 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   let latestParticipantUnavailableCount = 0;
   let castNestedBitsCheckedCount = 0;
   let castNestedBitsUnavailableCount = 0;
+  let damageCallbackF32CheckedCount = 0;
+  let damageCallbackF32AvailableCount = 0;
+  let damageCallbackF32UnavailableCount = 0;
   let packetRecordCountCheckedCount = 0;
   let levelAfterCheckedCount = 0;
   let endpointReversedPairInspectedCount = 0;
@@ -5517,6 +5698,11 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     if (options.castNestedBits != null) {
       castNestedBitsCheckedCount += summary.cast_nested_bits_checked_count;
     }
+    if (options.damageCallbackF32Available) {
+      damageCallbackF32CheckedCount += summary.damage_callback_f32_checked_count;
+      damageCallbackF32AvailableCount += summary.damage_callback_f32_available_count;
+      damageCallbackF32UnavailableCount += summary.damage_callback_f32_unavailable_count;
+    }
     if (options.packetRecordCount != null) {
       packetRecordCountCheckedCount += summary.packet_record_count_checked_count;
     }
@@ -5540,6 +5726,12 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         cast_nested_bits_checked_count: summary.cast_nested_bits_checked_count,
         cast_nested_bits_unavailable_count: 0,
       }),
+      ...(options.damageCallbackF32Available ? {
+        damage_callback_f32_checked_count: summary.damage_callback_f32_checked_count,
+        damage_callback_f32_available_count: summary.damage_callback_f32_available_count,
+        damage_callback_f32_unavailable_count: summary.damage_callback_f32_unavailable_count,
+        native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
+      } : {}),
       ...(options.packetRecordCount == null ? {} : {
         packet_record_count_checked_count:
           summary.packet_record_count_checked_count,
@@ -5578,6 +5770,14 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         replayResults.filter((replay) =>
           replay.code === 'CAST_NESTED_BITS_UNAVAILABLE').length,
     }),
+    ...(options.damageCallbackF32Available ? {
+      damage_callback_f32_checked_count: damageCallbackF32CheckedCount,
+      damage_callback_f32_available_count: damageCallbackF32AvailableCount,
+      damage_callback_f32_unavailable_count: damageCallbackF32UnavailableCount,
+      damage_callback_f32_unavailable_replay_count:
+        prepared.replays.length - completedCount,
+      native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
+    } : {}),
     ...(options.packetRecordCount == null ? {} : {
       packet_record_count_checked_count: packetRecordCountCheckedCount,
       packet_record_count_unavailable_replay_count:

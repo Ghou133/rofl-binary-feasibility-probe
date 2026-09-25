@@ -205,6 +205,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'direct_input_movement_turn_packet', 'set_movement_driver_packet',
       'increment_minion_kills_packet', 'face_direction_packet',
       'circular_movement_restriction_packet',
+      'unit_apply_damage_packet',
       'face_direction_keyframe_roster_pair']);
   const queried = Object.fromEntries(query.capabilities.map((row) => [row.capability, row]));
   assert.equal(queried.hero_death.runtime_image_requirement, 'NOT_REQUIRED');
@@ -222,6 +223,10 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'EXACT_IMAGE_REQUIRED');
   assert.equal(queried.circular_movement_restriction_packet.output,
     'circular_movement_restriction_packet_candidates');
+  assert.equal(queried.unit_apply_damage_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.unit_apply_damage_packet.output,
+    'unit_apply_damage_packet_candidates');
   assert.deepEqual(queried.hero_inventory_set_item_packet.missing_inputs,
     ['exact_runtime_image']);
   assert.equal(queried.hero_inventory_set_item_packet.output,

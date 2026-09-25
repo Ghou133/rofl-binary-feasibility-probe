@@ -179,6 +179,10 @@ face_direction_packet emits exact-821 packet-local direction-vector candidates;
 its raw param does not identify an actor, and the packet does not establish position or path.
 circular_movement_restriction_packet emits exact-821 packet-local anonymous fields;
 it does not establish an actor, world position, hero path, or effective restriction.
+unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
+to witness full native consumption of every selected packet before emitting
+packet-local selectors or a bounded anonymous float candidate; these do not
+establish damage amount or attribution.
 face_direction_keyframe_roster_pair pairs canonical keyframe FaceDirection packets
 with same-keyframe HeroStats roster candidates; the roster label does not identify the packet actor.
 Inspect reads the container and packet framing without a runtime image.
@@ -216,6 +220,8 @@ Options:
   --opaque-pair <u32:u8>      Exact anonymous 821 Buff Add/Remove/Update pair
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
   --cast-nested-bits <0..255|0xhex>  Exact decoded 821 CastSpellAns nested callback bits
+  --damage-callback-f32-available  Exact 821 UnitApplyDamage rows with a native-matched anonymous +0x20 f32
+                                Checks saved witness metadata and raw bytes; does not rerun the native parser.
   --packet-record-count <0|1>  Exact 821 circular movement restriction packet record count
   --level-after <1..20>        Exact-821 level packet within adjacent EXP keyframes
   --child-event-id <uint32|0xhex>  Exact 821 stealth, named multikill, HQ or objective-bounty child ID
@@ -276,6 +282,7 @@ function parseArgs(argv) {
     opaquePair: null,
     opaqueI32: null,
     castNestedBits: null,
+    damageCallbackF32Available: false,
     packetRecordCount: null,
     levelAfter: null,
     childEventId: null,
@@ -332,6 +339,10 @@ function parseArgs(argv) {
     }
     if (command === 'query-events' && token === '--endpoint-reversed-pair') {
       options.endpointReversedPair = true;
+      continue;
+    }
+    if (command === 'query-events' && token === '--damage-callback-f32-available') {
+      options.damageCallbackF32Available = true;
       continue;
     }
     if (command === 'ward-events' && token === '--ally') {
@@ -528,6 +539,10 @@ function parseArgs(argv) {
     if (options.castNestedBits !== null
         && options.event !== 'cast_spell_ans_packet_candidates') {
       throw new Error('--cast-nested-bits requires an 821 cast_spell_ans_packet_candidates event');
+    }
+    if (options.damageCallbackF32Available
+        && options.event !== 'unit_apply_damage_packet_candidates') {
+      throw new Error('--damage-callback-f32-available requires an 821 unit_apply_damage_packet_candidates event');
     }
     if (options.packetRecordCount !== null
         && (options.event !== 'circular_movement_restriction_packet_candidates'
@@ -882,6 +897,7 @@ function parseOne1619(replay, options, started) {
       'increment_minion_kills_packet',
       'face_direction_packet',
       'circular_movement_restriction_packet',
+      'unit_apply_damage_packet',
     ].includes(name)))] : [];
   if (options.semantic !== false && Array.isArray(options.events)
       && options.events.includes('face_direction_keyframe_roster_pair')) {
@@ -2124,6 +2140,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'increment_minion_kills_packet'
             || capability === 'face_direction_packet'
             || capability === 'circular_movement_restriction_packet'
+            || capability === 'unit_apply_damage_packet'
             || capability === 'face_direction_keyframe_roster_pair'));
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
@@ -2486,6 +2503,11 @@ function capabilityQuery(replay, options = {}) {
           'anonymous scalar and vector packet fields; no actor, world position, path, or effective restriction inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'unit_apply_damage_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and Python+Unicorn full native consumption of every selected 0x005f packet',
+          'packet selectors and one bounded anonymous callback float; no damage amount, source, target, or effect inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'npc_buff_remove_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x047c full packet consumption',
           'callback-transformed opaque fields and raw packet provenance; no buff identity or lifecycle inference');
@@ -2769,6 +2791,7 @@ function capabilityQuery(replay, options = {}) {
             face_direction_packet: 'face_direction_packet_candidates',
             circular_movement_restriction_packet:
               'circular_movement_restriction_packet_candidates',
+            unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
             face_direction_keyframe_roster_pair:
               'face_direction_keyframe_roster_pair_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
@@ -2937,6 +2960,7 @@ async function runQueryEventsCommand(parsed) {
       opaquePair: options.opaquePair,
       opaqueI32: options.opaqueI32,
       castNestedBits: options.castNestedBits,
+      damageCallbackF32Available: options.damageCallbackF32Available,
       packetRecordCount: options.packetRecordCount,
       levelAfter: options.levelAfter,
       childEventId: options.childEventId,

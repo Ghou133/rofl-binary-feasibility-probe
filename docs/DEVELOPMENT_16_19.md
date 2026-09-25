@@ -4,6 +4,28 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Exact-821 UnitApplyDamage packet candidate:** The pinned mapped image
+  registers game-stream route `0x005f` as `PKT_UnitApplyDamage_s`. Native
+  deserialization fully consumed all 628,909 observed packets in the 11
+  supplied KR Replays, covering 728 observed selector/length tuples with no
+  failed packet. A same-length, same-selector bit-flip control was only
+  partially consumed by native code; packet shape alone is insufficient.
+  The production decoder therefore requires the exact image, Python and
+  Unicorn, runs a bounded native full-consumption witness over every selected
+  packet before emitting any events, and retains each original packet and
+  source reference. One 15-byte shape yielded 6,501 anonymous callback
+  `+0x20` f32 values, each matching the pinned native transform; the other
+  622,408 rows carry `null` with `UNAVAILABLE_SHAPE`, never a numeric zero.
+  The new real CLI batch returned `CANDIDATE` in 11/11 Replays with zero
+  framing errors and `native_full_success_count = event_count` for each.
+  Saved `query-events --damage-callback-f32-available` verified all 628,909
+  rows, their ordered raw-input SHA and persisted native-witness metadata,
+  then selected the 6,501 native-matched rows; output remains byte-for-byte
+  original JSONL. Saved queries do not rerun native deserialization or reopen
+  original ROFL files. This route name and float do not establish
+  applied damage, health loss, attacker, victim, object lookup, or effect.
+  Local original inputs and batch evidence remain ignored under
+  `artifacts/16_19_development/unit_apply_damage_packet_native_batch_11_821/`.
 - **Exact-821 level packet / EXP keyframe time brackets:** Selecting both
   `hero_level_state,hero_experience_snapshot` emits
   `level_experience_keyframe_bracket_candidates` when a higher-level packet
@@ -51,6 +73,12 @@ Current progress (older notes below retain their original research context):
   before filtering saved `cast_spell_ans_packet_candidates` rows. The
   11-Replay batch checked 63,496 rows, with six matches for value 8, five
   for 100, and zero for 2; older v3 rows report the field unavailable.
+- **Shield-damage route stop-loss:** The pinned 821 image registers
+  `PKT_UnitApplyShieldDamage_s` at `0x043e`, but a fresh strict scan of all
+  streams in the 11 supplied KR Replays found zero such packets and zero
+  framing errors. There is no Replay payload or native-consumption sample
+  for this route. Existing ShieldingParams `0x040a` pairs are distinct and
+  do not establish absorbed damage, so no `0x043e` event is selected.
 - **Completed exact-821 experience endpoint intervals:** Selecting
   `hero_experience_snapshot` also emits
   `experience_keyframe_interval_difference_candidates` for positive

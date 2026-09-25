@@ -118,6 +118,8 @@ const { decodeFaceDirectionPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_face_direction_packet_candidate');
 const { decodeCircularMovementRestrictionPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_circular_movement_restriction_packet_candidate');
+const { decodeUnitApplyDamagePacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 const { associateFaceDirectionKeyframeRosterPairs821 } =
   require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
 const { RUNTIME_IMAGE_SHA256: RUNTIME_IMAGE_SHA256_821 } =
@@ -2428,6 +2430,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    unit_apply_damage_packet: (input, collected) =>
+      decodeUnitApplyDamagePacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -2496,6 +2504,7 @@ function decode1619821(replay, profile, options = {}) {
     face_direction_packet: 'face_direction_packet_candidates',
     circular_movement_restriction_packet:
       'circular_movement_restriction_packet_candidates',
+    unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
     face_direction_keyframe_roster_pair: 'face_direction_keyframe_roster_pair_candidates',
   };
   const capabilityResults = {};
@@ -2548,6 +2557,7 @@ function decode1619821(replay, profile, options = {}) {
     'increment_minion_kills_packet',
     'face_direction_packet',
     'circular_movement_restriction_packet',
+    'unit_apply_damage_packet',
   ]);
   const pairSelected = capabilities.includes('face_direction_keyframe_roster_pair');
   const supported = [...new Set([
@@ -2626,6 +2636,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'increment_minion_kills_packet'
         || capability === 'face_direction_packet'
         || capability === 'circular_movement_restriction_packet'
+        || capability === 'unit_apply_damage_packet'
         || capability === 'face_direction_keyframe_roster_pair') {
       result.runtime_image_status ??= options.runtimeImagePath
         ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';

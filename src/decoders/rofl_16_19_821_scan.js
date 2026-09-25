@@ -48,6 +48,7 @@ const CAPABILITIES = new Set([
   'increment_minion_kills_packet',
   'face_direction_packet',
   'circular_movement_restriction_packet',
+  'unit_apply_damage_packet',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
 const RESPAWN_ROUTES = new Set([0x0048, 0x018d]);
@@ -82,6 +83,7 @@ const MAX_SET_MOVEMENT_DRIVER_PACKET_ROWS = 20_000;
 const MAX_INCREMENT_MINION_KILLS_PACKET_ROWS = 10_000;
 const MAX_FACE_DIRECTION_PACKET_ROWS = 32_768;
 const MAX_CIRCULAR_MOVEMENT_RESTRICTION_PACKET_ROWS = 12_000;
+const MAX_UNIT_APPLY_DAMAGE_PACKET_ROWS = 100_000;
 const SCAN_SOURCE = new WeakMap();
 
 function copyRow(block, chunk) {
@@ -154,6 +156,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     increment_minion_kills_packet: [],
     face_direction_packet: [],
     circular_movement_restriction_packet: [],
+    unit_apply_damage_packet: [],
     hero_deaths_snapshot: heroStatsRows,
     hero_champion_kills_snapshot: heroStatsRows,
     hero_assists_snapshot: heroStatsRows,
@@ -239,6 +242,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let incrementMinionKillsPacketCount = 0;
   let faceDirectionPacketCount = 0;
   let circularMovementRestrictionPacketCount = 0;
+  let unitApplyDamagePacketCount = 0;
   let finished = false;
   // Capability selection is fixed for this walk. Cache the packet-route
   // decisions instead of probing the Set for every framed block.
@@ -278,6 +282,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsFaceDirection = selected.has('face_direction_packet');
   const selectsCircularMovementRestriction =
     selected.has('circular_movement_restriction_packet');
+  const selectsUnitApplyDamage = selected.has('unit_apply_damage_packet');
   const selectsHeroLevelState = selected.has('hero_level_state');
   return Object.freeze({
     observe(block, chunk) {
@@ -519,6 +524,12 @@ function create821ScanCollector(replay, selectedCapabilities) {
           rows.circular_movement_restriction_packet.push(copyRow(block, chunk));
         }
       }
+      if (selectsUnitApplyDamage && block.packet_id === 0x005f) {
+        unitApplyDamagePacketCount += 1;
+        if (rows.unit_apply_damage_packet.length < MAX_UNIT_APPLY_DAMAGE_PACKET_ROWS) {
+          rows.unit_apply_damage_packet.push(copyRow(block, chunk));
+        }
+      }
       if (selectsHeroStats && (chunk.stream_tag === 2 || chunk.stream_tag === 3)
           && block.packet_id === 0x0089) {
         heroStatsRows.push(copyRow(block, chunk));
@@ -574,6 +585,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         incrementMinionKillsPacketCount,
         faceDirectionPacketCount,
         circularMovementRestrictionPacketCount,
+        unitApplyDamagePacketCount,
         error: token.error,
       });
       return token;
@@ -838,6 +850,13 @@ function rowsFor821Capability(replay, token, capability) {
         > MAX_CIRCULAR_MOVEMENT_RESTRICTION_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.circularMovementRestrictionPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'unit_apply_damage_packet'
+      && bound.unitApplyDamagePacketCount > MAX_UNIT_APPLY_DAMAGE_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.unitApplyDamagePacketCount,
       scanned_block_count: bound.blockCount,
     };
   }

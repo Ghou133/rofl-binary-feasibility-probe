@@ -79,6 +79,7 @@
 | `16.19.821.7343 --events set_movement_driver_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x0335` SetMovementDriver 包，输出回调变换后的匿名分发字节和原始包来源 | 仅写入 `set_movement_driver_packet_candidates`，状态为 `CANDIDATE`；不声称驱动状态已改变，也不推断位置、路径或参与者；仅接受两种已观察到的包形状 |
 | `16.19.821.7343 --events face_direction_packet --runtime-image PATH` | 对 KR `0x038e` 已观察到的 13/17 字节包形状使用精确 821 镜像，输出包内向量、可选标量候选值和原始包来源 | 仅写入 `face_direction_packet_candidates`，状态为 `CANDIDATE`；不据原始参数认定行动者，不推断世界位置、路径或方向效果；其他 build 与未观察到的形状明确拒绝 |
 | `16.19.821.7343 --events circular_movement_restriction_packet --runtime-image PATH` | 对 KR `0x0464` 已观察到的一字节零记录包与 24 字节单记录包，按精确 821 镜像验证回调字节变换，保留包内匿名标量、三浮点值及原始包引用；11 份回放共 68,242 包 | 仅写入 `circular_movement_restriction_packet_candidates`，状态为 `CANDIDATE`；原生探针完整消费了 129 个单记录包，生产解码只接受已验证形状；不推断行动者、世界位置、英雄路径、接收者或实际限制效果 |
+| `16.19.821.7343 --events unit_apply_damage_packet --runtime-image PATH` | 精确 821 镜像注册 KR 游戏流 `0x005f` UnitApplyDamage；每次运行用 Python + Unicorn 原生完整消费全部待输出包，11 份回放共 628,909 包；输出原始包来源及选择位，其中一种 15 字节形状的 6,501 包另有原生吻合的匿名 `+0x20` 回调 f32 | 仅写入 `unit_apply_damage_packet_candidates`，状态为 `CANDIDATE`；原生依赖缺失或任一包未完整消费时整项失败；其余 622,408 包的该浮点字段为不可用，不推断实际伤害、生命变化、来源、目标或对象查找结果 |
 | `16.19.821.7343 --events face_direction_keyframe_roster_pair --runtime-image PATH` | 自动解码 FaceDirection 包和 `0x0089` 标准补刀快照，在同一关键帧按完整原始参数及先后顺序配对规范英雄行 | 仅写入 `face_direction_keyframe_roster_pair_candidates`；参与者标签来自 HeroStats 阵容，不能当作 FaceDirection 包的行动者；不推断方向效果、位置或路径 |
 | `16.19.821.7343 --events npc_buff_add_packet,npc_buff_remove_packet --runtime-image PATH` | 分别解码 KR `0x00ae/0x047c` 原生包，并在两项均成功时汇总相同不透明 `(u32, u8)` 键的重合与时序歧义 | 逐包候选分别写入两个 JSONL；`candidate_associations.npc_buff_add_remove_opaque_key` 仅含回放内统计，不配对单个包，不推断 Buff 名称、归属或生命周期 |
 | `16.19.821.7343 --events npc_buff_update_num_counter_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x0194` BuffUpdateNumCounter 包，保留四个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_update_num_counter_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 名称、归属、计数含义或生命周期 |
@@ -794,6 +795,16 @@ node src/cli.js query-events "work\16-19-821-circular" `
 
 查询核对每行的原始包哈希、来源引用、精确镜像变换和匿名字段，再原样输出。11 份回放的保存结果中，单记录 129 行、零记录 68,113 行；`packet_record_count_checked_count` 与不可用数会分开报告。单记录的三个浮点值不是已确认的英雄位置或路径。
 
+对 821 `UnitApplyDamage` 保存结果，仅筛选具有上述匿名回调浮点值的包：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-unit-damage" `
+  --event unit_apply_damage_packet_candidates `
+  --damage-callback-f32-available --limit 20
+```
+
+查询校验精确 build、镜像和变换标识、保存的全包原生见证状态与有序输入摘要，以及每行原始包哈希与来源引用；达到输出上限后仍检查余下行。它不会重新运行原生解码或打开原始回放。输出保留原始 JSONL。11 份回放的保存结果中共检查 628,909 行，6,501 行可用，622,408 行为 `UNAVAILABLE_SHAPE`。该值不代表已确认的实际伤害量。
+
 三个 KR 821 候选包组 JSONL 也能使用 `query-events`，按时间、原始参数或
 各组子包直接解码的 `+0x04` 匿名整数筛选。例如：
 
@@ -863,6 +874,7 @@ node src/cli.js ward-events "D:\Data\ward_events.jsonl" `
 | `npm run test:16-19-turret-die` | OnTurretDie 候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
 | `npm run test:16-19-turret-first-blood` | OnTurretFirstBlood 候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
 | `npm run test:16-19-hq-kill` | OnHQKill 包级候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
+| `npm run test:16-19-unit-apply-damage` | UnitApplyDamage 包级候选、原生负例、CLI/API 和保存结果查询；真实回放与精确镜像缺失时，输入专属整合测试明确跳过，执行原生检查还需 Python + Unicorn |
 | `npm run test:maintenance` | 本次新增定点维护测试；Node + Python 标准库 |
 | `npm run test:all` | 原完整 Node 套件；部分测试需要未公开的精确输入和本地证据 |
 | `npm run test:v3` / `npm run test:v4` | 数据库层单元测试，需安装对应 Python 依赖 |
