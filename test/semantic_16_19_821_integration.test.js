@@ -194,6 +194,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'turret_first_blood_event_packet',
       'hq_kill_event_packet',
       'turret_plate_event_packet',
+      'objective_bounty_claimed_packet',
       'cast_spell_ans_packet',
       'npc_buff_remove_packet', 'npc_buff_add_packet',
       'npc_buff_update_num_counter_packet',

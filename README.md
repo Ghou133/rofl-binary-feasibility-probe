@@ -65,6 +65,7 @@
 | `16.19.821.7343 --events resurrect_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x002d` 子包，保留 OnResurrect 镜像名表标签、匿名原生子包 `+0x04/+0x08` 整数和原始包来源 | 有此包形状的回放写入 `resurrect_event_packet_candidates`，状态为 `CANDIDATE`；无此形状的回放报告 `PROFILE_UNAVAILABLE`；不推断实际复活、对象角色或状态变化 |
 | `16.19.821.7343 --events revive_ally_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x002c` 子包，保留 OnReviveAlly 镜像名表标签、匿名原生子包 `+0x04` 整数及原始包来源 | 有目标包时写入 `revive_ally_event_packet_candidates`，状态为 `CANDIDATE`；无目标包时报告 `PROFILE_UNAVAILABLE`；同长度异类子事件保留为排除证据，不推断实际复活、对象角色或状态变化 |
 | `16.19.821.7343 --events turret_plate_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0107` 子包，保留 OnTurretPlateDestroyed 镜像名表标签、匿名原生子包 `+0x04` 整数和原始包来源 | 仅写入 `turret_plate_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断镀层破坏、建筑、参与者或状态变化 |
+| `16.19.821.7343 --events objective_bounty_claimed_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0113` 子包，保留 OnObjectiveBountyClaimed 镜像名表标签、匿名八字节子包及 `blob_u32_0x04`、原始包来源 | 有目标包时写入 `objective_bounty_claimed_packet_candidates`，状态为 `CANDIDATE`；无目标包时报告 `PROFILE_UNAVAILABLE` 并保留同长度异类包引用；不推断实际悬赏发放、对象、行动者、队伍或状态变化 |
 | `16.19.821.7343 --events dampener_die_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x0035` 子包，保留 OnDampenerDie 镜像名表标签、匿名 108 字节原生子包及原始包来源 | 有目标包时写入 `dampener_die_event_packet_candidates`，状态为 `CANDIDATE`；无目标包时报告 `PROFILE_UNAVAILABLE`；同长度异类子事件作为排除证据，不推断建筑实际毁坏、建筑身份、参与者或状态变化 |
 | `16.19.821.7343 --events turret_die_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x003b` 子包，保留 OnTurretDie 镜像名表标签、匿名 108 字节原生子包内容及 SHA-256、原始包来源 | 仅写入 `turret_die_event_packet_candidates`，状态为 `CANDIDATE`；同长度异类子事件作为排除证据，不推断实际防御塔死亡、建筑身份、参与者或状态变化 |
 | `16.19.821.7343 --events turret_first_blood_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x003d` 子包，保留 OnTurretFirstBlood 镜像名表标签、匿名 108 字节原生子包内容及 SHA-256、原始包来源 | 仅写入 `turret_first_blood_event_packet_candidates`，状态为 `CANDIDATE`；同长度异类子事件作为排除证据，不推断实际首座防御塔死亡、建筑身份、参与者或状态变化 |
@@ -241,6 +242,10 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events turret_plate_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-turret-plate-event-packets"
+node src/cli.js batch "D:\Replays\16.19.821.7343" `
+  --events objective_bounty_claimed_packet `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-objective-bounty-claim-packets"
 node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events dampener_die_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `

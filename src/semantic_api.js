@@ -84,6 +84,8 @@ const { decodeHqKillEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_hq_kill_event_packet_candidate');
 const { decodeTurretPlateEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_turret_plate_event_packet_candidate');
+const { decodeObjectiveBountyClaimedEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_objective_bounty_claimed_packet_candidate');
 const { decodeCastSpellAnsPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const { decodeNpcBuffRemovePacketCandidates821 } =
@@ -2334,6 +2336,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    objective_bounty_claimed_packet: (input, collected) =>
+      decodeObjectiveBountyClaimedEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     cast_spell_ans_packet: (input, collected) =>
       decodeCastSpellAnsPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2459,6 +2467,7 @@ function decode1619821(replay, profile, options = {}) {
     turret_first_blood_event_packet: 'turret_first_blood_event_packet_candidates',
     hq_kill_event_packet: 'hq_kill_event_packet_candidates',
     turret_plate_event_packet: 'turret_plate_event_packet_candidates',
+    objective_bounty_claimed_packet: 'objective_bounty_claimed_packet_candidates',
     cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
     npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
     npc_buff_add_packet: 'npc_buff_add_packet_candidates',
@@ -2509,6 +2518,7 @@ function decode1619821(replay, profile, options = {}) {
     'turret_first_blood_event_packet',
     'hq_kill_event_packet',
     'turret_plate_event_packet',
+    'objective_bounty_claimed_packet',
     'cast_spell_ans_packet',
     'npc_buff_remove_packet',
     'npc_buff_add_packet',
@@ -2586,6 +2596,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'turret_first_blood_event_packet'
         || capability === 'hq_kill_event_packet'
         || capability === 'turret_plate_event_packet'
+        || capability === 'objective_bounty_claimed_packet'
         || capability === 'cast_spell_ans_packet'
         || capability === 'npc_buff_remove_packet' || capability === 'npc_buff_add_packet'
         || capability === 'npc_buff_update_num_counter_packet'
@@ -2660,7 +2671,9 @@ function decode1619821(replay, profile, options = {}) {
                     : capability === 'hq_kill_event_packet'
                       ? '0x040a/child_0046'
                     : capability === 'turret_plate_event_packet'
-                      ? '0x040a/child_0107' : result.input_packet_id;
+                      ? '0x040a/child_0107'
+                    : capability === 'objective_bounty_claimed_packet'
+                      ? '0x040a/child_0113' : result.input_packet_id;
     const decodedCount = capability === 'stealth_event_packet'
       ? result.target_packet_count
       : capability === 'champion_die_event_packet'
@@ -2688,6 +2701,8 @@ function decode1619821(replay, profile, options = {}) {
                 : capability === 'hq_kill_event_packet'
                   ? result.event_count
                 : capability === 'turret_plate_event_packet'
+                  ? result.event_count
+                : capability === 'objective_bounty_claimed_packet'
                   ? result.event_count : result.input_count;
     uniqueDecodedInputCounts.set(packetGroup,
       Math.max(uniqueDecodedInputCounts.get(packetGroup) ?? 0, decodedCount));

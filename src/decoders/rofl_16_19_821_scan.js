@@ -37,6 +37,7 @@ const CAPABILITIES = new Set([
   'turret_first_blood_event_packet',
   'hq_kill_event_packet',
   'turret_plate_event_packet',
+  'objective_bounty_claimed_packet',
   'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
   'npc_buff_update_num_counter_packet', 'npc_buff_update_count_packet',
   'npc_buff_replace_packet',
@@ -74,6 +75,7 @@ const MAX_DAMPENER_DIE_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_FIRST_BLOOD_EVENT_PACKET_ROWS = 2_000;
 const MAX_HQ_KILL_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_PLATE_EVENT_PACKET_ROWS = 10_000;
+const MAX_OBJECTIVE_BOUNTY_CLAIMED_PACKET_ROWS = 10_000;
 const MAX_DIRECT_INPUT_TURN_PACKET_ROWS = 20_000;
 const MAX_SET_MOVEMENT_DRIVER_PACKET_ROWS = 20_000;
 const MAX_INCREMENT_MINION_KILLS_PACKET_ROWS = 10_000;
@@ -136,6 +138,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     turret_first_blood_event_packet: [],
     hq_kill_event_packet: [],
     turret_plate_event_packet: [],
+    objective_bounty_claimed_packet: [],
     cast_spell_ans_packet: [],
     npc_buff_remove_packet: [],
     npc_buff_add_packet: [],
@@ -227,6 +230,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let turretFirstBloodEventPacketCount = 0;
   let hqKillEventPacketCount = 0;
   let turretPlateEventPacketCount = 0;
+  let objectiveBountyClaimedPacketCount = 0;
   let directInputTurnPacketCount = 0;
   let setMovementDriverPacketCount = 0;
   let incrementMinionKillsPacketCount = 0;
@@ -252,6 +256,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsTurretFirstBloodEvent = selected.has('turret_first_blood_event_packet');
   const selectsHqKillEvent = selected.has('hq_kill_event_packet');
   const selectsTurretPlateEvent = selected.has('turret_plate_event_packet');
+  const selectsObjectiveBountyClaimed = selected.has('objective_bounty_claimed_packet');
   const selectsInventoryPacket = selected.has('hero_inventory_packet');
   const selectsInventoryBroadcast = selected.has('hero_inventory_broadcast_packet');
   const selectsInventorySetItem = selected.has('hero_inventory_set_item_packet');
@@ -403,6 +408,14 @@ function create821ScanCollector(replay, selectedCapabilities) {
           rows.turret_plate_event_packet.push(copyRow(block, chunk));
         }
       }
+      if (selectsObjectiveBountyClaimed
+          && block.packet_id === 0x040a && block.payload_length === 17) {
+        objectiveBountyClaimedPacketCount += 1;
+        if (rows.objective_bounty_claimed_packet.length
+            < MAX_OBJECTIVE_BOUNTY_CLAIMED_PACKET_ROWS) {
+          rows.objective_bounty_claimed_packet.push(copyRow(block, chunk));
+        }
+      }
       if (selectsInventoryPacket && chunk.stream_tag === 1
           && block.packet_id === 0x018d) {
         rows.hero_inventory_packet.push(copyRow(block, chunk));
@@ -542,6 +555,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         turretFirstBloodEventPacketCount,
         hqKillEventPacketCount,
         turretPlateEventPacketCount,
+        objectiveBountyClaimedPacketCount,
         directInputTurnPacketCount,
         setMovementDriverPacketCount,
         incrementMinionKillsPacketCount,
@@ -716,6 +730,13 @@ function rowsFor821Capability(replay, token, capability) {
       && bound.turretPlateEventPacketCount > MAX_TURRET_PLATE_EVENT_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.turretPlateEventPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'objective_bounty_claimed_packet'
+      && bound.objectiveBountyClaimedPacketCount > MAX_OBJECTIVE_BOUNTY_CLAIMED_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.objectiveBountyClaimedPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }
