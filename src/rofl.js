@@ -67,7 +67,18 @@ function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
+const OPCODE_LABELS = new Map();
+
 function formatOpcode(packetId) {
+  // Replay packet IDs are u16 and repeat across millions of blocks.
+  if (Number.isInteger(packetId) && packetId >= 0 && packetId <= 0xffff) {
+    let label = OPCODE_LABELS.get(packetId);
+    if (label === undefined) {
+      label = `0x${packetId.toString(16).padStart(4, '0')}`;
+      OPCODE_LABELS.set(packetId, label);
+    }
+    return label;
+  }
   return `0x${packetId.toString(16).padStart(4, '0')}`;
 }
 
