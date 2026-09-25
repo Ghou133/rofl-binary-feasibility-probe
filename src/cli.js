@@ -186,6 +186,9 @@ establish damage amount or attribution.
 show_health_bar_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
 packet-local callback flag candidates; these do not establish health or display effects.
+unit_apply_damage_roster_key_pair additionally requires complete exact-821
+HeroStats keyframes; full raw-key equality gives a candidate roster label,
+without actor, source, target, or effective damage attribution.
 face_direction_keyframe_roster_pair pairs canonical keyframe FaceDirection packets
 with same-keyframe HeroStats roster candidates; the roster label does not identify the packet actor.
 Inspect reads the container and packet framing without a runtime image.
@@ -226,6 +229,8 @@ Options:
   --cast-nested-bits <0..255|0xhex>  Exact decoded 821 CastSpellAns nested callback bits
   --damage-callback-f32-available  Exact 821 UnitApplyDamage rows with a native-matched anonymous +0x20 f32
                                 Checks saved witness metadata and raw bytes; does not rerun the native parser.
+  --show-health-zero-flag <0|1>  Exact 821 ShowHealthBar callback zero-flag candidate
+                                Checks saved witness metadata and raw bytes; does not infer display effect.
   --packet-record-count <0|1>  Exact 821 circular movement restriction packet record count
   --level-after <1..20>        Exact-821 level packet within adjacent EXP keyframes
   --child-event-id <uint32|0xhex>  Exact 821 stealth, named multikill, HQ or objective-bounty child ID
@@ -287,6 +292,7 @@ function parseArgs(argv) {
     opaqueI32: null,
     castNestedBits: null,
     damageCallbackF32Available: false,
+    showHealthZeroFlag: null,
     packetRecordCount: null,
     levelAfter: null,
     childEventId: null,
@@ -411,6 +417,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'opaque-pair') options.opaquePair = queryOpaquePair(value);
       else if (command === 'query-events' && key === 'opaque-i32') options.opaqueI32 = queryInt32(value, key);
       else if (command === 'query-events' && key === 'cast-nested-bits') options.castNestedBits = queryByte(value, key);
+      else if (command === 'query-events' && key === 'show-health-zero-flag') options.showHealthZeroFlag = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'packet-record-count') options.packetRecordCount = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'level-after') options.levelAfter = queryInteger(value, key);
       else if (command === 'query-events' && key === 'child-event-id') options.childEventId = queryUint32(value, key);
@@ -547,6 +554,11 @@ function parseArgs(argv) {
     if (options.damageCallbackF32Available
         && options.event !== 'unit_apply_damage_packet_candidates') {
       throw new Error('--damage-callback-f32-available requires an 821 unit_apply_damage_packet_candidates event');
+    }
+    if (options.showHealthZeroFlag !== null
+        && (options.event !== 'show_health_bar_packet_candidates'
+          || options.showHealthZeroFlag > 1)) {
+      throw new Error('--show-health-zero-flag requires show_health_bar_packet_candidates and 0..1');
     }
     if (options.packetRecordCount !== null
         && (options.event !== 'circular_movement_restriction_packet_candidates'
@@ -907,6 +919,12 @@ function parseOne1619(replay, options, started) {
   if (options.semantic !== false && Array.isArray(options.events)
       && options.events.includes('face_direction_keyframe_roster_pair')) {
     for (const source of ['face_direction_packet', 'hero_minions_killed_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('unit_apply_damage_roster_key_pair')) {
+    for (const source of ['unit_apply_damage_packet', 'hero_minions_killed_snapshot']) {
       if (!selected821.includes(source)) selected821.push(source);
     }
   }
@@ -2166,6 +2184,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'circular_movement_restriction_packet'
             || capability === 'unit_apply_damage_packet'
             || capability === 'show_health_bar_packet'
+            || capability === 'unit_apply_damage_roster_key_pair'
             || capability === 'face_direction_keyframe_roster_pair'));
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
@@ -2240,10 +2259,12 @@ function capabilityQuery(replay, options = {}) {
           ? assessHeroKillStatsTail821(replay)
         : profile.game_version === '16.19.821.7343'
           && ['hero_minions_killed_snapshot', 'face_direction_keyframe_roster_pair',
+            'unit_apply_damage_roster_key_pair',
             'hero_experience_snapshot', 'hero_vision_score_snapshot',
             'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot'].includes(capability)
           ? assessHeroFloatSnapshotTail821(replay,
-            capability === 'face_direction_keyframe_roster_pair'
+            ['face_direction_keyframe_roster_pair',
+              'unit_apply_damage_roster_key_pair'].includes(capability)
               ? 'hero_minions_killed_snapshot' : capability)
         : profile.game_version === '16.19.821.7343'
           && (capability === 'hero_death' || capability === 'hero_death_timer')
@@ -2311,9 +2332,11 @@ function capabilityQuery(replay, options = {}) {
           ? [dependencies[0], options.runtimeImage
             ? fileInputDependency('exact_runtime_image', options.runtimeImage)
             : { name: 'exact_runtime_image', status: 'MISSING', path: null },
-          ...(['unit_apply_damage_packet', 'show_health_bar_packet'].includes(capability)
+          ...(['unit_apply_damage_packet', 'show_health_bar_packet',
+            'unit_apply_damage_roster_key_pair'].includes(capability)
             ? [pythonUnicornDependency(options.python ?? options.pythonExecutable)] : []),
-          ...(capability === 'face_direction_keyframe_roster_pair'
+          ...(['face_direction_keyframe_roster_pair',
+            'unit_apply_damage_roster_key_pair'].includes(capability)
             ? tailStatInput : [])]
           : [...dependencies, ...tailStatInput,
             ...(profile.game_version === '16.19.821.7343' && capability === 'hero_respawn'
@@ -2538,6 +2561,11 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'show_health_bar_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and Python+Unicorn full native consumption of every selected 0x0165 packet',
           'two observed one-byte packet shapes and callback flag candidates; no health amount, actor, or display-effect inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'unit_apply_damage_roster_key_pair') {
+        validationPending.push('native-gated 0x005f packet source and complete ten-hero 0x0089 keyframe roster',
+          'full raw-key equality and both source references; no actor, source, target, or applied-damage inference');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'npc_buff_remove_packet') {
@@ -2825,6 +2853,7 @@ function capabilityQuery(replay, options = {}) {
               'circular_movement_restriction_packet_candidates',
             unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
             show_health_bar_packet: 'show_health_bar_packet_candidates',
+            unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
             face_direction_keyframe_roster_pair:
               'face_direction_keyframe_roster_pair_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
@@ -2994,6 +3023,7 @@ async function runQueryEventsCommand(parsed) {
       opaqueI32: options.opaqueI32,
       castNestedBits: options.castNestedBits,
       damageCallbackF32Available: options.damageCallbackF32Available,
+      showHealthZeroFlag: options.showHealthZeroFlag,
       packetRecordCount: options.packetRecordCount,
       levelAfter: options.levelAfter,
       childEventId: options.childEventId,

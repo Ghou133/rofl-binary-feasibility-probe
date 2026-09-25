@@ -11,7 +11,9 @@ const test = require('node:test');
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: profile,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821: v1ProfileId,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821: v2ProfileId,
   decodeUnitApplyDamageCallbackF32FromRaw821,
+  decodeUnitApplyDamageLookupKeyFromRaw821,
   isObservedShape,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 
@@ -97,12 +99,31 @@ function v2Row(index, payloadHex = FLOAT_PACKET) {
   const offset = constant ? null : payloadHex === OTHER_PACKET ? 9 : 5;
   const rawBytes = offset === null ? null
     : Buffer.from(payloadHex, 'hex').subarray(offset, offset + 4).toString('hex');
-  entry.build_profile = profile.id;
+  entry.build_profile = v2ProfileId;
   entry.native_callback_f32_0x20_candidate = constant
     ? constant[2] : decodeUnitApplyDamageCallbackF32FromRaw821(rawBytes);
   entry.native_callback_f32_0x20_source = constant ? constant[1] : 'RAW_READER';
   entry.native_callback_f32_0x20_raw_offset = offset;
   entry.native_callback_f32_0x20_raw_bytes_hex = rawBytes;
+  return entry;
+}
+
+function v3Row(index, payloadHex = FLOAT_PACKET, relation = 'EQUAL') {
+  const entry = v2Row(index, payloadHex);
+  const encoded24 = '01020304';
+  const encoded2c = '05060708';
+  const key24 = decodeUnitApplyDamageLookupKeyFromRaw821(encoded24, 0x24);
+  const key2c = decodeUnitApplyDamageLookupKeyFromRaw821(encoded2c, 0x2c);
+  entry.build_profile = profile.id;
+  entry.raw_param = relation === 'EQUAL' ? key24
+    : relation === 'RAW_PARAM_IS_LOOKUP_PLUS_0X100' ? key24 + 0x100
+      : key24 + 0x200;
+  entry.raw_packet_ref.raw_param = entry.raw_param;
+  entry.native_callback_lookup_key_u32_0x24_candidate = key24;
+  entry.native_callback_lookup_key_0x24_encoded_bytes_hex = encoded24;
+  entry.native_callback_lookup_key_u32_0x2c_candidate = key2c;
+  entry.native_callback_lookup_key_0x2c_encoded_bytes_hex = encoded2c;
+  entry.native_callback_lookup_key_0x24_raw_param_relation = relation;
   return entry;
 }
 
@@ -133,7 +154,7 @@ function writeReplay(root, name, rows, {
     observed_shape_family_count: shapes.size,
     callback_f32_available_count: available,
     callback_f32_unavailable_count: rows.length - available,
-    ...(rows[0]?.build_profile === profile.id ? {
+    ...(rows[0]?.build_profile !== v1ProfileId ? {
       native_callback_f32_available_count: rows.length,
       native_callback_f32_source_counts: {
         RAW_READER: rows.filter((entry) =>
@@ -144,6 +165,22 @@ function writeReplay(root, name, rows, {
           entry.native_callback_f32_0x20_source === 'CONSTANT_1').length,
         CONSTANT_2: rows.filter((entry) =>
           entry.native_callback_f32_0x20_source === 'CONSTANT_2').length,
+      },
+    } : {}),
+    ...(rows[0]?.build_profile === profile.id ? {
+      native_callback_lookup_full_write_count: rows.length,
+      evidence_lookup_key_0x24_table_sha256:
+        profile.evidence_lookup_key_0x24_table_sha256,
+      evidence_lookup_key_0x2c_table_sha256:
+        profile.evidence_lookup_key_0x2c_table_sha256,
+      native_callback_lookup_key_0x24_raw_param_relation_counts: {
+        EQUAL: rows.filter((entry) =>
+          entry.native_callback_lookup_key_0x24_raw_param_relation === 'EQUAL').length,
+        RAW_PARAM_IS_LOOKUP_PLUS_0X100: rows.filter((entry) =>
+          entry.native_callback_lookup_key_0x24_raw_param_relation
+            === 'RAW_PARAM_IS_LOOKUP_PLUS_0X100').length,
+        OTHER: rows.filter((entry) =>
+          entry.native_callback_lookup_key_0x24_raw_param_relation === 'OTHER').length,
       },
     } : {}),
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
@@ -214,6 +251,35 @@ test('query-events checks v2 native float provenance while preserving the legacy
     '--damage-callback-f32-available', '--limit', '1');
   assert.equal(rejected.status, 2, rejected.stderr);
   assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('query-events checks v3 native lookup keys and relation counts after output limit', (t) => {
+  const rows = [v3Row(0),
+    v3Row(1, OTHER_PACKET, 'RAW_PARAM_IS_LOOKUP_PLUS_0X100'),
+    v3Row(2, CONSTANT_PACKETS[0][0], 'OTHER')];
+  const { directory, lines } = fixture(t, rows);
+  const selected = command(directory, '--damage-callback-f32-available', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${lines[0]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 3);
+  assert.equal(summary.matched_count, 1);
+  const damagedRows = rows.map((entry) => structuredClone(entry));
+  damagedRows[1].native_callback_lookup_key_0x24_encoded_bytes_hex = '00000000';
+  const damaged = fixture(t, damagedRows);
+  const rejected = command(damaged.directory,
+    '--damage-callback-f32-available', '--limit', '1');
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+  const { directory: badMetadata } = fixture(t, rows);
+  const metadataFile = path.join(badMetadata, 'semantic_run.json');
+  const semantic = JSON.parse(fs.readFileSync(metadataFile, 'utf8'));
+  semantic.capability_results[CAPABILITY]
+    .native_callback_lookup_key_0x24_raw_param_relation_counts.OTHER += 1;
+  fs.writeFileSync(metadataFile, JSON.stringify(semantic));
+  const badCounts = command(badMetadata, '--damage-callback-f32-available');
+  assert.equal(badCounts.status, 2, badCounts.stderr);
+  assert.equal(JSON.parse(badCounts.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
 });
 
 test('query-events distinguishes zero available floats from unavailable shapes and capability', (t) => {

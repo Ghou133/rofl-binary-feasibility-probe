@@ -72,9 +72,15 @@ const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
 const { CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE_PROFILE_821,
   decodeCircularMovementRestrictionPayload821 } =
   require('./decoders/rofl_16_19_821_circular_movement_restriction_packet_candidate');
+const { SHOW_HEALTH_BAR_PACKET_CANDIDATE_PROFILE_821,
+  decodeShowHealthBarPayload821 } =
+  require('./decoders/rofl_16_19_821_show_health_bar_packet_candidate');
 const { UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821,
-  decodeUnitApplyDamageCallbackF32FromRaw821, isObservedShape: isObservedUnitApplyDamageShape821 } =
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821,
+  decodeUnitApplyDamageCallbackF32FromRaw821,
+  decodeUnitApplyDamageLookupKeyFromRaw821,
+  isObservedShape: isObservedUnitApplyDamageShape821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
@@ -110,6 +116,28 @@ const CIRCULAR_MOVEMENT_RESTRICTION_ROW_FIELDS_821 = new Set([
   'anonymous_scalar_f32_candidate', 'anonymous_vector_xyz_f32_candidate',
   'semantic_effect_status', 'confidence', 'semantic_status', 'raw_packet_ref',
 ]);
+const SHOW_HEALTH_BAR_RESULT_FIELDS_821 = new Set([
+  'profile_id', 'input_packet_id', 'evidence_status',
+  'evidence_runtime_image_sha256', 'evidence_callback_table_sha256',
+  'status', 'input_count', 'event_count', 'scanned_block_count',
+  'known_limits', 'event_field_confidence', 'observed_payload_counts',
+  'native_witness_status', 'native_full_success_count',
+  'native_input_sha256', 'runtime_image_status', 'runtime_image_used',
+  'runtime_image_sha256',
+]);
+const SHOW_HEALTH_BAR_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param', 'packet_name_candidate',
+  'raw_payload_byte_hex', 'native_object_byte_0x10_hex',
+  'callback_byte_candidate', 'callback_zero_flag_candidate',
+  'semantic_effect_status', 'confidence', 'semantic_status', 'raw_packet_ref',
+]);
+const SHOW_HEALTH_BAR_REF_FIELDS_821 = new Set([
+  'source_path', 'replay_sha256', 'chunk_index', 'chunk_id', 'chunk_stream',
+  'chunk_file_offset', 'decompressed_block_offset',
+  'decompressed_payload_offset', 'packet_id', 'replay_time_ms',
+  'payload_length', 'raw_param', 'raw_payload_hex', 'raw_payload_sha256',
+]);
 const UNIT_APPLY_DAMAGE_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile',
   'replay_sha256', 'replay_time_ms', 'raw_param', 'packet_name_candidate',
@@ -122,6 +150,17 @@ const UNIT_APPLY_DAMAGE_V2_ROW_FIELDS_821 = new Set([
   ...UNIT_APPLY_DAMAGE_ROW_FIELDS_821,
   'native_callback_f32_0x20_candidate', 'native_callback_f32_0x20_source',
   'native_callback_f32_0x20_raw_offset', 'native_callback_f32_0x20_raw_bytes_hex',
+]);
+const UNIT_APPLY_DAMAGE_V3_ROW_FIELDS_821 = new Set([
+  ...UNIT_APPLY_DAMAGE_V2_ROW_FIELDS_821,
+  'native_callback_lookup_key_u32_0x24_candidate',
+  'native_callback_lookup_key_0x24_encoded_bytes_hex',
+  'native_callback_lookup_key_u32_0x2c_candidate',
+  'native_callback_lookup_key_0x2c_encoded_bytes_hex',
+  'native_callback_lookup_key_0x24_raw_param_relation',
+]);
+const UNIT_APPLY_DAMAGE_LOOKUP_RELATIONS_821 = Object.freeze([
+  'EQUAL', 'RAW_PARAM_IS_LOOKUP_PLUS_0X100', 'OTHER',
 ]);
 const UNIT_APPLY_DAMAGE_NATIVE_FLOAT_SOURCES_821 = Object.freeze([
   'RAW_READER', 'CONSTANT_0', 'CONSTANT_1', 'CONSTANT_2',
@@ -1838,7 +1877,9 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   const associationConfig = ASSOCIATION_EVENTS_821[eventKey] ?? null;
   const exactPacketProfile = EXACT_PACKET_EVENTS_821[eventKey] ?? null;
   const exactBlobPacketConfig = EXACT_BLOB_PACKET_EVENTS_821[eventKey] ?? null;
-  const capability = eventKey.slice(0, -'_candidates'.length);
+  const capability = eventKey === 'unit_apply_damage_roster_key_candidates'
+    ? 'unit_apply_damage_roster_key_pair'
+    : eventKey.slice(0, -'_candidates'.length);
   const capabilityResult = associationConfig
     ? prepareAssociation(semantic, analysis, eventKey, associationConfig)
     : semantic.capability_results?.[capability];
@@ -2538,6 +2579,130 @@ function circularMovementRestrictionRecordCount(row, prepared, lineNumber,
   return inspected.packet_record_count_candidate;
 }
 
+function prepareShowHealthBarZeroFlag(prepared) {
+  const profile = SHOW_HEALTH_BAR_PACKET_CANDIDATE_PROFILE_821;
+  if (prepared.eventKey !== 'show_health_bar_packet_candidates'
+      || prepared.replayVersion !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--show-health-zero-flag requires an exact 16.19.821.7343 ShowHealthBar packet candidate event.');
+  }
+  const result = prepared.capabilityResult;
+  const fields = Object.keys(result ?? {});
+  const counts = result?.observed_payload_counts;
+  const fieldConfidence = {
+    replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
+    callback_byte_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_TRANSFORM',
+    callback_zero_flag_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_TRANSFORM',
+  };
+  const analysisResult = prepared[PREPARED_REPLAY_METADATA]?.analysis?.semantic
+    ?.capability_results?.[profile.capability];
+  if (prepared.capabilityStatus !== 'CANDIDATE'
+      || fields.length !== SHOW_HEALTH_BAR_RESULT_FIELDS_821.size
+      || fields.some((field) => !SHOW_HEALTH_BAR_RESULT_FIELDS_821.has(field))
+      || result.profile_id !== profile.id
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || result.evidence_status !== profile.evidence_status
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.evidence_callback_table_sha256
+        !== profile.evidence_callback_table_sha256
+      || result.status !== 'CANDIDATE'
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || result.native_witness_status !== 'FULLY_CONSUMED_ALL'
+      || !REPLAY_SHA.test(result.native_input_sha256 ?? '')
+      || !isCount(result.input_count) || result.input_count === 0
+      || result.input_count > 100_000
+      || result.event_count !== result.input_count
+      || result.event_count !== prepared.declaredCount
+      || result.native_full_success_count !== result.event_count
+      || !isCount(result.scanned_block_count)
+      || result.scanned_block_count < result.input_count
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(result.event_field_confidence, fieldConfidence)
+      || !counts || Object.keys(counts).length !== 2
+      || !isCount(counts['4a']) || !isCount(counts['4b'])
+      || counts['4a'] + counts['4b'] !== result.event_count
+      || !isDeepStrictEqual(analysisResult, result)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'ShowHealthBar packet metadata differs from its exact-build native-witness profile.');
+  }
+}
+
+function showHealthBarZeroFlag(row, prepared, lineNumber, state) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid ShowHealthBar packet at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const profile = SHOW_HEALTH_BAR_PACKET_CANDIDATE_PROFILE_821;
+  const fields = Object.keys(row);
+  const ref = row.raw_packet_ref;
+  const refFields = ref && typeof ref === 'object' && !Array.isArray(ref)
+    ? Object.keys(ref) : [];
+  if (fields.length !== SHOW_HEALTH_BAR_ROW_FIELDS_821.size
+      || fields.some((field) => !SHOW_HEALTH_BAR_ROW_FIELDS_821.has(field))
+      || refFields.length !== SHOW_HEALTH_BAR_REF_FIELDS_821.size
+      || refFields.some((field) => !SHOW_HEALTH_BAR_REF_FIELDS_821.has(field))
+      || row.event_type !== 'SHOW_HEALTH_BAR_PACKET_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.replay_sha256 !== prepared.replaySha
+      || row.packet_name_candidate !== profile.packet_name
+      || row.semantic_effect_status !== 'UNKNOWN'
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== profile.evidence_status
+      || !Number.isSafeInteger(row.replay_time_ms) || row.replay_time_ms < 0
+      || !Number.isSafeInteger(row.raw_param) || row.raw_param <= 0
+      || row.raw_param > 0xffffffff
+      || ref.source_path !== (prepared.sourcePath ?? null)
+      || ref.replay_sha256 !== prepared.replaySha
+      || !['game_chunk', 'keyframe'].includes(ref.chunk_stream)
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== profile.replay_block_packet_id
+      || ref.replay_time_ms !== row.replay_time_ms
+      || ref.payload_length !== 1 || ref.raw_param !== row.raw_param
+      || typeof ref.raw_payload_hex !== 'string'
+      || ref.raw_payload_hex !== row.raw_payload_byte_hex
+      || !REPLAY_SHA.test(ref.raw_payload_sha256 ?? '')) {
+    invalid('profile, raw packet reference, or candidate provenance differs');
+  }
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (state.positions.has(position)) invalid('duplicate raw packet position');
+  if (ref.chunk_index < state.previousChunkIndex
+      || (ref.chunk_index === state.previousChunkIndex
+        && ref.decompressed_block_offset <= state.previousBlockOffset)) {
+    invalid('raw packet order differs from Replay walk order');
+  }
+  state.positions.add(position);
+  state.previousChunkIndex = ref.chunk_index;
+  state.previousBlockOffset = ref.decompressed_block_offset;
+  const inspected = decodeShowHealthBarPayload821(ref.raw_payload_hex);
+  if (!inspected
+      || row.raw_payload_byte_hex !== inspected.raw_payload_byte_hex
+      || row.native_object_byte_0x10_hex !== inspected.native_object_byte_0x10_hex
+      || row.callback_byte_candidate !== inspected.callback_byte_candidate
+      || row.callback_zero_flag_candidate !== inspected.callback_zero_flag_candidate
+      || ref.raw_payload_sha256 !== crypto.createHash('sha256')
+        .update(Buffer.from(ref.raw_payload_hex, 'hex')).digest('hex')) {
+    invalid('raw payload, pinned callback transform, or payload hash differs');
+  }
+  const nativeInputHeader = Buffer.allocUnsafe(8);
+  nativeInputHeader.writeUInt32LE(row.raw_param, 0);
+  nativeInputHeader.writeUInt32LE(1, 4);
+  state.nativeInputHash.update(nativeInputHeader)
+    .update(Buffer.from(ref.raw_payload_hex, 'hex'));
+  state.observedPayloadCounts[ref.raw_payload_hex] += 1;
+  return inspected.callback_zero_flag_candidate;
+}
+
 function prepareUnitApplyDamageCallbackF32(prepared) {
   const profile = UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821;
   if (prepared.eventKey !== 'unit_apply_damage_packet_candidates'
@@ -2548,7 +2713,8 @@ function prepareUnitApplyDamageCallbackF32(prepared) {
   const result = prepared.capabilityResult;
   if (prepared.capabilityStatus !== 'CANDIDATE'
       || (result?.profile_id !== profile.id
-        && result?.profile_id !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821)
+        && result?.profile_id !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821
+        && result?.profile_id !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821)
       || result.input_packet_id !== profile.replay_block_packet_id
       || result.evidence_status !== profile.evidence_status
       || result.evidence_runtime_image_sha256
@@ -2574,7 +2740,7 @@ function prepareUnitApplyDamageCallbackF32(prepared) {
       || !isCount(result.observed_shape_family_count)
       || result.observed_shape_family_count < 1
       || result.observed_shape_family_count > result.event_count
-      || (result.profile_id === profile.id
+      || (result.profile_id !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821
         && (result.native_callback_f32_available_count !== result.event_count
           || !result.native_callback_f32_source_counts
           || typeof result.native_callback_f32_source_counts !== 'object'
@@ -2586,6 +2752,24 @@ function prepareUnitApplyDamageCallbackF32(prepared) {
             !isCount(result.native_callback_f32_source_counts[source]))
           || UNIT_APPLY_DAMAGE_NATIVE_FLOAT_SOURCES_821.reduce((sum, source) =>
             sum + result.native_callback_f32_source_counts[source], 0)
+            !== result.event_count))
+      || (result.profile_id === profile.id
+        && (result.native_callback_lookup_full_write_count !== result.event_count
+          || result.evidence_lookup_key_0x24_table_sha256
+            !== profile.evidence_lookup_key_0x24_table_sha256
+          || result.evidence_lookup_key_0x2c_table_sha256
+            !== profile.evidence_lookup_key_0x2c_table_sha256
+          || !result.native_callback_lookup_key_0x24_raw_param_relation_counts
+          || typeof result.native_callback_lookup_key_0x24_raw_param_relation_counts
+            !== 'object'
+          || Array.isArray(result.native_callback_lookup_key_0x24_raw_param_relation_counts)
+          || !isDeepStrictEqual(Object.keys(
+            result.native_callback_lookup_key_0x24_raw_param_relation_counts).sort(),
+          [...UNIT_APPLY_DAMAGE_LOOKUP_RELATIONS_821].sort())
+          || UNIT_APPLY_DAMAGE_LOOKUP_RELATIONS_821.some((relation) =>
+            !isCount(result.native_callback_lookup_key_0x24_raw_param_relation_counts[relation]))
+          || UNIT_APPLY_DAMAGE_LOOKUP_RELATIONS_821.reduce((sum, relation) =>
+            sum + result.native_callback_lookup_key_0x24_raw_param_relation_counts[relation], 0)
             !== result.event_count))) {
     throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
       'UnitApplyDamage packet metadata differs from its exact-build profile.');
@@ -2593,7 +2777,8 @@ function prepareUnitApplyDamageCallbackF32(prepared) {
 }
 
 function unitApplyDamageCallbackF32(row, prepared, lineNumber,
-  packetPositions, shapeFamilies, nativeInputHash, nativeFloatSourceCounts) {
+  packetPositions, shapeFamilies, nativeInputHash, nativeFloatSourceCounts,
+  nativeLookupRelationCounts) {
   const invalid = (reason) => {
     throw new EventQueryError('INVALID_EVENT_ROW',
       `Invalid UnitApplyDamage packet at JSONL line ${lineNumber}: ${reason}.`,
@@ -2601,9 +2786,12 @@ function unitApplyDamageCallbackF32(row, prepared, lineNumber,
   };
   const profile = UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821;
   const profileId = prepared.capabilityResult.profile_id;
-  const isV2 = profileId === profile.id;
-  const allowedFields = isV2
-    ? UNIT_APPLY_DAMAGE_V2_ROW_FIELDS_821 : UNIT_APPLY_DAMAGE_ROW_FIELDS_821;
+  const isV3 = profileId === profile.id;
+  const hasNativeFloat = isV3
+    || profileId === UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821;
+  const allowedFields = isV3 ? UNIT_APPLY_DAMAGE_V3_ROW_FIELDS_821
+    : hasNativeFloat ? UNIT_APPLY_DAMAGE_V2_ROW_FIELDS_821
+      : UNIT_APPLY_DAMAGE_ROW_FIELDS_821;
   const fields = Object.keys(row);
   const ref = row.raw_packet_ref;
   if (fields.length !== allowedFields.size
@@ -2677,7 +2865,7 @@ function unitApplyDamageCallbackF32(row, prepared, lineNumber,
       || row.callback_f32_0x20_candidate !== null) {
     invalid('unavailable callback float shape is not explicitly null');
   }
-  if (isV2) {
+  if (hasNativeFloat) {
     const constants = {
       3: ['CONSTANT_0', 0],
       5: ['CONSTANT_1', 1],
@@ -2709,6 +2897,22 @@ function unitApplyDamageCallbackF32(row, prepared, lineNumber,
       invalid('legacy and native callback floats disagree');
     }
     nativeFloatSourceCounts[source] += 1;
+  }
+  if (isV3) {
+    const encoded24 = row.native_callback_lookup_key_0x24_encoded_bytes_hex;
+    const encoded2c = row.native_callback_lookup_key_0x2c_encoded_bytes_hex;
+    const key24 = decodeUnitApplyDamageLookupKeyFromRaw821(encoded24, 0x24);
+    const key2c = decodeUnitApplyDamageLookupKeyFromRaw821(encoded2c, 0x2c);
+    const relation = row.raw_param === key24 ? 'EQUAL'
+      : row.raw_param - key24 === 0x100
+        ? 'RAW_PARAM_IS_LOOKUP_PLUS_0X100' : 'OTHER';
+    if (key24 === null || key2c === null
+        || row.native_callback_lookup_key_u32_0x24_candidate !== key24
+        || row.native_callback_lookup_key_u32_0x2c_candidate !== key2c
+        || row.native_callback_lookup_key_0x24_raw_param_relation !== relation) {
+      invalid('native lookup keys or full raw-parameter relation differ');
+    }
+    nativeLookupRelationCounts[relation] += 1;
   }
   return hasFloat;
 }
@@ -4947,7 +5151,7 @@ function validateFilters(options) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, damageCallbackF32Available = false,
-    packetRecordCount = null, levelAfter = null,
+    packetRecordCount = null, showHealthZeroFlag = null, levelAfter = null,
     childEventId = null, limit = null, latestPerParticipant = false,
     endpointReversedPair: endpointReversedPairFilter = false,
     comparisonToEndpoints = null } = options;
@@ -4980,6 +5184,7 @@ function validateFilters(options) {
     ['opaqueI32', opaqueI32, -0x80000000, 0x7fffffff],
     ['castNestedBits', castNestedBits, 0, 0xff],
     ['packetRecordCount', packetRecordCount, 0, 1],
+    ['showHealthZeroFlag', showHealthZeroFlag, 0, 1],
     ['levelAfter', levelAfter, 1, 20],
     ['childEventId', childEventId, 0, 0xffffffff],
     ['limit', limit, 1, Number.MAX_SAFE_INTEGER],
@@ -5006,7 +5211,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, damageCallbackF32Available = false,
-    packetRecordCount = null, levelAfter = null,
+    packetRecordCount = null, showHealthZeroFlag = null, levelAfter = null,
     childEventId = null, limit = null, latestPerParticipant = false,
     endpointReversedPair: endpointReversedPairFilter = false,
     comparisonToEndpoints = null } = options;
@@ -5106,6 +5311,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   if (packetRecordCount != null) {
     prepareCircularMovementRestrictionRecordCount(prepared);
   }
+  if (showHealthZeroFlag != null) prepareShowHealthBarZeroFlag(prepared);
   if (levelAfter != null && (prepared.eventKey
       !== 'level_experience_keyframe_bracket_candidates'
       || prepared.replayVersion !== '16.19.821.7343')) {
@@ -5152,10 +5358,17 @@ async function streamEventQuery(prepared, options, emitLine) {
   const damageShapeFamilies = new Set();
   const damageNativeFloatSourceCounts = Object.fromEntries(
     UNIT_APPLY_DAMAGE_NATIVE_FLOAT_SOURCES_821.map((source) => [source, 0]));
+  const damageNativeLookupRelationCounts = Object.fromEntries(
+    UNIT_APPLY_DAMAGE_LOOKUP_RELATIONS_821.map((relation) => [relation, 0]));
   const damageNativeInputHash = damageCallbackF32Available
     ? crypto.createHash('sha256') : null;
   const circularPacketPositions = new Set();
   const circularShapeCounts = { empty1: 0, record24: 0 };
+  const showHealthState = showHealthZeroFlag == null ? null : {
+    positions: new Set(), previousChunkIndex: -1, previousBlockOffset: -1,
+    observedPayloadCounts: { '4a': 0, '4b': 0 },
+    nativeInputHash: crypto.createHash('sha256'),
+  };
   let childEventIdUnavailableCount = 0;
   let childEventIdAvailableCount = 0;
   let tripleGroupCount = 0;
@@ -5313,7 +5526,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       const damageCallbackF32 = damageCallbackF32Available
         ? unitApplyDamageCallbackF32(row, prepared, lineNumber,
           damagePacketPositions, damageShapeFamilies, damageNativeInputHash,
-          damageNativeFloatSourceCounts) : null;
+          damageNativeFloatSourceCounts, damageNativeLookupRelationCounts) : null;
       if (damageCallbackF32Available) {
         if (damageCallbackF32) damageCallbackF32AvailableCount += 1;
         else damageCallbackF32UnavailableCount += 1;
@@ -5324,6 +5537,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (packetRecordCount != null) {
         circularShapeCounts[circularRecordCount === 0 ? 'empty1' : 'record24'] += 1;
       }
+      const showHealthFlag = showHealthZeroFlag == null ? null
+        : showHealthBarZeroFlag(row, prepared, lineNumber, showHealthState);
       const childId = childEventId == null ? null
         : candidateChildEventId(row, prepared.eventKey, lineNumber);
       const assistingParticipants = assistingParticipant == null ? null
@@ -5397,6 +5612,7 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (castNestedBits != null && nestedBits !== castNestedBits)
           || (damageCallbackF32Available && !damageCallbackF32)
           || (packetRecordCount != null && circularRecordCount !== packetRecordCount)
+          || (showHealthZeroFlag != null && showHealthFlag !== showHealthZeroFlag)
           || (levelAfter != null && row.level_after_candidate !== levelAfter)
           || (childEventId != null && childId.value !== childEventId)) continue;
       matchedCount += 1;
@@ -5433,6 +5649,15 @@ async function streamEventQuery(prepared, options, emitLine) {
       'Circular movement restriction row shapes differ from capability metadata.',
       { observed_shape_counts: circularShapeCounts });
   }
+  if (showHealthZeroFlag != null
+      && (!isDeepStrictEqual(showHealthState.observedPayloadCounts,
+        prepared.capabilityResult.observed_payload_counts)
+        || showHealthState.nativeInputHash.digest('hex')
+          !== prepared.capabilityResult.native_input_sha256)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'ShowHealthBar raw payload counts or ordered native input digest differ from capability metadata.',
+      { observed_payload_counts: showHealthState.observedPayloadCounts });
+  }
   if (damageCallbackF32Available
       && (damageCallbackF32AvailableCount
           !== prepared.capabilityResult.callback_f32_available_count
@@ -5441,9 +5666,13 @@ async function streamEventQuery(prepared, options, emitLine) {
         || damageShapeFamilies.size
           !== prepared.capabilityResult.observed_shape_family_count
         || (prepared.capabilityResult.profile_id
-          === UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id
+          !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821
           && !isDeepStrictEqual(damageNativeFloatSourceCounts,
             prepared.capabilityResult.native_callback_f32_source_counts))
+        || (prepared.capabilityResult.profile_id
+          === UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id
+          && !isDeepStrictEqual(damageNativeLookupRelationCounts,
+            prepared.capabilityResult.native_callback_lookup_key_0x24_raw_param_relation_counts))
         || damageNativeInputHash.digest('hex')
           !== prepared.capabilityResult.native_input_sha256)) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
@@ -5648,6 +5877,11 @@ async function streamEventQuery(prepared, options, emitLine) {
       packet_record_count_checked_count: scannedCount,
       packet_record_count_unavailable_count: 0,
     }),
+    ...(showHealthZeroFlag == null ? {} : {
+      show_health_zero_flag_checked_count: scannedCount,
+      show_health_zero_flag_unavailable_count: 0,
+      native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
+    }),
     ...(levelAfter == null ? {} : {
       level_after_checked_count: scannedCount,
       level_after_unavailable_count: 0,
@@ -5672,6 +5906,9 @@ async function streamEventQuery(prepared, options, emitLine) {
       ...(castNestedBits == null ? {} : { cast_nested_bits: castNestedBits }),
       ...(damageCallbackF32Available ? { damage_callback_f32_available: true } : {}),
       ...(packetRecordCount == null ? {} : { packet_record_count: packetRecordCount }),
+      ...(showHealthZeroFlag == null ? {} : {
+        show_health_zero_flag: showHealthZeroFlag,
+      }),
       ...(levelAfter == null ? {} : { level_after: levelAfter }),
       ...(childEventId == null ? {} : { child_event_id: childEventId }) },
     rows_unmodified: true,
@@ -5716,6 +5953,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   let damageCallbackF32AvailableCount = 0;
   let damageCallbackF32UnavailableCount = 0;
   let packetRecordCountCheckedCount = 0;
+  let showHealthZeroFlagCheckedCount = 0;
   let levelAfterCheckedCount = 0;
   let endpointReversedPairInspectedCount = 0;
   let completedCount = 0;
@@ -5773,6 +6011,9 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     if (options.packetRecordCount != null) {
       packetRecordCountCheckedCount += summary.packet_record_count_checked_count;
     }
+    if (options.showHealthZeroFlag != null) {
+      showHealthZeroFlagCheckedCount += summary.show_health_zero_flag_checked_count;
+    }
     if (options.levelAfter != null) {
       levelAfterCheckedCount += summary.level_after_checked_count;
     }
@@ -5803,6 +6044,12 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         packet_record_count_checked_count:
           summary.packet_record_count_checked_count,
         packet_record_count_unavailable_count: 0,
+      }),
+      ...(options.showHealthZeroFlag == null ? {} : {
+        show_health_zero_flag_checked_count:
+          summary.show_health_zero_flag_checked_count,
+        show_health_zero_flag_unavailable_count: 0,
+        native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
       }),
       ...(options.levelAfter == null ? {} : {
         level_after_checked_count: summary.level_after_checked_count,
@@ -5849,6 +6096,12 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       packet_record_count_checked_count: packetRecordCountCheckedCount,
       packet_record_count_unavailable_replay_count:
         prepared.replays.length - completedCount,
+    }),
+    ...(options.showHealthZeroFlag == null ? {} : {
+      show_health_zero_flag_checked_count: showHealthZeroFlagCheckedCount,
+      show_health_zero_flag_unavailable_replay_count:
+        prepared.replays.length - completedCount,
+      native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
     }),
     ...(options.levelAfter == null ? {} : {
       level_after_checked_count: levelAfterCheckedCount,

@@ -4,6 +4,26 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **UnitApplyDamage native lookup keys v3:** Exact-image native audit
+  explicitly observed writes to object `+0x24` and `+0x2c` in all
+  628,909/628,909 `0x005f` packets. The callback decodes these as two
+  separate object lookup keys; the first lookup result receives a virtual
+  `+0x720` call with the anonymous `+0x20` float. Production now retains
+  both decoded u32 keys, their protected object bytes and the relation
+  between `raw_param` and the first key, with full native witness and pinned
+  lookup transforms. All 10,284 hero-key `+0x100` aliases decode their
+  first key to the canonical HeroStats key. At 655 candidate death anchors,
+  a same-time packet had first key equal to the candidate victim in 655
+  cases (rotated-key control 24); among 653 anchors with a candidate killer,
+  631 same packets also had second key equal to that killer (rotated control
+  2). These are bounded role clues; lookup and type-cast success, actual
+  health change and effective damage remain `UNKNOWN`. Eleven observed
+  `+0x20` floats were `2e9`, so that field is not an effective-damage amount.
+  The new 11-Replay CLI batch returned `CANDIDATE` in 11/11 with
+  628,909/628,909 full native lookup-write witnesses. First-key relation to
+  `raw_param` was `EQUAL` in 568,329 rows, `raw_param = key + 0x100` in
+  49,239, and `OTHER` in 11,341. Saved v1, v2 and v3 damage queries each
+  checked 628,909 rows and selected the original 6,501 narrow-shape rows.
 - **UnitApplyDamage native callback float v2:** The same exact 821 image
   writes object `+0x20` for every one of the 628,909 observed `0x005f`
   packets. Native and raw-byte checks distinguish 622,951 raw-reader writes
@@ -27,6 +47,16 @@ Current progress (older notes below retain their original research context):
   packets, so no loose key merge is used. The direct key relation is a
   bounded participant-label candidate only; the `+0x100` alias and any
   source/target or applied-damage role remain unresolved.
+- **UnitApplyDamage full-key roster pair:** Selecting
+  `unit_apply_damage_roster_key_pair` now runs the native-gated `0x005f`
+  decoder and complete ten-key HeroStats keyframe decoder once, then emits
+  only exact full-key pairs with both source references. The new 11-Replay
+  CLI batch returned `CANDIDATE` in 11/11: 49,473 of 628,909 damage packets
+  matched a canonical roster key, 10,284 `+0x100` hero-key aliases were
+  separately excluded, and 579,436 packets remained unmatched. All 632,179
+  source packet references (damage and roster) and ordered native input
+  digests were physically checked. The roster label is a co-key candidate
+  and does not establish a damage actor, source, target or health effect.
 - **ShowHealthBar packet candidate:** The image registers `0x0165` as
   `PKT_S2C_ShowHealthBar_s`. All 89,515 observed packets in 11 exact-build
   KR Replays were fully consumed by the native deserializer: 61,813 had
@@ -36,7 +66,9 @@ Current progress (older notes below retain their original research context):
   so the decoder limits output to the two observed bytes. These fields do
   not establish health, damage, actor identity or actual display state. The
   same 11-Replay CLI batch returned `CANDIDATE` in 11/11, zero framing
-  errors and 89,515/89,515 native full-consumption witnesses.
+  errors and 89,515/89,515 native full-consumption witnesses. Saved
+  `query-events --show-health-zero-flag 1` checked all 89,515 rows and
+  selected 27,702 while preserving original JSONL.
 - **Exact-821 UnitApplyDamage packet candidate:** The pinned mapped image
   registers game-stream route `0x005f` as `PKT_UnitApplyDamage_s`. Native
   deserialization fully consumed all 628,909 observed packets in the 11

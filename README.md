@@ -79,8 +79,9 @@
 | `16.19.821.7343 --events set_movement_driver_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x0335` SetMovementDriver 包，输出回调变换后的匿名分发字节和原始包来源 | 仅写入 `set_movement_driver_packet_candidates`，状态为 `CANDIDATE`；不声称驱动状态已改变，也不推断位置、路径或参与者；仅接受两种已观察到的包形状 |
 | `16.19.821.7343 --events face_direction_packet --runtime-image PATH` | 对 KR `0x038e` 已观察到的 13/17 字节包形状使用精确 821 镜像，输出包内向量、可选标量候选值和原始包来源 | 仅写入 `face_direction_packet_candidates`，状态为 `CANDIDATE`；不据原始参数认定行动者，不推断世界位置、路径或方向效果；其他 build 与未观察到的形状明确拒绝 |
 | `16.19.821.7343 --events circular_movement_restriction_packet --runtime-image PATH` | 对 KR `0x0464` 已观察到的一字节零记录包与 24 字节单记录包，按精确 821 镜像验证回调字节变换，保留包内匿名标量、三浮点值及原始包引用；11 份回放共 68,242 包 | 仅写入 `circular_movement_restriction_packet_candidates`，状态为 `CANDIDATE`；原生探针完整消费了 129 个单记录包，生产解码只接受已验证形状；不推断行动者、世界位置、英雄路径、接收者或实际限制效果 |
-| `16.19.821.7343 --events unit_apply_damage_packet --runtime-image PATH` | 精确 821 镜像注册 KR 游戏流 `0x005f` UnitApplyDamage；每次运行用 Python + Unicorn 原生完整消费全部待输出包，11 份回放共 628,909 包；输出原始包来源、选择位及原生写入的匿名 `+0x20` 回调 f32 和原始读取／常量来源 | 仅写入 `unit_apply_damage_packet_candidates`，状态为 `CANDIDATE`；旧 `callback_f32_*` 字段仍只覆盖原先 6,501 包，其他包保持 `UNAVAILABLE_SHAPE`；新 `native_callback_f32_*` 字段覆盖全部已验证包，但不推断实际伤害、生命变化、来源、目标或对象查找结果 |
+| `16.19.821.7343 --events unit_apply_damage_packet --runtime-image PATH` | 精确 821 镜像注册 KR 游戏流 `0x005f` UnitApplyDamage；每次运行用 Python + Unicorn 原生完整消费全部待输出包，11 份回放共 628,909 包；输出原始包来源、选择位、匿名 `+0x20` 回调 f32，以及 `+0x24/+0x2c` 两个原生对象查找键候选及受保护编码字节 | 仅写入 `unit_apply_damage_packet_candidates`，状态为 `CANDIDATE`；旧 `callback_f32_*` 字段仍只覆盖原先 6,501 包，v2 `native_callback_f32_*` 覆盖全部已验证包；查找键和 `raw_param` 的关系单列，不能推断查找成功、实际伤害、生命变化或确定的来源与目标 |
 | `16.19.821.7343 --events show_health_bar_packet --runtime-image PATH` | 精确 821 镜像注册 KR `0x0165` ShowHealthBar；两种已观察的单字节载荷经 Python + Unicorn 逐包完整消费，输出原始包引用、回调字节与零标记候选；11 份回放共 89,515 包 | 仅写入 `show_health_bar_packet_candidates`，状态为 `CANDIDATE`；未知载荷、镜像或原生见证不符时整项失败；不推断血量、伤害、参与者身份或实际显示效果 |
+| `16.19.821.7343 --events unit_apply_damage_roster_key_pair --runtime-image PATH` | 将原生验证的 `0x005f` 完整原始参数与同回放完整十人 `0x0089` HeroStats 阵容键精确配对，输出两个来源引用和阵容一侧的候选参与者标签；11 份回放匹配 49,473/628,909 包 | 仅写入 `unit_apply_damage_roster_key_candidates`，状态为 `CANDIDATE`；10,284 个 `+0x100` 别名和其他键明确排除，不把阵容标签当作伤害包行动者、来源或目标，也不推断实际伤害 |
 | `16.19.821.7343 --events face_direction_keyframe_roster_pair --runtime-image PATH` | 自动解码 FaceDirection 包和 `0x0089` 标准补刀快照，在同一关键帧按完整原始参数及先后顺序配对规范英雄行 | 仅写入 `face_direction_keyframe_roster_pair_candidates`；参与者标签来自 HeroStats 阵容，不能当作 FaceDirection 包的行动者；不推断方向效果、位置或路径 |
 | `16.19.821.7343 --events npc_buff_add_packet,npc_buff_remove_packet --runtime-image PATH` | 分别解码 KR `0x00ae/0x047c` 原生包，并在两项均成功时汇总相同不透明 `(u32, u8)` 键的重合与时序歧义 | 逐包候选分别写入两个 JSONL；`candidate_associations.npc_buff_add_remove_opaque_key` 仅含回放内统计，不配对单个包，不推断 Buff 名称、归属或生命周期 |
 | `16.19.821.7343 --events npc_buff_update_num_counter_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x0194` BuffUpdateNumCounter 包，保留四个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_update_num_counter_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 名称、归属、计数含义或生命周期 |
@@ -796,11 +797,11 @@ node src/cli.js query-events "work\16-19-821-circular" `
 
 查询核对每行的原始包哈希、来源引用、精确镜像变换和匿名字段，再原样输出。11 份回放的保存结果中，单记录 129 行、零记录 68,113 行；`packet_record_count_checked_count` 与不可用数会分开报告。单记录的三个浮点值不是已确认的英雄位置或路径。
 
-对精确 821 的两个独立候选包能力，可一次处理同一目录中的回放：
+对精确 821 的伤害包、伤害包原始参数与阵容键配对、血条显示包候选能力，可一次处理同一目录中的回放：
 
 ```powershell
 node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
-  --events unit_apply_damage_packet,show_health_bar_packet `
+  --events unit_apply_damage_packet,unit_apply_damage_roster_key_pair,show_health_bar_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-combat-packets"
 ```
@@ -813,7 +814,17 @@ node src/cli.js query-events "work\16-19-821-unit-damage" `
   --damage-callback-f32-available --limit 20
 ```
 
-查询校验精确 build、镜像和变换标识、保存的全包原生见证状态与有序输入摘要，以及每行原始包哈希与来源引用；新版还校验全部匿名原生浮点值的读取偏移或常量来源及汇总计数，旧 v1 产物仍按原合同读取。达到输出上限后仍检查余下行，不重新运行原生解码或打开原始回放。该筛选保留原来较窄的 `callback_f32_*` 含义：11 份回放共 628,909 行，其中 6,501 行可用，622,408 行为 `UNAVAILABLE_SHAPE`。新版 `native_callback_f32_*` 在全部已验证包可用，仍不代表实际伤害量。
+查询校验精确 build、镜像和变换标识、保存的全包原生见证状态与有序输入摘要，以及每行原始包哈希与来源引用；v2 校验全部匿名原生浮点值的读取偏移或常量来源，v3 另校验两项查找键的固定字节变换和 `raw_param` 关系汇总；旧 v1/v2 产物仍按各自合同读取。达到输出上限后仍检查余下行，不重新运行原生解码或打开原始回放。该筛选保留原来较窄的 `callback_f32_*` 含义：11 份回放共 628,909 行，其中 6,501 行可用，622,408 行为 `UNAVAILABLE_SHAPE`；保存的 v1、v2、v3 三版分别完整扫描 628,909 行，均筛出 6,501 行。新版 `native_callback_f32_*` 在全部已验证包可用，仍不代表实际伤害量。
+
+血条显示包的匿名回调零标记可在保存结果中筛选：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-combat-packets" `
+  --event show_health_bar_packet_candidates `
+  --show-health-zero-flag 1 --limit 20
+```
+
+查询会核对精确 build、镜像与回调表、逐包原始引用、载荷哈希、有序原生输入摘要和全部行计数；`--limit` 仅限制输出。11 份回放中标记 `1` 有 27,702 行，标记 `0` 有 61,813 行。这只是回调字节候选，不代表真实血条显示或血量变化。
 
 三个 KR 821 候选包组 JSONL 也能使用 `query-events`，按时间、原始参数或
 各组子包直接解码的 `+0x04` 匿名整数筛选。例如：

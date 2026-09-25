@@ -12,15 +12,15 @@ const { parseReplayFile } = require('../src/rofl');
 const { decodeSemanticReplay } = require('../src/semantic_api');
 
 const BUILD = '16.19.821.7343';
-const CAPABILITY = 'unit_apply_damage_packet';
-const EVENTS = 'unit_apply_damage_packet_candidates';
+const CAPABILITY = 'unit_apply_damage_roster_key_pair';
+const EVENT = 'unit_apply_damage_roster_key_candidates';
 const CLI = path.resolve(__dirname, '..', 'src', 'cli.js');
 const IMAGE = path.resolve(__dirname, '..', 'artifacts', '16_19_development',
   'kr_821_runtime_capture', 'LeagueOfLegends_16.19.821.7343.memory.bin');
 const REPLAY = path.resolve(__dirname, '..', '..', 'kr-rofl-batch-collector',
   'data', 'KR', '16.19', 'builds', BUILD, 'rofl', 'KR_8392938200.rofl');
 
-test('821 UnitApplyDamage candidate reaches API and CLI without losing raw rows', async (t) => {
+test('exact 821 damage full-key roster association reaches API and CLI', async (t) => {
   if (!fs.existsSync(REPLAY) || !fs.existsSync(IMAGE)) {
     t.skip('supplied KR 821 replay or matching local runtime image absent');
     return;
@@ -32,36 +32,23 @@ test('821 UnitApplyDamage candidate reaches API and CLI without losing raw rows'
   const result = decoded.capability_results[CAPABILITY];
   assert.equal(result.status, 'CANDIDATE', result.error);
   assert.equal(result.runtime_image_status, 'MATCHED_USED');
-  assert.equal(result.runtime_image_used, true);
-  assert.equal(result.event_count, decoded.events[EVENTS].length);
-  assert.equal(result.event_count, 64824);
-  assert.equal(result.callback_f32_available_count, 684);
-  assert.equal(result.callback_f32_unavailable_count, result.event_count - 684);
-  assert.equal(result.native_callback_f32_available_count, result.event_count);
-  assert.deepEqual(result.native_callback_f32_source_counts, {
-    RAW_READER: 64471, CONSTANT_0: 10, CONSTANT_1: 293, CONSTANT_2: 50,
-  });
-  assert.equal(result.native_callback_lookup_full_write_count, result.event_count);
-  assert.equal(Object.values(
-    result.native_callback_lookup_key_0x24_raw_param_relation_counts)
-    .reduce((sum, count) => sum + count, 0), result.event_count);
-  assert.ok(decoded.events[EVENTS].every((row) =>
-    row.event_type === 'UNIT_APPLY_DAMAGE_PACKET_CANDIDATE'
+  assert.equal(result.event_count, decoded.events[EVENT].length);
+  assert.equal(result.matched_full_key_packet_count, result.event_count);
+  assert.ok(result.event_count > 0);
+  assert.ok(result.excluded_alias_0x100_packet_count > 0);
+  assert.ok(decoded.events[EVENT].every((row) =>
+    row.event_type === 'UNIT_APPLY_DAMAGE_ROSTER_KEY_CANDIDATE'
       && row.game_version === BUILD
-      && row.confidence === 'CANDIDATE'
       && row.semantic_effect_status === 'UNKNOWN'
-      && row.raw_packet_ref.packet_id === 0x005f
-      && Number.isFinite(row.native_callback_f32_0x20_candidate)
-      && ['RAW_READER', 'CONSTANT_0', 'CONSTANT_1', 'CONSTANT_2']
-        .includes(row.native_callback_f32_0x20_source)
-      && Number.isSafeInteger(row.native_callback_lookup_key_u32_0x24_candidate)
-      && Number.isSafeInteger(row.native_callback_lookup_key_u32_0x2c_candidate)
-      && ['EQUAL', 'RAW_PARAM_IS_LOOKUP_PLUS_0X100', 'OTHER']
-        .includes(row.native_callback_lookup_key_0x24_raw_param_relation)
-      && (row.callback_f32_0x20_status === 'NATIVE_MATCHED_SHAPE'
-        || row.callback_f32_0x20_status === 'UNAVAILABLE_SHAPE')));
+      && row.actor_assignment_status === 'UNKNOWN'
+      && row.unit_apply_damage_raw_packet_ref.packet_id === 0x005f
+      && row.hero_stats_roster_raw_packet_ref.packet_id === 0x0089
+      && row.raw_param === row.unit_apply_damage_raw_packet_ref.raw_param
+      && row.raw_param === row.hero_stats_roster_raw_packet_ref.raw_param
+      && row.hero_stats_participant_id_candidate >= 1
+      && row.hero_stats_participant_id_candidate <= 10));
 
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-821-unit-damage-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-821-damage-key-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const output = path.join(directory, 'output');
   const run = spawnSync(process.execPath, [CLI, 'decode', REPLAY,
@@ -78,15 +65,30 @@ test('821 UnitApplyDamage candidate reaches API and CLI without losing raw rows'
     'semantic_run.json'), 'utf8'));
   assert.deepEqual(semantic.capability_results[CAPABILITY], result);
   const expectedHash = crypto.createHash('sha256');
-  for (const row of decoded.events[EVENTS]) expectedHash.update(`${JSON.stringify(row)}\n`);
+  for (const row of decoded.events[EVENT]) expectedHash.update(`${JSON.stringify(row)}\n`);
   const actualHash = crypto.createHash('sha256');
-  for await (const chunk of fs.createReadStream(path.join(replayDirectory, `${EVENTS}.jsonl`))) {
+  for await (const chunk of fs.createReadStream(path.join(replayDirectory, `${EVENT}.jsonl`))) {
     actualHash.update(chunk);
   }
   assert.equal(actualHash.digest('hex'), expectedHash.digest('hex'));
+
+  const query = spawnSync(process.execPath, [CLI, 'query-events', replayDirectory,
+    '--event', EVENT, '--raw-param', '0x400000ae', '--limit', '1'], {
+    encoding: 'utf8', timeout: 120000,
+  });
+  assert.equal(query.status, 0, query.stderr || query.stdout);
+  const querySummary = JSON.parse(query.stderr);
+  assert.equal(querySummary.query_status, 'COMPLETE');
+  assert.equal(querySummary.scanned_count, result.event_count);
+  assert.ok(querySummary.matched_count > 0);
+  assert.equal(querySummary.emitted_count, 1);
+  const queriedRow = JSON.parse(query.stdout.trim());
+  assert.equal(queriedRow.raw_param, 0x400000ae);
+  assert.equal(queriedRow.hero_stats_participant_id_candidate, 1);
+  assert.equal(queriedRow.actor_assignment_status, 'UNKNOWN');
 });
 
-test('missing exact image leaves independent 821 level output available', (t) => {
+test('missing image leaves an independent level result while the key pair is unavailable', (t) => {
   if (!fs.existsSync(REPLAY)) {
     t.skip('supplied KR 821 replay absent');
     return;
@@ -96,7 +98,7 @@ test('missing exact image leaves independent 821 level output available', (t) =>
   });
   assert.equal(decoded.status, 'PARTIAL');
   assert.equal(decoded.capability_results[CAPABILITY].status, 'MISSING_INPUT');
-  assert.equal(decoded.events[EVENTS], undefined);
+  assert.equal(decoded.events[EVENT], undefined);
   assert.equal(decoded.capability_results.hero_level_state.status, 'CANDIDATE');
   assert.ok(decoded.events.hero_level_state_candidates.length > 0);
 });
