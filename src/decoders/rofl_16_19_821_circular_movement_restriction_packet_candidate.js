@@ -7,6 +7,7 @@ const path = require('node:path');
 const { walkBlocks } = require('../rofl');
 const { replaySourceError } = require('./replay_source_integrity');
 const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
+const { runtimeByteLookupTable821 } = require('./rofl_16_19_821_runtime_bytes');
 
 const BUILD = '16.19.821.7343';
 const CAPABILITY = 'circular_movement_restriction_packet';
@@ -19,11 +20,9 @@ const SCALAR_TRANSFORM_SHA256 = '1c03503a6e01dd840b12db1aadb27271dcc9a1e3c34a6d6
 const VECTOR_TRANSFORM_SHA256 = 'b60f1c5d50083d4b884184becb607e97fb2f34751d41b66a55e7b78b2738e745';
 const EVIDENCE_STATUS = 'CANDIDATE_EXACT_821_CIRCULAR_MOVEMENT_RESTRICTION_PACKET_FIELDS';
 const MAX_TOTAL_PACKETS = 12_000;
-// A 256-byte exact-image table is embedded for offline verification of saved
-// JSONL rows. Live decoding still requires the whole mapped image and checks
-// its SHA-256 before accepting a packet candidate.
-const PINNED_BYTE_TABLE_HEX =
-  'd75682dc83028f2935042171799e927fcb976a5105c76fe640637e345b4707785a96b8b92c995e6ed1754161245f4aaa4bcf0ed4865dba1d3f2bdf62f0330055cafc19acf3662369bceb46f89c50874d6d108e88be1bb5da4e1a13cc2209ada49d30a6e57dfac91712c2fde1bbe70b98bfbd1137c07cf795b6dd49f4812a9f1cfb8d9a727b577a43b3a953e459202fa8f67436a085f1a7147031840cb2a5dbe816ae3d25b1cd9b0367155cea1f39a1440a8b76de606593f264d5c1c84c064fb7edfee0f9a2184891ce1e3cb46c425494e328e90127ec0d45ff26efe28aabd9f508c4af32c56b80c6c358eea33e2d0f893ab0d2d33873d8d08c7790523bd62e68';
+// Saved-output queries use the already pinned 821 table. Live decoding still
+// requires the whole mapped image and checks its SHA-256 before accepting a
+// candidate packet.
 
 // Every 24-byte 0x0464 packet in the eleven KR Replays has one of these
 // eight native-consumed record headers. Other headers must be researched
@@ -87,7 +86,7 @@ function vectorTransformByte(value, table) {
   return table[((ror8(shuffled, 3) ^ 0xd2) + 0x24) & 0xff];
 }
 
-const PINNED_BYTE_TABLE = Buffer.from(PINNED_BYTE_TABLE_HEX, 'hex');
+const PINNED_BYTE_TABLE = runtimeByteLookupTable821();
 if (PINNED_BYTE_TABLE.length !== 256 || sha256(PINNED_BYTE_TABLE) !== BYTE_TABLE_SHA256) {
   throw new Error('pinned exact-821 circular packet byte table differs');
 }
