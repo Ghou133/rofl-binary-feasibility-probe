@@ -310,6 +310,11 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 原生回调变换后的 `+0x10/+0x14/+0x18/+0x1c` 匿名字段和原始包引用。
 该候选不绑定 Buff 身份、目标或游戏内计数含义。
 
+同时选择 `npc_buff_add_packet,npc_buff_update_num_counter_packet` 时，
+`semantic_run.json` 的 `candidate_associations.npc_buff_add_update_num_counter_opaque_pair`
+汇总同一回放中匿名 `(u32,u8)` 字段组合、原始包参数及更早游戏流 Add 包的计数。
+该统计保留关键帧与游戏流的区别；重复出现会导致歧义，不输出逐包配对或 Buff 生命周期。
+
 821 的 `hero_inventory_packet`、`hero_deaths_snapshot` 与至少一种移动包路由一起选择时，
 `semantic_run.json` 和 API 的 `candidate_associations.movement_full_param_participant_candidate`
 会给出回放级完整 `raw_param` 候选关联。它要求十人快照、最新库存包与回放结算物品

@@ -111,6 +111,8 @@ const { analyzeBuffPacketKeyCompatibility } =
   require('./decoders/rofl_16_19_buff_key_compatibility');
 const { analyzeBuffPacketKeyCompatibility821 } =
   require('./decoders/rofl_16_19_821_buff_key_compatibility');
+const { analyzeBuffAddUpdateNumCounterCompatibility821 } =
+  require('./decoders/rofl_16_19_821_buff_add_update_compatibility');
 const { associateChampionDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_die_hero_death_pair_candidate');
 const { associateChampionKillDieHeroDeathCandidates821 } =
@@ -2579,6 +2581,33 @@ function decode1619821(replay, profile, options = {}) {
         dependency_statuses: {
           npc_buff_add_packet: capabilityResults.npc_buff_add_packet?.status ?? 'UNEXECUTED',
           npc_buff_remove_packet: capabilityResults.npc_buff_remove_packet?.status ?? 'UNEXECUTED',
+        },
+      };
+    }
+  }
+  if (capabilities.includes('npc_buff_add_packet')
+      && capabilities.includes('npc_buff_update_num_counter_packet')) {
+    const addRows = events.npc_buff_add_packet_candidates;
+    const updateRows = events.npc_buff_update_num_counter_packet_candidates;
+    if (Array.isArray(addRows) && Array.isArray(updateRows)) {
+      try {
+        candidateAssociations.npc_buff_add_update_num_counter_opaque_pair =
+          analyzeBuffAddUpdateNumCounterCompatibility821(addRows, updateRows,
+            replay.source_sha256);
+      } catch (error) {
+        candidateAssociations.npc_buff_add_update_num_counter_opaque_pair = {
+          status: 'DECODE_FAILED', error: error.message || String(error),
+        };
+      }
+    } else {
+      candidateAssociations.npc_buff_add_update_num_counter_opaque_pair = {
+        status: 'UNAVAILABLE',
+        required_capabilities: ['npc_buff_add_packet',
+          'npc_buff_update_num_counter_packet'],
+        dependency_statuses: {
+          npc_buff_add_packet: capabilityResults.npc_buff_add_packet?.status ?? 'UNEXECUTED',
+          npc_buff_update_num_counter_packet:
+            capabilityResults.npc_buff_update_num_counter_packet?.status ?? 'UNEXECUTED',
         },
       };
     }
