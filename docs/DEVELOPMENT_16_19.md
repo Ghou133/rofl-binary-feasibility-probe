@@ -56,7 +56,11 @@ Current progress (older notes below retain their original research context):
   unique in both endpoints. The real 11-Replay batch was `COMPLETE` for all
   Replays, inspected 1,759 interval rows, and emitted 15 unmodified rows
   (SHA-256 `beaeac6bef5ae26cf6e13ef80b2c6460fc595832bc63e3508b9298d815dc3b30`).
-  This is an endpoint pattern, not an observed swap action or change time.
+  Joining by Replay, full raw parameter and adjacent keyframe indexes found
+  no overlap between these 15 rows and the 55 game-stream Broadcast bracket
+  rows; the same join matched 24 bracket rows to ordinary differing-endpoint
+  intervals. This is an endpoint pattern, not an observed swap action or
+  change time.
 - **Completed previous-endpoint inventory query:** The exact-821
   `inventory_keyframe_interval_difference_candidates` query accepts
   `--previous-item-id` and matches it with optional current `--item-id` and
