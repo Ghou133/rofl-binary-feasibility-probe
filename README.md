@@ -297,6 +297,15 @@ node src/cli.js query-events "work\16-19-821-heal-report\replays\KR_example" `
 
 `--opaque-u32` 同时支持 `shielding_params_packet_pair_candidates`、`stealth_event_packet_candidates`、`champion_die_event_packet_candidates`、`champion_kill_event_packet_candidates` 和 `champion_multiple_kill_event_packet_candidates`，匹配各记录中已解码的匿名标量 u32 字段；不查询后者的 `+0x10` 列表，也不使用外层 `raw_param` 代替字段或赋予治疗、护盾、隐身、死亡、击杀参与者角色。十进制、十六进制和 `0` 均可精确查询；汇总保留字段不可用数与已检查后的零命中。
 
+对 821 CastSpellAns 候选包中已解码的不透明有符号整数精确查询：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-cast\replays\KR_example" `
+  --event cast_spell_ans_packet_candidates --opaque-i32 0 --limit 20
+```
+
+`--opaque-i32` 只接受十进制有符号 int32（含 `0` 和负数），只匹配当包的 `opaque_i32_0x14c`，不赋予技能、槽位或施法者含义。JSONL 行原样输出；汇总中的 `opaque_i32_unavailable_count` 区分字段缺失与已检查后的零命中，已出现但无效的字段会使查询失败。
+
 三个 KR 821 候选包组 JSONL 也能使用 `query-events`，按时间、原始参数或
 各组子包直接解码的 `+0x04` 匿名整数筛选。例如：
 

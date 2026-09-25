@@ -169,6 +169,7 @@ Options:
   --item-id <uint32|0xhex>     Exact decoded 821 inventory packet record item ID
   --slot <0..9>                Exact observed 821 inventory packet record slot
   --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
+  --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
   --child-event-id <uint32|0xhex>  Exact 821 stealth child ID (0x0101 or 0x0102)
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
   --output <path|->            Write unmodified JSONL rows (default: stdout)
@@ -213,6 +214,7 @@ function parseArgs(argv) {
     itemId: null,
     slot: null,
     opaqueU32: null,
+    opaqueI32: null,
     childEventId: null,
     limit: null,
     python: null,
@@ -313,6 +315,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'item-id') options.itemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'slot') options.slot = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'opaque-u32') options.opaqueU32 = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'opaque-i32') options.opaqueI32 = queryInt32(value, key);
       else if (command === 'query-events' && key === 'child-event-id') options.childEventId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'limit') options.limit = queryInteger(value, key);
       else if (command === 'ward-events' && key === 'format') options.format = String(value).toLowerCase();
@@ -383,6 +386,9 @@ function parseArgs(argv) {
     ].includes(options.event)) {
       throw new Error('--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, OnChampionKill, OnChampionMultipleKill, or candidate packet-group event');
     }
+    if (options.opaqueI32 !== null && options.event !== 'cast_spell_ans_packet_candidates') {
+      throw new Error('--opaque-i32 requires an 821 cast_spell_ans_packet_candidates event');
+    }
     if (options.childEventId !== null) {
       if (options.event !== 'stealth_event_packet_candidates') {
         throw new Error('--child-event-id requires an 821 stealth_event_packet_candidates event');
@@ -404,6 +410,18 @@ function queryInteger(value, label, allowZero = false) {
   const number = Number(literal);
   if (!Number.isSafeInteger(number) || (!allowZero && number === 0)) {
     throw new Error(`--${label} must be a ${allowZero ? 'nonnegative' : 'positive'} safe integer`);
+  }
+  return number;
+}
+
+function queryInt32(value, label) {
+  const literal = String(value);
+  if (!/^(?:0|-?[1-9][0-9]*)$/.test(literal)) {
+    throw new Error(`--${label} must be a decimal signed int32`);
+  }
+  const number = Number(literal);
+  if (!Number.isInteger(number) || number < -0x80000000 || number > 0x7fffffff) {
+    throw new Error(`--${label} must be a decimal signed int32`);
   }
   return number;
 }
@@ -2529,6 +2547,7 @@ async function runQueryEventsCommand(parsed) {
       itemId: options.itemId,
       slot: options.slot,
       opaqueU32: options.opaqueU32,
+      opaqueI32: options.opaqueI32,
       childEventId: options.childEventId,
       limit: options.limit,
     }, async (line) => {

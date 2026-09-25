@@ -32,6 +32,7 @@ const SET_ITEM_EVENT = 'hero_inventory_set_item_packet_candidates';
 const HEAL_PACKET_EVENT = 'params_heal_packet_candidates';
 const SHIELD_PAIR_EVENT = 'shielding_params_packet_pair_candidates';
 const STEALTH_PACKET_EVENT = 'stealth_event_packet_candidates';
+const CAST_SPELL_ANS_EVENT = 'cast_spell_ans_packet_candidates';
 const CHAMPION_DIE_EVENT = 'champion_die_event_packet_candidates';
 const CHAMPION_KILL_EVENT = 'champion_kill_event_packet_candidates';
 const CHAMPION_MULTIPLE_KILL_EVENT = 'champion_multiple_kill_event_packet_candidates';
@@ -183,7 +184,7 @@ function artifact(t, rows = [
 ], compact = true, eventKey = EVENT) {
   const capability = eventKey.slice(0, -'_candidates'.length);
   const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT,
-    HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT,
+    HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT, CAST_SPELL_ANS_EVENT,
     CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
     CHAMPION_MULTIPLE_KILL_EVENT, ...ASSOCIATION_EVENTS].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
@@ -718,6 +719,87 @@ test('query-events filters either anonymous 821 heal or shield u32 without infer
   assert.equal(selectedShield.status, 0, selectedShield.stderr);
   assert.equal(selectedShield.stdout, `${shield.lines[0]}\n`);
   assert.equal(JSON.parse(selectedShield.stderr).filters.opaque_u32, 0x400000b5);
+});
+
+test('query-events filters only decoded CastSpellAns signed i32, including both bounds and zero', (t) => {
+  const values = [-0x80000000, -1, 0, 0x7fffffff];
+  const rows = values.map((value, index) => ({
+    replay_sha256: SHA, replay_time_ms: index + 1, raw_param: 0x400000ae,
+    opaque_i32_0x14c: value, confidence: 'CANDIDATE',
+  }));
+  rows.push({ replay_sha256: SHA, replay_time_ms: 5, raw_param: 0x400000ae,
+    confidence: 'CANDIDATE' });
+  const fixture = artifact(t, rows, true, CAST_SPELL_ANS_EVENT);
+  for (const [index, value] of values.entries()) {
+    const result = run(fixture.replayDirectory, '--event', CAST_SPELL_ANS_EVENT,
+      `--opaque-i32=${value}`);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `${fixture.lines[index]}\n`);
+    const summary = JSON.parse(result.stderr);
+    assert.equal(summary.capability_status, 'CANDIDATE');
+    assert.equal(summary.scanned_count, rows.length);
+    assert.equal(summary.matched_count, 1);
+    assert.equal(summary.opaque_i32_unavailable_count, 1);
+    assert.equal(summary.filters.opaque_i32, value);
+    assert.equal(summary.rows_unmodified, true);
+  }
+  const noMatch = run(fixture.replayDirectory, '--event', CAST_SPELL_ANS_EVENT,
+    '--opaque-i32', '17');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(noMatch.stdout, '');
+  assert.equal(JSON.parse(noMatch.stderr).matched_count, 0);
+  assert.equal(JSON.parse(noMatch.stderr).opaque_i32_unavailable_count, 1);
+});
+
+test('query-events reports wholly missing CastSpellAns i32 and rejects malformed present fields', (t) => {
+  const missing = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 1 }],
+    true, CAST_SPELL_ANS_EVENT);
+  const missingOutput = path.join(missing.root, 'missing-cast-i32.jsonl');
+  const unavailable = run(missing.replayDirectory, '--event', CAST_SPELL_ANS_EVENT,
+    '--opaque-i32', '0', '--output', missingOutput);
+  assert.equal(unavailable.status, 2, unavailable.stderr);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'OPAQUE_I32_UNAVAILABLE');
+  assert.equal(JSON.parse(unavailable.stderr).opaque_i32_unavailable_count, 1);
+  assert.equal(fs.existsSync(missingOutput), false);
+
+  for (const value of [null, '0', 1.5, -0x80000001, 0x80000000]) {
+    const fixture = artifact(t, [
+      { replay_sha256: SHA, replay_time_ms: 1, opaque_i32_0x14c: 0 },
+      { replay_sha256: SHA, replay_time_ms: 2, opaque_i32_0x14c: value },
+    ], true, CAST_SPELL_ANS_EVENT);
+    const output = path.join(fixture.root, 'invalid-cast-i32.jsonl');
+    const result = run(fixture.replayDirectory, '--event', CAST_SPELL_ANS_EVENT,
+      '--opaque-i32', '0', '--to-ms', '1', '--output', output);
+    assert.equal(result.status, 2, `${value}: ${result.stderr}`);
+    assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
+});
+
+test('query-events limits CastSpellAns i32 filter to exact 821 event and signed decimal range', (t) => {
+  const wrongEvent = artifact(t);
+  const unsupported = run(wrongEvent.replayDirectory, '--event', EVENT,
+    '--opaque-i32', '0');
+  assert.equal(unsupported.status, 1, unsupported.stderr);
+  assert.match(unsupported.stderr, /--opaque-i32 requires an 821 cast_spell_ans_packet_candidates event/);
+
+  const oldBuild = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 1,
+    opaque_i32_0x14c: 0 }], true, CAST_SPELL_ANS_EVENT);
+  rewriteJson(path.join(oldBuild.replayDirectory, 'semantic_run.json'),
+    (semantic) => { semantic.replay_version = VERSION; });
+  rewriteJson(path.join(oldBuild.replayDirectory, 'replay_analysis.json'),
+    (analysis) => { analysis.replay_version = VERSION; });
+  const wrongBuild = run(oldBuild.replayDirectory, '--event', CAST_SPELL_ANS_EVENT,
+    '--opaque-i32', '0');
+  assert.equal(wrongBuild.status, 2, wrongBuild.stderr);
+  assert.equal(JSON.parse(wrongBuild.stderr).code, 'UNSUPPORTED_FILTER');
+
+  for (const value of ['-2147483649', '2147483648', '0x1', '-0', '1.0', '1e2', '+1']) {
+    const invalid = run(oldBuild.replayDirectory, '--event', CAST_SPELL_ANS_EVENT,
+      '--opaque-i32', value);
+    assert.equal(invalid.status, 1, `${value}: ${invalid.stderr}`);
+    assert.equal(invalid.stdout, '');
+  }
 });
 
 test('query-events filters exact 821 stealth child u32 without substituting Replay raw_param', (t) => {
