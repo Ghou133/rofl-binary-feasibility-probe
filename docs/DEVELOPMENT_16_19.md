@@ -4,6 +4,18 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed packet candidate:** Exact KR 821 `0x040a/116` child `0x003d`,
+  named `OnTurretFirstBlood` in the pinned runtime image, is selectable through
+  CLI/API with the exact image SHA-256 gate. All 11 supplied Replays returned
+  `CANDIDATE`: one target packet per Replay passed native full consumption and
+  child identity checks (11 total); 820 same-length foreign children were
+  excluded by their observed raw fingerprints and retained as raw source
+  references. The batch scanned 18,235,209 blocks with zero framing errors.
+  Rows preserve the anonymous 108-byte child blob, its SHA-256, and packet
+  provenance. The image label does not establish an actual first turret death,
+  structure or actor identity, or state transition. No association with
+  `OnTurretDie` is output. Ignored real CLI output is under
+  `artifacts/16_19_development/turret_first_blood_cli_batch_11/`.
 - **Completed query:** `query-events --opaque-u32 VALUE` for
   `revive_ally_event_packet_candidates` filters the exact 821 anonymous native child `+0x04`
   integer without changing JSONL or assigning an actor/recipient role. A real

@@ -76,6 +76,8 @@ const { decodeReviveAllyEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
 const { decodeTurretDieEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_turret_die_event_packet_candidate');
+const { decodeTurretFirstBloodEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_turret_first_blood_event_packet_candidate');
 const { decodeTurretPlateEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_turret_plate_event_packet_candidate');
 const { decodeCastSpellAnsPacketCandidates821 } =
@@ -2286,6 +2288,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    turret_first_blood_event_packet: (input, collected) =>
+      decodeTurretFirstBloodEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     turret_plate_event_packet: (input, collected) =>
       decodeTurretPlateEventPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2401,6 +2409,7 @@ function decode1619821(replay, profile, options = {}) {
     resurrect_event_packet: 'resurrect_event_packet_candidates',
     revive_ally_event_packet: 'revive_ally_event_packet_candidates',
     turret_die_event_packet: 'turret_die_event_packet_candidates',
+    turret_first_blood_event_packet: 'turret_first_blood_event_packet_candidates',
     turret_plate_event_packet: 'turret_plate_event_packet_candidates',
     cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
     npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
@@ -2445,6 +2454,7 @@ function decode1619821(replay, profile, options = {}) {
     'resurrect_event_packet',
     'revive_ally_event_packet',
     'turret_die_event_packet',
+    'turret_first_blood_event_packet',
     'turret_plate_event_packet',
     'cast_spell_ans_packet',
     'npc_buff_remove_packet',
@@ -2501,6 +2511,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'resurrect_event_packet'
         || capability === 'revive_ally_event_packet'
         || capability === 'turret_die_event_packet'
+        || capability === 'turret_first_blood_event_packet'
         || capability === 'turret_plate_event_packet'
         || capability === 'cast_spell_ans_packet'
         || capability === 'npc_buff_remove_packet' || capability === 'npc_buff_add_packet'
@@ -2556,6 +2567,8 @@ function decode1619821(replay, profile, options = {}) {
                       ? '0x040a/child_002c'
                     : capability === 'turret_die_event_packet'
                       ? '0x040a/child_003b'
+                    : capability === 'turret_first_blood_event_packet'
+                      ? '0x040a/child_003d'
                     : capability === 'turret_plate_event_packet'
                       ? '0x040a/child_0107' : result.input_packet_id;
     const decodedCount = capability === 'stealth_event_packet'
@@ -2577,6 +2590,8 @@ function decode1619821(replay, profile, options = {}) {
                 : capability === 'revive_ally_event_packet'
                   ? result.event_count
                 : capability === 'turret_die_event_packet'
+                  ? result.event_count
+                : capability === 'turret_first_blood_event_packet'
                   ? result.event_count
                 : capability === 'turret_plate_event_packet'
                   ? result.event_count : result.input_count;
