@@ -583,7 +583,13 @@ node src/cli.js query-events "work\16-19-821-ward-inventory" `
 
 `--endpoint-reversed-pair` 只选择恰好两个槽位发生差异、两个非零物品键在前后端点交叉且在两端完整 10 槽快照中各自唯一的行。查询读取并校验保存的 Broadcast 来源快照，原样输出区间 JSONL；这只表示相邻关键帧的端点模式，不确定区间内动作或变化时刻。
 
-`query-events DIR --event inventory_game_broadcast_keyframe_bracket_candidates` 可读取上表的游戏流关联，按 `--participant`、`--raw-param` 或时间范围筛选，并校验保存的 Broadcast 来源、完整关键帧及三个原始包引用。游戏包未明确记录的槽位保持不可用；相同端点之间出现不同的包值也只表示三次包观测。
+`query-events DIR --event inventory_game_broadcast_keyframe_bracket_candidates` 可读取上表的游戏流关联，按 `--participant`、`--raw-param`、`--slot`、`--item-id`、时间范围或 `--comparison-to-endpoints` 筛选，并校验保存的 Broadcast 来源、完整关键帧及三个原始包引用。比较标签必须是 `SAME_AS_BOTH_ENDPOINTS`、`DIFFERS_FROM_EQUAL_ENDPOINTS`、`SAME_AS_PREVIOUS_ENDPOINT`、`SAME_AS_NEXT_ENDPOINT`、`DIFFERS_FROM_BOTH_ENDPOINTS` 之一，大小写固定。标签与 `--slot`、`--item-id` 同时使用时必须落在**同一条游戏包明确记录的槽位**；`--item-id` 指该记录的游戏包物品键，`0` 有效。游戏包未明确记录的槽位保持不可用；相同端点之间出现不同的包值也只表示三次包观测。
+
+```powershell
+node src/cli.js query-events "work\16-19-821-inventory-game-bracket-batch" `
+  --event inventory_game_broadcast_keyframe_bracket_candidates `
+  --comparison-to-endpoints DIFFERS_FROM_EQUAL_ENDPOINTS --slot 0 --item-id 3866
+```
 
 只读取已观察到的 HN HeroStats keyframe 候选快照：
 
@@ -703,9 +709,9 @@ node src/cli.js query-events "work\16-19-821-inventory\replays\KR_example" `
   --event hero_inventory_packet_candidates --item-id 3340 --limit 20
 ```
 
-`--item-id` 接受十进制或 `0x` 十六进制 uint32，只匹配 821 MapView/Broadcast 当包 `records_candidate[].item_id_candidate` 或 SetItem 当包 `item_id_candidate`，不查询回调空槽、包间库存或买卖事件。Broadcast 中解出的物品 `0` 可以精确查询；当前 SetItem 样本只观察到正值。输出仍是未修改的原始 JSONL 行；汇总中的 `item_id_unavailable_count` 区分字段不可用与已检查后的零命中。其他事件流不能使用此过滤器。
+`--item-id` 接受十进制或 `0x` 十六进制 uint32，匹配 821 MapView/Broadcast 当包 `records_candidate[].item_id_candidate`、SetItem 当包 `item_id_candidate`，以及上文明确列出的库存关联记录：配对当包物品键、区间后端点物品键、游戏包区间比较记录的游戏包物品键。不查询回调空槽、包间持续库存或买卖事件。Broadcast 中解出的物品 `0` 可以精确查询；当前 SetItem 样本只观察到正值。输出仍是未修改的原始 JSONL 行；汇总中的 `item_id_unavailable_count` 区分字段不可用与已检查后的零命中。其他事件流不能使用此过滤器。
 
-`--slot 0..9` 在同样三种精确 821 库存候选包中查询当包记录的候选槽位；MapView/Broadcast 只查 `records_candidate[].slot_candidate`，SetItem 查当包 `slot_candidate`。与 `--item-id` 同时使用时，两个值必须来自同一条记录。空槽快照和包间状态不参与匹配；`slot_unavailable_count` 区分字段不可用与已检查后的零命中。
+`--slot 0..9` 查询同样三种精确 821 库存候选包及上文库存关联中的明确记录槽位；MapView/Broadcast 只查 `records_candidate[].slot_candidate`，SetItem 查当包 `slot_candidate`。与 `--item-id` 同时使用时，两个值必须来自同一条记录。未记录槽位和包间状态不参与匹配；`slot_unavailable_count` 区分字段不可用与已检查后的零命中。
 
 对 821 治疗上报或护盾双包中的匿名整数精确查询：
 

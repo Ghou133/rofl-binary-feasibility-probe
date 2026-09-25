@@ -99,6 +99,11 @@ const INVENTORY_GAME_BRACKET_ROW_FIELDS_821 = new Set([
   'field_confidence', 'raw_packet_ref', 'previous_raw_packet_ref',
   'game_raw_packet_ref', 'next_raw_packet_ref', 'raw_packet_refs',
 ]);
+const INVENTORY_GAME_COMPARISON_LABELS_821 = Object.freeze([
+  'SAME_AS_BOTH_ENDPOINTS', 'DIFFERS_FROM_EQUAL_ENDPOINTS',
+  'SAME_AS_PREVIOUS_ENDPOINT', 'SAME_AS_NEXT_ENDPOINT',
+  'DIFFERS_FROM_BOTH_ENDPOINTS',
+]);
 const INCREMENT_MINION_KILLS_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'raw_param', 'raw_payload_hex', 'raw_selector_byte',
@@ -888,9 +893,7 @@ function prepareInventoryGameBroadcastBracketAssociation(semantic, analysis, eve
     ['excluded_after_last_keyframe_count', 'excluded_after_last_keyframe_refs'],
     ['excluded_on_boundary_count', 'excluded_on_boundary_refs'],
   ];
-  const labels = ['SAME_AS_BOTH_ENDPOINTS', 'DIFFERS_FROM_EQUAL_ENDPOINTS',
-    'SAME_AS_PREVIOUS_ENDPOINT', 'SAME_AS_NEXT_ENDPOINT',
-    'DIFFERS_FROM_BOTH_ENDPOINTS'];
+  const labels = INVENTORY_GAME_COMPARISON_LABELS_821;
   const comparisonCounts = association.comparison_counts;
   if (association.profile_id !== profile.id
       || association.evidence_runtime_image_sha256
@@ -3327,12 +3330,18 @@ function validateFilters(options) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     childEventId = null, limit = null, latestPerParticipant = false,
-    endpointReversedPair: endpointReversedPairFilter = false } = options;
+    endpointReversedPair: endpointReversedPairFilter = false,
+    comparisonToEndpoints = null } = options;
   if (typeof latestPerParticipant !== 'boolean') {
     throw new EventQueryError('INVALID_FILTER', 'Invalid latestPerParticipant query filter.');
   }
   if (typeof endpointReversedPairFilter !== 'boolean') {
     throw new EventQueryError('INVALID_FILTER', 'Invalid endpointReversedPair query filter.');
+  }
+  if (comparisonToEndpoints != null
+      && !INVENTORY_GAME_COMPARISON_LABELS_821.includes(comparisonToEndpoints)) {
+    throw new EventQueryError('INVALID_FILTER',
+      'Invalid comparisonToEndpoints query filter.');
   }
   for (const [name, value, minimum, maximum] of [
     ['fromMs', fromMs, 0, Number.MAX_SAFE_INTEGER],
@@ -3371,13 +3380,21 @@ async function streamEventQuery(prepared, options, emitLine) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     childEventId = null, limit = null, latestPerParticipant = false,
-    endpointReversedPair: endpointReversedPairFilter = false } = options;
+    endpointReversedPair: endpointReversedPairFilter = false,
+    comparisonToEndpoints = null } = options;
   if (endpointReversedPairFilter
       && (prepared.eventKey !== 'inventory_keyframe_interval_difference_candidates'
         || prepared.replayVersion !== '16.19.821.7343'
         || prepared.capabilityStatus !== 'CANDIDATE')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--endpoint-reversed-pair requires exact 16.19.821.7343 inventory keyframe interval difference candidates.');
+  }
+  if (comparisonToEndpoints != null
+      && (prepared.eventKey !== 'inventory_game_broadcast_keyframe_bracket_candidates'
+        || prepared.replayVersion !== '16.19.821.7343'
+        || prepared.capabilityStatus !== 'CANDIDATE')) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--comparison-to-endpoints requires exact 16.19.821.7343 inventory game Broadcast keyframe bracket candidates.');
   }
   if (latestPerParticipant
       && (prepared.replayVersion !== '16.19.821.7343'
@@ -3392,6 +3409,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     'hero_inventory_set_item_packet_candidates',
     'ward_inventory_keyframe_pair_candidates',
     'inventory_keyframe_interval_difference_candidates',
+    'inventory_game_broadcast_keyframe_bracket_candidates',
   ].includes(prepared.eventKey);
   const killerConfig = KILLER_PARTICIPANT_EVENTS_821[prepared.eventKey] ?? null;
   if (killerParticipant != null) {
@@ -3430,7 +3448,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   if ((itemId != null || slot != null) && (!inventoryPacketEvent
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
-      '--item-id and --slot require an exact-821 inventory packet, ward/inventory pair, or keyframe interval difference candidate event.');
+      '--item-id and --slot require an exact-821 inventory packet, ward/inventory pair, keyframe interval difference, or game Broadcast bracket candidate event.');
   }
   if (previousItemId != null
       && (prepared.eventKey !== 'inventory_keyframe_interval_difference_candidates'
@@ -3595,6 +3613,11 @@ async function streamEventQuery(prepared, options, emitLine) {
           slot_candidate: change.slot_candidate,
           item_id_candidate: change.current_item_id_candidate,
         })), record_count: row.changed_slot_count }
+        : prepared.associationConfig?.inventoryGameBracket
+          ? { records_candidate: row.record_comparisons_candidate.map((record) => ({
+            slot_candidate: record.slot_candidate,
+            item_id_candidate: record.game_item_id_candidate,
+          })), record_count: row.record_count }
         : prepared.eventKey === 'ward_inventory_keyframe_pair_candidates'
           ? { records_candidate: row.inventory_records_candidate,
             record_count: row.inventory_record_count } : row;
@@ -3604,7 +3627,8 @@ async function streamEventQuery(prepared, options, emitLine) {
           : packetRecordItemIds(inventoryRecordRow, lineNumber,
             ['hero_inventory_broadcast_packet_candidates',
               'ward_inventory_keyframe_pair_candidates',
-              'inventory_keyframe_interval_difference_candidates']
+              'inventory_keyframe_interval_difference_candidates',
+              'inventory_game_broadcast_keyframe_bracket_candidates']
               .includes(prepared.eventKey));
       const slots = slot == null ? null
         : prepared.eventKey === 'hero_inventory_set_item_packet_candidates'
@@ -3668,8 +3692,16 @@ async function streamEventQuery(prepared, options, emitLine) {
                 || change.previous_item_id_candidate === previousItemId)
               && (itemId == null || change.current_item_id_candidate === itemId)
               && (slot == null || change.slot_candidate === slot)))
+          || (prepared.associationConfig?.inventoryGameBracket
+            && (comparisonToEndpoints != null || (itemId != null && slot != null))
+            && !row.record_comparisons_candidate.some((record) =>
+              (comparisonToEndpoints == null
+                || record.comparison_to_endpoints === comparisonToEndpoints)
+              && (itemId == null || record.game_item_id_candidate === itemId)
+              && (slot == null || record.slot_candidate === slot)))
           || (itemId != null && slot != null
             && prepared.eventKey !== 'inventory_keyframe_interval_difference_candidates'
+            && !prepared.associationConfig?.inventoryGameBracket
             && (prepared.eventKey === 'hero_inventory_set_item_packet_candidates'
               ? (row.item_id_candidate !== itemId || row.slot_candidate !== slot)
               : !inventoryRecordRow.records_candidate.some((record) =>
@@ -3892,6 +3924,8 @@ async function streamEventQuery(prepared, options, emitLine) {
     filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit,
       ...(latestPerParticipant ? { latest_per_participant: true } : {}),
       ...(endpointReversedPairFilter ? { endpoint_reversed_pair: true } : {}),
+      ...(comparisonToEndpoints == null ? {}
+        : { comparison_to_endpoints: comparisonToEndpoints }),
       ...(killerParticipant == null ? {}
         : { killer_participant_id: killerParticipant }),
       ...(assistingParticipant == null ? {}
@@ -3914,6 +3948,12 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       && prepared.eventKey !== 'inventory_keyframe_interval_difference_candidates') {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--endpoint-reversed-pair requires exact 16.19.821.7343 inventory keyframe interval difference candidates.');
+  }
+  if (options.comparisonToEndpoints != null
+      && (prepared.eventKey !== 'inventory_game_broadcast_keyframe_bracket_candidates'
+        || prepared.replays.some((replay) => replay.replayVersion !== '16.19.821.7343'))) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--comparison-to-endpoints requires exact 16.19.821.7343 inventory game Broadcast keyframe bracket candidates.');
   }
   if (options.endpointReversedPair
       || prepared.eventKey === 'inventory_game_broadcast_keyframe_bracket_candidates') {

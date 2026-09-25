@@ -114,6 +114,11 @@ const { EventQueryError, prepareEventQuery, prepareBatchEventQuery,
 const REPOSITORY_ROOT = path.resolve(__dirname, '..');
 const TEST_COMMAND = 'node --test test/*.test.js';
 const COMMANDS = new Set(['inspect', 'decode', 'analyze', 'batch', 'validate', 'ward-events', 'capabilities', 'query-events']);
+const INVENTORY_GAME_COMPARISON_LABELS_821 = Object.freeze([
+  'SAME_AS_BOTH_ENDPOINTS', 'DIFFERS_FROM_EQUAL_ENDPOINTS',
+  'SAME_AS_PREVIOUS_ENDPOINT', 'SAME_AS_NEXT_ENDPOINT',
+  'DIFFERS_FROM_BOTH_ENDPOINTS',
+]);
 
 function enumerateRepositoryTestFiles() {
   const testRoot = path.join(REPOSITORY_ROOT, 'test');
@@ -194,9 +199,9 @@ Options:
   --killer-participant <1..10>  Candidate killer in exact-821 death, assist or episode rows
   --assisting-participant <1..10>  Member of exact-821 assist or episode candidate list
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
-  --item-id <uint32|0xhex>     Exact decoded 821 inventory record item ID, including ward/inventory pairs
+  --item-id <uint32|0xhex>     Exact 821 inventory record item ID, including saved associations
   --previous-item-id <uint32|0xhex>  Previous endpoint item ID in an exact-821 keyframe interval difference
-  --slot <0..9>                Exact observed 821 inventory record slot, including ward/inventory pairs
+  --slot <0..9>                Exact observed 821 inventory record slot, including saved associations
   Interval differences: --item-id is the CURRENT item ID on a changed slot (zero valid).
                         Previous/current item IDs and --slot must match the SAME changed slot.
   --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
@@ -207,6 +212,10 @@ Options:
                                 For interval differences: last matching observed difference.
   --endpoint-reversed-pair    Exact-821 interval rows with two unique nonzero item keys
                                observed in reversed slots at adjacent keyframe endpoints
+  --comparison-to-endpoints <label>  Exact-821 game Broadcast bracket record label:
+                                SAME_AS_BOTH_ENDPOINTS, DIFFERS_FROM_EQUAL_ENDPOINTS,
+                                SAME_AS_PREVIOUS_ENDPOINT, SAME_AS_NEXT_ENDPOINT,
+                                DIFFERS_FROM_BOTH_ENDPOINTS
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
   --output <path|->            Write unmodified JSONL rows (default: stdout)
                                 Query summary is JSON on stderr when output is stdout
@@ -258,6 +267,7 @@ function parseArgs(argv) {
     childEventId: null,
     latestPerParticipant: false,
     endpointReversedPair: false,
+    comparisonToEndpoints: null,
     limit: null,
     python: null,
     wardSpawns: null,
@@ -367,6 +377,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'item-id') options.itemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'previous-item-id') options.previousItemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'slot') options.slot = queryInteger(value, key, true);
+      else if (command === 'query-events' && key === 'comparison-to-endpoints') options.comparisonToEndpoints = value;
       else if (command === 'query-events' && key === 'opaque-u32') options.opaqueU32 = queryUint32(value, key);
       else if (command === 'query-events' && key === 'opaque-pair') options.opaquePair = queryOpaquePair(value);
       else if (command === 'query-events' && key === 'opaque-i32') options.opaqueI32 = queryInt32(value, key);
@@ -431,9 +442,10 @@ function parseArgs(argv) {
       'hero_inventory_set_item_packet_candidates',
       'ward_inventory_keyframe_pair_candidates',
       'inventory_keyframe_interval_difference_candidates',
+      'inventory_game_broadcast_keyframe_bracket_candidates',
     ].includes(options.event);
     if (options.itemId !== null && !inventoryQueryEvent) {
-      throw new Error('--item-id requires an 821 inventory packet event, ward/inventory keyframe pair event, or inventory keyframe interval difference event');
+      throw new Error('--item-id requires an 821 inventory packet event, ward/inventory keyframe pair event, inventory keyframe interval difference event, or game Broadcast bracket event');
     }
     if (options.previousItemId !== null
         && options.event !== 'inventory_keyframe_interval_difference_candidates') {
@@ -443,8 +455,16 @@ function parseArgs(argv) {
         && options.event !== 'inventory_keyframe_interval_difference_candidates') {
       throw new Error('--endpoint-reversed-pair requires inventory_keyframe_interval_difference_candidates');
     }
+    if (options.comparisonToEndpoints !== null
+        && !INVENTORY_GAME_COMPARISON_LABELS_821.includes(options.comparisonToEndpoints)) {
+      throw new Error('--comparison-to-endpoints requires one of the five exact uppercase bracket comparison labels');
+    }
+    if (options.comparisonToEndpoints !== null
+        && options.event !== 'inventory_game_broadcast_keyframe_bracket_candidates') {
+      throw new Error('--comparison-to-endpoints requires inventory_game_broadcast_keyframe_bracket_candidates');
+    }
     if (options.slot !== null && !inventoryQueryEvent) {
-      throw new Error('--slot requires an 821 inventory packet event, ward/inventory keyframe pair event, or inventory keyframe interval difference event');
+      throw new Error('--slot requires an 821 inventory packet event, ward/inventory keyframe pair event, inventory keyframe interval difference event, or game Broadcast bracket event');
     }
     if (options.slot !== null && options.slot > 9) {
       throw new Error('--slot must be in 0..9');
@@ -2847,6 +2867,7 @@ async function runQueryEventsCommand(parsed) {
       childEventId: options.childEventId,
       latestPerParticipant: options.latestPerParticipant,
       endpointReversedPair: options.endpointReversedPair,
+      comparisonToEndpoints: options.comparisonToEndpoints,
       limit: options.limit,
     };
     const emitLine = async (line) => {
