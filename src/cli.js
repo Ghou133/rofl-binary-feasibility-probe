@@ -387,6 +387,7 @@ function parseArgs(argv) {
       'npc_buff_add_packet_candidates',
       'npc_buff_remove_packet_candidates',
       'npc_buff_update_num_counter_packet_candidates',
+      'npc_buff_update_count_packet_candidates',
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
       'champion_multiple_kill_event_packet_candidates',

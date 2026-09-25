@@ -49,6 +49,7 @@ const CAST_SPELL_ANS_EVENT = 'cast_spell_ans_packet_candidates';
 const BUFF_ADD_EVENT = 'npc_buff_add_packet_candidates';
 const BUFF_REMOVE_EVENT = 'npc_buff_remove_packet_candidates';
 const BUFF_UPDATE_COUNTER_EVENT = 'npc_buff_update_num_counter_packet_candidates';
+const BUFF_UPDATE_COUNT_EVENT = 'npc_buff_update_count_packet_candidates';
 const CHAMPION_DIE_EVENT = 'champion_die_event_packet_candidates';
 const CHAMPION_KILL_EVENT = 'champion_kill_event_packet_candidates';
 const CHAMPION_MULTIPLE_KILL_EVENT = 'champion_multiple_kill_event_packet_candidates';
@@ -415,6 +416,7 @@ function artifact(t, rows = [
   const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT,
     HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT, CAST_SPELL_ANS_EVENT,
     BUFF_ADD_EVENT, BUFF_REMOVE_EVENT, BUFF_UPDATE_COUNTER_EVENT,
+    BUFF_UPDATE_COUNT_EVENT,
     CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
     CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT,
     RESURRECT_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
@@ -1418,6 +1420,62 @@ test('query-events filters either anonymous 821 BuffUpdateNumCounter u32', (t) =
     '--opaque-u32', '1');
   assert.equal(rejected.status, 2);
   assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('query-events filters only anonymous 821 BuffUpdateCount +0x14 u32', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae,
+      opaque_u32_0x14: 7, opaque_f32_0x18: 9,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x02d9 } },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 9,
+      opaque_u32_0x14: 0,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x02d9 } },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 0x400000b0,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x02d9 } },
+  ];
+  const fixture = artifact(t, rows, true, BUFF_UPDATE_COUNT_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', BUFF_UPDATE_COUNT_EVENT,
+    '--opaque-u32', '7');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+  assert.equal(JSON.parse(selected.stderr).opaque_u32_unavailable_count, 1);
+  const zero = run(fixture.replayDirectory, '--event', BUFF_UPDATE_COUNT_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${fixture.lines[1]}\n`);
+  const rawOnly = run(fixture.replayDirectory, '--event', BUFF_UPDATE_COUNT_EVENT,
+    '--opaque-u32', '9');
+  assert.equal(rawOnly.status, 0, rawOnly.stderr);
+  assert.equal(rawOnly.stdout, '');
+  assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
+
+  const corrupt = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x14: 0x100000000 }], true, BUFF_UPDATE_COUNT_EVENT);
+  const rejected = run(corrupt.replayDirectory, '--event', BUFF_UPDATE_COUNT_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+
+  const foreignSource = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x14: 7,
+    raw_packet_ref: { replay_sha256: 'b'.repeat(64), packet_id: 0x02d9 } }],
+  true, BUFF_UPDATE_COUNT_EVENT);
+  const rejectedSource = run(foreignSource.replayDirectory,
+    '--event', BUFF_UPDATE_COUNT_EVENT, '--opaque-u32', '7');
+  assert.equal(rejectedSource.status, 2);
+  assert.equal(JSON.parse(rejectedSource.stderr).code, 'ARTIFACT_IDENTITY_MISMATCH');
+
+  const wrongBuild = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x14: 7 }], true, BUFF_UPDATE_COUNT_EVENT);
+  for (const filename of ['semantic_run.json', 'replay_analysis.json']) {
+    rewriteJson(path.join(wrongBuild.replayDirectory, filename), (document) => {
+      document.replay_version = VERSION;
+    });
+  }
+  const rejectedBuild = run(wrongBuild.replayDirectory,
+    '--event', BUFF_UPDATE_COUNT_EVENT, '--opaque-u32', '7');
+  assert.equal(rejectedBuild.status, 2);
+  assert.equal(JSON.parse(rejectedBuild.stderr).code, 'UNSUPPORTED_FILTER');
 });
 
 test('query-events filters only decoded CastSpellAns signed i32, including both bounds and zero', (t) => {

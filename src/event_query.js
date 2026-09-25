@@ -45,6 +45,7 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
   npc_buff_remove_packet_candidates: Object.freeze(['opaque_u32_0x10']),
   npc_buff_update_num_counter_packet_candidates:
     Object.freeze(['opaque_u32_0x14', 'opaque_u32_0x1c']),
+  npc_buff_update_count_packet_candidates: Object.freeze(['opaque_u32_0x14']),
   params_heal_packet_candidates: Object.freeze([
     'event_entity_u32_0x04', 'event_entity_u32_0x14',
   ]),

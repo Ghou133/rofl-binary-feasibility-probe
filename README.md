@@ -323,6 +323,8 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 镜像哈希及原生完整消费；这些字段不构成 Buff 身份或计数语义。
 现有 11 份 KR 821 回放的实际 CLI 批处理得到 151,495/151,495 个候选包，
 11 份均为 `CANDIDATE`，容器 framing 错误为零。
+`query-events --event npc_buff_update_count_packet_candidates --opaque-u32 VALUE`
+可按解码后的匿名 `+0x14` 整数筛选，仍输出原始候选行。
 
 821 的 `hero_inventory_packet`、`hero_deaths_snapshot` 与至少一种移动包路由一起选择时，
 `semantic_run.json` 和 API 的 `candidate_associations.movement_full_param_participant_candidate`

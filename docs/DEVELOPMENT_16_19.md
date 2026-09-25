@@ -4,6 +4,30 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed candidate:** Exact KR 821 `0x0194` BuffUpdateNumCounter and
+  `0x02d9` BuffUpdateCount are selectable CLI/API packet candidates with
+  pinned-image native full consumption, anonymous callback fields, raw bytes,
+  and packet provenance. The 11 supplied Replays produced 132,851 and
+  151,495 rows respectively; all capability results were `CANDIDATE` with
+  zero framing errors. No buff identity, owner, effect, or count meaning is
+  inferred. Ignored outputs are in
+  `artifacts/16_19_development/buff_update_num_counter_cli_batch_11/` and
+  `artifacts/16_19_development/buff_update_count_cli_batch_11/`.
+- **Completed candidate association:** Selecting KR 821 BuffAdd2 and
+  BuffUpdateNumCounter together exposes Replay-scoped equality and packet-order
+  counts for anonymous `(u32,u8)` fields and recorded raw parameters. All
+  132,851 Update rows have a pair present in game-stream Add rows; 125,362
+  have a preceding Add with the same pair and raw parameter, but 42,506 have
+  multiple such predecessors. This does not identify or pair Buff instances.
+  Ignored output is in
+  `artifacts/16_19_development/buff_add_update_num_counter_cli_batch_11/`.
+- **Completed:** `query-events --opaque-u32` now filters the decoded 821
+  BuffUpdateCount `+0x14` field. A real KR Replay query scanned 7,629 rows,
+  matched 1,750, and emitted three unmodified rows with `--limit 3`.
+- **Current:** Select the next 821 route from bounded exact-image and Replay
+  evidence. Unavailable virtual callback receivers still block the promoted
+  owner/target/effect claims for several existing event candidates.
+
 - **Completed candidate marker:** Exact KR 821 CLI/API now selects native
   `0x040a` child `0x000b`, named `OnChampionDoubleKill` in the pinned image.
   Across the 11 supplied Replays, 63/654 length-104 packets are targets;
