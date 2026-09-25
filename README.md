@@ -347,6 +347,9 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 一个匿名浮点、两个匿名整数和一个匿名分发字节；偏移与原始字节保留在行内。
 11 份 KR 821 回放的 CLI 批处理得到 5,481/5,481 个候选包，
 11 份均为 `CANDIDATE`，零 framing 错误。包名及分发路径不足以确认游戏内计时变化。
+`query-events --event set_spell_timer_from_buff_packet_candidates --opaque-u32 VALUE`
+可按匿名 `opaque_u32_0x18` 或 `opaque_u32_0x1c` 精确筛选，输出仍保留完整候选行。
+外层 `raw_param`、匿名浮点和字节均不参与匹配；字段缺失与已检查的零命中分别报告。
 
 821 的 `hero_inventory_packet`、`hero_deaths_snapshot` 与至少一种移动包路由一起选择时，
 `semantic_run.json` 和 API 的 `candidate_associations.movement_full_param_participant_candidate`
