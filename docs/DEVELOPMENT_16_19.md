@@ -331,14 +331,22 @@ Current progress (older notes below retain their original research context):
   receiver or raw anchor can resolve the remaining anonymous roles.
   Unavailable virtual callback receivers still block owner/target/effect
   promotion for several existing event candidates.
-- **Next route lead:** Exact 821 `0x038e` FaceDirection has 262,393 packets
-  across the 11 KR Replays (13/17-byte payloads). The pinned image registers
-  its constructor and deserializer; one real packet of each length passed
-  native return and full-consumption checks, while truncation and appended
-  controls did not pass both checks. Its callback compares an anonymous
-  12-byte object region against a live receiver absent from the capture.
-  No coordinates, path, actor, or direction effect is established, and no
-  821 candidate output is implemented for this route yet.
+- **Completed 821 FaceDirection packet candidate:** The exact 821 `0x038e`
+  route is selectable as `face_direction_packet` in the CLI/API. The pinned
+  image and callback transform yield a packet-local unit-vector candidate;
+  observed 17-byte game packets also carry an optional scalar candidate.
+  The 11 supplied KR Replays produced 262,393/262,393 candidate rows
+  (67,999 keyframe/13, 2,504 game/13, 191,890 game/17), 11/11
+  `CANDIDATE`, and zero framing errors in a real JSONL-only CLI batch.
+  The raw marker, parameter, payload, and packet reference remain in each
+  row. A `query-events --raw-param 0x400000b7` check scanned all 262,393
+  rows and matched 1,548. Native representatives and controls support the
+  observed lengths; rare marker branches are not all natively sampled.
+  This batch used the exact-image-derived transform;
+  it did not execute the native callback per packet. That callback compares
+  against a live receiver absent from the capture. Actor, coordinates,
+  path, and direction effect remain `UNKNOWN`. Local output is ignored at
+  `artifacts/16_19_development/face_direction_batch_11_821/`.
 
 - **Completed candidate marker:** Exact KR 821 CLI/API now selects native
   `0x040a` child `0x000b`, named `OnChampionDoubleKill` in the pinned image.
