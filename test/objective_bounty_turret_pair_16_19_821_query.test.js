@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -70,6 +71,43 @@ function writeJson(filename, value) {
   fs.writeFileSync(filename, JSON.stringify(value));
 }
 
+function sourceRow(pair, kind) {
+  const profile = { plate: PLATE, die: DIE, claim: CLAIM }[kind];
+  const ref = pair[`${kind === 'die' ? 'turret_die' : kind}_raw_packet_ref`];
+  const word = pair[`${kind === 'plate' ? 'plate_event'
+    : kind === 'die' ? 'turret_die_blob' : 'claim_blob'}_u32_0x${kind === 'die' ? '0c' : '04'}`];
+  const blob = Buffer.alloc(kind === 'die' ? 108 : 8);
+  blob.writeUInt32LE(469, 0);
+  blob.writeUInt32LE(word, kind === 'die' ? 0x0c : 4);
+  const eventName = profile.child_event_name;
+  const row = {
+    event_type: { plate: 'TURRET_PLATE_EVENT_PACKET_CANDIDATE',
+      die: 'TURRET_DIE_EVENT_PACKET_CANDIDATE',
+      claim: 'OBJECTIVE_BOUNTY_CLAIMED_PACKET_CANDIDATE' }[kind],
+    game_version: BUILD, patch: '16.19', build_profile: profile.id,
+    replay_sha256: SHA, replay_time_ms: ref.replay_time_ms,
+    raw_param: ref.raw_param, event_id: profile.child_event_id,
+    event_name: eventName,
+    ...(kind === 'die' ? {} : { event_schema_u32_0x00: 469 }),
+    ...(kind === 'plate' ? { event_u32_0x04: word }
+      : kind === 'claim' ? { blob_u32_0x04: word } : {}),
+    raw_event_id_hex: { plate: '0x09e8', die: '0x4966', claim: '0x09e5' }[kind],
+    ...(kind === 'plate' ? {} : { event_blob_hex: blob.toString('hex') }),
+    event_blob_sha256: crypto.createHash('sha256').update(blob).digest('hex'),
+    confidence: 'CANDIDATE',
+    semantic_status: kind === 'die'
+      ? 'CANDIDATE_EXACT_RUNTIME_ON_TURRET_DIE_PACKET'
+      : 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD',
+    raw_packet_ref: ref,
+  };
+  return row;
+}
+
+function writePairRows(sample, rows) {
+  fs.writeFileSync(path.join(sample.artifact, `${EVENT}.jsonl`),
+    `${rows.map(JSON.stringify).join('\n')}\n`);
+}
+
 function fixture(t, rows = [triple()]) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-821-claim-pair-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -92,11 +130,10 @@ function fixture(t, rows = [triple()]) {
     known_limits: [...profile.known_limits],
   });
   const claim = dependency(CLAIM, rows.length);
-  claim.input_count += 1;
-  claim.same_length_control_count = 1;
+  claim.input_packet_scope = 'child_0113_length_17';
+  claim.same_length_control_refs = [];
+  claim.same_length_control_ids = {};
   const plate = dependency(PLATE, rows.length);
-  plate.input_count += 1;
-  plate.same_length_control_count = 1;
   const die = dependency(DIE, rows.length);
   const association = {
     status: 'CANDIDATE', profile_id: PROFILE.id,
@@ -130,12 +167,23 @@ function fixture(t, rows = [triple()]) {
       turret_die_event_packet_candidates: rows.length,
     },
     event_storage: 'JSONL_ONLY', events: null,
-    event_jsonl_files: { [EVENT]: `${EVENT}.jsonl` },
+    event_jsonl_files: Object.fromEntries([EVENT,
+      ...['objective_bounty_claimed_packet', 'turret_plate_event_packet',
+        'turret_die_event_packet'].map((capability) => `${capability}_candidates`)]
+      .map((eventKey) => [eventKey, `${eventKey}.jsonl`])),
   };
   writeJson(path.join(artifact, 'semantic_run.json'), semantic);
   writeJson(path.join(artifact, 'replay_analysis.json'), analysis);
   const lines = rows.map(JSON.stringify);
   fs.writeFileSync(path.join(artifact, `${EVENT}.jsonl`), `${lines.join('\n')}\n`);
+  for (const [kind, eventKey] of [
+    ['claim', 'objective_bounty_claimed_packet_candidates'],
+    ['plate', 'turret_plate_event_packet_candidates'],
+    ['die', 'turret_die_event_packet_candidates'],
+  ]) {
+    fs.writeFileSync(path.join(artifact, `${eventKey}.jsonl`),
+      `${rows.map((row) => JSON.stringify(sourceRow(row, kind))).join('\n')}\n`);
+  }
   return { root, artifact, semantic, rows, lines };
 }
 
@@ -178,8 +226,9 @@ test('query fails closed on changed dependencies and tampered triple fields', (t
     (row) => { row.claim_raw_packet_ref.source_path = 'foreign.rofl'; },
   ]) {
     const rows = [triple(), triple(0x40000089, [132, 164, 196])];
-    mutate(rows[1]);
     const sample = fixture(t, rows);
+    mutate(rows[1]);
+    writePairRows(sample, rows);
     const output = path.join(sample.root, 'must-not-exist.jsonl');
     const rejected = command(sample.artifact, '--event', EVENT,
       '--limit', '1', '--output', output);
@@ -187,6 +236,77 @@ test('query fails closed on changed dependencies and tampered triple fields', (t
     assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
     assert.equal(fs.existsSync(output), false);
   }
+});
+
+test('query rejects coordinated triple word tampering before limited file output', (t) => {
+  const sample = fixture(t);
+  const rows = structuredClone(sample.rows);
+  rows[0].plate_event_u32_0x04 = 0x12345678;
+  rows[0].turret_die_blob_u32_0x0c = 0x12345678;
+  rows[0].claim_blob_u32_0x04 = 0x12345678;
+  writePairRows(sample, rows);
+  const output = path.join(sample.root, 'falsified-result.jsonl');
+  const rejected = command(sample.artifact, '--event', EVENT,
+    '--opaque-u32', '0x12345678', '--limit', '1', '--output', output);
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
+});
+
+test('query requires all three source JSONLs and validates native source blobs', (t) => {
+  for (const [eventKey, mutate, code] of [
+    ['turret_plate_event_packet_candidates', (filename) => fs.unlinkSync(filename),
+      'MISSING_EVENT_ARTIFACT'],
+    ['turret_die_event_packet_candidates', (filename) => {
+      const row = JSON.parse(fs.readFileSync(filename, 'utf8'));
+      row.event_blob_sha256 = 'f'.repeat(64);
+      fs.writeFileSync(filename, `${JSON.stringify(row)}\n`);
+    }, 'INVALID_EVENT_ROW'],
+    ['objective_bounty_claimed_packet_candidates', (filename) => {
+      const row = JSON.parse(fs.readFileSync(filename, 'utf8'));
+      row.blob_u32_0x04 += 1;
+      fs.writeFileSync(filename, `${JSON.stringify(row)}\n`);
+    }, 'INVALID_EVENT_ROW'],
+  ]) {
+    const sample = fixture(t);
+    mutate(path.join(sample.artifact, `${eventKey}.jsonl`));
+    const output = path.join(sample.root, 'must-not-exist.jsonl');
+    const rejected = command(sample.artifact, '--event', EVENT,
+      '--limit', '1', '--output', output);
+    assert.equal(rejected.status, 2, rejected.stderr);
+    assert.equal(JSON.parse(rejected.stderr).code, code);
+    assert.equal(fs.existsSync(output), false);
+  }
+});
+
+test('batch query verifies manifest hashes for the three packet sources', (t) => {
+  const sample = fixture(t);
+  const batch = path.join(sample.root, 'batch');
+  const replay = path.join(batch, 'replays', 'SYNTH');
+  fs.mkdirSync(replay, { recursive: true });
+  const outputHashes = {};
+  for (const filename of ['semantic_run.json', 'replay_analysis.json',
+    `${EVENT}.jsonl`, 'turret_plate_event_packet_candidates.jsonl',
+    'turret_die_event_packet_candidates.jsonl',
+    'objective_bounty_claimed_packet_candidates.jsonl']) {
+    const source = path.join(sample.artifact, filename);
+    fs.copyFileSync(source, path.join(replay, filename));
+    outputHashes[`replays/SYNTH/${filename}`] = crypto.createHash('sha256')
+      .update(fs.readFileSync(source)).digest('hex');
+  }
+  writeJson(path.join(batch, 'manifest.json'), {
+    command_args: ['batch'],
+    replay_inputs: [{ artifact_directory: 'replays/SYNTH',
+      sha256: SHA, version: BUILD }],
+    output_hashes_excluding_manifest: outputHashes,
+  });
+  const source = path.join(replay, 'turret_plate_event_packet_candidates.jsonl');
+  fs.appendFileSync(source, '\n');
+  const output = path.join(sample.root, 'must-not-exist.jsonl');
+  const rejected = command(batch, '--event', EVENT, '--limit', '1', '--output', output);
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'ARTIFACT_HASH_MISMATCH');
+  assert.equal(fs.existsSync(output), false);
 });
 
 test('real 11-Replay triple query retains unmatched claim and target-free outcomes', (t) => {

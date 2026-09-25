@@ -341,6 +341,23 @@ const ASSOCIATION_EVENTS_821 = Object.freeze({
     }),
   }),
 });
+const OBJECTIVE_BOUNTY_TURRET_PAIR_SOURCE_EVENTS_821 = Object.freeze([
+  Object.freeze({ eventKey: 'turret_plate_event_packet_candidates',
+    profile: TURRET_PLATE_EVENT_PACKET_821_PROFILE,
+    eventType: 'TURRET_PLATE_EVENT_PACKET_CANDIDATE',
+    rawEventIdHex: '0x09e8', payloadLength: 17,
+    evidenceStatus: 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD' }),
+  Object.freeze({ eventKey: 'turret_die_event_packet_candidates',
+    profile: TURRET_DIE_EVENT_PACKET_821_PROFILE,
+    eventType: 'TURRET_DIE_EVENT_PACKET_CANDIDATE',
+    rawEventIdHex: '0x4966', payloadLength: 116,
+    evidenceStatus: 'CANDIDATE_EXACT_RUNTIME_ON_TURRET_DIE_PACKET' }),
+  Object.freeze({ eventKey: 'objective_bounty_claimed_packet_candidates',
+    profile: OBJECTIVE_BOUNTY_CLAIMED_PACKET_821_PROFILE,
+    eventType: 'OBJECTIVE_BOUNTY_CLAIMED_PACKET_CANDIDATE',
+    rawEventIdHex: '0x09e5', payloadLength: 17,
+    evidenceStatus: 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD' }),
+]);
 const EXACT_PACKET_EVENTS_821 = Object.freeze({
   champion_double_kill_event_packet_candidates:
     CHAMPION_DOUBLE_KILL_EVENT_PACKET_821_PROFILE,
@@ -1685,10 +1702,15 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
     snapshot: prepareEventQueryFromDocuments(artifactDirectory,
       'hero_minions_killed_snapshot_candidates', semantic, analysis),
   } : null;
+  const objectiveBountyTurretPairSources = associationConfig?.objectiveBountyTurretPair
+    ? Object.fromEntries(OBJECTIVE_BOUNTY_TURRET_PAIR_SOURCE_EVENTS_821.map(
+      ({ eventKey: sourceEventKey }) => [sourceEventKey,
+        prepareEventQueryFromDocuments(artifactDirectory, sourceEventKey,
+          semantic, analysis)])) : null;
   const prepared = {
     artifactDirectory, inputPath, eventKey, eventStorage, capability, capabilityStatus,
     capabilityResult, declaredCount, replaySha, associationConfig, exactPacketProfile,
-    exactBlobPacketConfig, bracketSources,
+    exactBlobPacketConfig, bracketSources, objectiveBountyTurretPairSources,
     sourcePath: analysis.source_path,
     episodeAssistNativeStatus: associationConfig?.episode
       ? semantic.capability_results?.hero_assist?.native_child_identity_status : null,
@@ -1822,6 +1844,11 @@ function prepareBatchEventQuery(directory, eventKey) {
       checkHash(`${relative}/${eventKey}.jsonl`, prepared.inputPath);
       if (prepared.bracketSources) {
         for (const source of Object.values(prepared.bracketSources)) {
+          checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
+        }
+      }
+      if (prepared.objectiveBountyTurretPairSources) {
+        for (const source of Object.values(prepared.objectiveBountyTurretPairSources)) {
           checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
         }
       }
@@ -2172,6 +2199,132 @@ function objectiveBountyTurretPairRow(row, prepared, lineNumber,
       || !(plate.decompressed_block_offset < die.decompressed_block_offset
         && die.decompressed_block_offset < claim.decompressed_block_offset)) {
     invalid('same-chunk, same-millisecond plate < die < claim order differs');
+  }
+}
+
+function objectiveBountyTurretPairSourceRow(row, prepared, spec, lineNumber,
+  seenPacketPositions) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid ${spec.eventKey} source row at JSONL line ${lineNumber}: ${reason}.`,
+      { event_key: spec.eventKey, line_number: lineNumber });
+  };
+  const ref = row.raw_packet_ref;
+  if (row.event_type !== spec.eventType
+      || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+      || row.build_profile !== spec.profile.id
+      || row.replay_sha256 !== prepared.replaySha
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== spec.evidenceStatus
+      || row.event_id !== spec.profile.child_event_id
+      || row.event_name !== spec.profile.child_event_name
+      || row.raw_event_id_hex !== spec.rawEventIdHex
+      || !ref || typeof ref !== 'object' || Array.isArray(ref)
+      || ref.replay_sha256 !== prepared.replaySha
+      || (prepared.sourcePath !== undefined
+        && ref.source_path !== prepared.sourcePath)
+      || (ref.source_path !== null
+        && (typeof ref.source_path !== 'string' || ref.source_path.length === 0))
+      || ref.replay_time_ms !== row.replay_time_ms
+      || ref.chunk_stream !== 'game_chunk'
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== 0x040a || ref.payload_length !== spec.payloadLength
+      || !Number.isSafeInteger(ref.raw_param) || ref.raw_param <= 0
+      || ref.raw_param > 0xffffffff || row.raw_param !== ref.raw_param
+      || !REPLAY_SHA.test(ref.raw_payload_sha256 ?? '')
+      || !REPLAY_SHA.test(row.event_blob_sha256 ?? '')) {
+    invalid('exact-build child, Replay identity or raw packet reference differs');
+  }
+  let blob;
+  let word;
+  if (spec.eventKey === 'turret_plate_event_packet_candidates') {
+    if (row.event_schema_u32_0x00 !== 469
+        || !Number.isSafeInteger(row.event_u32_0x04)
+        || row.event_u32_0x04 < 0 || row.event_u32_0x04 > 0xffffffff) {
+      invalid('anonymous native child words differ');
+    }
+    blob = Buffer.alloc(8);
+    blob.writeUInt32LE(row.event_schema_u32_0x00, 0);
+    blob.writeUInt32LE(row.event_u32_0x04, 4);
+    word = row.event_u32_0x04;
+  } else {
+    const hexLength = spec.eventKey === 'turret_die_event_packet_candidates'
+      ? 216 : 16;
+    if (typeof row.event_blob_hex !== 'string'
+        || !new RegExp(`^[0-9a-f]{${hexLength}}$`).test(row.event_blob_hex)) {
+      invalid('native child blob is missing or malformed');
+    }
+    blob = Buffer.from(row.event_blob_hex, 'hex');
+    if (spec.eventKey === 'objective_bounty_claimed_packet_candidates') {
+      if (row.event_schema_u32_0x00 !== 469
+          || blob.readUInt32LE(0) !== 469
+          || !Number.isSafeInteger(row.blob_u32_0x04)
+          || row.blob_u32_0x04 < 0 || row.blob_u32_0x04 > 0xffffffff
+          || blob.readUInt32LE(4) !== row.blob_u32_0x04) {
+        invalid('anonymous native child words differ');
+      }
+      word = row.blob_u32_0x04;
+    } else {
+      word = blob.readUInt32LE(0x0c);
+    }
+  }
+  if (crypto.createHash('sha256').update(blob).digest('hex')
+      !== row.event_blob_sha256) {
+    invalid('native child blob SHA-256 differs');
+  }
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (seenPacketPositions.has(position)) invalid('source packet is reused');
+  seenPacketPositions.add(position);
+  return { position, ref, word };
+}
+
+async function loadObjectiveBountyTurretPairSourceRows(prepared) {
+  const rowsByEvent = new Map();
+  const seenPacketPositions = new Set();
+  for (const spec of OBJECTIVE_BOUNTY_TURRET_PAIR_SOURCE_EVENTS_821) {
+    const source = prepared.objectiveBountyTurretPairSources[spec.eventKey];
+    const rows = new Map();
+    let lineNumber = 0;
+    const summary = await streamEventQuery(source, {}, async (line) => {
+      const packet = objectiveBountyTurretPairSourceRow(JSON.parse(line), source,
+        spec, ++lineNumber, seenPacketPositions);
+      rows.set(packet.position, packet);
+    });
+    if (summary.scanned_count !== source.declaredCount
+        || rows.size !== source.declaredCount) {
+      throw new EventQueryError('EVENT_COUNT_MISMATCH',
+        `${spec.eventKey} source rows disagree with declared packet count.`,
+        { event_key: spec.eventKey, declared_event_count: source.declaredCount,
+          source_row_count: rows.size });
+    }
+    rowsByEvent.set(spec.eventKey, rows);
+  }
+  return rowsByEvent;
+}
+
+function objectiveBountyTurretPairSourceRefs(row, sourceRows, lineNumber) {
+  const links = [
+    ['turret_plate_event_packet_candidates', row.plate_raw_packet_ref,
+      row.plate_event_u32_0x04],
+    ['turret_die_event_packet_candidates', row.turret_die_raw_packet_ref,
+      row.turret_die_blob_u32_0x0c],
+    ['objective_bounty_claimed_packet_candidates', row.claim_raw_packet_ref,
+      row.claim_blob_u32_0x04],
+  ];
+  for (const [eventKey, ref, word] of links) {
+    const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+    const source = sourceRows.get(eventKey)?.get(position);
+    if (!source || !isDeepStrictEqual(source.ref, ref) || source.word !== word) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        `Objective bounty turret triple at JSONL line ${lineNumber} differs from ${eventKey} source packet.`,
+        { event_key: eventKey, line_number: lineNumber });
+    }
   }
 }
 
@@ -3846,6 +3999,9 @@ async function streamEventQuery(prepared, options, emitLine) {
   const faceRosterPairState = { frames: new Map(), positions: new Set() };
   const minionBracketExpected = prepared.associationConfig?.minionBracket
     ? await loadMinionBracketExpectedRows(prepared) : null;
+  const objectiveBountyTurretPairSourceRows =
+    prepared.associationConfig?.objectiveBountyTurretPair
+      ? await loadObjectiveBountyTurretPairSourceRows(prepared) : null;
   const inventoryEndpointSnapshots = endpointReversedPairFilter
     || prepared.associationConfig?.inventoryGameBracket
     ? await loadInventoryIntervalEndpointSnapshots(prepared) : null;
@@ -3908,6 +4064,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       associationRow(row, prepared, lineNumber, associationKeys,
         associationPacketPositions, episodePhysicalRefs, wardPairFrames,
         inventoryIntervalState, minionBracketExpected);
+      if (objectiveBountyTurretPairSourceRows) {
+        objectiveBountyTurretPairSourceRefs(row,
+          objectiveBountyTurretPairSourceRows, lineNumber);
+      }
       if (prepared.associationConfig?.inventoryGameBracket) {
         inventoryGameBroadcastBracketRow(row, prepared, lineNumber,
           inventoryEndpointSnapshots, inventoryGameState);
