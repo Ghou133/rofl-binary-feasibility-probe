@@ -10,9 +10,13 @@ Current progress (older notes below retain their original research context):
   820 same-length foreign-child packet references, with zero framing errors.
   An independent scout matched all 11 original packet references and native
   blob hashes. `OnHQKill` is the image name; actual HQ destruction, winner,
-  actor and state change remain `UNKNOWN`. Evidence is ignored under
+  actor and state change remain `UNKNOWN`. A true saved `batch` query checked
+  and emitted all 11 original lines (SHA-256
+  `022c71699616e1113c68171a823e73bce3c80c3b49430b35387cb1a42c50c430`);
+  query validation uses saved artifacts and does not reparse the ROFL bytes.
+  Evidence is ignored under
   `artifacts/16_19_development/on_hq_kill_scout_20260925/` and
-  `artifacts/16_19_development/hq_kill_cli_batch_11_821/`.
+  `artifacts/16_19_development/hq_kill_query_batch_11_821/`.
 - **Completed opcode label cache check:** A bounded cache for repeated u16
   packet labels preserved three inventory JSONLs and the packet inventory
   byte-for-byte. An isolated before/after test on one exact-821 Replay
