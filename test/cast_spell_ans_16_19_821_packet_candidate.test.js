@@ -19,6 +19,7 @@ const BUILD = '16.19.821.7343';
 const IMAGE_SHA256 = '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325';
 const TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b';
 const FLOAT_INVERSE_SHA256 = 'cce644f3775d31b6be55e5abc79ed029298be5110b8f81be8957bd3b066019f5';
+const BYTE_INVERSE_SHA256 = 'b5d220967c423848c278651d068786e3aaedf4994c6d30dd1d3d0c8fe6892516';
 const PAYLOAD = Buffer.concat([Buffer.from([0x15]), Buffer.alloc(128)]);
 
 function packet(packetId = 0x01da, rawParam = 0x400000ae, payload = PAYLOAD) {
@@ -49,6 +50,7 @@ function nativeResult(request, values = []) {
     status: 'PASS', runtime_image_sha256: IMAGE_SHA256,
     callback_table_sha256: TABLE_SHA256,
     nested_float_inverse_sha256: FLOAT_INVERSE_SHA256,
+    nested_byte_inverse_sha256: BYTE_INVERSE_SHA256,
     results: request.packets.map((input, inputIndex) => ({
       status: 'DECODED', input_index: inputIndex,
       raw_param: input.raw_param,
@@ -62,6 +64,8 @@ function nativeResult(request, values = []) {
       opaque_i32_0x14c: values[inputIndex]?.i32 ?? 0,
       raw_f32_bytes_hex: values[inputIndex]?.float ? 'ff57f6cd' : 'ffffffff',
       opaque_f32_0xe0: values[inputIndex]?.float ?? 0,
+      raw_u8_0x140_hex: values[inputIndex]?.byte === 13 ? '5f' : '2c',
+      opaque_u8_0x140: values[inputIndex]?.byte ?? 0,
     })),
   };
 }
@@ -80,7 +84,7 @@ test('821 CastSpellAns candidate exposes only provenance and opaque packet field
     assert.deepEqual(request.packets.map((row) => row.raw_param),
       [0x400000ae, 0x4000023c]);
     return { status: 0, stderr: '', stdout: JSON.stringify(nativeResult(request, [
-      { flag: 1 }, { i32: 80444, float: -0.06680679321289062 },
+      { flag: 1 }, { i32: 80444, float: -0.06680679321289062, byte: 13 },
     ])) };
   });
   const result = decode(replay, { runtimeImagePath: image });
@@ -94,6 +98,9 @@ test('821 CastSpellAns candidate exposes only provenance and opaque packet field
   assert.equal(result.events[0].opaque_f32_0xe0, 0);
   assert.equal(result.events[1].opaque_f32_0xe0, -0.06680679321289062);
   assert.equal(result.events[1].raw_f32_0xe0_bytes_hex, 'ff57f6cd');
+  assert.equal(result.events[0].opaque_u8_0x140, 0);
+  assert.equal(result.events[1].raw_u8_0x140_hex, '5f');
+  assert.equal(result.events[1].opaque_u8_0x140, 13);
   assert.equal(result.events[1].raw_packet_ref.chunk_stream, 'keyframe');
   assert.equal(result.events[1].raw_packet_ref.raw_param, 0x4000023c);
   assert.equal(result.events[0].raw_packet_ref.replay_sha256, replay.source_sha256);
@@ -138,6 +145,28 @@ test('821 CastSpellAns rejects a finite float inconsistent with native bytes', (
   assert.equal(result.status, 'DECODE_FAILED');
   assert.equal(result.events, null);
   assert.equal(result.first_failed_packet_ref.packet_id, 0x01da);
+});
+
+test('821 CastSpellAns rejects a nested byte inconsistent with native bytes', (t) => {
+  const image = fakeImage(t);
+  const replay = replayWithChunks([{ packets: [packet()] }]);
+  const wrongValue = t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const output = nativeResult(JSON.parse(options.input));
+    output.results[0].opaque_u8_0x140 = 13;
+    return { status: 0, stderr: '', stdout: JSON.stringify(output) };
+  });
+  const first = decode(replay, { runtimeImagePath: image });
+  assert.equal(first.status, 'DECODE_FAILED');
+  assert.equal(first.events, null);
+  wrongValue.mock.restore();
+  t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const output = nativeResult(JSON.parse(options.input));
+    output.results[0].raw_u8_0x140_hex = 'gg';
+    return { status: 0, stderr: '', stdout: JSON.stringify(output) };
+  });
+  const second = decode(replay, { runtimeImagePath: image });
+  assert.equal(second.status, 'DECODE_FAILED');
+  assert.equal(second.events, null);
 });
 
 test('821 CastSpellAns requires exact Replay build and leaves absent route unavailable', () => {

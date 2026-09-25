@@ -4,6 +4,14 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `cast_spell_ans_packet` profile v3 also retains the
+  protected native byte and decoded anonymous u8 at packet object `+0x140`.
+  An exact-image inverse table is SHA-pinned and recomputed at the JS
+  boundary. All 63,496 route packets in 11 Replays were fully consumed by
+  the native helper; a selected CLI smoke emitted 5,980 v3 candidate rows
+  from one Replay with zero framing errors. The 29 observed byte values do
+  not identify a spell, owner, target or cast action. Ignored evidence is
+  under `artifacts/16_19_development/cast821_next/`.
 - **Research-only:** The isolated KR 821 movement/full-parameter association
   utility checks a complete candidate `0x0089` roster, latest `0x018d`
   packet-local inventory, and a unique 7/7 Replay-tail item match for each

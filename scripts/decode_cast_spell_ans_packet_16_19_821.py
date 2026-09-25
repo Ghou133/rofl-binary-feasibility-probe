@@ -28,6 +28,7 @@ VTABLE_RVA = 0x01ba8ca0
 CALLBACK_TABLE_RVA = 0x01ab62d0
 CALLBACK_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b'
 NESTED_FLOAT_INVERSE_SHA256 = 'cce644f3775d31b6be55e5abc79ed029298be5110b8f81be8957bd3b066019f5'
+NESTED_BYTE_INVERSE_SHA256 = 'b5d220967c423848c278651d068786e3aaedf4994c6d30dd1d3d0c8fe6892516'
 PROFILE = {'constructor_rva': 0x00e9da90, 'deserialize_rva': 0x010df350,
            'object_size': 0x150, 'fields': []}
 MAX_INPUT_BYTES = 4_000_000
@@ -103,6 +104,26 @@ def nested_float_inverse():
 NESTED_FLOAT_INVERSE = nested_float_inverse()
 
 
+def nested_byte_inverse():
+    # The nested deserializer writes a protected byte at nested +0x130,
+    # packet +0x140. Exact 821 RVA 0x10bf400..0x10bf422 and wire reader
+    # RVA 0x10a1900..0x10a197f use inverse stages of the same transform.
+    def encode(byte):
+        value = ror8((byte + 0x78) & 0xff, 7)
+        value = (~((value + 0x44) & 0xff)) & 0xff
+        return swap((ror8(value, 6) - 0x13) & 0xff)
+
+    inverse = {encode(byte): byte for byte in range(256)}
+    if (len(inverse) != 256 or encode(0) != 0x2c
+            or hashlib.sha256(bytes(inverse[index] for index in range(256))).hexdigest()
+            != NESTED_BYTE_INVERSE_SHA256):
+        raise ValueError('cast nested byte transform differs')
+    return inverse
+
+
+NESTED_BYTE_INVERSE = nested_byte_inverse()
+
+
 def decode_flag(encoded, table):
     # Exact callback byte path at RVA 0x002bd2ec and 0x002bd4c2.
     value = table[swap(ror8(encoded, 2))] ^ 0xea
@@ -149,11 +170,14 @@ def decode_packet(emulator, context, raw_param, payload, table):
     if not math.isfinite(opaque_float):
         return failure('nested cast packet float is not finite',
                        return_al=return_al, consumed=consumed)
+    raw_byte = obj[0x140]
+    opaque_byte = NESTED_BYTE_INVERSE[raw_byte]
     return {'status': 'DECODED', 'deserialize_return_al': return_al,
             'bytes_consumed': consumed, 'native_packet_id': PACKET_ID,
             'native_raw_param': raw_param, 'raw_flag_byte_hex': f'{raw_flag:02x}',
             'opaque_flag_0x148': opaque_flag,
             'raw_f32_bytes_hex': raw_float.hex(), 'opaque_f32_0xe0': opaque_float,
+            'raw_u8_0x140_hex': f'{raw_byte:02x}', 'opaque_u8_0x140': opaque_byte,
             'raw_i32_bytes_hex': raw_i32.hex(), 'opaque_i32_0x14c': opaque_i32}
 
 
@@ -195,6 +219,7 @@ def main():
         json.dump({'status': 'PASS', 'runtime_image_sha256': digest,
                    'callback_table_sha256': table_sha,
                    'nested_float_inverse_sha256': NESTED_FLOAT_INVERSE_SHA256,
+                   'nested_byte_inverse_sha256': NESTED_BYTE_INVERSE_SHA256,
                    'results': results},
                   sys.stdout, separators=(',', ':'))
         sys.stdout.write('\n')
