@@ -21,6 +21,7 @@ const CAPABILITIES = new Set([
   'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
   'hero_level_state', 'hero_respawn', 'hero_assist', 'hero_inventory_packet',
   'hero_inventory_broadcast_packet', 'hero_inventory_set_item_packet',
+  'params_heal_packet',
   'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
   'direct_input_movement_turn_packet',
   'set_movement_driver_packet',
@@ -31,6 +32,7 @@ const MAX_BUFF_REMOVE_PACKET_ROWS = 50_000;
 const MAX_BUFF_ADD_PACKET_ROWS = 50_000;
 const MAX_BROADCAST_PACKET_ROWS = 512;
 const MAX_SET_ITEM_PACKET_ROWS = 256;
+const MAX_PARAMS_HEAL_PACKET_ROWS = 20_000;
 const MAX_DIRECT_INPUT_TURN_PACKET_ROWS = 20_000;
 const MAX_SET_MOVEMENT_DRIVER_PACKET_ROWS = 20_000;
 const SCAN_SOURCE = new WeakMap();
@@ -75,6 +77,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     hero_inventory_packet: [],
     hero_inventory_broadcast_packet: [],
     hero_inventory_set_item_packet: [],
+    params_heal_packet: [],
     cast_spell_ans_packet: [],
     npc_buff_remove_packet: [],
     npc_buff_add_packet: [],
@@ -138,6 +141,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let buffAddPacketCount = 0;
   let broadcastPacketCount = 0;
   let setItemPacketCount = 0;
+  let paramsHealPacketCount = 0;
   let directInputTurnPacketCount = 0;
   let setMovementDriverPacketCount = 0;
   let finished = false;
@@ -159,6 +163,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
       if (selected.has('hero_assist') && chunk.stream_tag === 1
           && block.packet_id === 0x040a && block.payload_length === 44) {
         rows.hero_assist.push(copyRow(block, chunk));
+      }
+      if (selected.has('params_heal_packet')
+          && block.packet_id === 0x040a && block.payload_length === 60) {
+        paramsHealPacketCount += 1;
+        if (rows.params_heal_packet.length < MAX_PARAMS_HEAL_PACKET_ROWS) {
+          rows.params_heal_packet.push(copyRow(block, chunk));
+        }
       }
       if (selected.has('hero_inventory_packet') && chunk.stream_tag === 1
           && block.packet_id === 0x018d) {
@@ -234,6 +245,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         selected, rows, blockCount, keyframeBlockCount,
         buffRemovePacketCount, buffAddPacketCount, broadcastPacketCount,
         setItemPacketCount,
+        paramsHealPacketCount,
         directInputTurnPacketCount,
         setMovementDriverPacketCount,
         error: token.error,
@@ -291,6 +303,13 @@ function rowsFor821Capability(replay, token, capability) {
       && bound.setItemPacketCount > MAX_SET_ITEM_PACKET_ROWS) {
     return {
       observed_packet_count: bound.setItemPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'params_heal_packet'
+      && bound.paramsHealPacketCount > MAX_PARAMS_HEAL_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.paramsHealPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }

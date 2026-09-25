@@ -4,6 +4,16 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `params_heal_packet` is an unpublished selected
+  CLI/API candidate for exact-image OnEvent child `0x004b` (`ParamsHeal`).
+  Independent native validation accepted and fully consumed all 86,604
+  outer `0x040a` packets in 11 Replays: 70,698 are the 60-byte child
+  `0x004b` packets, while 15,906 other child packets remain excluded. The
+  registered handler reads the child blob's `+0x18` f32, exposed as a
+  reported-amount candidate; `+0x04` and `+0x14` u32 values stay anonymous.
+  Twenty truncated/appended controls failed the full-consumption gate.
+  No effective-heal amount, caster or target is inferred. Ignored cross-checks
+  are under `artifacts/16_19_development/heal_event_validation_821/`.
 - **Completed:** KR 821 `hero_inventory_set_item_packet` is an unpublished
   selected CLI/API candidate for the exact-image `0x002d` SetItem route.
   The factory, constructor, nested reader and HeroInventoryClient class
