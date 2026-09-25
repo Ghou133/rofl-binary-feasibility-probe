@@ -4,6 +4,44 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed exact-821 experience endpoint intervals:** Selecting
+  `hero_experience_snapshot` also emits
+  `experience_keyframe_interval_difference_candidates` for positive
+  differences between two adjacent complete keyframe samples for the same
+  candidate participant. The fresh 11-KR-Replay CLI batch returned 11/11
+  `CANDIDATE` with no framing errors: 327 keyframes and 3,270 physically
+  verified source packets form 3,160 participant intervals, with 2,931
+  positive endpoint differences and 229 equal endpoints. Rows preserve both
+  original packet references, sampled times, f32 values, floors and deltas.
+  Equal endpoints produce no row but remain in the association counts. This
+  does not locate a gain inside the interval, identify its source, count XP
+  events, infer a level threshold, or fill the final Replay-tail gap. Saved
+  `query-events` checks the source JSONL and association before time,
+  participant and latest-per-participant filters. The 11-Replay query emitted
+  all 2,931 original rows byte-for-byte (SHA-256
+  `447eb591e4da62096ca48f84003bbb3a479788aada3c14160c4ed04fdc2a2754`);
+  participant 1 with latest-per-participant selected 11 rows after scanning
+  the same 2,931 rows. The local batch is ignored under
+  `artifacts/16_19_development/experience_keyframe_interval_batch_11_821/`.
+- **Completed exact-821 CastSpellAns opaque nested byte:** The pinned runtime
+  native packet object at `+0x24` (nested object `+0x14`) is now retained as
+  protected raw byte `raw_nested_bits_0x24_hex` and callback-transformed
+  `opaque_nested_bits_0x24` in the existing `cast_spell_ans_packet` output.
+  The fresh 11-Replay CLI batch fully decoded 63,496/63,496 route packets
+  with no framing or native failures; observed transformed byte values were
+  `0` (49,152), `1` (106), `3` (52), `4` (13,704), `8` (6), `12` (471), and
+  `100` (5). The image callback copies some bits to temporary flags, but
+  these values do not establish a cast, actor, slot, spell, target or effect.
+  Local output is ignored under
+  `artifacts/16_19_development/cast_spell_ans_bits_batch_11_821/`.
+- **Ward route stop-loss:** Rechecking the exact 821 image and 11 Replays
+  found neither registered `OnPlaceWard` nor `OnKillWard` child in 86,604
+  fully decoded OnEvent packets. Aggregate ward counter increases lack a
+  packet-local object/time/owner/position; other probed routes failed their
+  positive/zero controls or full native consumption. No new ward event is
+  selected. Negative evidence remains under
+  `artifacts/16_19_development/ward_anchor_followup_821/` and
+  `artifacts/16_19_development/ward821_next/`.
 - **Completed exact-821 OnObjectiveBountyClaimed packet candidate and query:**
   Selected `objective_bounty_claimed_packet` uses the pinned local mapped
   821 image to fully deserialize game-stream `0x040a` child `0x0113`, retaining
