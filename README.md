@@ -551,12 +551,12 @@ node src/cli.js query-events "work\16-19-821-assists" `
 ```
 
 `--assisting-participant` 只接受 `1..10`，仅匹配精确 `16.19.821.7343` 的
-`hero_assist_candidates`；输出保留原 JSONL 行。非英雄来源的 `null` 列表计入
+`hero_assist_candidates` 或 `hero_death_episode_candidates`；输出保留原 JSONL 行。非英雄来源的 `null` 列表计入
 `assisting_participant_unavailable_count`，已核对的空列表是可用的零助攻候选。
 筛选不会把候选助攻提升为已确认的游戏事件。
 
 `--killer-participant 1..10` 可查询同一完整 build 的 `hero_death_candidates`
-或 `hero_assist_candidates` 中的候选击杀者，也可与 `--participant`（受害者）及
+、`hero_assist_candidates` 或 `hero_death_episode_candidates` 中的候选击杀者，也可与 `--participant`（受害者）及
 助攻列表筛选同时使用。非英雄来源的空击杀者计入
 `killer_participant_unavailable_count`；已核对且没有匹配行时正常返回零命中。
 
@@ -564,6 +564,16 @@ node src/cli.js query-events "work\16-19-821-assists" `
 node src/cli.js query-events "work\16-19-821-deaths" `
   --event hero_death_candidates --killer-participant 6 --limit 20
 ```
+
+逐死亡关联的查询也接受 `--assisting-participant`、时间和原始参数筛选。例如：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-death-episodes" `
+  --event hero_death_episode_candidates --participant 6 `
+  --killer-participant 2 --assisting-participant 1 --limit 20
+```
+
+查询核对三项来源能力、关联计数和逐行包引用，输出原 JSONL 行；缺少任一来源的回放在批量结果中单独标为不可查询。筛选值仍是候选参与者映射。
 
 对已解码的 821 库存包按物品 ID 查询单包记录：
 

@@ -181,8 +181,8 @@ Options:
   Query event filters (query-events, 16.19 default or --event-jsonl-only artifacts):
   --from-ms/--to-ms <number>    Inclusive Replay millisecond bounds
   --participant <1..10>        Candidate subject participant; unknown rows do not match
-  --killer-participant <1..10>  Candidate killer in exact-821 death or assist rows
-  --assisting-participant <1..10>  Member of exact-821 hero_assist candidate list
+  --killer-participant <1..10>  Candidate killer in exact-821 death, assist or episode rows
+  --assisting-participant <1..10>  Member of exact-821 assist or episode candidate list
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
   --item-id <uint32|0xhex>     Exact decoded 821 inventory packet record item ID
   --slot <0..9>                Exact observed 821 inventory packet record slot
@@ -383,13 +383,15 @@ function parseArgs(argv) {
     }
     if (options.killerParticipant !== null
         && (options.killerParticipant > 10
-          || !['hero_death_candidates', 'hero_assist_candidates'].includes(options.event))) {
-      throw new Error('--killer-participant requires hero_death_candidates or hero_assist_candidates and 1..10');
+          || !['hero_death_candidates', 'hero_assist_candidates',
+            'hero_death_episode_candidates'].includes(options.event))) {
+      throw new Error('--killer-participant requires hero_death_candidates, hero_assist_candidates or hero_death_episode_candidates and 1..10');
     }
     if (options.assistingParticipant !== null
         && (options.assistingParticipant > 10
-          || options.event !== 'hero_assist_candidates')) {
-      throw new Error('--assisting-participant requires hero_assist_candidates and 1..10');
+          || !['hero_assist_candidates', 'hero_death_episode_candidates']
+            .includes(options.event))) {
+      throw new Error('--assisting-participant requires hero_assist_candidates or hero_death_episode_candidates and 1..10');
     }
     if (options.fromMs !== null && options.toMs !== null && options.fromMs > options.toMs) {
       throw new Error('--from-ms must not exceed --to-ms');

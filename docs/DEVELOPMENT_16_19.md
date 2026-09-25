@@ -4,6 +4,15 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed query:** `query-events --event hero_death_episode_candidates`
+  validates the exact 821 association, all three source capability results,
+  count partition, and stored packet references before filtering unchanged
+  JSONL rows by victim, candidate killer or assistant, time, or recorded raw
+  parameter. The saved 11-Replay CLI batch query completed 11/11 and scanned
+  all 655 rows. A combined real filter matched one source row byte-for-byte;
+  an unavailable source remains unavailable rather than a zero match. Query
+  checks artifact provenance and structure; raw Replay bytes were checked at
+  decode time.
 - **Completed candidate association:** Selecting `hero_assist,hero_death_timer,hero_respawn`
   for exact KR 821 also writes `hero_death_episode_candidates` and
   `candidate_associations.hero_death_episode`. Each row joins the three
