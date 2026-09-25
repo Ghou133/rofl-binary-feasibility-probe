@@ -35,6 +35,7 @@
 | `16.19.821.7343 --events hero_jungle_minions_killed_snapshot` | 精确 821 原生 `0x0089` 向量偏移 `0x40/0x44/0x48` 的三项野怪计数候选浮点快照；11 份回放共 3,270 条 | 仅写入 `hero_jungle_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；保留原始小数、取整值及三项结算尾差，不推断逐次击杀、野怪类型或位置 |
 | `16.19.821.7343 --events hero_experience_snapshot` | `0x0089` 关键帧反向字节向量的 `0x28` 浮点候选经验值；11 份回放共 3,270 个快照 | 写入 `hero_experience_snapshot_candidates`，保留与 `EXP` 结算的尾部差值；不推导升级阈值或经验来源 |
 | `16.19.821.7343 --events hero_experience_snapshot` 的派生输出 | 比较同一候选参与者的相邻完整关键帧经验值端点，保留两端原始包引用与浮点、取整差值；11 份回放中 3,160 个区间有 2,931 个上升端点 | 另写入 `experience_keyframe_interval_difference_candidates`；229 个端点相同区间只计数，不推断区间内的经验来源、次数、发生时刻或升级门槛 |
+| `16.19.821.7343 --events hero_level_state,hero_experience_snapshot` 的关联输出 | 将同一候选参与者的较高等级包放入两个相邻且完整的经验关键帧时间端点之间；11 份回放有 1,564 条夹持记录，涉及 1,495 个不同的参与者区间 | 另写入 `level_experience_keyframe_bracket_candidates`；每行保留等级包和两端经验包引用。只报告时间及候选参与者一致，不定位经验获取时刻、来源或升级门槛；末帧后的 25 条等级包不插值 |
 | `16.19.821.7343 --events hero_vision_score_snapshot` | 同一向量 `0x1b0` 浮点候选视野分；11 份回放的 110 人均从零开始并不超过各自结算值 | 仅写入 `hero_vision_score_snapshot_candidates`；不推导守卫、探测或视野行为 |
 | `16.19.821.7343 --events hero_gold_earned_snapshot` | 同一向量 `0x38` 浮点候选已赚金币；110 人首帧均为 500，序列单调且在 `GOLD_EARNED` 结算内 | 仅写入 `hero_gold_earned_snapshot_candidates`；末帧均落后于结算并保留差额，不推导收入事件 |
 | `16.19.821.7343 --events hero_gold_spent_snapshot` | 同一向量 `0x34` 浮点候选已花金币；末帧 92/110 人与 `GOLD_SPENT` 结算相等 | 仅写入 `hero_gold_spent_snapshot_candidates`；保留一次观察到的下降，不推导购买、退款或出售 |
@@ -77,6 +78,7 @@
 | `16.19.821.7343 --events direct_input_movement_turn_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x00ba` DirectInputMovementDriverServerTurnData 包，输出三个回调变换后的匿名 f32 字段与原始包来源 | 仅写入 `direct_input_movement_turn_packet_candidates`，状态为 `CANDIDATE`；不将字段标为世界坐标、英雄路径或参与者位置；仅接受已观察到的 13 字节 `0x85` 形状 |
 | `16.19.821.7343 --events set_movement_driver_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x0335` SetMovementDriver 包，输出回调变换后的匿名分发字节和原始包来源 | 仅写入 `set_movement_driver_packet_candidates`，状态为 `CANDIDATE`；不声称驱动状态已改变，也不推断位置、路径或参与者；仅接受两种已观察到的包形状 |
 | `16.19.821.7343 --events face_direction_packet --runtime-image PATH` | 对 KR `0x038e` 已观察到的 13/17 字节包形状使用精确 821 镜像，输出包内向量、可选标量候选值和原始包来源 | 仅写入 `face_direction_packet_candidates`，状态为 `CANDIDATE`；不据原始参数认定行动者，不推断世界位置、路径或方向效果；其他 build 与未观察到的形状明确拒绝 |
+| `16.19.821.7343 --events circular_movement_restriction_packet --runtime-image PATH` | 对 KR `0x0464` 已观察到的一字节零记录包与 24 字节单记录包，按精确 821 镜像验证回调字节变换，保留包内匿名标量、三浮点值及原始包引用；11 份回放共 68,242 包 | 仅写入 `circular_movement_restriction_packet_candidates`，状态为 `CANDIDATE`；原生探针完整消费了 129 个单记录包，生产解码只接受已验证形状；不推断行动者、世界位置、英雄路径、接收者或实际限制效果 |
 | `16.19.821.7343 --events face_direction_keyframe_roster_pair --runtime-image PATH` | 自动解码 FaceDirection 包和 `0x0089` 标准补刀快照，在同一关键帧按完整原始参数及先后顺序配对规范英雄行 | 仅写入 `face_direction_keyframe_roster_pair_candidates`；参与者标签来自 HeroStats 阵容，不能当作 FaceDirection 包的行动者；不推断方向效果、位置或路径 |
 | `16.19.821.7343 --events npc_buff_add_packet,npc_buff_remove_packet --runtime-image PATH` | 分别解码 KR `0x00ae/0x047c` 原生包，并在两项均成功时汇总相同不透明 `(u32, u8)` 键的重合与时序歧义 | 逐包候选分别写入两个 JSONL；`candidate_associations.npc_buff_add_remove_opaque_key` 仅含回放内统计，不配对单个包，不推断 Buff 名称、归属或生命周期 |
 | `16.19.821.7343 --events npc_buff_update_num_counter_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x0194` BuffUpdateNumCounter 包，保留四个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_update_num_counter_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 名称、归属、计数含义或生命周期 |
@@ -395,7 +397,11 @@ OnShutdown 只是镜像中的事件标签，未确认游戏内 shutdown 效果�
 
 821 的候选死亡记录保留原始包来源及未配对路由的负例计数。该 build 的运行时镜像已从真实回放进程捕获；当前死亡包的计时浮点和 Hero_Die 来源 ID 均有独立候选解码，单次助攻候选在 `hero_assist` 入口。可追加 `hero_assist,hero_respawn,hero_death_timer,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_assists_snapshot,hero_missions_minions_killed_snapshot,hero_ward_stats_snapshot,hero_missions_cannon_minions_killed_snapshot,hero_experience_snapshot,hero_vision_score_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_damage_totals_snapshot,hero_damage_taken_from_champions_snapshot,hero_damage_self_mitigated_snapshot,hero_structure_objective_damage_snapshot,hero_longest_living_time_snapshot,hero_total_time_spent_dead_snapshot,hero_total_heal_snapshot,hero_total_units_healed_snapshot,hero_epic_monster_damage_snapshot,hero_crowd_control_time_snapshot,hero_level_state` 到 `--events`；计数、浮点、计时和等级使用已固定的精确镜像变换，CLI 运行时无需再次提供镜像。库存 `hero_inventory_packet`、广播包 `hero_inventory_broadcast_packet`、单包 `hero_inventory_set_item_packet`、治疗上报包 `params_heal_packet`、护盾配对包 `shielding_params_packet_pair`、隐身名表子包 `stealth_event_packet`、CastSpellAns 包 `cast_spell_ans_packet`、DirectInput turn 包 `direct_input_movement_turn_packet`、SetMovementDriver 包 `set_movement_driver_packet`、OnChampionDie 子包 `champion_die_event_packet` 和 OnChampionKill 子包 `champion_kill_event_packet` 需要 `--runtime-image` 指向同一完整 build 的镜像。各能力独立报告状态；载荷形状超出已验证范围、解码值违反参与者结算上界等情况仍会保留其他已通过能力的候选输出，并明确标出失败项。11 份现有 KR 回放中的等级 20 和高击杀/助攻编码均已被相应变换覆盖。计时值不用于预测返回时点。
 
+`circular_movement_restriction_packet` 也需要 `--runtime-image` 指向完整的 `16.19.821.7343` 镜像；无需将镜像提交到仓库。输出按包保留零记录和单记录两种形状，匿名三浮点值不是已确认的坐标或路径。
+
 只选择 `hero_experience_snapshot` 还会输出 `experience_keyframe_interval_difference_candidates.jsonl`：每行是同一候选参与者在相邻完整关键帧的正端点差，包含两端时间、原始包引用、候选经验浮点值与取整值。`semantic_run.json` 的 `candidate_associations.experience_keyframe_interval_difference` 同时记录正差与端点相同的区间数。查询使用当前端点时间，支持 `--participant` 和 `--latest-per-participant`；末帧至结算的差额不插值。
+
+同时选择 `hero_level_state,hero_experience_snapshot` 时，还会输出 `level_experience_keyframe_bracket_candidates.jsonl`。每行记录一个等级包严格位于同一候选参与者的两份相邻经验快照之间，并保留三个原始包引用及整段采样端点差；多次等级包共用区间时，差值不分摊。可用 `query-events --event level_experience_keyframe_bracket_candidates --level-after 2` 查询保存结果。`--level-after` 只接受 1..20，查询先校验关联、上游等级和经验 JSONL 的原始来源与精确 build 变换，再返回未经修改的行。等级 1 在当前关联中属于明确排除项，因此筛选值 1 的零命中表示已校验后的零，不代表字段不可用。
 
 ```powershell
 node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
@@ -775,6 +781,8 @@ node src/cli.js query-events "work\16-19-821-cast\replays\KR_example" `
 ```
 
 `--opaque-i32` 只接受十进制有符号 int32（含 `0` 和负数），只匹配当包的 `opaque_i32_0x14c`，不赋予技能、槽位或施法者含义。JSONL 行原样输出；汇总中的 `opaque_i32_unavailable_count` 区分字段缺失与已检查后的零命中，已出现但无效的字段会使查询失败。
+
+嵌套对象 `+0x24` 的不透明回调字节可以用 `--cast-nested-bits 8` 或 `--cast-nested-bits 0x8` 精确筛选（范围 0..255）。保存结果查询会先核对精确 821 profile、镜像及回调摘要、原始包引用与字节变换；旧版 v3 CastSpellAns 产物报告该字段不可用，已检查但未匹配则返回零命中。字段数值不指代技能、槽位、角色或施法结果。
 
 三个 KR 821 候选包组 JSONL 也能使用 `query-events`，按时间、原始参数或
 各组子包直接解码的 `+0x04` 匿名整数筛选。例如：

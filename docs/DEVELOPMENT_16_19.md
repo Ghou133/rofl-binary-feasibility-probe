@@ -1,9 +1,42 @@
 # 16.19 development progress
 
-Updated: 2026-09-25. Branch: `codex/16-19-development`.
+Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Exact-821 level packet / EXP keyframe time brackets:** Selecting both
+  `hero_level_state,hero_experience_snapshot` emits
+  `level_experience_keyframe_bracket_candidates` when a higher-level packet
+  falls strictly between two complete adjacent EXP keyframes for the same
+  candidate participant. All 11 supplied KR Replays produced 1,564 rows in
+  1,495 distinct participant intervals, with three original packet references
+  per row. The source has 1,613 level packets; 2 level-one and 22 repeated
+  observations are excluded, as are 25 higher-level packets after the last
+  keyframe. One level sequence gap remains explicit. All 1,564 row endpoint
+  differences are positive, but a rotated-participant negative control also
+  finds positive intervals at similar rates. The relation therefore reports
+  sampled time and candidate participant alignment only; it does not locate
+  an EXP gain, assign an interval delta to a level packet, or establish an
+  upgrade threshold. The fresh CLI batch is ignored under
+  `artifacts/16_19_development/level_experience_keyframe_bracket_batch_11_821/`.
+  Saved `query-events --level-after` validated all 1,564 bracket rows and
+  their LevelUp/EXP source JSONL rows across the same 11 Replays: level 2
+  and 3 each matched 110 rows; level 1 matched zero after complete checks.
+- **Exact-821 circular movement restriction packet candidate:** The pinned
+  image registers route `0x0464` as
+  `PKT_S2C_SyncCircularMovementRestriction_s`. All 11 KR Replays yielded
+  68,242 packet candidates: 68,113 one-byte zero-record packets and 129
+  24-byte one-record packets. A separate exact-image native probe fully
+  consumed all 129 record-bearing packets; the production decoder checks
+  the image and byte-transform hashes and accepts only the observed shapes.
+  It preserves raw packet refs and anonymous scalar/vector values. Neither
+  route name nor these values prove an actor, world position, hero path,
+  receiver, or effective movement restriction.
+- **Saved CastSpellAns nested-byte query:** `query-events --cast-nested-bits`
+  checks the exact-821 profile, callback transform and original packet refs
+  before filtering saved `cast_spell_ans_packet_candidates` rows. The
+  11-Replay batch checked 63,496 rows, with six matches for value 8, five
+  for 100, and zero for 2; older v3 rows report the field unavailable.
 - **Completed exact-821 experience endpoint intervals:** Selecting
   `hero_experience_snapshot` also emits
   `experience_keyframe_interval_difference_candidates` for positive
