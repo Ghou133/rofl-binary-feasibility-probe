@@ -4,6 +4,28 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **UnitApplyDamage second native lookup-key roster pair:** The independent
+  `unit_apply_damage_lookup2c_roster_key_pair` capability now uses the exact
+  821 native `+0x2c` full key and the complete ten-key HeroStats roster. It
+  retains both native lookup keys, their protected bytes, the original
+  `raw_param` relation, and both source references. The decoder physically
+  rechecks the raw-key pair against the Replay and validates the prior
+  `+0x24` pair before output. A fresh selected-only CLI batch on all 11
+  supplied KR Replays returned `CANDIDATE` in 11/11, zero framing errors,
+  and the one pinned runtime-image SHA
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`.
+  Of 628,909 native-witnessed damage packets, 173,125 matched `+0x2c` to
+  the canonical roster and 455,784 did not; 632,179 damage and HeroStats
+  source references were physically checked. Among matches, `+0x24` was the
+  same roster key in 15, a different roster key in 34,697, and outside the
+  roster in 138,413. The new saved `query-events --raw-param 0x400000ae
+  --limit 1` then checked all 173,125 association rows across all 11 Replay
+  artifacts, matched 2,387 original damage raw parameters, and emitted one
+  unchanged row. Saved queries validate their stored metadata, rows, hashes
+  and references; they do not reopen original ROFL bytes. Lookup success,
+  actor, source, target, killer, fatal packet, actual amount and health effect
+  remain `UNKNOWN`. Local batch inputs/results remain ignored under
+  `artifacts/16_19_development/combat_lookup2c_roster_pair_11_821/`.
 - **Saved v3 native lookup-key query:** `query-events` now filters the
   separate exact `+0x24` and `+0x2c` u32 keys, individually or conjunctively,
   without assigning either a combat role. It requires the exact-821 v3

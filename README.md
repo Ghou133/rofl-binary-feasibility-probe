@@ -83,6 +83,7 @@
 | `16.19.821.7343 --events show_health_bar_packet --runtime-image PATH` | 精确 821 镜像注册 KR `0x0165` ShowHealthBar；两种已观察的单字节载荷经 Python + Unicorn 逐包完整消费，输出原始包引用、回调字节与零标记候选；11 份回放共 89,515 包 | 仅写入 `show_health_bar_packet_candidates`，状态为 `CANDIDATE`；未知载荷、镜像或原生见证不符时整项失败；不推断血量、伤害、参与者身份或实际显示效果 |
 | `16.19.821.7343 --events unit_apply_damage_roster_key_pair --runtime-image PATH` | 将原生验证的 `0x005f` 完整原始参数与同回放完整十人 `0x0089` HeroStats 阵容键精确配对，输出两个来源引用和阵容一侧的候选参与者标签；11 份回放匹配 49,473/628,909 包 | 仅写入 `unit_apply_damage_roster_key_candidates`，状态为 `CANDIDATE`；10,284 个 `+0x100` 别名和其他键明确排除，不把阵容标签当作伤害包行动者、来源或目标，也不推断实际伤害 |
 | `16.19.821.7343 --events unit_apply_damage_lookup_roster_key_pair --runtime-image PATH` | 将原生回调解出的 `0x005f` 对象 `+0x24` 完整查找键与同回放完整十人 `0x0089` HeroStats 阵容键精确配对，保留原始参数与查找键的关系及两个来源引用；11 份回放匹配 62,860/628,909 包，其中 10,284 包的原始参数为匹配键 `+0x100` | 另写入 `unit_apply_damage_lookup_roster_key_candidates`，状态为 `CANDIDATE`；阵容标签仅属于查找键共现，不能确定对象查找成功、行动者、来源、目标、实际伤害或血量变化 |
+| `16.19.821.7343 --events unit_apply_damage_lookup2c_roster_key_pair --runtime-image PATH` | 独立检查原生回调对象 `+0x2c` 完整查找键与同回放完整十人 HeroStats 阵容键的精确共现，同时保留 `+0x24` 键、原始参数关系和两个来源引用；11 份回放匹配 173,125/628,909 包 | 另写入 `unit_apply_damage_lookup2c_roster_key_candidates`，状态为 `CANDIDATE`；阵容标签仅属于 `+0x2c` 键共现，不能确定查找成功、行动者、来源、目标、击杀者或伤害效果 |
 | `16.19.821.7343 --events face_direction_keyframe_roster_pair --runtime-image PATH` | 自动解码 FaceDirection 包和 `0x0089` 标准补刀快照，在同一关键帧按完整原始参数及先后顺序配对规范英雄行 | 仅写入 `face_direction_keyframe_roster_pair_candidates`；参与者标签来自 HeroStats 阵容，不能当作 FaceDirection 包的行动者；不推断方向效果、位置或路径 |
 | `16.19.821.7343 --events npc_buff_add_packet,npc_buff_remove_packet --runtime-image PATH` | 分别解码 KR `0x00ae/0x047c` 原生包，并在两项均成功时汇总相同不透明 `(u32, u8)` 键的重合与时序歧义 | 逐包候选分别写入两个 JSONL；`candidate_associations.npc_buff_add_remove_opaque_key` 仅含回放内统计，不配对单个包，不推断 Buff 名称、归属或生命周期 |
 | `16.19.821.7343 --events npc_buff_update_num_counter_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x0194` BuffUpdateNumCounter 包，保留四个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_update_num_counter_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 名称、归属、计数含义或生命周期 |
@@ -825,6 +826,20 @@ node src/cli.js query-events "work\16-19-821-damage-lookup-roster" `
   --event unit_apply_damage_lookup_roster_key_candidates `
   --raw-param 0x400001ae --limit 20
 ```
+
+同样可以单独提取与查询 `+0x2c` 键的阵容共现候选：
+
+```powershell
+node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
+  --events unit_apply_damage_lookup2c_roster_key_pair `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-damage-lookup2c-roster"
+node src/cli.js query-events "work\16-19-821-damage-lookup2c-roster" `
+  --event unit_apply_damage_lookup2c_roster_key_candidates `
+  --raw-param 0x400000ae --limit 20
+```
+
+保存查询仍按原始伤害包参数筛选，并逐行核对已保存的候选字段、原始字节和来源引用；它不会重新打开 ROFL，物理包核对发生在解码阶段。`+0x24` 与 `+0x2c` 可以同时落在阵容内，也可以分别落在阵容外；不能把其中一个字段的标签转给另一个字段，或从同一回放毫秒选出唯一致死包。11 份回放的 CLI 输出为 11/11 `CANDIDATE`、零 framing 错误；其中两键都在阵容内的有 34,712 包，仅 15 包是相同键。
 
 对 821 `UnitApplyDamage` 保存结果，仅筛选具有上述旧版匿名回调浮点值的包：
 
