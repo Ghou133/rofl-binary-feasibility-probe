@@ -33,7 +33,13 @@ Current progress (older notes below retain their original research context):
   full target packets. No buff replacement, owner, slot, or lifecycle claim is
   made. Ignored output is in
   `artifacts/16_19_development/buff_replace_cli_batch_11/`.
-- **Current:** Continue selected packet queries and exact-build field research.
+- **Completed:** A real four-capability Buff Add/UpdateNum/UpdateCount/Replace
+  CLI run on `KR_8393821675` returned 24,296/8,189/13,518/770 candidate
+  rows and a `CANDIDATE` Add/UpdateNum aggregate, with zero framing errors.
+  `query-events --opaque-u32` now filters BuffReplace's anonymous `+0x18`;
+  a real query scanned 770 rows and matched 12.
+- **Current:** Continue exact-build field research where an independent
+  receiver or raw anchor can resolve the remaining anonymous roles.
   Unavailable virtual callback receivers still block owner/target/effect
   promotion for several existing event candidates.
 
