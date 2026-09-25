@@ -162,7 +162,9 @@ turret_first_blood_event_packet emits a separate packet-local OnTurretFirstBlood
 Selecting both also emits a candidate OnTurretDie/OnTurretFirstBlood packet-order pair.
 hq_kill_event_packet emits a separate packet-local OnHQKill candidate.
 turret_plate_event_packet emits a separate packet-local OnTurretPlateDestroyed candidate.
-objective_bounty_claimed_packet emits a separate packet-local OnObjectiveBountyClaimed candidate.
+  objective_bounty_claimed_packet emits a separate packet-local OnObjectiveBountyClaimed candidate.
+  Selecting it with turret_plate_event_packet and turret_die_event_packet emits
+  a candidate same-chunk packet triple when anonymous native words agree.
 npc_buff_update_num_counter_packet emits an exact-821 packet-local opaque candidate.
 npc_buff_update_count_packet emits an exact-821 packet-local opaque candidate.
 npc_buff_replace_packet emits an exact-821 packet-local opaque candidate.
@@ -490,6 +492,7 @@ function parseArgs(argv) {
       'revive_ally_event_packet_candidates',
       'turret_plate_event_packet_candidates',
       'objective_bounty_claimed_packet_candidates',
+      'objective_bounty_turret_pair_candidates',
       'champion_die_hero_death_pair_candidates',
       'champion_kill_die_hero_death_pair_candidates',
       'champion_multiple_kill_die_hero_death_pair_candidates',

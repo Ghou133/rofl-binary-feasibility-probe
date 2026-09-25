@@ -74,6 +74,10 @@ const { HQ_KILL_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_hq_kill_event_packet_candidate');
 const { OBJECTIVE_BOUNTY_CLAIMED_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_objective_bounty_claimed_packet_candidate');
+const { OBJECTIVE_BOUNTY_TURRET_PAIR_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_objective_bounty_turret_pair_candidate');
+const { TURRET_PLATE_EVENT_PACKET_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_turret_plate_event_packet_candidate');
 const { INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821,
   isObservedIncrementMinionKillsPayloadHex,
   lookupIncrementMinionKillsKeyFromNativeBytes } =
@@ -195,6 +199,9 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
   objective_bounty_claimed_packet_candidates: Object.freeze([
     'blob_u32_0x04',
   ]),
+  objective_bounty_turret_pair_candidates: Object.freeze([
+    'claim_blob_u32_0x04',
+  ]),
   champion_die_hero_death_pair_candidates: Object.freeze([
     'on_champion_die_event_u32_0x04',
   ]),
@@ -257,6 +264,12 @@ const ASSOCIATION_EVENTS_821 = Object.freeze({
     eventType: 'TURRET_FIRST_BLOOD_DIE_PACKET_PAIR_CANDIDATE',
     evidenceStatus: 'CANDIDATE_821_TURRET_FIRST_BLOOD_DIE_PACKET_PAIR',
     turretPair: true,
+  }),
+  objective_bounty_turret_pair_candidates: Object.freeze({
+    profile: OBJECTIVE_BOUNTY_TURRET_PAIR_821_PROFILE,
+    eventType: 'OBJECTIVE_BOUNTY_TURRET_PACKET_TRIPLE_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_821_ON_EVENT_PLATE_DIE_CLAIM_PACKET_TRIPLE',
+    objectiveBountyTurretPair: true,
   }),
   champion_die_hero_death_pair_candidates: Object.freeze({
     profile: CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE,
@@ -740,6 +753,91 @@ function prepareTurretPairAssociation(semantic, analysis, eventKey,
       throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
         `${dependency} identity or count disagrees with ${profile.capability}.`,
         { capability: dependency, association: profile.capability });
+    }
+  }
+  return association;
+}
+
+function prepareObjectiveBountyTurretPairAssociation(semantic, analysis, eventKey,
+  { profile, evidenceStatus }) {
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`);
+  }
+  const association = semantic.candidate_associations?.[profile.capability];
+  if (association?.status !== 'CANDIDATE') {
+    throw new EventQueryError('ASSOCIATION_UNAVAILABLE',
+      `${profile.capability} is not an executed candidate association.`,
+      { capability: profile.capability,
+        association_status: association?.status ?? null,
+        error: association?.error ?? null, semantic_run_status: semantic.status });
+  }
+  const imageSha = profile.evidence_runtime_image_sha256;
+  if (association.profile_id !== profile.id
+      || association.evidence_runtime_image_sha256 !== imageSha
+      || association.evidence_status !== evidenceStatus
+      || association.replay_sha256 !== semantic.replay_sha256
+      || !isDeepStrictEqual(association.depends_on, [...profile.depends_on])
+      || !isDeepStrictEqual(association.known_limits, [...profile.known_limits])
+      || !isCount(association.event_count)
+      || association.triple_count !== association.event_count
+      || !isCount(association.claim_packet_count)
+      || !isCount(association.turret_plate_count)
+      || !isCount(association.turret_die_count)
+      || !isCount(association.unmatched_claim_count)
+      || !isCount(association.nonunique_claim_count)
+      || association.claim_packet_count
+        !== association.event_count + association.unmatched_claim_count
+      || association.nonunique_claim_count > association.unmatched_claim_count
+      || association.event_count > association.turret_plate_count
+      || association.event_count > association.turret_die_count
+      || !Array.isArray(association.unmatched_claims)
+      || association.unmatched_claims.length !== association.unmatched_claim_count
+      || analysis.event_counts?.[eventKey] !== association.event_count
+      || (analysis.semantic?.candidate_associations?.[profile.capability] != null
+        && !isDeepStrictEqual(analysis.semantic.candidate_associations[profile.capability],
+          association))) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      `${profile.capability} identity, source counts or unmatched claims differ.`);
+  }
+  const dependencies = {
+    objective_bounty_claimed_packet: [OBJECTIVE_BOUNTY_CLAIMED_PACKET_821_PROFILE,
+      association.claim_packet_count],
+    turret_plate_event_packet: [TURRET_PLATE_EVENT_PACKET_821_PROFILE,
+      association.turret_plate_count],
+    turret_die_event_packet: [TURRET_DIE_EVENT_PACKET_821_PROFILE,
+      association.turret_die_count],
+  };
+  for (const dependency of profile.depends_on) {
+    if (!Array.isArray(semantic.requested_capabilities)
+        || !semantic.requested_capabilities.includes(dependency)) {
+      throw new EventQueryError('CAPABILITY_NOT_REQUESTED',
+        `${dependency} was not requested in this Replay artifact.`,
+        { capability: dependency, association: profile.capability });
+    }
+    const result = semantic.capability_results?.[dependency];
+    if (result?.status !== 'CANDIDATE') {
+      throw new EventQueryError('CAPABILITY_UNAVAILABLE',
+        `${dependency} is unavailable for ${profile.capability}.`,
+        { capability: dependency, capability_status: result?.status ?? null,
+          association: profile.capability });
+    }
+    const [dependencyProfile, expectedCount] = dependencies[dependency];
+    if (result.profile_id !== dependencyProfile.id
+        || result.evidence_runtime_image_sha256 !== imageSha
+        || result.runtime_image_sha256 !== imageSha
+        || result.runtime_image_status !== 'MATCHED_USED'
+        || result.runtime_image_used !== true
+        || result.input_packet_id !== 0x040a
+        || result.child_event_id !== dependencyProfile.child_event_id
+        || result.event_count !== expectedCount
+        || (dependency === 'turret_die_event_packet'
+          ? result.input_count !== result.event_count
+          : result.target_packet_count !== result.event_count
+            || result.input_count < result.event_count)
+        || analysis.event_counts?.[`${dependency}_candidates`] !== expectedCount) {
+      throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+        `${dependency} identity or count disagrees with ${profile.capability}.`);
     }
   }
   return association;
@@ -1231,6 +1329,10 @@ function prepareAssociation(semantic, analysis, eventKey, associationConfig) {
   if (associationConfig.turretPair) {
     return prepareTurretPairAssociation(semantic, analysis, eventKey,
       associationConfig);
+  }
+  if (associationConfig.objectiveBountyTurretPair) {
+    return prepareObjectiveBountyTurretPairAssociation(semantic, analysis,
+      eventKey, associationConfig);
   }
   if (associationConfig.nestedGroup) {
     return prepareNamedMultiGroupAssociation(semantic, analysis, eventKey,
@@ -1995,6 +2097,75 @@ function turretPairRow(row, prepared, lineNumber, seenKeys, seenPacketPositions)
   const key = `${firstRef.chunk_index}/${row.replay_time_ms}`;
   if (seenKeys.has(key)) invalid('duplicate same-chunk, same-ms candidate');
   seenKeys.add(key);
+}
+
+function objectiveBountyTurretPairRow(row, prepared, lineNumber,
+  seenPacketPositions) {
+  const { associationConfig, capabilityResult, replaySha, replayVersion } = prepared;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid objective_bounty_turret_pair row at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const plate = row.plate_raw_packet_ref;
+  const die = row.turret_die_raw_packet_ref;
+  const claim = row.claim_raw_packet_ref;
+  if (row.event_type !== associationConfig.eventType
+      || row.game_version !== replayVersion || row.patch !== '16.19'
+      || row.build_profile !== associationConfig.profile.id
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== capabilityResult.evidence_status
+      || row.plate_child_event_id !== 0x0107
+      || row.turret_die_child_event_id !== 0x003b
+      || row.claim_child_event_id !== 0x0113
+      || !plate || !die || !claim
+      || !isDeepStrictEqual(row.raw_packet_ref, claim)
+      || !isDeepStrictEqual(row.raw_packet_refs, [plate, die, claim])
+      || !Number.isSafeInteger(row.claim_blob_u32_0x04)
+      || row.claim_blob_u32_0x04 < 0
+      || row.claim_blob_u32_0x04 > 0xffffffff
+      || row.plate_event_u32_0x04 !== row.claim_blob_u32_0x04
+      || row.turret_die_blob_u32_0x0c !== row.claim_blob_u32_0x04
+      || row.raw_param !== row.claim_raw_param) {
+    invalid('candidate profile, source references or anonymous native words differ');
+  }
+  const refs = [[plate, 17, row.plate_raw_param],
+    [die, 116, row.turret_die_raw_param],
+    [claim, 17, row.claim_raw_param]];
+  for (const [ref, length, param] of refs) {
+    if (ref.replay_sha256 !== replaySha
+        || (prepared.sourcePath !== undefined
+          && ref.source_path !== prepared.sourcePath)
+        || (ref.source_path !== null
+          && (typeof ref.source_path !== 'string' || ref.source_path.length === 0))
+        || ref.replay_time_ms !== row.replay_time_ms
+        || ref.chunk_stream !== 'game_chunk'
+        || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+        || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+        || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+        || !Number.isSafeInteger(ref.decompressed_block_offset)
+        || ref.decompressed_block_offset < 0
+        || !Number.isSafeInteger(ref.decompressed_payload_offset)
+        || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+        || ref.packet_id !== 0x040a || ref.payload_length !== length
+        || !Number.isSafeInteger(ref.raw_param) || ref.raw_param <= 0
+        || ref.raw_param > 0xffffffff || ref.raw_param !== param
+        || !REPLAY_SHA.test(ref.raw_payload_sha256 ?? '')) {
+      invalid('same-Replay packet reference or raw parameter differs');
+    }
+    const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+    if (seenPacketPositions.has(position)) invalid('source packet is reused');
+    seenPacketPositions.add(position);
+  }
+  if (plate.source_path !== die.source_path || die.source_path !== claim.source_path
+      || plate.chunk_index !== die.chunk_index || die.chunk_index !== claim.chunk_index
+      || plate.chunk_id !== die.chunk_id || die.chunk_id !== claim.chunk_id
+      || plate.chunk_file_offset !== die.chunk_file_offset
+      || die.chunk_file_offset !== claim.chunk_file_offset
+      || !(plate.decompressed_block_offset < die.decompressed_block_offset
+        && die.decompressed_block_offset < claim.decompressed_block_offset)) {
+    invalid('same-chunk, same-millisecond plate < die < claim order differs');
+  }
 }
 
 const EPISODE_REF_FIELDS = Object.freeze([
@@ -2881,6 +3052,10 @@ function associationRow(row, prepared, lineNumber, seenKeys, seenPacketPositions
   }
   if (associationConfig.turretPair) {
     turretPairRow(row, prepared, lineNumber, seenKeys, seenPacketPositions);
+    return;
+  }
+  if (associationConfig.objectiveBountyTurretPair) {
+    objectiveBountyTurretPairRow(row, prepared, lineNumber, seenPacketPositions);
     return;
   }
   if (associationConfig.nestedGroup) {
