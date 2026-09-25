@@ -55,6 +55,8 @@ const buffRemovePacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_buff_remove_packet_candidate');
 const buffAddPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_buff_add_packet_candidate');
+const buffUpdateNumCounterPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_buff_update_num_counter_packet_candidate');
 const directInputTurnPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_direct_input_turn_packet_candidate');
 const setMovementDriverPacketCandidate1619821 =
@@ -544,6 +546,7 @@ const BUILD_PROFILES = deepFreeze({
       cast_spell_ans_packet: 0x01da,
       npc_buff_remove_packet: 0x047c,
       npc_buff_add_packet: 0x00ae,
+      npc_buff_update_num_counter_packet: 0x0194,
       direct_input_movement_turn_packet: 0x00ba,
       set_movement_driver_packet: 0x0335,
     },
@@ -627,6 +630,8 @@ const BUILD_PROFILES = deepFreeze({
         buffRemovePacketCandidate1619821.NPC_BUFF_REMOVE_PACKET_CANDIDATE_PROFILE_821,
       npc_buff_add_packet:
         buffAddPacketCandidate1619821.NPC_BUFF_ADD_PACKET_CANDIDATE_PROFILE_821,
+      npc_buff_update_num_counter_packet:
+        buffUpdateNumCounterPacketCandidate1619821.NPC_BUFF_UPDATE_NUM_COUNTER_PACKET_CANDIDATE_PROFILE_821,
       direct_input_movement_turn_packet:
         directInputTurnPacketCandidate1619821.DIRECT_INPUT_MOVEMENT_TURN_PACKET_CANDIDATE_PROFILE_821,
       set_movement_driver_packet:
@@ -697,6 +702,8 @@ const BUILD_PROFILES = deepFreeze({
       cast_spell_ans_packet: 'CANDIDATE_821_NATIVE_CAST_SPELL_ANS_OPAQUE_PACKET_FIELDS',
       npc_buff_remove_packet: 'CANDIDATE_821_NATIVE_BUFF_REMOVE2_OPAQUE_PACKET_FIELDS',
       npc_buff_add_packet: 'CANDIDATE_821_NATIVE_BUFF_ADD2_OPAQUE_PACKET_FIELDS',
+      npc_buff_update_num_counter_packet:
+        'CANDIDATE_821_NATIVE_BUFF_UPDATE_NUM_COUNTER_OPAQUE_PACKET_FIELDS',
       direct_input_movement_turn_packet:
         'CANDIDATE_821_NATIVE_DIRECT_INPUT_TURN_OPAQUE_PACKET_FIELDS',
       set_movement_driver_packet:
@@ -750,6 +757,7 @@ const BUILD_PROFILES = deepFreeze({
       cast_spell_ans_packet: 'exact 821 native 0x01da packet constructor/deserializer, callback transforms for opaque object offsets 0x148/0x14c, nested protected float at +0xe0 and byte at +0x140; no successful-cast, owner, target, spell, slot or field-meaning inference',
       npc_buff_remove_packet: 'exact 821 native 0x047c BuffRemove2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14/0x18; no owner, buff identity, target or lifecycle inference',
       npc_buff_add_packet: 'exact 821 native 0x00ae BuffAdd2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14; no owner, buff identity, target or lifecycle inference',
+      npc_buff_update_num_counter_packet: 'exact 821 native 0x0194 BuffUpdateNumCounter constructor/deserializer and callback transforms for anonymous object offsets 0x10/0x14/0x18/0x1c; no owner, buff identity, target, counter meaning, or lifecycle inference',
       direct_input_movement_turn_packet: 'exact 821 native 0x00ba DirectInputMovementDriverServerTurnData constructor/deserializer and callback transform for three opaque f32 fields at object offsets 0x10/0x14/0x18; no world-position, hero-path or participant inference',
       set_movement_driver_packet: 'exact 821 native 0x0335 SetMovementDriver constructor/deserializer and callback transform for opaque byte at object offset 0x2a; no driver-state transition, position, path or participant inference',
     },
@@ -785,6 +793,7 @@ const BUILD_PROFILES = deepFreeze({
       'resurrect_event_packet',
       'turret_plate_event_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
+      'npc_buff_update_num_counter_packet',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',
     ],

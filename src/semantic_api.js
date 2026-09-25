@@ -80,6 +80,8 @@ const { decodeNpcBuffRemovePacketCandidates821 } =
   require('./decoders/rofl_16_19_821_buff_remove_packet_candidate');
 const { decodeNpcBuffAddPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_buff_add_packet_candidate');
+const { decodeNpcBuffUpdateNumCounterPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_buff_update_num_counter_packet_candidate');
 const {
   DIRECT_INPUT_MOVEMENT_TURN_PACKET_CANDIDATE_PROFILE_821,
   decodeDirectInputMovementTurnPacketCandidates821,
@@ -2279,6 +2281,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    npc_buff_update_num_counter_packet: (input, collected) =>
+      decodeNpcBuffUpdateNumCounterPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     direct_input_movement_turn_packet: (input, collected) =>
       decodeDirectInputMovementTurnPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2342,6 +2350,7 @@ function decode1619821(replay, profile, options = {}) {
     cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
     npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
     npc_buff_add_packet: 'npc_buff_add_packet_candidates',
+    npc_buff_update_num_counter_packet: 'npc_buff_update_num_counter_packet_candidates',
     direct_input_movement_turn_packet: 'direct_input_movement_turn_packet_candidates',
     set_movement_driver_packet: 'set_movement_driver_packet_candidates',
   };
@@ -2379,6 +2388,7 @@ function decode1619821(replay, profile, options = {}) {
     'cast_spell_ans_packet',
     'npc_buff_remove_packet',
     'npc_buff_add_packet',
+    'npc_buff_update_num_counter_packet',
     'direct_input_movement_turn_packet',
     'set_movement_driver_packet',
   ]);
@@ -2426,6 +2436,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'turret_plate_event_packet'
         || capability === 'cast_spell_ans_packet'
         || capability === 'npc_buff_remove_packet' || capability === 'npc_buff_add_packet'
+        || capability === 'npc_buff_update_num_counter_packet'
         || capability === 'direct_input_movement_turn_packet'
         || capability === 'set_movement_driver_packet') {
       result.runtime_image_status ??= options.runtimeImagePath

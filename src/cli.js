@@ -147,6 +147,7 @@ champion_double_kill_event_packet emits a separate packet-local named child mark
 champion_triple_quadra_event_packet emits exact-image 0x000c/0x000d packet markers.
 resurrect_event_packet emits a separate packet-local OnResurrect candidate.
 turret_plate_event_packet emits a separate packet-local OnTurretPlateDestroyed candidate.
+npc_buff_update_num_counter_packet emits an exact-821 packet-local opaque candidate.
 Inspect reads the container and packet framing without a runtime image.
 Capabilities reads the container/build registry without packet framing or semantic decode.
 
@@ -706,6 +707,7 @@ function parseOne1619(replay, options, started) {
       'resurrect_event_packet',
       'turret_plate_event_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
+      'npc_buff_update_num_counter_packet',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',
     ].includes(name)))] : [];
@@ -1915,6 +1917,8 @@ function capabilityQuery(replay, options = {}) {
         || capability === 'npc_buff_remove_packet'
         || capability === 'npc_buff_add_packet'
         || (profile.game_version === '16.19.821.7343'
+          && capability === 'npc_buff_update_num_counter_packet')
+        || (profile.game_version === '16.19.821.7343'
           && (capability === 'direct_input_movement_turn_packet'
             || capability === 'set_movement_driver_packet'));
       const tailStat = perCapabilityInputsAssessed
@@ -2248,6 +2252,11 @@ function capabilityQuery(replay, options = {}) {
           'callback-transformed opaque fields and raw packet provenance; no buff identity or lifecycle inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'npc_buff_update_num_counter_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x0194 full packet consumption',
+          'callback-transformed anonymous fields and raw packet provenance; no owner, buff identity, counter meaning, or lifecycle inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'direct_input_movement_turn_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x00ba full packet consumption',
           'three callback-transformed opaque f32 fields and raw packet provenance; no world-position, general hero-path or participant inference');
@@ -2460,6 +2469,8 @@ function capabilityQuery(replay, options = {}) {
             cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
             npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
             npc_buff_add_packet: 'npc_buff_add_packet_candidates',
+            npc_buff_update_num_counter_packet:
+              'npc_buff_update_num_counter_packet_candidates',
             direct_input_movement_turn_packet:
               'direct_input_movement_turn_packet_candidates',
             set_movement_driver_packet: 'set_movement_driver_packet_candidates',

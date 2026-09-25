@@ -33,6 +33,7 @@ const CAPABILITIES = new Set([
   'resurrect_event_packet',
   'turret_plate_event_packet',
   'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
+  'npc_buff_update_num_counter_packet',
   'direct_input_movement_turn_packet',
   'set_movement_driver_packet',
 ]);
@@ -40,6 +41,7 @@ const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
 const RESPAWN_ROUTES = new Set([0x0048, 0x018d]);
 const MAX_BUFF_REMOVE_PACKET_ROWS = 50_000;
 const MAX_BUFF_ADD_PACKET_ROWS = 50_000;
+const MAX_BUFF_UPDATE_NUM_COUNTER_PACKET_ROWS = 25_000;
 const MAX_BROADCAST_PACKET_ROWS = 512;
 const MAX_SET_ITEM_PACKET_ROWS = 256;
 const MAX_PARAMS_HEAL_PACKET_ROWS = 20_000;
@@ -111,6 +113,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     cast_spell_ans_packet: [],
     npc_buff_remove_packet: [],
     npc_buff_add_packet: [],
+    npc_buff_update_num_counter_packet: [],
     direct_input_movement_turn_packet: [],
     set_movement_driver_packet: [],
     hero_deaths_snapshot: heroStatsRows,
@@ -169,6 +172,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let keyframeBlockCount = 0;
   let buffRemovePacketCount = 0;
   let buffAddPacketCount = 0;
+  let buffUpdateNumCounterPacketCount = 0;
   let broadcastPacketCount = 0;
   let setItemPacketCount = 0;
   let paramsHealPacketCount = 0;
@@ -206,6 +210,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsCastSpellAns = selected.has('cast_spell_ans_packet');
   const selectsBuffRemove = selected.has('npc_buff_remove_packet');
   const selectsBuffAdd = selected.has('npc_buff_add_packet');
+  const selectsBuffUpdateNumCounter = selected.has('npc_buff_update_num_counter_packet');
   const selectsDirectInputTurn = selected.has('direct_input_movement_turn_packet');
   const selectsSetMovementDriver = selected.has('set_movement_driver_packet');
   const selectsHeroLevelState = selected.has('hero_level_state');
@@ -341,6 +346,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
           rows.npc_buff_add_packet.push(copyRow(block, chunk));
         }
       }
+      if (selectsBuffUpdateNumCounter && block.packet_id === 0x0194) {
+        buffUpdateNumCounterPacketCount += 1;
+        if (rows.npc_buff_update_num_counter_packet.length
+            < MAX_BUFF_UPDATE_NUM_COUNTER_PACKET_ROWS) {
+          rows.npc_buff_update_num_counter_packet.push(copyRow(block, chunk));
+        }
+      }
       if (selectsDirectInputTurn && block.packet_id === 0x00ba) {
         directInputTurnPacketCount += 1;
         if (rows.direct_input_movement_turn_packet.length < MAX_DIRECT_INPUT_TURN_PACKET_ROWS) {
@@ -380,7 +392,8 @@ function create821ScanCollector(replay, selectedCapabilities) {
         version: replay.header.version,
         file_size: replay.file_size,
         selected, rows, blockCount, keyframeBlockCount,
-        buffRemovePacketCount, buffAddPacketCount, broadcastPacketCount,
+        buffRemovePacketCount, buffAddPacketCount, buffUpdateNumCounterPacketCount,
+        broadcastPacketCount,
         setItemPacketCount,
         paramsHealPacketCount,
         shieldingParamsPacketCount,
@@ -544,6 +557,14 @@ function rowsFor821Capability(replay, token, capability) {
       && bound.buffAddPacketCount > MAX_BUFF_ADD_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.buffAddPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'npc_buff_update_num_counter_packet'
+      && bound.buffUpdateNumCounterPacketCount
+        > MAX_BUFF_UPDATE_NUM_COUNTER_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.buffUpdateNumCounterPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }

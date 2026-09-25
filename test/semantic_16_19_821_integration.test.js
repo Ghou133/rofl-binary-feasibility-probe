@@ -191,6 +191,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'turret_plate_event_packet',
       'cast_spell_ans_packet',
       'npc_buff_remove_packet', 'npc_buff_add_packet',
+      'npc_buff_update_num_counter_packet',
       'direct_input_movement_turn_packet', 'set_movement_driver_packet']);
   const queried = Object.fromEntries(query.capabilities.map((row) => [row.capability, row]));
   assert.equal(queried.hero_death.runtime_image_requirement, 'NOT_REQUIRED');
@@ -256,6 +257,12 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'EXACT_IMAGE_REQUIRED');
   assert.deepEqual(queried.npc_buff_add_packet.missing_inputs, ['exact_runtime_image']);
   assert.equal(queried.npc_buff_add_packet.output, 'npc_buff_add_packet_candidates');
+  assert.equal(queried.npc_buff_update_num_counter_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.deepEqual(queried.npc_buff_update_num_counter_packet.missing_inputs,
+    ['exact_runtime_image']);
+  assert.equal(queried.npc_buff_update_num_counter_packet.output,
+    'npc_buff_update_num_counter_packet_candidates');
   assert.equal(queried.direct_input_movement_turn_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
   assert.deepEqual(queried.direct_input_movement_turn_packet.missing_inputs,
