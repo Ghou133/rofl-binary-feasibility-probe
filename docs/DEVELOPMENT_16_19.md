@@ -4,6 +4,39 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **UnitApplyDamage native callback float v2:** The same exact 821 image
+  writes object `+0x20` for every one of the 628,909 observed `0x005f`
+  packets. Native and raw-byte checks distinguish 622,951 raw-reader writes
+  from 5,958 constant writes (`0`, `1`, or `2`). The new
+  `native_callback_f32_*` row fields retain the finite anonymous value,
+  source class and, for raw reads, the packet-local byte offset and bytes.
+  Old `callback_f32_*` fields and the saved v1 query contract remain limited
+  to the original 6,501 calibrated rows. Neither field proves applied damage
+  or actor roles; `+0x100` raw-key aliases remain unassigned. Saved v2
+  queries check each new field and source counts before selection.
+  A fresh 11-Replay CLI batch returned `CANDIDATE` in 11/11 with
+  628,909/628,909 native full-consumption witnesses; the saved v2 query
+  scanned all rows and selected the original 6,501 narrow-shape values.
+  Its local JSONL stays ignored under
+  `artifacts/16_19_development/combat_packet_batch_v2_11_821/`.
+- **UnitApplyDamage raw-key identity control:** Full `raw_param` matched one
+  of the ten unique HeroStats hero keys in 49,473/628,909 `0x005f` packets;
+  another 10,284 used the corresponding `+0x100` alias. At 655 candidate
+  death anchors, 442 same-time packets matched the full victim key; a
+  rotated-key control matched 11. Low-byte matching would add 24,473 other
+  packets, so no loose key merge is used. The direct key relation is a
+  bounded participant-label candidate only; the `+0x100` alias and any
+  source/target or applied-damage role remain unresolved.
+- **ShowHealthBar packet candidate:** The image registers `0x0165` as
+  `PKT_S2C_ShowHealthBar_s`. All 89,515 observed packets in 11 exact-build
+  KR Replays were fully consumed by the native deserializer: 61,813 had
+  one-byte payload `4a` and 27,702 had `4b`. The separate CLI/API capability
+  emits raw source references, a callback byte and a zero-flag candidate,
+  with `UNKNOWN` effect. Native code also accepts foreign one-byte values,
+  so the decoder limits output to the two observed bytes. These fields do
+  not establish health, damage, actor identity or actual display state. The
+  same 11-Replay CLI batch returned `CANDIDATE` in 11/11, zero framing
+  errors and 89,515/89,515 native full-consumption witnesses.
 - **Exact-821 UnitApplyDamage packet candidate:** The pinned mapped image
   registers game-stream route `0x005f` as `PKT_UnitApplyDamage_s`. Native
   deserialization fully consumed all 628,909 observed packets in the 11

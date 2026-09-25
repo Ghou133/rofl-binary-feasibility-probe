@@ -183,6 +183,9 @@ unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
 packet-local selectors or a bounded anonymous float candidate; these do not
 establish damage amount or attribution.
+show_health_bar_packet requires the exact-821 runtime image and Python+Unicorn
+to witness full native consumption of every selected packet before emitting
+packet-local callback flag candidates; these do not establish health or display effects.
 face_direction_keyframe_roster_pair pairs canonical keyframe FaceDirection packets
 with same-keyframe HeroStats roster candidates; the roster label does not identify the packet actor.
 Inspect reads the container and packet framing without a runtime image.
@@ -899,6 +902,7 @@ function parseOne1619(replay, options, started) {
       'face_direction_packet',
       'circular_movement_restriction_packet',
       'unit_apply_damage_packet',
+      'show_health_bar_packet',
     ].includes(name)))] : [];
   if (options.semantic !== false && Array.isArray(options.events)
       && options.events.includes('face_direction_keyframe_roster_pair')) {
@@ -2161,6 +2165,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'face_direction_packet'
             || capability === 'circular_movement_restriction_packet'
             || capability === 'unit_apply_damage_packet'
+            || capability === 'show_health_bar_packet'
             || capability === 'face_direction_keyframe_roster_pair'));
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
@@ -2306,7 +2311,7 @@ function capabilityQuery(replay, options = {}) {
           ? [dependencies[0], options.runtimeImage
             ? fileInputDependency('exact_runtime_image', options.runtimeImage)
             : { name: 'exact_runtime_image', status: 'MISSING', path: null },
-          ...(capability === 'unit_apply_damage_packet'
+          ...(['unit_apply_damage_packet', 'show_health_bar_packet'].includes(capability)
             ? [pythonUnicornDependency(options.python ?? options.pythonExecutable)] : []),
           ...(capability === 'face_direction_keyframe_roster_pair'
             ? tailStatInput : [])]
@@ -2528,6 +2533,11 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'unit_apply_damage_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and Python+Unicorn full native consumption of every selected 0x005f packet',
           'packet selectors and one bounded anonymous callback float; no damage amount, source, target, or effect inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'show_health_bar_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and Python+Unicorn full native consumption of every selected 0x0165 packet',
+          'two observed one-byte packet shapes and callback flag candidates; no health amount, actor, or display-effect inference');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'npc_buff_remove_packet') {
@@ -2814,6 +2824,7 @@ function capabilityQuery(replay, options = {}) {
             circular_movement_restriction_packet:
               'circular_movement_restriction_packet_candidates',
             unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
+            show_health_bar_packet: 'show_health_bar_packet_candidates',
             face_direction_keyframe_roster_pair:
               'face_direction_keyframe_roster_pair_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',

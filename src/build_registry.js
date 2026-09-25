@@ -89,6 +89,8 @@ const circularMovementRestrictionPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_circular_movement_restriction_packet_candidate');
 const unitApplyDamagePacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
+const showHealthBarPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_show_health_bar_packet_candidate');
 const faceDirectionKeyframeRosterPair1619821 =
   require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
 const damageFloatCandidate1619821 =
@@ -593,6 +595,7 @@ const BUILD_PROFILES = deepFreeze({
       face_direction_packet: 0x038e,
       circular_movement_restriction_packet: 0x0464,
       unit_apply_damage_packet: 0x005f,
+      show_health_bar_packet: 0x0165,
       face_direction_keyframe_roster_pair: 0x038e,
     },
     decoder_profile: {
@@ -709,6 +712,8 @@ const BUILD_PROFILES = deepFreeze({
         circularMovementRestrictionPacketCandidate1619821.CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE_PROFILE_821,
       unit_apply_damage_packet:
         unitApplyDamagePacketCandidate1619821.UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821,
+      show_health_bar_packet:
+        showHealthBarPacketCandidate1619821.SHOW_HEALTH_BAR_PACKET_CANDIDATE_PROFILE_821,
       face_direction_keyframe_roster_pair:
         faceDirectionKeyframeRosterPair1619821.FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE,
     },
@@ -811,6 +816,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_EXACT_821_CIRCULAR_MOVEMENT_RESTRICTION_PACKET_FIELDS',
       unit_apply_damage_packet:
         'CANDIDATE_EXACT_821_UNIT_APPLY_DAMAGE_PACKET_FIELDS',
+      show_health_bar_packet:
+        'CANDIDATE_EXACT_821_SHOW_HEALTH_BAR_PACKET_FIELDS',
       face_direction_keyframe_roster_pair:
         faceDirectionKeyframeRosterPair1619821.FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE.evidence_status,
     },
@@ -879,6 +886,7 @@ const BUILD_PROFILES = deepFreeze({
       face_direction_packet: 'exact 821 native 0x038e FaceDirection constructor/deserializer packet vector and optional scalar candidates; no proven world position, path, actor, or direction effect',
       circular_movement_restriction_packet: 'exact 821 native-observed 0x0464 packet structure and image-derived anonymous scalar/vector fields; no proven world position, path, actor, receiver, or effective restriction',
       unit_apply_damage_packet: 'exact 821 0x005f packet selectors and bounded anonymous callback f32 from one natively verified shape family; no proven damage amount, source, target, actor or applied effect',
+      show_health_bar_packet: 'exact 821 0x0165 ShowHealthBar route with two observed one-byte packet shapes and anonymous callback byte/zero flag; no proven health amount, damage, actor, or display effect',
       face_direction_keyframe_roster_pair: 'same-keyframe 0x038e packet and canonical 0x0089 hero roster candidate matched by raw parameter; participant label belongs to the roster observation, with no proven packet actor or direction effect',
     },
     verified_capabilities: [],
@@ -930,6 +938,7 @@ const BUILD_PROFILES = deepFreeze({
       'face_direction_packet',
       'circular_movement_restriction_packet',
       'unit_apply_damage_packet',
+      'show_health_bar_packet',
       'face_direction_keyframe_roster_pair',
     ],
     unsupported_capabilities: [],

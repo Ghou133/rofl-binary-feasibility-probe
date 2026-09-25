@@ -120,6 +120,8 @@ const { decodeCircularMovementRestrictionPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_circular_movement_restriction_packet_candidate');
 const { decodeUnitApplyDamagePacketCandidates821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
+const { decodeShowHealthBarPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_show_health_bar_packet_candidate');
 const { associateFaceDirectionKeyframeRosterPairs821 } =
   require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
 const { RUNTIME_IMAGE_SHA256: RUNTIME_IMAGE_SHA256_821 } =
@@ -2436,6 +2438,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    show_health_bar_packet: (input, collected) =>
+      decodeShowHealthBarPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -2505,6 +2513,7 @@ function decode1619821(replay, profile, options = {}) {
     circular_movement_restriction_packet:
       'circular_movement_restriction_packet_candidates',
     unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
+    show_health_bar_packet: 'show_health_bar_packet_candidates',
     face_direction_keyframe_roster_pair: 'face_direction_keyframe_roster_pair_candidates',
   };
   const capabilityResults = {};
@@ -2558,6 +2567,7 @@ function decode1619821(replay, profile, options = {}) {
     'face_direction_packet',
     'circular_movement_restriction_packet',
     'unit_apply_damage_packet',
+    'show_health_bar_packet',
   ]);
   const pairSelected = capabilities.includes('face_direction_keyframe_roster_pair');
   const supported = [...new Set([
@@ -2637,6 +2647,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'face_direction_packet'
         || capability === 'circular_movement_restriction_packet'
         || capability === 'unit_apply_damage_packet'
+        || capability === 'show_health_bar_packet'
         || capability === 'face_direction_keyframe_roster_pair') {
       result.runtime_image_status ??= options.runtimeImagePath
         ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';

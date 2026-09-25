@@ -205,6 +205,24 @@ test('821 UnitApplyDamage preflight reports a missing Python and Unicorn runtime
   assert.equal(damage.required_inputs[2].status, 'MISSING');
 });
 
+test('821 ShowHealthBar preflight reports runtime dependencies without opening packet framing', () => {
+  const cli = loadCli();
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.821.7343');
+  const unavailablePython = path.join(os.tmpdir(), 'rofl-821-python-does-not-exist');
+  const result = cli.capabilityQuery(replay, { python: unavailablePython });
+  const bar = result.capabilities.find((row) =>
+    row.capability === 'show_health_bar_packet');
+  assert.equal(result.packet_framing_inspected, false);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(bar.status, 'CANDIDATE');
+  assert.equal(bar.output, 'show_health_bar_packet_candidates');
+  assert.equal(bar.runtime_image_requirement, 'EXACT_IMAGE_REQUIRED');
+  assert.deepEqual(bar.required_inputs.map((input) => input.name),
+    ['replay', 'exact_runtime_image', 'python_unicorn']);
+  assert.deepEqual(bar.missing_inputs, ['exact_runtime_image', 'python_unicorn']);
+  assert.equal(bar.required_inputs[2].status, 'MISSING');
+});
+
 test('capabilities exposes missing Replay tail stats without treating it as zero events', (t) => {
   const cli = loadCli();
   const input = fixture(t, '16.19.820.7193');
