@@ -35,6 +35,8 @@ const { HERO_DEATH_CANDIDATE_PROFILE_821 } =
   require('../src/decoders/rofl_16_19_821_7343');
 const { HERO_ASSIST_CANDIDATE_PROFILE_821 } =
   require('../src/decoders/rofl_16_19_821_assist_candidate');
+const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_revive_ally_packet_candidate');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const SHA = 'a'.repeat(64);
@@ -60,6 +62,7 @@ const CHAMPION_KILL_EVENT = 'champion_kill_event_packet_candidates';
 const CHAMPION_MULTIPLE_KILL_EVENT = 'champion_multiple_kill_event_packet_candidates';
 const SHUTDOWN_PACKET_EVENT = 'on_shutdown_event_packet_candidates';
 const RESURRECT_PACKET_EVENT = 'resurrect_event_packet_candidates';
+const REVIVE_ALLY_PACKET_EVENT = 'revive_ally_event_packet_candidates';
 const TURRET_PLATE_PACKET_EVENT = 'turret_plate_event_packet_candidates';
 const DIE_PAIR_EVENT = 'champion_die_hero_death_pair_candidates';
 const KILL_GROUP_EVENT = 'champion_kill_die_hero_death_pair_candidates';
@@ -430,7 +433,7 @@ function artifact(t, rows = [
     SET_SPELL_LEVEL_EVENT,
     CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
     CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT,
-    RESURRECT_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
+    RESURRECT_PACKET_EVENT, REVIVE_ALLY_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
     DOUBLE_PACKET_EVENT, DOUBLE_MULTI_GROUP_EVENT, TRIPLE_QUADRA_PACKET_EVENT,
     TRIPLE_QUADRA_MULTI_GROUP_EVENT,
     HERO_DEATH_EVENT, HERO_ASSIST_EVENT, ...ASSOCIATION_EVENTS].includes(eventKey)
@@ -468,6 +471,38 @@ function artifact(t, rows = [
 function run(...args) {
   return spawnSync(process.execPath, [CLI, 'query-events', ...args],
     { encoding: 'utf8', cwd: path.dirname(CLI) });
+}
+
+function reviveAllyRow(time, fields = {}) {
+  return {
+    event_type: 'REVIVE_ALLY_EVENT_PACKET_CANDIDATE',
+    game_version: REVIVE_ALLY_EVENT_PACKET_821_PROFILE.replay_version,
+    patch: '16.19', build_profile: REVIVE_ALLY_EVENT_PACKET_821_PROFILE.id,
+    replay_sha256: SHA, replay_time_ms: time,
+    raw_param: 0x400000b5, event_id: 0x002c, event_name: 'OnReviveAlly',
+    raw_event_id_hex: '0x49ca', confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_EXACT_RUNTIME_ON_REVIVE_ALLY_PACKET',
+    raw_packet_ref: { replay_sha256: SHA, packet_id: 0x040a,
+      payload_length: 16, raw_param: 0x400000b5 },
+    ...fields,
+  };
+}
+
+function reviveAllyArtifact(t, rows) {
+  const fixture = artifact(t, rows, true, REVIVE_ALLY_PACKET_EVENT);
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    Object.assign(semantic.capability_results.revive_ally_event_packet, {
+      profile_id: REVIVE_ALLY_EVENT_PACKET_821_PROFILE.id,
+      evidence_runtime_image_sha256:
+        REVIVE_ALLY_EVENT_PACKET_821_PROFILE.evidence_runtime_image_sha256,
+      runtime_image_sha256:
+        REVIVE_ALLY_EVENT_PACKET_821_PROFILE.evidence_runtime_image_sha256,
+      runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+      evidence_status: 'CANDIDATE_EXACT_RUNTIME_ON_REVIVE_ALLY_PACKET',
+      input_packet_id: 0x040a, child_event_id: 0x002c,
+    });
+  });
+  return fixture;
 }
 
 function assistRow(time, victim, killer, assistants) {
@@ -2469,6 +2504,87 @@ test('query-events filters anonymous OnResurrect child fields without using oute
   assert.equal(rawOnly.status, 0, rawOnly.stderr);
   assert.equal(rawOnly.stdout, '');
   assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
+});
+
+test('query-events filters the anonymous OnReviveAlly child u32 and preserves JSONL', (t) => {
+  const fixture = reviveAllyArtifact(t, [
+    reviveAllyRow(10, { event_u32_0x04: 0x400000b6 }),
+    reviveAllyRow(20, { event_u32_0x04: 0 }),
+    reviveAllyRow(30),
+    reviveAllyRow(40, { event_u32_0x04: null }),
+  ]);
+  const matched = run(fixture.replayDirectory, '--event', REVIVE_ALLY_PACKET_EVENT,
+    '--opaque-u32', '0x400000b6');
+  assert.equal(matched.status, 0, matched.stderr);
+  assert.equal(matched.stdout, `${fixture.lines[0]}\n`);
+  const summary = JSON.parse(matched.stderr);
+  assert.equal(summary.scanned_count, 4);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.opaque_u32_unavailable_count, 2);
+  assert.equal(summary.rows_unmodified, true);
+
+  const zeroValue = run(fixture.replayDirectory, '--event', REVIVE_ALLY_PACKET_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zeroValue.status, 0, zeroValue.stderr);
+  assert.equal(zeroValue.stdout, `${fixture.lines[1]}\n`);
+  const noMatch = run(fixture.replayDirectory, '--event', REVIVE_ALLY_PACKET_EVENT,
+    '--opaque-u32', '0x400000b5');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(noMatch.stdout, '');
+  assert.equal(JSON.parse(noMatch.stderr).matched_count, 0);
+});
+
+test('query-events keeps missing OnReviveAlly u32 unavailable and rejects identity or field corruption', (t) => {
+  const unavailable = reviveAllyArtifact(t, [
+    reviveAllyRow(10), reviveAllyRow(20, { event_u32_0x04: null }),
+  ]);
+  const output = path.join(unavailable.root, 'unavailable.jsonl');
+  const absent = run(unavailable.replayDirectory, '--event', REVIVE_ALLY_PACKET_EVENT,
+    '--opaque-u32', '0', '--output', output);
+  assert.equal(absent.status, 2);
+  assert.equal(JSON.parse(absent.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const wrongBuild = reviveAllyArtifact(t, [reviveAllyRow(10, { event_u32_0x04: 0 })]);
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    rewriteJson(path.join(wrongBuild.replayDirectory, name), (document) => {
+      document.replay_version = VERSION;
+    });
+  }
+  const buildRejected = run(wrongBuild.replayDirectory,
+    '--event', REVIVE_ALLY_PACKET_EVENT, '--opaque-u32', '0');
+  assert.equal(buildRejected.status, 2);
+  assert.equal(JSON.parse(buildRejected.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+
+  const wrongProfile = reviveAllyArtifact(t, [reviveAllyRow(10, { event_u32_0x04: 0 })]);
+  rewriteJson(path.join(wrongProfile.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.revive_ally_event_packet.profile_id = 'foreign-profile';
+  });
+  const profileRejected = run(wrongProfile.replayDirectory,
+    '--event', REVIVE_ALLY_PACKET_EVENT, '--opaque-u32', '0');
+  assert.equal(profileRejected.status, 2);
+  assert.equal(JSON.parse(profileRejected.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+
+  const wrongRow = reviveAllyArtifact(t, [reviveAllyRow(10,
+    { event_u32_0x04: 0, build_profile: 'foreign-profile' })]);
+  const rowRejected = run(wrongRow.replayDirectory,
+    '--event', REVIVE_ALLY_PACKET_EVENT, '--opaque-u32', '0');
+  assert.equal(rowRejected.status, 2);
+  assert.equal(JSON.parse(rowRejected.stderr).code, 'INVALID_EVENT_ROW');
+
+  for (const value of [-1, 0x100000000, '7']) {
+    const malformed = reviveAllyArtifact(t, [
+      reviveAllyRow(10, { event_u32_0x04: 0 }),
+      reviveAllyRow(20, { event_u32_0x04: value }),
+    ]);
+    const failedOutput = path.join(malformed.root, 'invalid-u32.jsonl');
+    const rejected = run(malformed.replayDirectory,
+      '--event', REVIVE_ALLY_PACKET_EVENT,
+      '--opaque-u32', '0', '--output', failedOutput);
+    assert.equal(rejected.status, 2);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(failedOutput), false);
+  }
 });
 
 test('query-events filters anonymous turret plate child field without using outer raw param', (t) => {

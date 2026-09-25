@@ -420,6 +420,7 @@ function parseArgs(argv) {
       'champion_multiple_kill_event_packet_candidates',
       'on_shutdown_event_packet_candidates',
       'resurrect_event_packet_candidates',
+      'revive_ally_event_packet_candidates',
       'turret_plate_event_packet_candidates',
       'champion_die_hero_death_pair_candidates',
       'champion_kill_die_hero_death_pair_candidates',

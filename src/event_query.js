@@ -33,6 +33,8 @@ const { HERO_DEATH_CANDIDATE_PROFILE_821 } =
   require('./decoders/rofl_16_19_821_7343');
 const { HERO_ASSIST_CANDIDATE_PROFILE_821 } =
   require('./decoders/rofl_16_19_821_assist_candidate');
+const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
@@ -73,6 +75,7 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
   resurrect_event_packet_candidates: Object.freeze([
     'event_u32_0x04', 'event_u32_0x08',
   ]),
+  revive_ally_event_packet_candidates: Object.freeze(['event_u32_0x04']),
   turret_plate_event_packet_candidates: Object.freeze([
     'event_u32_0x04',
   ]),
@@ -496,6 +499,29 @@ function prepareEventQuery(directory, eventKey) {
   const capabilityResult = associationConfig
     ? prepareAssociation(semantic, analysis, eventKey, associationConfig)
     : semantic.capability_results?.[capability];
+  if (eventKey === 'revive_ally_event_packet_candidates') {
+    const profile = REVIVE_ALLY_EVENT_PACKET_821_PROFILE;
+    if (semantic.replay_version !== profile.replay_version) {
+      throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+        `${eventKey} requires exact build ${profile.replay_version}.`);
+    }
+    if (capabilityResult?.status === 'CANDIDATE'
+        && (capabilityResult.profile_id !== profile.id
+          || capabilityResult.evidence_runtime_image_sha256
+            !== profile.evidence_runtime_image_sha256
+          || capabilityResult.runtime_image_sha256
+            !== profile.evidence_runtime_image_sha256
+          || capabilityResult.runtime_image_status !== 'MATCHED_USED'
+          || capabilityResult.runtime_image_used !== true
+          || capabilityResult.evidence_status
+            !== 'CANDIDATE_EXACT_RUNTIME_ON_REVIVE_ALLY_PACKET'
+          || capabilityResult.input_packet_id !== profile.replay_block_packet_id
+          || capabilityResult.child_event_id !== profile.child_event_id
+          || capabilityResult.input_count !== capabilityResult.event_count)) {
+      throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+        `${capability} identity differs from its exact-build candidate profile.`);
+    }
+  }
   if (exactPacketProfile) {
     prepareExactPacketEvent(semantic, analysis, eventKey, capabilityResult,
       exactPacketProfile);
@@ -1390,6 +1416,20 @@ async function streamEventQuery(prepared, options, emitLine) {
       }
       exactNamedKillPacketRow(row, prepared, lineNumber,
         associationPacketPositions);
+      if (prepared.eventKey === 'revive_ally_event_packet_candidates'
+          && (row.event_type !== 'REVIVE_ALLY_EVENT_PACKET_CANDIDATE'
+            || row.game_version !== prepared.replayVersion
+            || row.patch !== '16.19'
+            || row.build_profile !== REVIVE_ALLY_EVENT_PACKET_821_PROFILE.id
+            || row.event_id !== REVIVE_ALLY_EVENT_PACKET_821_PROFILE.child_event_id
+            || row.event_name !== REVIVE_ALLY_EVENT_PACKET_821_PROFILE.child_event_name
+            || row.raw_event_id_hex !== '0x49ca'
+            || row.confidence !== 'CANDIDATE'
+            || row.semantic_status !== 'CANDIDATE_EXACT_RUNTIME_ON_REVIVE_ALLY_PACKET')) {
+        throw new EventQueryError('INVALID_EVENT_ROW',
+          `OnReviveAlly candidate identity differs at JSONL line ${lineNumber}.`,
+          { line_number: lineNumber });
+      }
       associationRow(row, prepared, lineNumber, associationKeys,
         associationPacketPositions);
       if (prepared.eventKey === 'champion_triple_quadra_multi_group_candidates') {

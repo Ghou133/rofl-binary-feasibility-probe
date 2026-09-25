@@ -4,6 +4,13 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed query:** `query-events --opaque-u32 VALUE` for
+  `revive_ally_event_packet_candidates` filters the exact 821 anonymous native child `+0x04`
+  integer without changing JSONL or assigning an actor/recipient role. A real
+  11-Replay artifact query for `0x400000b6` scanned three candidate rows,
+  emitted one original line, and reported one complete Replay plus ten
+  unavailable Replays (`PARTIAL`). Missing and null values stay unavailable;
+  checked nonmatches are zero, not missing input.
 - **Completed packet candidate:** Exact KR 821 `0x040a/116` child `0x003b`,
   named `OnTurretDie` in the pinned runtime image, is selectable through
   CLI/API with the exact image SHA-256 gate. All 11 supplied Replays returned
