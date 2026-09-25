@@ -8,6 +8,7 @@ const test = require('node:test');
 
 const { parseReplayBuffer, parseReplayFile, walkBlocks } = require('../src/rofl');
 const { replayFromChunks } = require('./helpers/synthetic_replay');
+const { collect821Routes } = require('../src/decoders/rofl_16_19_821_scan');
 const { PROFILES } = require('../src/decoders/rofl_16_19_821_float_stats_candidate');
 const {
   decodeHeroFloatSnapshotCandidates821,
@@ -357,6 +358,25 @@ test('wrong build and incomplete or altered source candidates fail closed', () =
   const changedBytes = fixture();
   changedBytes.replay.buffer[0] ^= 1;
   assert.equal(associate(changedBytes.replay, changedBytes).status, 'DECODE_FAILED');
+});
+
+test('same-run route scan reuse preserves rows and rejects foreign or changed sources', () => {
+  const values = fixture();
+  const token = collect821Routes(values.replay, ['hero_death']);
+  const independent = associate(values.replay, values);
+  const reused = associate(values.replay, { ...values, precollected: token });
+  assert.equal(independent.status, 'CANDIDATE', independent.error);
+  assert.deepEqual(reused, independent);
+
+  const foreign = fixture();
+  const foreignResult = associate(foreign.replay, {
+    ...foreign, precollected: token,
+  });
+  assert.equal(foreignResult.status, 'DECODE_FAILED');
+
+  values.replay.buffer[0] ^= 1;
+  const changed = associate(values.replay, { ...values, precollected: token });
+  assert.equal(changed.status, 'DECODE_FAILED');
 });
 
 test('one original KR exact-build Replay preserves full source-bound packet multiplicity', {

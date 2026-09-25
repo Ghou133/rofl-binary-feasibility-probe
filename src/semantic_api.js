@@ -2650,6 +2650,7 @@ function decode1619821(replay, profile, options = {}) {
           minionsKilledSnapshotOutcome: decodeCapability('hero_minions_killed_snapshot'),
           validatedRawRosterPairOutcome:
             decodeCapability('unit_apply_damage_roster_key_pair'),
+          precollected: candidate821Scan,
         });
       } else if (decoders[capability]) {
         outcome = decoders[capability](replay, candidate821Scan);
