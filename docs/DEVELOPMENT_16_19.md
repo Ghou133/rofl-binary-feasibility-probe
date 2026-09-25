@@ -4,6 +4,16 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `shielding_params_packet_pair` is an unpublished
+  selected CLI/API candidate for exact-image OnEvent children `0x00f0`
+  and `0x00ef`, both registered as `ShieldingParams`. Native decoding fully
+  consumed all 5,556 observed 29-byte packets in 11 Replays; their 20-byte
+  child blobs form 2,778 unique ordered pairs within replay, chunk and time.
+  The two packet refs and callback-read anonymous `+0x08/+0x0c` u32 fields
+  are retained. The raw `+0x10` f32 is opaque: zero and negative values
+  occur, and neither callback reads it directly. No shield amount, actor,
+  target, generation or absorption is inferred. Ignored cross-checks are
+  under `artifacts/16_19_development/shielding_pair_validation_821/`.
 - **Completed:** KR 821 `params_heal_packet` is an unpublished selected
   CLI/API candidate for exact-image OnEvent child `0x004b` (`ParamsHeal`).
   Independent native validation accepted and fully consumed all 86,604

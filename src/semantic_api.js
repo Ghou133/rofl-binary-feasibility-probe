@@ -50,6 +50,8 @@ const { decodeHeroInventorySetItemPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_set_item_packet_candidate');
 const { decodeParamsHealPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_params_heal_packet_candidate');
+const { decodeShieldingParamsPacketPairCandidates821 } =
+  require('./decoders/rofl_16_19_821_shielding_params_packet_pair_candidate');
 const { decodeCastSpellAnsPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const { decodeNpcBuffRemovePacketCandidates821 } =
@@ -2120,6 +2122,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    shielding_params_packet_pair: (input, collected) =>
+      decodeShieldingParamsPacketPairCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     cast_spell_ans_packet: (input, collected) =>
       decodeCastSpellAnsPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2188,6 +2196,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_inventory_broadcast_packet: 'hero_inventory_broadcast_packet_candidates',
     hero_inventory_set_item_packet: 'hero_inventory_set_item_packet_candidates',
     params_heal_packet: 'params_heal_packet_candidates',
+    shielding_params_packet_pair: 'shielding_params_packet_pair_candidates',
     cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
     npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
     npc_buff_add_packet: 'npc_buff_add_packet_candidates',
@@ -2214,6 +2223,7 @@ function decode1619821(replay, profile, options = {}) {
     'hero_inventory_packet', 'hero_inventory_broadcast_packet',
     'hero_inventory_set_item_packet',
     'params_heal_packet',
+    'shielding_params_packet_pair',
     'cast_spell_ans_packet',
     'npc_buff_remove_packet',
     'npc_buff_add_packet',
@@ -2251,6 +2261,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'hero_inventory_broadcast_packet'
         || capability === 'hero_inventory_set_item_packet'
         || capability === 'params_heal_packet'
+        || capability === 'shielding_params_packet_pair'
         || capability === 'cast_spell_ans_packet'
         || capability === 'npc_buff_remove_packet' || capability === 'npc_buff_add_packet'
         || capability === 'direct_input_movement_turn_packet'
@@ -2274,10 +2285,12 @@ function decode1619821(replay, profile, options = {}) {
   const uniqueDecodedInputCounts = new Map();
   for (const [capability, result] of Object.entries(capabilityResults)) {
     if (result.status !== 'CANDIDATE') continue;
-    // The 0x040a route carries distinct child protocols. Its 44-byte assist
-    // packets and 60-byte ParamsHeal packets are disjoint decoded inputs.
+    // The 0x040a route carries disjoint 44-byte assist, 60-byte ParamsHeal,
+    // and 29-byte ShieldingParams packets.
     const packetGroup = capability === 'params_heal_packet'
-      ? '0x040a/child_004b' : result.input_packet_id;
+      ? '0x040a/child_004b'
+      : capability === 'shielding_params_packet_pair'
+        ? '0x040a/child_00ef_00f0' : result.input_packet_id;
     uniqueDecodedInputCounts.set(packetGroup,
       Math.max(uniqueDecodedInputCounts.get(packetGroup) ?? 0, result.input_count));
   }

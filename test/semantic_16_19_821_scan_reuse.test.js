@@ -174,6 +174,24 @@ test('821 selected-only token stays bound to its Replay and copied packet rows',
   assert.match(rejected.error, /Replay source integrity failed/);
 });
 
+test('821 OnEvent packet shapes stay separate in the shared scan', () => {
+  const replay = replayFromChunks([
+    { stream: 1, body: Buffer.concat([29, 44, 60].map((length) =>
+      shortPacket(0x040a, 0x400000ae, Buffer.alloc(length)))) },
+    { stream: 2, body: Buffer.concat([29, 60].map((length) =>
+      shortPacket(0x040a, 0x400000ae, Buffer.alloc(length)))) },
+  ], BUILD);
+  const token = collect821Routes(replay, [
+    'hero_assist', 'params_heal_packet', 'shielding_params_packet_pair',
+  ]);
+  assert.deepEqual(rowsFor821Capability(replay, token, 'hero_assist').rows
+    .map(({ block }) => block.payload_length), [44]);
+  assert.deepEqual(rowsFor821Capability(replay, token, 'params_heal_packet').rows
+    .map(({ block }) => block.payload_length), [60, 60]);
+  assert.deepEqual(rowsFor821Capability(replay, token, 'shielding_params_packet_pair').rows
+    .map(({ block }) => block.payload_length), [29, 29]);
+});
+
 test('821 out-of-range level retains independent results and a bad start chunk blocks all', (t) => {
   const unknown = fixture({ unknownLevel: true });
   const decompressions = countDecompressions(t);
