@@ -43,6 +43,8 @@ const { WARD_INVENTORY_KEYFRAME_PAIR_821_PROFILE } =
   require('./decoders/rofl_16_19_821_ward_inventory_keyframe_pair_candidate');
 const { INVENTORY_KEYFRAME_INTERVAL_DIFFERENCE_821_PROFILE } =
   require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
+const { INVENTORY_GAME_BROADCAST_KEYFRAME_BRACKET_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_inventory_game_broadcast_keyframe_bracket_candidate');
 const { INCREMENT_MINION_KEYFRAME_BRACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_increment_minion_keyframe_bracket_candidate');
 const { FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE } =
@@ -85,6 +87,17 @@ const INVENTORY_INTERVAL_ROW_FIELDS_821 = new Set([
   'changed_slot_count', 'changed_slots_candidate', 'confidence', 'semantic_status',
   'field_confidence', 'raw_packet_ref', 'previous_raw_packet_ref',
   'current_raw_packet_ref', 'raw_packet_refs',
+]);
+const INVENTORY_GAME_BRACKET_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'previous_observation_time_ms', 'game_observation_time_ms',
+  'next_observation_time_ms', 'observation_interval_ms',
+  'previous_keyframe_chunk_index', 'game_chunk_index', 'next_keyframe_chunk_index',
+  'hero_raw_param', 'participant_id_candidate', 'observation_kind',
+  'observation_scope', 'record_count', 'record_comparisons_candidate',
+  'unrecorded_game_slots_candidate', 'confidence', 'semantic_status',
+  'field_confidence', 'raw_packet_ref', 'previous_raw_packet_ref',
+  'game_raw_packet_ref', 'next_raw_packet_ref', 'raw_packet_refs',
 ]);
 const INCREMENT_MINION_KILLS_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
@@ -208,6 +221,12 @@ const ASSOCIATION_EVENTS_821 = Object.freeze({
     eventType: 'INVENTORY_KEYFRAME_INTERVAL_DIFFERENCE_CANDIDATE',
     evidenceStatus: 'CANDIDATE_821_ADJACENT_KEYFRAME_INVENTORY_SLOT_DIFFERENCE',
     inventoryInterval: true,
+  }),
+  inventory_game_broadcast_keyframe_bracket_candidates: Object.freeze({
+    profile: INVENTORY_GAME_BROADCAST_KEYFRAME_BRACKET_821_PROFILE,
+    eventType: 'INVENTORY_GAME_BROADCAST_KEYFRAME_BRACKET_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_821_GAME_BROADCAST_BETWEEN_ADJACENT_KEYFRAMES',
+    inventoryGameBracket: true,
   }),
   ward_inventory_keyframe_pair_candidates: Object.freeze({
     profile: WARD_INVENTORY_KEYFRAME_PAIR_821_PROFILE,
@@ -846,6 +865,78 @@ function prepareInventoryKeyframeIntervalDifferenceAssociation(semantic, analysi
   return association;
 }
 
+function prepareInventoryGameBroadcastBracketAssociation(semantic, analysis, eventKey,
+  { profile, evidenceStatus }) {
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`);
+  }
+  const association = semantic.candidate_associations?.[profile.capability];
+  if (association?.status !== 'CANDIDATE') {
+    throw new EventQueryError('ASSOCIATION_UNAVAILABLE',
+      `${profile.capability} is not an executed candidate association.`,
+      { capability: profile.capability, association_status: association?.status ?? null,
+        error: association?.error ?? null, semantic_run_status: semantic.status });
+  }
+  const interval = prepareInventoryKeyframeIntervalDifferenceAssociation(
+    semantic, analysis, 'inventory_keyframe_interval_difference_candidates',
+    ASSOCIATION_EVENTS_821.inventory_keyframe_interval_difference_candidates);
+  const exclusions = [
+    ['excluded_noncanonical_game_broadcast_count',
+      'excluded_noncanonical_game_broadcast_packet_refs'],
+    ['excluded_before_first_keyframe_count', 'excluded_before_first_keyframe_refs'],
+    ['excluded_after_last_keyframe_count', 'excluded_after_last_keyframe_refs'],
+    ['excluded_on_boundary_count', 'excluded_on_boundary_refs'],
+  ];
+  const labels = ['SAME_AS_BOTH_ENDPOINTS', 'DIFFERS_FROM_EQUAL_ENDPOINTS',
+    'SAME_AS_PREVIOUS_ENDPOINT', 'SAME_AS_NEXT_ENDPOINT',
+    'DIFFERS_FROM_BOTH_ENDPOINTS'];
+  const comparisonCounts = association.comparison_counts;
+  if (association.profile_id !== profile.id
+      || association.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || association.evidence_status !== evidenceStatus
+      || association.replay_sha256 !== semantic.replay_sha256
+      || association.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || association.runtime_image_status !== 'MATCHED_USED'
+      || association.runtime_image_used !== true
+      || !isDeepStrictEqual(association.depends_on, [...profile.depends_on])
+      || !isDeepStrictEqual(association.known_limits, [...profile.known_limits])
+      || association.input_count !== interval.input_count
+      || association.keyframe_count !== interval.keyframe_count
+      || association.broadcast_keyframe_packet_count
+        !== interval.broadcast_keyframe_packet_count
+      || association.game_broadcast_packet_count
+        !== interval.excluded_game_broadcast_count
+      || association.verified_raw_packet_count !== interval.verified_raw_packet_count
+      || !isCount(association.bracketed_game_broadcast_count)
+      || association.event_count !== association.bracketed_game_broadcast_count
+      || !isCount(association.record_comparison_count)
+      || association.record_comparison_count < association.event_count * 6
+      || association.record_comparison_count > association.event_count * 9
+      || !isCount(association.distinct_participant_interval_count)
+      || association.distinct_participant_interval_count > association.event_count
+      || exclusions.some(([countName, refsName]) =>
+        !isCount(association[countName])
+        || !Array.isArray(association[refsName])
+        || association[refsName].length !== association[countName])
+      || association.event_count + exclusions.reduce((sum, [name]) =>
+        sum + association[name], 0) !== association.game_broadcast_packet_count
+      || !comparisonCounts || typeof comparisonCounts !== 'object'
+      || Array.isArray(comparisonCounts)
+      || !isDeepStrictEqual(Object.keys(comparisonCounts).sort(), labels.slice().sort())
+      || labels.some((label) => !isCount(comparisonCounts[label]))
+      || labels.reduce((sum, label) => sum + comparisonCounts[label], 0)
+        !== association.record_comparison_count
+      || analysis.event_counts?.[eventKey] !== association.event_count
+      || !isDeepStrictEqual(
+        analysis.semantic?.candidate_associations?.[profile.capability], association)) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      `${profile.capability} identity, source counts, or exclusions differ.`);
+  }
+  return association;
+}
+
 function prepareWardInventoryKeyframePairAssociation(semantic, analysis, eventKey,
   { profile, evidenceStatus }) {
   if (semantic.replay_version !== profile.replay_version) {
@@ -1052,6 +1143,10 @@ function prepareAssociation(semantic, analysis, eventKey, associationConfig) {
   }
   if (associationConfig.inventoryInterval) {
     return prepareInventoryKeyframeIntervalDifferenceAssociation(semantic, analysis,
+      eventKey, associationConfig);
+  }
+  if (associationConfig.inventoryGameBracket) {
+    return prepareInventoryGameBroadcastBracketAssociation(semantic, analysis,
       eventKey, associationConfig);
   }
   if (associationConfig.wardPair) {
@@ -2091,6 +2186,9 @@ async function loadInventoryIntervalEndpointSnapshots(prepared) {
   const source = prepareInventoryIntervalSource(prepared);
   const association = prepared.capabilityResult;
   const sourceResult = source?.capabilityResult;
+  const expectedGameCount = prepared.associationConfig?.inventoryGameBracket
+    ? association.game_broadcast_packet_count
+    : association.excluded_game_broadcast_count;
   const invalid = (reason) => {
     throw new EventQueryError('INVALID_EVENT_ROW',
       `Invalid inventory Broadcast endpoint source: ${reason}.`);
@@ -2105,12 +2203,13 @@ async function loadInventoryIntervalEndpointSnapshots(prepared) {
           .evidence_runtime_image_sha256
       || sourceResult.event_count !== association.input_count
       || source.declaredCount !== association.input_count
-      || association.input_count > 512) {
+      || association.input_count > 10_000) {
     throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
       'Inventory interval Broadcast endpoint source differs from exact-build metadata.');
   }
   const snapshots = new Map();
   const frames = new Map();
+  const gameRows = new Map();
   const positions = new Set();
   let keyframeCount = 0;
   let gameCount = 0;
@@ -2176,6 +2275,7 @@ async function loadInventoryIntervalEndpointSnapshots(prepared) {
       }
     }
     if (!keyframe) {
+      gameRows.set(position, row);
       gameCount += 1;
       return;
     }
@@ -2186,7 +2286,8 @@ async function loadInventoryIntervalEndpointSnapshots(prepared) {
       invalid('keyframe has a noncanonical or contradictory participant key');
     }
     const frame = frames.get(ref.chunk_index)
-      ?? { timeMs: row.replay_time_ms, participants: new Set() };
+      ?? { chunkIndex: ref.chunk_index, timeMs: row.replay_time_ms,
+        participants: new Set() };
     if (frame.timeMs !== row.replay_time_ms
         || frame.participants.has(row.participant_id_candidate)) {
       invalid('keyframe time or participant roster differs');
@@ -2198,14 +2299,20 @@ async function loadInventoryIntervalEndpointSnapshots(prepared) {
   });
   if (summary.scanned_count !== association.input_count
       || keyframeCount !== association.broadcast_keyframe_packet_count
-      || gameCount !== association.excluded_game_broadcast_count
+      || gameCount !== expectedGameCount
       || frames.size !== association.keyframe_count
       || [...frames.values()].some((frame) => frame.participants.size !== 10)
       || snapshots.size !== keyframeCount) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
       'Inventory Broadcast source lacks a complete keyframe endpoint roster.');
   }
-  return snapshots;
+  const orderedFrames = [...frames.values()].sort((a, b) => a.chunkIndex - b.chunkIndex);
+  if (orderedFrames.some((frame, index) => index > 0
+      && frame.timeMs <= orderedFrames[index - 1].timeMs)) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      'Inventory Broadcast keyframe times are not strictly increasing.');
+  }
+  return { snapshots, gameRows, orderedFrames };
 }
 
 function endpointReversedPair(row, prepared, lineNumber, snapshots) {
@@ -2214,9 +2321,9 @@ function endpointReversedPair(row, prepared, lineNumber, snapshots) {
       `Invalid inventory interval endpoint at JSONL line ${lineNumber}: ${reason}.`,
       { line_number: lineNumber });
   };
-  const previous = snapshots.get(
+  const previous = snapshots.snapshots.get(
     `${row.previous_keyframe_chunk_index}/${row.hero_raw_param}`);
-  const current = snapshots.get(
+  const current = snapshots.snapshots.get(
     `${row.current_keyframe_chunk_index}/${row.hero_raw_param}`);
   if (!previous || !current
       || !isDeepStrictEqual(previous.ref, row.previous_raw_packet_ref)
@@ -2243,6 +2350,104 @@ function endpointReversedPair(row, prepared, lineNumber, snapshots) {
   return [firstItem, secondItem].every((item) =>
     previous.values.filter((value) => value === item).length === 1
     && current.values.filter((value) => value === item).length === 1);
+}
+
+function inventoryGameBroadcastBracketRow(row, prepared, lineNumber, source, state) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid inventory game Broadcast bracket at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const fields = Object.keys(row);
+  const param = row.hero_raw_param;
+  const previousTime = row.previous_observation_time_ms;
+  const gameTime = row.game_observation_time_ms;
+  const nextTime = row.next_observation_time_ms;
+  const gameRef = row.game_raw_packet_ref;
+  if (fields.length !== INVENTORY_GAME_BRACKET_ROW_FIELDS_821.size
+      || fields.some((field) => !INVENTORY_GAME_BRACKET_ROW_FIELDS_821.has(field))
+      || row.event_type !== prepared.associationConfig.eventType
+      || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+      || row.build_profile !== prepared.associationConfig.profile.id
+      || row.replay_sha256 !== prepared.replaySha
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== prepared.capabilityResult.evidence_status
+      || row.observation_kind
+        !== 'GAME_BROADCAST_PACKET_BRACKETED_BY_ADJACENT_KEYFRAMES'
+      || row.observation_scope
+        !== 'EXPLICIT_GAME_PACKET_RECORDS_AND_KEYFRAME_ENDPOINTS'
+      || !Number.isSafeInteger(param) || param < 0x400000ae
+      || param > 0x400000b7
+      || row.participant_id_candidate !== param - 0x400000ae + 1
+      || !Number.isSafeInteger(previousTime) || previousTime < 0
+      || !Number.isSafeInteger(gameTime) || gameTime <= previousTime
+      || !Number.isSafeInteger(nextTime) || nextTime <= gameTime
+      || row.replay_time_ms !== gameTime
+      || row.observation_interval_ms !== nextTime - previousTime
+      || !gameRef || typeof gameRef !== 'object' || Array.isArray(gameRef)
+      || !isDeepStrictEqual(row.raw_packet_ref, gameRef)
+      || !isDeepStrictEqual(row.raw_packet_refs,
+        [row.previous_raw_packet_ref, gameRef, row.next_raw_packet_ref])
+      || !isDeepStrictEqual(row.field_confidence, {
+        previous_observation_time_ms: 'VERIFIED_DIRECT',
+        game_observation_time_ms: 'VERIFIED_DIRECT',
+        next_observation_time_ms: 'VERIFIED_DIRECT',
+        participant_id_candidate: 'CANDIDATE_KR_821_RAW_PARAM_TAIL_ALIGNMENT',
+        record_comparisons_candidate: 'CANDIDATE_EXACT_RUNTIME_BROADCAST_PACKET_FIELDS',
+      })) invalid('exact-build identity, timing or named references differ');
+  const position = `${gameRef.chunk_index}/${gameRef.decompressed_block_offset}`;
+  const game = source.gameRows.get(position);
+  const nextFrameIndex = source.orderedFrames.findIndex((frame) =>
+    frame.chunkIndex > gameRef.chunk_index);
+  if (!game || !isDeepStrictEqual(game.raw_packet_ref, gameRef)
+      || game.packet_stream !== 'game_chunk'
+      || game.hero_raw_param !== param || game.replay_time_ms !== gameTime
+      || nextFrameIndex <= 0
+      || state.seenGamePositions.has(position)) {
+    invalid('game packet is absent, repeated, or outside keyframe scope');
+  }
+  const previousFrame = source.orderedFrames[nextFrameIndex - 1];
+  const nextFrame = source.orderedFrames[nextFrameIndex];
+  const previous = source.snapshots.get(`${previousFrame.chunkIndex}/${param}`);
+  const next = source.snapshots.get(`${nextFrame.chunkIndex}/${param}`);
+  if (!previous || !next
+      || previousFrame.chunkIndex !== row.previous_keyframe_chunk_index
+      || gameRef.chunk_index !== row.game_chunk_index
+      || nextFrame.chunkIndex !== row.next_keyframe_chunk_index
+      || previousFrame.timeMs !== previousTime || nextFrame.timeMs !== nextTime
+      || !isDeepStrictEqual(previous.ref, row.previous_raw_packet_ref)
+      || !isDeepStrictEqual(next.ref, row.next_raw_packet_ref)) {
+    invalid('game packet does not name its adjacent complete keyframe endpoints');
+  }
+  const expectedRecords = game.records_candidate.map((record) => {
+    const slot = record.slot_candidate;
+    const before = previous.values[slot];
+    const observed = record.item_id_candidate;
+    const after = next.values[slot];
+    const label = before === after
+      ? (observed === before
+        ? 'SAME_AS_BOTH_ENDPOINTS' : 'DIFFERS_FROM_EQUAL_ENDPOINTS')
+      : observed === before ? 'SAME_AS_PREVIOUS_ENDPOINT'
+        : observed === after ? 'SAME_AS_NEXT_ENDPOINT'
+          : 'DIFFERS_FROM_BOTH_ENDPOINTS';
+    return { slot_candidate: slot, previous_item_id_candidate: before,
+      game_item_id_candidate: observed, next_item_id_candidate: after,
+      comparison_to_endpoints: label };
+  });
+  const recordedSlots = new Set(expectedRecords.map((record) => record.slot_candidate));
+  const missingSlots = Array.from({ length: 10 }, (_, slot) => slot)
+    .filter((slot) => !recordedSlots.has(slot));
+  if (row.record_count !== expectedRecords.length
+      || !isDeepStrictEqual(row.record_comparisons_candidate, expectedRecords)
+      || !isDeepStrictEqual(row.unrecorded_game_slots_candidate, missingSlots)) {
+    invalid('explicit packet records or unavailable game slots differ');
+  }
+  state.seenGamePositions.add(position);
+  state.distinctIntervals.add(`${previousFrame.chunkIndex}/${nextFrame.chunkIndex}/${param}`);
+  for (const record of expectedRecords) {
+    state.comparisonCounts[record.comparison_to_endpoints] += 1;
+  }
+  state.recordComparisonCount += expectedRecords.length;
 }
 
 function wardInventoryKeyframePairRow(row, prepared, lineNumber, seenKeys,
@@ -2586,6 +2791,7 @@ function associationRow(row, prepared, lineNumber, seenKeys, seenPacketPositions
       inventoryIntervalState);
     return;
   }
+  if (associationConfig.inventoryGameBracket) return;
   if (associationConfig.wardPair) {
     wardInventoryKeyframePairRow(row, prepared, lineNumber, seenKeys,
       seenPacketPositions, wardPairFrames);
@@ -3293,10 +3499,18 @@ async function streamEventQuery(prepared, options, emitLine) {
   const wardPairFrames = new Map();
   const inventoryIntervalState = { pairs: new Map(), frameTimes: new Map(),
     endpoints: new Map(), changedSlotCount: 0 };
+  const inventoryGameState = { seenGamePositions: new Set(),
+    distinctIntervals: new Set(), recordComparisonCount: 0,
+    comparisonCounts: {
+      SAME_AS_BOTH_ENDPOINTS: 0, DIFFERS_FROM_EQUAL_ENDPOINTS: 0,
+      SAME_AS_PREVIOUS_ENDPOINT: 0, SAME_AS_NEXT_ENDPOINT: 0,
+      DIFFERS_FROM_BOTH_ENDPOINTS: 0,
+    } };
   const faceRosterPairState = { frames: new Map(), positions: new Set() };
   const minionBracketExpected = prepared.associationConfig?.minionBracket
     ? await loadMinionBracketExpectedRows(prepared) : null;
   const inventoryEndpointSnapshots = endpointReversedPairFilter
+    || prepared.associationConfig?.inventoryGameBracket
     ? await loadInventoryIntervalEndpointSnapshots(prepared) : null;
   const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
@@ -3355,6 +3569,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       associationRow(row, prepared, lineNumber, associationKeys,
         associationPacketPositions, episodePhysicalRefs, wardPairFrames,
         inventoryIntervalState, minionBracketExpected);
+      if (prepared.associationConfig?.inventoryGameBracket) {
+        inventoryGameBroadcastBracketRow(row, prepared, lineNumber,
+          inventoryEndpointSnapshots, inventoryGameState);
+      }
       const reversedPairObserved = endpointReversedPairFilter
         ? endpointReversedPair(row, prepared, lineNumber, inventoryEndpointSnapshots)
         : false;
@@ -3537,6 +3755,17 @@ async function streamEventQuery(prepared, options, emitLine) {
           observed_frame_count: inventoryIntervalState.frameTimes.size });
     }
   }
+  if (prepared.associationConfig?.inventoryGameBracket
+      && (inventoryGameState.seenGamePositions.size !== scannedCount
+        || inventoryGameState.recordComparisonCount
+          !== prepared.capabilityResult.record_comparison_count
+        || inventoryGameState.distinctIntervals.size
+          !== prepared.capabilityResult.distinct_participant_interval_count
+        || !isDeepStrictEqual(inventoryGameState.comparisonCounts,
+          prepared.capabilityResult.comparison_counts))) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Inventory game Broadcast rows disagree with bracket and record counts.');
+  }
   if (prepared.eventKey === 'champion_triple_quadra_multi_group_candidates'
       && (tripleGroupCount
         !== prepared.capabilityResult.matched_multi_u32_0x08_3_count
@@ -3686,7 +3915,8 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--endpoint-reversed-pair requires exact 16.19.821.7343 inventory keyframe interval difference candidates.');
   }
-  if (options.endpointReversedPair) {
+  if (options.endpointReversedPair
+      || prepared.eventKey === 'inventory_game_broadcast_keyframe_bracket_candidates') {
     for (const replay of prepared.replays) {
       if (!replay.prepared) continue;
       const source = prepareInventoryIntervalSource(replay.prepared);

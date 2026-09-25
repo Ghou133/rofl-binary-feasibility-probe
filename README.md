@@ -51,6 +51,7 @@
 | `16.19.821.7343 --events hero_inventory_packet --runtime-image PATH` | 精确 821 镜像原生反序列化 KR `0x018d` MapView，逐包输出候选槽位与物品 ID 记录，以及回调先清空再应用记录所得的 0–9 槽单包候选快照 | 仅写入 `hero_inventory_packet_candidates`；无记录的槽位为 `null` 并注明回调清空依据；不推断购买、出售或包间持续库存状态；额外原始参数变体不映射参与者 |
 | `16.19.821.7343 --events hero_inventory_broadcast_packet --runtime-image PATH` | 精确 821 镜像原生反序列化 KR `0x0357` Broadcast，逐包输出候选槽位与物品 ID 记录及 0–9 槽单包候选快照 | 来源流写入 `hero_inventory_broadcast_packet_candidates`；包内物品 `0` 与未列出的 `null` 槽位分开保留；不推断购买、出售或包间持续库存状态；非典型原始参数不映射参与者 |
 | `16.19.821.7343 --events hero_inventory_broadcast_packet --runtime-image PATH` 的派生输出 | 比较同一候选参与者在相邻完整关键帧的十槽端点观察，列出端点值不同的槽位及两端原始包引用；11 份回放有 1,759 条候选差异 | 另写入 `inventory_keyframe_interval_difference_candidates`；3,160 个区间中 1,401 个端点相同；不推断精确变化时间、买卖、交换、替换事件或区间内持续状态，61 条不完整游戏流广播单独排除 |
+| `16.19.821.7343 --events hero_inventory_broadcast_packet --runtime-image PATH` 的游戏流关联 | 将游戏流 `0x0357` 包的明确槽位记录与同一规范原始参数的相邻完整关键帧两端逐槽比较；11 份回放有 55 条严格区间内包、421 条槽位比较 | 另写入 `inventory_game_broadcast_keyframe_bracket_candidates`，保留三份原始包引用和未记录槽位；4 条非规范参数、2 条末帧之后的包保留为排除证据；不推断持续库存、交易或变化时刻 |
 | `16.19.821.7343 --events hero_inventory_set_item_packet --runtime-image PATH` | 精确 821 镜像原生反序列化 KR `0x002d` SetItem，输出单包候选槽位和物品键及原始包来源 | 仅写入 `hero_inventory_set_item_packet_candidates`；当前 11 份回放只观察到候选槽位 8；不推断购买、出售、替换或包间库存状态 |
 | `16.19.821.7343 --events params_heal_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` OnEvent 的注册子事件 `0x004b` ParamsHeal，输出处理函数读取的候选上报浮点值、两个匿名整数和原始包来源 | 仅写入 `params_heal_packet_candidates`，状态为 `CANDIDATE`；不推断有效治疗量、施法者或目标；与同路由的 44 字节助攻候选包分别计数 |
 | `16.19.821.7343 --events shielding_params_packet_pair --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x00f0/0x00ef` 两种 ShieldingParams 子包，以相同时间和载荷形成候选配对，保留两包来源、匿名整数和不透明浮点字段 | 仅写入 `shielding_params_packet_pair_candidates`，状态为 `CANDIDATE`；不把浮点字段解释为生成或吸收的护盾量，也不推断施加者或接收者 |
@@ -581,6 +582,8 @@ node src/cli.js query-events "work\16-19-821-ward-inventory" `
 `--previous-item-id` 只用于这类区间差异，筛选前端点物品键；与 `--slot`、`--item-id` 合用时，所有条件必须落在同一条差异槽位记录。两个物品键均可为 `0`；同一槽位前后值相等不会生成差异行。`--latest-per-participant --to-ms 600000` 取截止时间前每场每人最后一条符合筛选条件的差异记录，仍不表示截止时的持续库存状态。查询校验保存的关联元数据与行来源，缺镜像的场次标为不可查询。
 
 `--endpoint-reversed-pair` 只选择恰好两个槽位发生差异、两个非零物品键在前后端点交叉且在两端完整 10 槽快照中各自唯一的行。查询读取并校验保存的 Broadcast 来源快照，原样输出区间 JSONL；这只表示相邻关键帧的端点模式，不确定区间内动作或变化时刻。
+
+`query-events DIR --event inventory_game_broadcast_keyframe_bracket_candidates` 可读取上表的游戏流关联，按 `--participant`、`--raw-param` 或时间范围筛选，并校验保存的 Broadcast 来源、完整关键帧及三个原始包引用。游戏包未明确记录的槽位保持不可用；相同端点之间出现不同的包值也只表示三次包观测。
 
 只读取已观察到的 HN HeroStats keyframe 候选快照：
 
