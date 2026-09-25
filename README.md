@@ -71,6 +71,7 @@
 | `16.19.821.7343 --events cast_spell_ans_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x01da` CastSpellAns 包，输出原始包来源、两个回调变换后的不透明字段，以及嵌套对象 `+0xe0` 的受保护浮点与 `+0x140` 的受保护字节候选值及其原始字节 | 仅写入 `cast_spell_ans_packet_candidates`；不声称一次成功施法，也不推断技能、槽位、施法者、目标或这两个字段的游戏含义；镜像按完整 SHA-256 校验 |
 | `16.19.821.7343 --events direct_input_movement_turn_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x00ba` DirectInputMovementDriverServerTurnData 包，输出三个回调变换后的匿名 f32 字段与原始包来源 | 仅写入 `direct_input_movement_turn_packet_candidates`，状态为 `CANDIDATE`；不将字段标为世界坐标、英雄路径或参与者位置；仅接受已观察到的 13 字节 `0x85` 形状 |
 | `16.19.821.7343 --events set_movement_driver_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x0335` SetMovementDriver 包，输出回调变换后的匿名分发字节和原始包来源 | 仅写入 `set_movement_driver_packet_candidates`，状态为 `CANDIDATE`；不声称驱动状态已改变，也不推断位置、路径或参与者；仅接受两种已观察到的包形状 |
+| `16.19.821.7343 --events face_direction_packet --runtime-image PATH` | 对 KR `0x038e` 已观察到的 13/17 字节包形状使用精确 821 镜像，输出包内向量、可选标量候选值和原始包来源 | 仅写入 `face_direction_packet_candidates`，状态为 `CANDIDATE`；不据原始参数认定行动者，不推断世界位置、路径或方向效果；其他 build 与未观察到的形状明确拒绝 |
 | `16.19.821.7343 --events npc_buff_add_packet,npc_buff_remove_packet --runtime-image PATH` | 分别解码 KR `0x00ae/0x047c` 原生包，并在两项均成功时汇总相同不透明 `(u32, u8)` 键的重合与时序歧义 | 逐包候选分别写入两个 JSONL；`candidate_associations.npc_buff_add_remove_opaque_key` 仅含回放内统计，不配对单个包，不推断 Buff 名称、归属或生命周期 |
 | `16.19.821.7343 --events npc_buff_update_num_counter_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x0194` BuffUpdateNumCounter 包，保留四个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_update_num_counter_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 名称、归属、计数含义或生命周期 |
 | `16.19.821.7343 --events npc_buff_update_count_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x02d9` BuffUpdateCount 包，保留五个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_update_count_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 名称、归属、计数含义或生命周期 |
@@ -455,6 +456,19 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 这是独立的候选汇总；单条移动事件不新增参与者字段。非标准完整参数变体仍不绑定，
 候选键共享的行数不证明每个包的行动者。缺少所选能力或证据不完整时，关联状态会明确为
 `UNAVAILABLE` 或 `DECODE_FAILED`。
+
+821 的 `0x038e` FaceDirection 包可单独输出候选字段。该路由每场可有数万个包，
+`--event-jsonl-only` 可减少磁盘上的重复事件文件：
+
+```powershell
+node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
+  --events face_direction_packet `
+  --runtime-image "D:\PrivateInputs\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-face-direction"
+```
+
+`face_direction_packet_candidates.jsonl` 保留 13/17 字节包的候选向量、17 字节包的
+可选标量及原始包引用。它不建立包的行动者、世界坐标、英雄路径或实际方向变化。
 
 单独检查 821 IncrementMinionKills 包的候选协议字段：
 

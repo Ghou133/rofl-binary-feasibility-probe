@@ -164,6 +164,8 @@ set_spell_level_packet emits an exact-821 packet-local opaque candidate.
 increment_minion_kills_packet emits an exact-821 packet-local lookup-key candidate.
 Selecting it with hero_minions_killed_snapshot also emits packet-to-keyframe bracket candidates;
 the endpoint difference does not establish a per-packet CS effect or last hit.
+face_direction_packet emits exact-821 packet-local direction-vector candidates;
+its raw param does not identify an actor, and the packet does not establish position or path.
 Inspect reads the container and packet framing without a runtime image.
 Capabilities reads the container/build registry without packet framing or semantic decode.
 
@@ -796,6 +798,7 @@ function parseOne1619(replay, options, started) {
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',
       'increment_minion_kills_packet',
+      'face_direction_packet',
     ].includes(name)))] : [];
   const selectsBuffAdd = options.semantic !== false
     && Array.isArray(options.events) && options.events.includes('npc_buff_add_packet');
@@ -2027,7 +2030,8 @@ function capabilityQuery(replay, options = {}) {
         || (profile.game_version === '16.19.821.7343'
           && (capability === 'direct_input_movement_turn_packet'
             || capability === 'set_movement_driver_packet'
-            || capability === 'increment_minion_kills_packet'));
+            || capability === 'increment_minion_kills_packet'
+            || capability === 'face_direction_packet'));
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
           && capability === 'hero_respawn'
@@ -2418,6 +2422,11 @@ function capabilityQuery(replay, options = {}) {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x03a7 full packet consumption',
           'callback-transformed packet-local lookup key and raw packet provenance; no proven lookup success, participant, minion, last hit, or CS delta');
       }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'face_direction_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and bounded 0x038e packet shape validation',
+          'packet-local unit-vector and optional scalar candidates with raw provenance; no actor, world position, path or direction effect');
+      }
       if (profile.game_version === '16.19.820.7193'
           && (capability === 'hero_death_timer' || capability === 'hero_respawn')) {
         validationPending.push('ten-participant NUM_DEATHS presence and equality',
@@ -2637,6 +2646,7 @@ function capabilityQuery(replay, options = {}) {
               'direct_input_movement_turn_packet_candidates',
             set_movement_driver_packet: 'set_movement_driver_packet_candidates',
             increment_minion_kills_packet: 'increment_minion_kills_packet_candidates',
+            face_direction_packet: 'face_direction_packet_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
             hero_damage_taken_from_champions_snapshot:
               'hero_damage_taken_from_champions_snapshot_candidates',
