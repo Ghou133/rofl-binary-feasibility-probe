@@ -4,9 +4,24 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `stealth_event_packet` is an unpublished selected
+  CLI/API candidate for exact-image OnEvent children `0x0101/0x0102`.
+  The exact 821 event-name table labels them OnEnterStealth and OnExitStealth.
+  Native decoding fully consumed 5,621 observed 17-byte packets in 11
+  Replays, yielding 4,913 target packets and excluding 708 known same-length
+  child controls. Each candidate keeps its raw reference and callback-read
+  anonymous `+0x04` u32. The event names do not prove a participant, a
+  visibility effect, or a persistent stealth interval. Ignored cross-checks
+  are under `artifacts/16_19_development/on_event_remaining_821/` and
+  `artifacts/16_19_development/ward_route_probe_821/`. A four-capability
+  CLI smoke on `KR_8392938200` scanned 2,048,130 framed blocks without
+  errors and reported `decoded_packet_count=7337`; stealth produced 691
+  candidates while excluding 77 same-length controls. Its exact-u32 query
+  matched two rows, one of which had a different outer `raw_param`.
 - **Completed:** `query-events --opaque-u32` searches either decoded
   anonymous u32 in exact 821 `params_heal_packet_candidates` or
-  `shielding_params_packet_pair_candidates`. It preserves JSONL rows,
+  `shielding_params_packet_pair_candidates`, or `event_u32_0x04` in
+  `stealth_event_packet_candidates`. It preserves JSONL rows,
   reports missing fields separately from zero matches, and never substitutes
   outer `raw_param` or assigns entity roles. A real KR Replay query scanned
   6,059 heal rows and 164 shield pairs, matching 321 and 100 respectively

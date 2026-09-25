@@ -17,6 +17,7 @@ const BROADCAST_EVENT = 'hero_inventory_broadcast_packet_candidates';
 const SET_ITEM_EVENT = 'hero_inventory_set_item_packet_candidates';
 const HEAL_PACKET_EVENT = 'params_heal_packet_candidates';
 const SHIELD_PAIR_EVENT = 'shielding_params_packet_pair_candidates';
+const STEALTH_PACKET_EVENT = 'stealth_event_packet_candidates';
 
 function artifact(t, rows = [
   { replay_sha256: SHA, replay_time_ms: 0, participant_id_candidate: 1,
@@ -30,7 +31,7 @@ function artifact(t, rows = [
 ], compact = true, eventKey = EVENT) {
   const capability = eventKey.slice(0, -'_candidates'.length);
   const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT,
-    HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT].includes(eventKey)
+    HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -307,6 +308,83 @@ test('query-events filters either anonymous 821 heal or shield u32 without infer
   assert.equal(selectedShield.status, 0, selectedShield.stderr);
   assert.equal(selectedShield.stdout, `${shield.lines[0]}\n`);
   assert.equal(JSON.parse(selectedShield.stderr).filters.opaque_u32, 0x400000b5);
+});
+
+test('query-events filters exact 821 stealth child u32 without substituting Replay raw_param', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      child_event_id: 0x0101, registered_event_name: 'OnEnterStealth',
+      raw_param: 0x400000ae, event_u32_0x04: 0x400000ae,
+      raw_packet_ref: { replay_sha256: SHA, raw_param: 0x400000ae } },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      child_event_id: 0x0102, registered_event_name: 'OnExitStealth',
+      raw_param: 0x400001ae, event_u32_0x04: 0x400000ae,
+      raw_packet_ref: { replay_sha256: SHA, raw_param: 0x400001ae } },
+    { replay_sha256: SHA, replay_time_ms: 30,
+      child_event_id: 0x0101, registered_event_name: 'OnEnterStealth',
+      raw_param: 0x400002ae, event_u32_0x04: 0 },
+    { replay_sha256: SHA, replay_time_ms: 40,
+      child_event_id: 0x0102, raw_param: 0x400003ae },
+  ];
+  const fixture = artifact(t, rows, true, STEALTH_PACKET_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--opaque-u32', '0x400000ae');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[0]}\n${fixture.lines[1]}\n`);
+  assert.equal(JSON.parse(selected.stderr).matched_count, 2);
+
+  const rawOnly = run(fixture.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--opaque-u32', '0x400001ae');
+  assert.equal(rawOnly.status, 0, rawOnly.stderr);
+  assert.equal(rawOnly.stdout, '');
+  assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
+  assert.equal(JSON.parse(rawOnly.stderr).opaque_u32_unavailable_count, 1);
+
+  const zero = run(fixture.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${fixture.lines[2]}\n`);
+});
+
+test('query-events keeps missing 821 stealth u32 unavailable and enforces exact build and capability', (t) => {
+  const missing = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      raw_param: 0x400000ae,
+      raw_packet_ref: { replay_sha256: SHA, raw_param: 0x400000ae } },
+  ], true, STEALTH_PACKET_EVENT);
+  const output = path.join(missing.root, 'missing-stealth-u32.jsonl');
+  const unavailable = run(missing.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--opaque-u32', '0x400000ae', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const wrongBuild = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, event_u32_0x04: 0 },
+  ], true, STEALTH_PACKET_EVENT);
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(wrongBuild.replayDirectory, name);
+    const document = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    document.replay_version = VERSION;
+    fs.writeFileSync(filename, JSON.stringify(document));
+  }
+  const rejected = run(wrongBuild.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'UNSUPPORTED_FILTER');
+
+  const unavailableCapability = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, event_u32_0x04: 0 },
+  ], true, STEALTH_PACKET_EVENT);
+  const semanticPath = path.join(unavailableCapability.replayDirectory, 'semantic_run.json');
+  const semantic = JSON.parse(fs.readFileSync(semanticPath, 'utf8'));
+  semantic.capability_results.stealth_event_packet.status = 'MISSING_INPUT';
+  semantic.capability_results.stealth_event_packet.event_count = null;
+  fs.writeFileSync(semanticPath, JSON.stringify(semantic));
+  const notDecoded = run(unavailableCapability.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(notDecoded.status, 2);
+  assert.equal(JSON.parse(notDecoded.stderr).code, 'CAPABILITY_UNAVAILABLE');
 });
 
 test('query-events distinguishes missing anonymous u32 fields from zero matches', (t) => {
