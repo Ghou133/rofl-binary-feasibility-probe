@@ -114,6 +114,23 @@ Current progress (older notes below retain their original research context):
   under `artifacts/16_19_development/on_shutdown_821/`,
   `artifacts/16_19_development/on_shutdown_death_link_821/`, and
   `artifacts/16_19_development/on_shutdown_group_cli_batch_821/`.
+- **Completed:** KR 821 OnEvent child `0x002d` has a dedicated exact-image
+  packet candidate decoder. The image name table labels it OnResurrect;
+  native code fully consumed all 29 observed 20-byte parents in seven of
+  the 11 KR Replays. The other four lack this packet shape and report
+  `PROFILE_UNAVAILABLE`, rather than a zero observation. The output keeps
+  anonymous native child `+0x04/+0x08` u32 values and raw refs. None of the
+  29 packets is co-timed with any of 607 existing `hero_respawn` candidates,
+  so the two routes remain separate. The selected 11-Replay CLI batch emitted
+  29 JSONL rows from seven Replays; the four absent-shape Replays wrote no
+  event JSONL, and the batch reported `PARTIAL` with zero framing errors.
+  `query-events --opaque-u32` matched an anonymous native field in the real
+  JSONL. Real same-length foreign-child controls
+  are absent; wrong child, image, build, stream and payload-length controls
+  fail closed. No actual resurrection, actor, or state transition is
+  established. Ignored evidence is under
+  `artifacts/16_19_development/on_event_next_followup_821/` and
+  `artifacts/16_19_development/on_resurrect_cli_batch_821/`.
 - **Completed:** KR 821 `champion_kill_event_packet` is an unpublished
   selected CLI/API candidate for exact-image OnEvent child `0x0007`. The
   exact name table labels it OnChampionKill, and the registered callback

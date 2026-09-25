@@ -49,6 +49,9 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
   on_shutdown_event_packet_candidates: Object.freeze([
     'event_u32_0x04', 'event_u32_0x58', 'event_u32_0x5c',
   ]),
+  resurrect_event_packet_candidates: Object.freeze([
+    'event_u32_0x04', 'event_u32_0x08',
+  ]),
   champion_die_hero_death_pair_candidates: Object.freeze([
     'on_champion_die_event_u32_0x04',
   ]),

@@ -41,6 +41,7 @@ const CHAMPION_DIE_EVENT = 'champion_die_event_packet_candidates';
 const CHAMPION_KILL_EVENT = 'champion_kill_event_packet_candidates';
 const CHAMPION_MULTIPLE_KILL_EVENT = 'champion_multiple_kill_event_packet_candidates';
 const SHUTDOWN_PACKET_EVENT = 'on_shutdown_event_packet_candidates';
+const RESURRECT_PACKET_EVENT = 'resurrect_event_packet_candidates';
 const DIE_PAIR_EVENT = 'champion_die_hero_death_pair_candidates';
 const KILL_GROUP_EVENT = 'champion_kill_die_hero_death_pair_candidates';
 const MULTI_GROUP_EVENT = 'champion_multiple_kill_die_hero_death_pair_candidates';
@@ -211,7 +212,8 @@ function artifact(t, rows = [
   const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT,
     HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT, CAST_SPELL_ANS_EVENT,
     CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
-    CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT, ...ASSOCIATION_EVENTS].includes(eventKey)
+    CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT,
+    RESURRECT_PACKET_EVENT, ...ASSOCIATION_EVENTS].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -1107,6 +1109,30 @@ test('query-events filters anonymous OnShutdown child fields without using outer
   assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
 });
 
+test('query-events filters anonymous OnResurrect child fields without using outer raw param', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000b0,
+      event_u32_0x04: 0x400000b4, event_u32_0x08: 0 },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000b1,
+      event_u32_0x04: 0x400000b5, event_u32_0x08: 0xffffffff },
+  ];
+  const fixture = artifact(t, rows, true, RESURRECT_PACKET_EVENT);
+  for (const [value, selectedIndex] of [
+    ['0x400000b4', 0], ['0', 0], ['0xffffffff', 1],
+  ]) {
+    const selected = run(fixture.replayDirectory, '--event', RESURRECT_PACKET_EVENT,
+      '--opaque-u32', value);
+    assert.equal(selected.status, 0, `${value}: ${selected.stderr}`);
+    assert.equal(selected.stdout, `${fixture.lines[selectedIndex]}\n`);
+    assert.equal(JSON.parse(selected.stderr).capability_status, 'CANDIDATE');
+  }
+  const rawOnly = run(fixture.replayDirectory, '--event', RESURRECT_PACKET_EVENT,
+    '--opaque-u32', '0x400000b0');
+  assert.equal(rawOnly.status, 0, rawOnly.stderr);
+  assert.equal(rawOnly.stdout, '');
+  assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
+});
+
 test('query-events filters only OnChampionMultipleKill decoded scalar u32 fields', (t) => {
   const rows = [
     { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000aa,
@@ -1215,7 +1241,7 @@ test('query-events rejects opaque-u32 on other streams and invalid anonymous fie
   const wrongEvent = run(unsupported.replayDirectory, '--event', EVENT,
     '--opaque-u32', '1');
   assert.equal(wrongEvent.status, 1);
-  assert.match(wrongEvent.stderr, /--opaque-u32 requires an 821 ParamsHeal/);
+  assert.match(wrongEvent.stderr, /--opaque-u32 requires a supported 821 packet/);
   const corrupt = artifact(t, [
     { replay_sha256: SHA, replay_time_ms: 10,
       event_entity_u32_0x04: 1, event_entity_u32_0x14: 2 },
