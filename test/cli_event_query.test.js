@@ -14,6 +14,7 @@ const EVENT = 'hero_level_state_candidates';
 const CAPABILITY = 'hero_level_state';
 const INVENTORY_EVENT = 'hero_inventory_packet_candidates';
 const BROADCAST_EVENT = 'hero_inventory_broadcast_packet_candidates';
+const SET_ITEM_EVENT = 'hero_inventory_set_item_packet_candidates';
 
 function artifact(t, rows = [
   { replay_sha256: SHA, replay_time_ms: 0, participant_id_candidate: 1,
@@ -26,7 +27,7 @@ function artifact(t, rows = [
     confidence: 'CANDIDATE', raw_packet_ref: { replay_sha256: SHA } },
 ], compact = true, eventKey = EVENT) {
   const capability = eventKey.slice(0, -'_candidates'.length);
-  const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT].includes(eventKey)
+  const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -247,6 +248,28 @@ test('query-events preserves decoded zero item values in 821 Broadcast records',
     '--item-id', '0xd0c');
   assert.equal(item.status, 0, item.stderr);
   assert.equal(item.stdout, `${fixture.lines[0]}\n`);
+});
+
+test('query-events filters the decoded scalar item key in 821 SetItem packets', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, slot_candidate: 8,
+      item_id_candidate: 1200 },
+    { replay_sha256: SHA, replay_time_ms: 20, slot_candidate: 8,
+      item_id_candidate: 1202 },
+  ];
+  const fixture = artifact(t, rows, true, SET_ITEM_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', SET_ITEM_EVENT,
+    '--item-id', '0x4b2');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[1]}\n`);
+  assert.equal(JSON.parse(selected.stderr).matched_count, 1);
+
+  const missing = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    slot_candidate: 8, item_id_candidate: null }], true, SET_ITEM_EVENT);
+  const unavailable = run(missing.replayDirectory, '--event', SET_ITEM_EVENT,
+    '--item-id', '1200');
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'ITEM_ID_UNAVAILABLE');
 });
 
 test('query-events rejects item ID filters on other streams and corrupt inventory records', (t) => {

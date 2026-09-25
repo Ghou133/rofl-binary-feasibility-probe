@@ -248,6 +248,17 @@ function packetRecordItemIds(row, lineNumber, allowZero) {
   return { values, unavailable, available: values.length > 0 || records.length === 0 };
 }
 
+function packetScalarItemId(row, lineNumber) {
+  const itemId = row.item_id_candidate;
+  if (itemId == null) return { values: [], unavailable: true, available: false };
+  if (!Number.isSafeInteger(itemId) || itemId < 0 || itemId > 0xffffffff) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid item_id_candidate at JSONL line ${lineNumber}.`,
+      { line_number: lineNumber });
+  }
+  return { values: [itemId], unavailable: false, available: true };
+}
+
 function validateFilters(options) {
   const { fromMs = null, toMs = null, participant = null, rawParam = null,
     itemId = null, limit = null } = options;
@@ -275,6 +286,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   const inventoryPacketEvent = [
     'hero_inventory_packet_candidates',
     'hero_inventory_broadcast_packet_candidates',
+    'hero_inventory_set_item_packet_candidates',
   ].includes(prepared.eventKey);
   if (itemId != null && (!inventoryPacketEvent
       || prepared.replayVersion !== '16.19.821.7343')) {
@@ -317,8 +329,11 @@ async function streamEventQuery(prepared, options, emitLine) {
           { line_number: lineNumber });
       }
       const params = rawParam == null ? null : rawPacketParams(row, lineNumber);
-      const items = itemId == null ? null : packetRecordItemIds(row, lineNumber,
-        prepared.eventKey === 'hero_inventory_broadcast_packet_candidates');
+      const items = itemId == null ? null
+        : prepared.eventKey === 'hero_inventory_set_item_packet_candidates'
+          ? packetScalarItemId(row, lineNumber)
+          : packetRecordItemIds(row, lineNumber,
+            prepared.eventKey === 'hero_inventory_broadcast_packet_candidates');
       if (participant != null && subject.value == null) participantUnavailableCount += 1;
       if (rawParam != null && params.length === 0) rawParamUnavailableCount += 1;
       if (itemId != null && items.unavailable) itemIdUnavailableCount += 1;

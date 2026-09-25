@@ -4,6 +4,17 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** KR 821 `hero_inventory_set_item_packet` is an unpublished
+  selected CLI/API candidate for the exact-image `0x002d` SetItem route.
+  The factory, constructor, nested reader and HeroInventoryClient class
+  registration were independently bound to this full build. All 177/177
+  seven-byte game packets in 11 Replays were fully consumed natively; their
+  decoded slot candidate was 8 and the item key had six observed values.
+  Each packet keeps its raw reference. A noncanonical raw-param variant in
+  two packets remains participant-unmapped. `query-events --item-id` can
+  filter the scalar packet item key. No purchase, sale, replacement or
+  between-packet inventory state is inferred. Ignored controls are under
+  `artifacts/16_19_development/set_item_821_next/`.
 - **Completed:** KR 821 `hero_inventory_broadcast_packet` is an unpublished
   selected CLI/API candidate for the exact-image `0x0357` Broadcast route.
   The independent factory, constructor, class descriptor and registration
@@ -14,6 +25,8 @@ Current progress (older notes below retain their original research context):
   0–9 candidate snapshot; absent records remain `null`. One real selected
   CLI run emitted 341 packet rows and 3,388 records with zero framing errors.
   `query-events --item-id` can filter Broadcast records, including zero.
+  Latest-keyframe ITEM0–ITEM6 candidates matched 651/770 Replay-tail values;
+  119 differences and the 604–59,926 ms tail gaps remain in ignored evidence.
   No purchase, sale, between-packet state or participant identity for four
   noncanonical raw-param variants is inferred. Ignored proof and native
   summaries are under `artifacts/16_19_development/inventory_routes_821/`.

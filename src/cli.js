@@ -347,6 +347,7 @@ function parseArgs(argv) {
     if (options.itemId !== null && ![
       'hero_inventory_packet_candidates',
       'hero_inventory_broadcast_packet_candidates',
+      'hero_inventory_set_item_packet_candidates',
     ].includes(options.event)) {
       throw new Error('--item-id requires an 821 inventory packet event');
     }
@@ -609,6 +610,7 @@ function parseOne1619(replay, options, started) {
       'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
       'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
       'hero_level_state', 'hero_inventory_packet', 'hero_inventory_broadcast_packet',
+      'hero_inventory_set_item_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',
@@ -1803,6 +1805,7 @@ function capabilityQuery(replay, options = {}) {
         || (profile.game_version === '16.19.821.7343'
           && (capability === 'hero_inventory_packet'
             || capability === 'hero_inventory_broadcast_packet'
+            || capability === 'hero_inventory_set_item_packet'
             || capability === 'cast_spell_ans_packet'))
         || capability === 'npc_buff_remove_packet'
         || capability === 'npc_buff_add_packet'
@@ -2065,6 +2068,11 @@ function capabilityQuery(replay, options = {}) {
           'per-packet slot/item record transform and shared callback reset/apply action; no transaction or between-packet inventory-state inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_inventory_set_item_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x002d SetItem packet consumption',
+          'nested slot/item transform and raw packet provenance; no transaction or between-packet inventory-state inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'cast_spell_ans_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x01da full packet consumption',
           'callback-transformed opaque fields and raw packet provenance; no successful-cast or spell identity inference');
@@ -2277,6 +2285,7 @@ function capabilityQuery(replay, options = {}) {
             hero_level_state: 'hero_level_state_candidates',
             hero_inventory_packet: 'hero_inventory_packet_candidates',
             hero_inventory_broadcast_packet: 'hero_inventory_broadcast_packet_candidates',
+            hero_inventory_set_item_packet: 'hero_inventory_set_item_packet_candidates',
             cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
             npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
             npc_buff_add_packet: 'npc_buff_add_packet_candidates',
