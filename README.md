@@ -286,6 +286,8 @@ node src/cli.js query-events "work\16-19-821-inventory\replays\KR_example" `
 
 `--item-id` 接受十进制或 `0x` 十六进制 uint32，只匹配 821 MapView/Broadcast 当包 `records_candidate[].item_id_candidate` 或 SetItem 当包 `item_id_candidate`，不查询回调空槽、包间库存或买卖事件。Broadcast 中解出的物品 `0` 可以精确查询；当前 SetItem 样本只观察到正值。输出仍是未修改的原始 JSONL 行；汇总中的 `item_id_unavailable_count` 区分字段不可用与已检查后的零命中。其他事件流不能使用此过滤器。
 
+`--slot 0..9` 在同样三种精确 821 库存候选包中查询当包记录的候选槽位；MapView/Broadcast 只查 `records_candidate[].slot_candidate`，SetItem 查当包 `slot_candidate`。与 `--item-id` 同时使用时，两个值必须来自同一条记录。空槽快照和包间状态不参与匹配；`slot_unavailable_count` 区分字段不可用与已检查后的零命中。
+
 对 821 治疗上报或护盾双包中的匿名整数精确查询：
 
 ```powershell

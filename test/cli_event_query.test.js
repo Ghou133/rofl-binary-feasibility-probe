@@ -556,6 +556,136 @@ test('query-events filters the decoded scalar item key in 821 SetItem packets', 
   assert.equal(JSON.parse(unavailable.stderr).code, 'ITEM_ID_UNAVAILABLE');
 });
 
+test('query-events filters observed packet slots including zero, without using snapshots', (t) => {
+  for (const eventKey of [INVENTORY_EVENT, BROADCAST_EVENT]) {
+    const rows = [
+      { replay_sha256: SHA, replay_time_ms: 10, record_count: 2,
+        records_candidate: [
+          { slot_candidate: 0, item_id_candidate: 1001 },
+          { slot_candidate: 6, item_id_candidate: 3340 },
+        ] },
+      { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+        records_candidate: [{ slot_candidate: 6, item_id_candidate: 2031 }],
+        packet_slot_snapshot_candidate: [{ slot_candidate: 0, item_id_candidate: 1001 }] },
+      { replay_sha256: SHA, replay_time_ms: 30, record_count: 0,
+        records_candidate: [] },
+    ];
+    const fixture = artifact(t, rows, true, eventKey);
+    const selected = run(fixture.replayDirectory, '--event', eventKey, '--slot', '0');
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+    const summary = JSON.parse(selected.stderr);
+    assert.equal(summary.scanned_count, 3);
+    assert.equal(summary.matched_count, 1);
+    assert.equal(summary.slot_unavailable_count, 0);
+    assert.equal(summary.filters.slot, 0);
+  }
+});
+
+test('query-events combines item and slot on the same inventory record', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, record_count: 2,
+      records_candidate: [
+        { slot_candidate: 0, item_id_candidate: 1001 },
+        { slot_candidate: 6, item_id_candidate: 3340 },
+      ] },
+    { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+      records_candidate: [{ slot_candidate: 0, item_id_candidate: 3340 }] },
+  ];
+  const fixture = artifact(t, rows, true, INVENTORY_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', INVENTORY_EVENT,
+    '--slot', '0', '--item-id', '3340');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[1]}\n`);
+  assert.equal(JSON.parse(selected.stderr).matched_count, 1);
+
+  const setItem = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, slot_candidate: 8,
+      item_id_candidate: 1200 },
+    { replay_sha256: SHA, replay_time_ms: 20, slot_candidate: 8,
+      item_id_candidate: 1202 },
+  ], true, SET_ITEM_EVENT);
+  const setItemMatch = run(setItem.replayDirectory, '--event', SET_ITEM_EVENT,
+    '--slot', '8', '--item-id', '1202');
+  assert.equal(setItemMatch.status, 0, setItemMatch.stderr);
+  assert.equal(setItemMatch.stdout, `${setItem.lines[1]}\n`);
+  const noMatch = run(setItem.replayDirectory, '--event', SET_ITEM_EVENT,
+    '--slot', '0');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(JSON.parse(noMatch.stderr).matched_count, 0);
+});
+
+test('query-events distinguishes unavailable slots from zero matches and rejects corrupt slots', (t) => {
+  for (const eventKey of [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT]) {
+    const missingRows = eventKey === SET_ITEM_EVENT
+      ? [{ replay_sha256: SHA, replay_time_ms: 10, item_id_candidate: 1200 }]
+      : [{ replay_sha256: SHA, replay_time_ms: 10, record_count: 1,
+        records_candidate: [{ item_id_candidate: 1200 }] }];
+    const missing = artifact(t, missingRows, true, eventKey);
+    const unavailable = run(missing.replayDirectory, '--event', eventKey, '--slot', '0');
+    assert.equal(unavailable.status, 2, unavailable.stderr);
+    assert.equal(JSON.parse(unavailable.stderr).code, 'SLOT_UNAVAILABLE');
+
+    const knownRows = eventKey === SET_ITEM_EVENT
+      ? [{ replay_sha256: SHA, replay_time_ms: 10, slot_candidate: 8,
+        item_id_candidate: 1200 }, ...missingRows]
+      : [{ replay_sha256: SHA, replay_time_ms: 10, record_count: 1,
+        records_candidate: [{ slot_candidate: 8, item_id_candidate: 1200 }] },
+      ...missingRows];
+    const known = artifact(t, knownRows, true, eventKey);
+    const zero = run(known.replayDirectory, '--event', eventKey, '--slot', '0');
+    assert.equal(zero.status, 0, zero.stderr);
+    assert.equal(zero.stdout, '');
+    assert.equal(JSON.parse(zero.stderr).slot_unavailable_count, 1);
+
+    for (const invalidSlot of [-1, 10, 1.5, '0']) {
+      const badRows = eventKey === SET_ITEM_EVENT
+        ? [{ replay_sha256: SHA, replay_time_ms: 10, slot_candidate: 8 },
+          { replay_sha256: SHA, replay_time_ms: 20, slot_candidate: invalidSlot }]
+        : [{ replay_sha256: SHA, replay_time_ms: 10, record_count: 1,
+          records_candidate: [{ slot_candidate: 8 }] },
+        { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+          records_candidate: [{ slot_candidate: invalidSlot }] }];
+      const bad = artifact(t, badRows, true, eventKey);
+      const output = path.join(bad.root, 'invalid-slot.jsonl');
+      const result = run(bad.replayDirectory, '--event', eventKey,
+        '--slot', '8', '--output', output);
+      assert.equal(result.status, 2, result.stderr);
+      assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+      assert.equal(fs.existsSync(output), false);
+    }
+  }
+});
+
+test('query-events limits slot filter to exact 821 inventory streams and 0..9', (t) => {
+  const unsupported = artifact(t);
+  const wrongEvent = run(unsupported.replayDirectory, '--event', EVENT, '--slot', '0');
+  assert.equal(wrongEvent.status, 1);
+  assert.match(wrongEvent.stderr, /--slot requires an 821 inventory packet event/);
+  const fixture = artifact(t, [], true, INVENTORY_EVENT);
+  for (const value of ['-1', '10', '1.5', '0x8', '01']) {
+    const result = run(fixture.replayDirectory, '--event', INVENTORY_EVENT,
+      '--slot', value);
+    assert.equal(result.status, 1, value);
+  }
+  const empty = run(fixture.replayDirectory, '--event', INVENTORY_EVENT,
+    '--slot', '0');
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.equal(JSON.parse(empty.stderr).scanned_count, 0);
+
+  const oldBuild = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    record_count: 1, records_candidate: [{ slot_candidate: 0 }] }], true,
+  INVENTORY_EVENT);
+  rewriteJson(path.join(oldBuild.replayDirectory, 'semantic_run.json'),
+    (semantic) => { semantic.replay_version = VERSION; });
+  rewriteJson(path.join(oldBuild.replayDirectory, 'replay_analysis.json'),
+    (analysis) => { analysis.replay_version = VERSION; });
+  const wrongBuild = run(oldBuild.replayDirectory, '--event', INVENTORY_EVENT,
+    '--slot', '0');
+  assert.equal(wrongBuild.status, 2, wrongBuild.stderr);
+  assert.equal(JSON.parse(wrongBuild.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
 test('query-events filters either anonymous 821 heal or shield u32 without inferring a role', (t) => {
   const healRows = [
     { replay_sha256: SHA, replay_time_ms: 10, raw_param: 7,

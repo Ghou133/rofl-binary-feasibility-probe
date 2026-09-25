@@ -440,6 +440,49 @@ function packetScalarItemId(row, lineNumber) {
   return { values: [itemId], unavailable: false, available: true };
 }
 
+function packetRecordSlots(row, lineNumber) {
+  const records = row.records_candidate;
+  if (records == null) return { values: [], unavailable: true, available: false };
+  if (!Array.isArray(records)
+      || (row.record_count != null && row.record_count !== records.length)) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid inventory records at JSONL line ${lineNumber}.`,
+      { line_number: lineNumber });
+  }
+  const values = [];
+  let unavailable = false;
+  for (const [index, record] of records.entries()) {
+    if (record === null || typeof record !== 'object' || Array.isArray(record)) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        `Invalid inventory record ${index} at JSONL line ${lineNumber}.`,
+        { line_number: lineNumber });
+    }
+    if (record.slot_candidate == null) {
+      unavailable = true;
+      continue;
+    }
+    const slot = record.slot_candidate;
+    if (!Number.isSafeInteger(slot) || slot < 0 || slot > 9) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        `Invalid records_candidate[${index}].slot_candidate at JSONL line ${lineNumber}.`,
+        { line_number: lineNumber });
+    }
+    values.push(slot);
+  }
+  return { values, unavailable, available: values.length > 0 || records.length === 0 };
+}
+
+function packetScalarSlot(row, lineNumber) {
+  const slot = row.slot_candidate;
+  if (slot == null) return { values: [], unavailable: true, available: false };
+  if (!Number.isSafeInteger(slot) || slot < 0 || slot > 9) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid slot_candidate at JSONL line ${lineNumber}.`,
+      { line_number: lineNumber });
+  }
+  return { values: [slot], unavailable: false, available: true };
+}
+
 function opaqueU32Values(row, lineNumber, fields) {
   const values = [];
   let unavailable = false;
@@ -551,13 +594,14 @@ function stealthChildEventId(row, lineNumber) {
 
 function validateFilters(options) {
   const { fromMs = null, toMs = null, participant = null, rawParam = null,
-    itemId = null, opaqueU32 = null, childEventId = null, limit = null } = options;
+    itemId = null, slot = null, opaqueU32 = null, childEventId = null, limit = null } = options;
   for (const [name, value, minimum, maximum] of [
     ['fromMs', fromMs, 0, Number.MAX_SAFE_INTEGER],
     ['toMs', toMs, 0, Number.MAX_SAFE_INTEGER],
     ['participant', participant, 1, 10],
     ['rawParam', rawParam, 0, 0xffffffff],
     ['itemId', itemId, 0, 0xffffffff],
+    ['slot', slot, 0, 9],
     ['opaqueU32', opaqueU32, 0, 0xffffffff],
     ['childEventId', childEventId, 0, 0xffffffff],
     ['limit', limit, 1, Number.MAX_SAFE_INTEGER],
@@ -578,16 +622,16 @@ function validateFilters(options) {
 async function streamEventQuery(prepared, options, emitLine) {
   validateFilters(options);
   const { fromMs = null, toMs = null, participant = null, rawParam = null,
-    itemId = null, opaqueU32 = null, childEventId = null, limit = null } = options;
+    itemId = null, slot = null, opaqueU32 = null, childEventId = null, limit = null } = options;
   const inventoryPacketEvent = [
     'hero_inventory_packet_candidates',
     'hero_inventory_broadcast_packet_candidates',
     'hero_inventory_set_item_packet_candidates',
   ].includes(prepared.eventKey);
-  if (itemId != null && (!inventoryPacketEvent
+  if ((itemId != null || slot != null) && (!inventoryPacketEvent
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
-      '--item-id requires a 16.19.821.7343 inventory packet candidate event.');
+      '--item-id and --slot require a 16.19.821.7343 inventory packet candidate event.');
   }
   const opaqueU32Fields = OPAQUE_U32_FIELDS_821[prepared.eventKey] ?? null;
   if (opaqueU32 != null && (!opaqueU32Fields
@@ -607,6 +651,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   let rawParamUnavailableCount = 0;
   let itemIdUnavailableCount = 0;
   let itemIdAvailableCount = 0;
+  let slotUnavailableCount = 0;
+  let slotAvailableCount = 0;
   let opaqueU32UnavailableCount = 0;
   let opaqueU32AvailableCount = 0;
   let childEventIdUnavailableCount = 0;
@@ -649,6 +695,10 @@ async function streamEventQuery(prepared, options, emitLine) {
           ? packetScalarItemId(row, lineNumber)
           : packetRecordItemIds(row, lineNumber,
             prepared.eventKey === 'hero_inventory_broadcast_packet_candidates');
+      const slots = slot == null ? null
+        : prepared.eventKey === 'hero_inventory_set_item_packet_candidates'
+          ? packetScalarSlot(row, lineNumber)
+          : packetRecordSlots(row, lineNumber);
       const opaqueValues = opaqueU32 == null ? null
         : opaqueU32Values(row, lineNumber, opaqueU32Fields);
       const childId = childEventId == null ? null
@@ -657,6 +707,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (rawParam != null && params.length === 0) rawParamUnavailableCount += 1;
       if (itemId != null && items.unavailable) itemIdUnavailableCount += 1;
       if (itemId != null && items.available) itemIdAvailableCount += 1;
+      if (slot != null && slots.unavailable) slotUnavailableCount += 1;
+      if (slot != null && slots.available) slotAvailableCount += 1;
       if (opaqueU32 != null && opaqueValues.unavailable) opaqueU32UnavailableCount += 1;
       if (opaqueU32 != null && opaqueValues.available) opaqueU32AvailableCount += 1;
       if (childEventId != null && !childId.available) childEventIdUnavailableCount += 1;
@@ -666,6 +718,12 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (participant != null && subject.value !== participant)
           || (rawParam != null && !params.includes(rawParam))
           || (itemId != null && !items.values.includes(itemId))
+          || (slot != null && !slots.values.includes(slot))
+          || (itemId != null && slot != null
+            && (prepared.eventKey === 'hero_inventory_set_item_packet_candidates'
+              ? (row.item_id_candidate !== itemId || row.slot_candidate !== slot)
+              : !row.records_candidate.some((record) =>
+                record.item_id_candidate === itemId && record.slot_candidate === slot)))
           || (opaqueU32 != null && !opaqueValues.values.includes(opaqueU32))
           || (childEventId != null && childId.value !== childEventId)) continue;
       matchedCount += 1;
@@ -700,6 +758,12 @@ async function streamEventQuery(prepared, options, emitLine) {
     throw new EventQueryError('ITEM_ID_UNAVAILABLE',
       'This event stream has no decoded packet record item ID for filtering.',
       { scanned_count: scannedCount, item_id_unavailable_count: itemIdUnavailableCount,
+        capability_status: prepared.capabilityStatus });
+  }
+  if (slot != null && scannedCount > 0 && slotAvailableCount === 0) {
+    throw new EventQueryError('SLOT_UNAVAILABLE',
+      'This event stream has no decoded packet record slot for filtering.',
+      { scanned_count: scannedCount, slot_unavailable_count: slotUnavailableCount,
         capability_status: prepared.capabilityStatus });
   }
   if (opaqueU32 != null && scannedCount > 0 && opaqueU32AvailableCount === 0) {
@@ -737,11 +801,13 @@ async function streamEventQuery(prepared, options, emitLine) {
     participant_unavailable_count: participantUnavailableCount,
     ...(rawParam == null ? {} : { raw_param_unavailable_count: rawParamUnavailableCount }),
     ...(itemId == null ? {} : { item_id_unavailable_count: itemIdUnavailableCount }),
+    ...(slot == null ? {} : { slot_unavailable_count: slotUnavailableCount }),
     ...(opaqueU32 == null ? {} : { opaque_u32_unavailable_count: opaqueU32UnavailableCount }),
     ...(childEventId == null ? {} : { child_event_id_unavailable_count: childEventIdUnavailableCount }),
     filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit,
       ...(rawParam == null ? {} : { raw_param: rawParam }),
       ...(itemId == null ? {} : { item_id: itemId }),
+      ...(slot == null ? {} : { slot }),
       ...(opaqueU32 == null ? {} : { opaque_u32: opaqueU32 }),
       ...(childEventId == null ? {} : { child_event_id: childEventId }) },
     rows_unmodified: true,

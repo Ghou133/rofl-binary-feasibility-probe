@@ -167,6 +167,7 @@ Options:
   --participant <1..10>        Candidate subject participant; unknown rows do not match
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
   --item-id <uint32|0xhex>     Exact decoded 821 inventory packet record item ID
+  --slot <0..9>                Exact observed 821 inventory packet record slot
   --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
   --child-event-id <uint32|0xhex>  Exact 821 stealth child ID (0x0101 or 0x0102)
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
@@ -210,6 +211,7 @@ function parseArgs(argv) {
     participant: null,
     rawParam: null,
     itemId: null,
+    slot: null,
     opaqueU32: null,
     childEventId: null,
     limit: null,
@@ -309,6 +311,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'participant') options.participant = queryInteger(value, key);
       else if (command === 'query-events' && key === 'raw-param') options.rawParam = queryRawParam(value);
       else if (command === 'query-events' && key === 'item-id') options.itemId = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'slot') options.slot = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'opaque-u32') options.opaqueU32 = queryUint32(value, key);
       else if (command === 'query-events' && key === 'child-event-id') options.childEventId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'limit') options.limit = queryInteger(value, key);
@@ -353,12 +356,19 @@ function parseArgs(argv) {
     if (options.fromMs !== null && options.toMs !== null && options.fromMs > options.toMs) {
       throw new Error('--from-ms must not exceed --to-ms');
     }
-    if (options.itemId !== null && ![
+    const inventoryQueryEvent = [
       'hero_inventory_packet_candidates',
       'hero_inventory_broadcast_packet_candidates',
       'hero_inventory_set_item_packet_candidates',
-    ].includes(options.event)) {
+    ].includes(options.event);
+    if (options.itemId !== null && !inventoryQueryEvent) {
       throw new Error('--item-id requires an 821 inventory packet event');
+    }
+    if (options.slot !== null && !inventoryQueryEvent) {
+      throw new Error('--slot requires an 821 inventory packet event');
+    }
+    if (options.slot !== null && options.slot > 9) {
+      throw new Error('--slot must be in 0..9');
     }
     if (options.opaqueU32 !== null && ![
       'params_heal_packet_candidates',
@@ -2517,6 +2527,7 @@ async function runQueryEventsCommand(parsed) {
       participant: options.participant,
       rawParam: options.rawParam,
       itemId: options.itemId,
+      slot: options.slot,
       opaqueU32: options.opaqueU32,
       childEventId: options.childEventId,
       limit: options.limit,
