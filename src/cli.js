@@ -208,7 +208,7 @@ Options:
   --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
   --opaque-pair <u32:u8>      Exact anonymous 821 Buff Add/Remove/Update pair
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
-  --child-event-id <uint32|0xhex>  Exact 821 stealth or named multikill child ID
+  --child-event-id <uint32|0xhex>  Exact 821 stealth, named multikill or OnHQKill child ID
   --latest-per-participant    Last matching observed row per participant and Replay
                                 For interval differences: last matching observed difference.
   --endpoint-reversed-pair    Exact-821 interval rows with two unique nonzero item keys
@@ -510,6 +510,8 @@ function parseArgs(argv) {
     if (options.childEventId !== null) {
       const ids = options.event === 'stealth_event_packet_candidates'
         ? [0x0101, 0x0102]
+        : options.event === 'hq_kill_event_packet_candidates'
+          ? [0x0046]
         : ['champion_double_kill_event_packet_candidates',
           'champion_double_kill_multi_group_candidates'].includes(options.event)
           ? [0x000b]
@@ -517,11 +519,13 @@ function parseArgs(argv) {
             'champion_triple_quadra_multi_group_candidates'].includes(options.event)
             ? [0x000c, 0x000d] : null;
       if (!ids) {
-        throw new Error('--child-event-id requires an 821 stealth or named multikill candidate event');
+        throw new Error('--child-event-id requires an 821 stealth, named multikill or OnHQKill candidate event');
       }
       if (!ids.includes(options.childEventId)) {
         throw new Error(options.event === 'stealth_event_packet_candidates'
           ? '--child-event-id must be 0x0101 (OnEnterStealth) or 0x0102 (OnExitStealth)'
+          : options.event === 'hq_kill_event_packet_candidates'
+            ? '--child-event-id must be 0x0046 (OnHQKill)'
           : ids[0] === 0x000b
             ? '--child-event-id must be 0x000b (OnChampionDoubleKill)'
             : '--child-event-id must be 0x000c (OnChampionTripleKill) or 0x000d (OnChampionQuadraKill)');

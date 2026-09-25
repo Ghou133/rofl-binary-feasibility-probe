@@ -646,12 +646,15 @@ node src/cli.js query-events "work\16-19-821-turret-first-blood-die-pairs" `
   --event turret_first_blood_die_pair_candidates --raw-param 0x4000008c
 node src/cli.js query-events "work\16-19-821-dampener-die-event-packets" `
   --event dampener_die_event_packet_candidates --raw-param 0x4000018f
+node src/cli.js query-events "work\16-19-821-hq-kill-event-packets" `
+  --event hq_kill_event_packet_candidates --child-event-id 0x0046 --limit 20
 ```
 
 炮塔候选配对可按回放毫秒或任一原始包的 `--raw-param` 查询；查询保留原 JSONL 行，
 并核对双源能力、精确镜像与候选关联的产物身份。原始参数不代表建筑或参与者身份。
 `dampener_die_event_packet_candidates` 也可按时间或原始参数查询；批量结果会单独列出
 `PROFILE_UNAVAILABLE` 的回放，不能把它当作零命中。
+`hq_kill_event_packet_candidates` 还可按时间、原始参数或精确子事件 ID `0x0046` 查询，输出保持原 JSONL 行。查询校验完整 `16.19.821.7343`、已保存的镜像哈希/候选元数据、`0x4918`、匿名子包哈希和原始包引用；批量查询另校验 manifest 文件哈希。这里校验的是保存产物及来源引用，**不会重新打开原始 ROFL 逐字节核对**。`OnHQKill` 只是精确镜像的标签；不据此断言主基地实际毁坏、胜者、行动者或状态变化。缺镜像或无目标包的场次仍标为不可用。
 
 按 821 单次助攻候选的参与者列表查询，可输入单场或 `batch` 输出目录：
 

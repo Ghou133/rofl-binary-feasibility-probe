@@ -70,6 +70,8 @@ const { TURRET_DIE_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_turret_die_event_packet_candidate');
 const { DAMPENER_DIE_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_dampener_die_event_packet_candidate');
+const { HQ_KILL_EVENT_PACKET_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_hq_kill_event_packet_candidate');
 const { INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821,
   isObservedIncrementMinionKillsPayloadHex,
   lookupIncrementMinionKillsKeyFromNativeBytes } =
@@ -334,9 +336,16 @@ const EXACT_BLOB_PACKET_EVENTS_821 = Object.freeze({
     evidenceStatus: 'CANDIDATE_EXACT_RUNTIME_ON_DAMPENER_DIE_PACKET',
     rawEventIdHex: '0x4906',
   }),
+  hq_kill_event_packet_candidates: Object.freeze({
+    profile: HQ_KILL_EVENT_PACKET_821_PROFILE,
+    eventType: 'HQ_KILL_EVENT_PACKET_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_EXACT_RUNTIME_ON_HQ_KILL_PACKET',
+    rawEventIdHex: '0x4918',
+  }),
 });
 const CHILD_EVENT_ID_FILTERS_821 = Object.freeze({
   stealth_event_packet_candidates: Object.freeze([0x0101, 0x0102]),
+  hq_kill_event_packet_candidates: Object.freeze([0x0046]),
   champion_double_kill_event_packet_candidates: Object.freeze([0x000b]),
   champion_double_kill_multi_group_candidates: Object.freeze([0x000b]),
   champion_triple_quadra_event_packet_candidates: Object.freeze([0x000c, 0x000d]),
@@ -459,6 +468,8 @@ function prepareExactBlobPacketEvent(semantic, analysis, eventKey, result,
   }
   if (result?.status !== 'CANDIDATE') return;
   const imageSha = profile.evidence_runtime_image_sha256;
+  const expectedPacketScope = `child_${profile.child_event_id.toString(16)
+    .padStart(4, '0')}_length_${profile.payload_length}`;
   if (result.profile_id !== profile.id
       || result.evidence_runtime_image_sha256 !== imageSha
       || result.runtime_image_sha256 !== imageSha
@@ -466,7 +477,7 @@ function prepareExactBlobPacketEvent(semantic, analysis, eventKey, result,
       || result.runtime_image_used !== true
       || result.evidence_status !== evidenceStatus
       || result.input_packet_id !== profile.replay_block_packet_id
-      || result.input_packet_scope !== 'child_0035_length_116'
+      || result.input_packet_scope !== expectedPacketScope
       || result.child_event_id !== profile.child_event_id
       || !isCount(result.event_count) || result.event_count === 0
       || result.input_count !== result.event_count
@@ -3056,6 +3067,9 @@ function exactBlobPacketRow(row, prepared, lineNumber, seenPacketPositions) {
       || !/^[0-9a-f]{216}$/.test(row.event_blob_hex)
       || !REPLAY_SHA.test(row.event_blob_sha256)
       || !ref || ref.replay_sha256 !== prepared.replaySha
+      || (ref.source_path !== null
+        && (typeof ref.source_path !== 'string' || ref.source_path.length === 0))
+      || (prepared.sourcePath !== undefined && ref.source_path !== prepared.sourcePath)
       || ref.replay_time_ms !== row.replay_time_ms
       || ref.chunk_stream !== 'game_chunk'
       || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
@@ -3225,7 +3239,8 @@ function candidateChildEventId(row, eventKey, lineNumber) {
   const field = eventKey === 'champion_triple_quadra_multi_group_candidates'
     ? 'on_champion_triple_quadra_child_event_id'
     : eventKey === 'champion_double_kill_multi_group_candidates'
-      ? 'on_champion_double_kill_child_event_id' : 'child_event_id';
+      ? 'on_champion_double_kill_child_event_id'
+      : eventKey === 'hq_kill_event_packet_candidates' ? 'event_id' : 'child_event_id';
   const value = row[field];
   if (value == null) return { value: null, available: false };
   if (!Number.isSafeInteger(value)
