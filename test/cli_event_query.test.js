@@ -1,0 +1,3268 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const test = require('node:test');
+const { CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_die_hero_death_pair_candidate');
+const { CHAMPION_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_kill_die_hero_death_pair_candidate');
+const { CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_multiple_kill_die_hero_death_pair_candidate');
+const { CHAMPION_DOUBLE_KILL_MULTI_GROUP_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_double_kill_multi_group_candidate');
+const { CHAMPION_TRIPLE_QUADRA_MULTI_GROUP_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_triple_quadra_multi_group_candidate');
+const { ON_SHUTDOWN_DIE_HERO_DEATH_PAIR_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_on_shutdown_die_hero_death_pair_candidate');
+const { CHAMPION_DIE_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_die_event_packet_candidate');
+const { CHAMPION_KILL_EVENT_PACKET_CANDIDATE_PROFILE_821 } =
+  require('../src/decoders/rofl_16_19_821_champion_kill_event_packet_candidate');
+const { CHAMPION_MULTIPLE_KILL_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_multiple_kill_event_packet_candidate');
+const { CHAMPION_DOUBLE_KILL_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_double_kill_event_packet_candidate');
+const { CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_champion_triple_quadra_event_packet_candidate');
+const { ON_SHUTDOWN_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
+const { HERO_DEATH_CANDIDATE_PROFILE_821 } =
+  require('../src/decoders/rofl_16_19_821_7343');
+const { HERO_ASSIST_CANDIDATE_PROFILE_821 } =
+  require('../src/decoders/rofl_16_19_821_assist_candidate');
+const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_revive_ally_packet_candidate');
+const { TURRET_FIRST_BLOOD_DIE_PAIR_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_turret_first_blood_die_pair_candidate');
+const { TURRET_FIRST_BLOOD_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_turret_first_blood_event_packet_candidate');
+const { TURRET_DIE_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_turret_die_event_packet_candidate');
+const { DAMPENER_DIE_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_dampener_die_event_packet_candidate');
+
+const CLI = path.resolve(__dirname, '../src/cli.js');
+const SHA = 'a'.repeat(64);
+const VERSION = '16.19.820.7193';
+const EVENT = 'hero_level_state_candidates';
+const CAPABILITY = 'hero_level_state';
+const INVENTORY_EVENT = 'hero_inventory_packet_candidates';
+const BROADCAST_EVENT = 'hero_inventory_broadcast_packet_candidates';
+const SET_ITEM_EVENT = 'hero_inventory_set_item_packet_candidates';
+const HEAL_PACKET_EVENT = 'params_heal_packet_candidates';
+const SHIELD_PAIR_EVENT = 'shielding_params_packet_pair_candidates';
+const STEALTH_PACKET_EVENT = 'stealth_event_packet_candidates';
+const CAST_SPELL_ANS_EVENT = 'cast_spell_ans_packet_candidates';
+const BUFF_ADD_EVENT = 'npc_buff_add_packet_candidates';
+const BUFF_REMOVE_EVENT = 'npc_buff_remove_packet_candidates';
+const BUFF_UPDATE_COUNTER_EVENT = 'npc_buff_update_num_counter_packet_candidates';
+const BUFF_UPDATE_COUNT_EVENT = 'npc_buff_update_count_packet_candidates';
+const BUFF_REPLACE_EVENT = 'npc_buff_replace_packet_candidates';
+const SET_SPELL_TIMER_FROM_BUFF_EVENT = 'set_spell_timer_from_buff_packet_candidates';
+const SET_SPELL_LEVEL_EVENT = 'set_spell_level_packet_candidates';
+const CHAMPION_DIE_EVENT = 'champion_die_event_packet_candidates';
+const CHAMPION_KILL_EVENT = 'champion_kill_event_packet_candidates';
+const CHAMPION_MULTIPLE_KILL_EVENT = 'champion_multiple_kill_event_packet_candidates';
+const SHUTDOWN_PACKET_EVENT = 'on_shutdown_event_packet_candidates';
+const RESURRECT_PACKET_EVENT = 'resurrect_event_packet_candidates';
+const REVIVE_ALLY_PACKET_EVENT = 'revive_ally_event_packet_candidates';
+const TURRET_PLATE_PACKET_EVENT = 'turret_plate_event_packet_candidates';
+const TURRET_FIRST_BLOOD_DIE_PAIR_EVENT = 'turret_first_blood_die_pair_candidates';
+const DAMPENER_DIE_PACKET_EVENT = 'dampener_die_event_packet_candidates';
+const DIE_PAIR_EVENT = 'champion_die_hero_death_pair_candidates';
+const KILL_GROUP_EVENT = 'champion_kill_die_hero_death_pair_candidates';
+const MULTI_GROUP_EVENT = 'champion_multiple_kill_die_hero_death_pair_candidates';
+const DOUBLE_PACKET_EVENT = 'champion_double_kill_event_packet_candidates';
+const DOUBLE_MULTI_GROUP_EVENT = 'champion_double_kill_multi_group_candidates';
+const TRIPLE_QUADRA_PACKET_EVENT = 'champion_triple_quadra_event_packet_candidates';
+const TRIPLE_QUADRA_MULTI_GROUP_EVENT = 'champion_triple_quadra_multi_group_candidates';
+const SHUTDOWN_GROUP_EVENT = 'on_shutdown_die_hero_death_pair_candidates';
+const HERO_DEATH_EVENT = 'hero_death_candidates';
+const HERO_ASSIST_EVENT = 'hero_assist_candidates';
+const HERO_DEATH_EVIDENCE = 'CANDIDATE_821_REPLAY_TAIL_ROUTE_FINGERPRINT';
+const HERO_ASSIST_EVIDENCE = 'CANDIDATE_821_CO_TIMED_ASSIST_PAIR_TAIL_ALIGNMENT';
+const ASSOCIATION_EVENTS = [DIE_PAIR_EVENT, KILL_GROUP_EVENT, MULTI_GROUP_EVENT,
+  SHUTDOWN_GROUP_EVENT];
+
+function rewriteJson(filename, edit) {
+  const value = JSON.parse(fs.readFileSync(filename, 'utf8'));
+  edit(value);
+  fs.writeFileSync(filename, JSON.stringify(value));
+}
+
+function associationArtifact(t, eventKey) {
+  const killGroup = eventKey === KILL_GROUP_EVENT;
+  const multiGroup = eventKey === MULTI_GROUP_EVENT;
+  const shutdownGroup = eventKey === SHUTDOWN_GROUP_EVENT;
+  const grouped = killGroup || multiGroup || shutdownGroup;
+  const profile = killGroup ? CHAMPION_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE
+    : multiGroup ? CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE
+      : shutdownGroup ? ON_SHUTDOWN_DIE_HERO_DEATH_PAIR_821_PROFILE
+        : CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE;
+  const evidenceStatus = killGroup
+    ? 'CANDIDATE_821_ON_CHAMPION_KILL_DIE_HERO_DIE_PACKET_GROUP'
+    : multiGroup ? 'CANDIDATE_821_ON_CHAMPION_MULTIPLE_KILL_DIE_HERO_DIE_PACKET_GROUP'
+      : shutdownGroup ? 'CANDIDATE_821_ON_SHUTDOWN_DIE_HERO_DIE_PACKET_GROUP'
+        : 'CANDIDATE_821_ON_CHAMPION_DIE_HERO_DIE_PACKET_PAIR';
+  const time = 100;
+  const dieRaw = 0x400000ae;
+  const source = 0x400000af;
+  const heroRaw = 0x400000ae;
+  const ref = (offset, rawParam) => ({
+    source_path: 'synthetic.rofl', replay_sha256: SHA,
+    chunk_index: 1, chunk_id: 2, chunk_stream: 'game_chunk', chunk_file_offset: 8,
+    decompressed_block_offset: offset, decompressed_payload_offset: offset + 6,
+    packet_id: 1034, replay_time_ms: time, payload_length: 12,
+    raw_param: rawParam, raw_payload_sha256: 'b'.repeat(64),
+  });
+  const dieRef = ref(10, dieRaw);
+  const longRef = ref(20, 0);
+  const groupRef = ref(25, source);
+  const heroRefs = [ref(30, heroRaw), ref(40, heroRaw), longRef];
+  const common = {
+    game_version: '16.19.821.7343', patch: '16.19', build_profile: profile.id,
+    replay_sha256: SHA, replay_time_ms: time, confidence: 'CANDIDATE',
+    semantic_status: evidenceStatus,
+    on_champion_die_raw_param: dieRaw, on_champion_die_event_u32_0x04: source,
+    hero_death_victim_raw_param: heroRaw,
+    hero_death_die_source_network_id_candidate: source,
+    on_champion_die_raw_packet_ref: dieRef,
+    hero_death_raw_packet_refs: heroRefs,
+  };
+  const row = grouped ? {
+    ...common, event_type: multiGroup
+      ? 'CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE'
+      : shutdownGroup ? 'ON_SHUTDOWN_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE'
+        : 'CHAMPION_KILL_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE',
+    ...(multiGroup ? {
+      on_champion_multiple_kill_raw_param: source,
+      on_champion_multiple_kill_event_u32_0x04: heroRaw,
+      on_champion_multiple_kill_event_u32_0x08: source,
+      on_champion_multiple_kill_event_u32_0x0c: 1,
+      on_champion_multiple_kill_event_u32_list_0x10: [source],
+      multi_0x04_xor_hero_raw_delta: 0,
+      multi_0x04_exact_hero_raw_equal: true,
+      on_champion_multiple_kill_raw_packet_ref: groupRef,
+    } : shutdownGroup ? {
+      on_shutdown_raw_param: source,
+      on_shutdown_event_u32_0x04: heroRaw,
+      on_shutdown_event_u32_0x58: 17,
+      on_shutdown_event_u32_0x5c: 19,
+      shutdown_0x04_xor_hero_raw_delta: 0,
+      shutdown_0x04_exact_hero_raw_equal: true,
+      on_shutdown_raw_packet_ref: groupRef,
+    } : {
+      on_champion_kill_raw_param: source,
+      on_champion_kill_event_u32_0x04: heroRaw,
+      kill_0x04_xor_hero_raw_delta: 0,
+      kill_0x04_exact_hero_raw_equal: true,
+      on_champion_kill_raw_packet_ref: groupRef,
+    }),
+    raw_packet_ref: groupRef,
+    raw_packet_refs: [dieRef, longRef, groupRef, ...heroRefs.slice(0, 2)],
+  } : {
+    ...common, event_type: 'CHAMPION_DIE_HERO_DEATH_PACKET_PAIR_CANDIDATE',
+    raw_param_xor_delta: 0, raw_param_exact_equal: true,
+    raw_packet_ref: dieRef, raw_packet_refs: [dieRef, ...heroRefs],
+  };
+  const fixture = artifact(t, [row], true, eventKey);
+  const association = {
+    profile_id: profile.id,
+    evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+    depends_on: [...profile.depends_on], known_limits: [...profile.known_limits],
+    status: 'CANDIDATE', evidence_status: evidenceStatus, replay_sha256: SHA,
+    on_champion_die_count: 1, hero_death_count: 1, pair_count: 1, event_count: 1,
+    ...(grouped ? {
+      ...(multiGroup ? {
+        on_champion_multiple_kill_count: 1,
+        unmatched_on_champion_multiple_kill_count: 0,
+        exact_multi_0x04_hero_raw_equal_count: 1,
+        multi_0x04_xor_hero_raw_delta_counts: { '0x00000000': 1 },
+      } : shutdownGroup ? {
+        on_shutdown_count: 1,
+        unmatched_on_shutdown_count: 0,
+        exact_shutdown_0x04_hero_raw_equal_count: 1,
+        shutdown_0x04_xor_hero_raw_delta_counts: { '0x00000000': 1 },
+      } : {
+        on_champion_kill_count: 1,
+        unmatched_on_champion_kill_count: 0,
+        exact_kill_0x04_hero_raw_equal_count: 1,
+        kill_0x04_xor_hero_raw_delta_counts: { '0x00000000': 1 },
+      }),
+      unpaired_on_champion_die_count: 0, unpaired_hero_death_count: 0,
+    } : {
+      exact_raw_param_equal_count: 1,
+      raw_param_xor_delta_counts: { '0x00000000': 1 },
+    }),
+  };
+  const profiles = {
+    hero_death: HERO_DEATH_CANDIDATE_PROFILE_821,
+    champion_die_event_packet: CHAMPION_DIE_EVENT_PACKET_821_PROFILE,
+    champion_kill_event_packet: CHAMPION_KILL_EVENT_PACKET_CANDIDATE_PROFILE_821,
+    champion_multiple_kill_event_packet: CHAMPION_MULTIPLE_KILL_EVENT_PACKET_821_PROFILE,
+    on_shutdown_event_packet: ON_SHUTDOWN_EVENT_PACKET_821_PROFILE,
+  };
+  const semanticPath = path.join(fixture.replayDirectory, 'semantic_run.json');
+  const analysisPath = path.join(fixture.replayDirectory, 'replay_analysis.json');
+  rewriteJson(semanticPath, (semantic) => {
+    semantic.requested_capabilities = [...profile.depends_on];
+    semantic.capability_results = Object.fromEntries(profile.depends_on.map((dependency) =>
+      [dependency, { status: 'CANDIDATE', profile_id: profiles[dependency].id,
+        event_count: 1,
+        evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+        ...(dependency === 'hero_death' ? {} : {
+          runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+          runtime_image_sha256: profile.evidence_runtime_image_sha256,
+        }) }]));
+    semantic.candidate_associations = { [profile.capability]: association };
+    if (grouped) semantic.candidate_associations.champion_die_hero_death_pair = {
+      status: 'CANDIDATE', profile_id: CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE.id,
+      replay_sha256: SHA, event_count: 1,
+    };
+  });
+  rewriteJson(analysisPath, (analysis) => {
+    for (const dependency of profile.depends_on) {
+      analysis.event_counts[`${dependency}_candidates`] = 1;
+    }
+    if (grouped) analysis.event_counts.champion_die_hero_death_pair_candidates = 1;
+    analysis.semantic = {
+      candidate_associations: { [profile.capability]: association },
+    };
+  });
+  return { ...fixture, row, association, semanticPath, analysisPath,
+    eventPath: path.join(fixture.replayDirectory, `${eventKey}.jsonl`) };
+}
+
+function turretPairArtifact(t) {
+  const profile = TURRET_FIRST_BLOOD_DIE_PAIR_821_PROFILE;
+  const time = 100;
+  const ref = (offset, rawParam) => ({
+    source_path: 'synthetic.rofl', replay_sha256: SHA,
+    chunk_index: 1, chunk_id: 2, chunk_stream: 'game_chunk', chunk_file_offset: 8,
+    decompressed_block_offset: offset, decompressed_payload_offset: offset + 6,
+    packet_id: 0x040a, replay_time_ms: time, payload_length: 116,
+    raw_param: rawParam, raw_payload_sha256: 'b'.repeat(64),
+  });
+  const dieRef = ref(10, 0x400000af);
+  const firstRef = ref(169, 0x400001af);
+  const row = {
+    event_type: 'TURRET_FIRST_BLOOD_DIE_PACKET_PAIR_CANDIDATE',
+    game_version: profile.replay_version, patch: '16.19', build_profile: profile.id,
+    replay_sha256: SHA, replay_time_ms: time,
+    turret_die_child_event_id: 0x003b,
+    turret_first_blood_child_event_id: 0x003d,
+    turret_die_raw_param: dieRef.raw_param,
+    turret_first_blood_raw_param: firstRef.raw_param,
+    source_order_block_offset_gap: 159, intervening_on_event_count: 0,
+    raw_packet_ref: firstRef,
+    turret_die_raw_packet_ref: dieRef,
+    turret_first_blood_raw_packet_ref: firstRef,
+    raw_packet_refs: [dieRef, firstRef],
+    confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_821_TURRET_FIRST_BLOOD_DIE_PACKET_PAIR',
+  };
+  const fixture = artifact(t, [row], true, TURRET_FIRST_BLOOD_DIE_PAIR_EVENT);
+  const association = {
+    profile_id: profile.id,
+    evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+    depends_on: [...profile.depends_on], known_limits: [...profile.known_limits],
+    status: 'CANDIDATE', evidence_status: row.semantic_status,
+    replay_sha256: SHA, turret_first_blood_count: 1, turret_die_count: 2,
+    unmatched_turret_first_blood_count: 0, unpaired_turret_die_count: 1,
+    pair_count: 1, event_count: 1,
+  };
+  const semanticPath = path.join(fixture.replayDirectory, 'semantic_run.json');
+  const analysisPath = path.join(fixture.replayDirectory, 'replay_analysis.json');
+  rewriteJson(semanticPath, (semantic) => {
+    semantic.replay_version = profile.replay_version;
+    semantic.requested_capabilities = [...profile.depends_on];
+    semantic.capability_results = Object.fromEntries([
+      [TURRET_FIRST_BLOOD_EVENT_PACKET_821_PROFILE, 1],
+      [TURRET_DIE_EVENT_PACKET_821_PROFILE, 2],
+    ].map(([dependency, count]) => [dependency.capability, {
+      status: 'CANDIDATE', profile_id: dependency.id,
+      evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+      runtime_image_sha256: profile.evidence_runtime_image_sha256,
+      runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+      input_packet_id: 0x040a, child_event_id: dependency.child_event_id,
+      input_count: count, event_count: count,
+    }]));
+    semantic.candidate_associations = { [profile.capability]: association };
+  });
+  rewriteJson(analysisPath, (analysis) => {
+    analysis.replay_version = profile.replay_version;
+    analysis.event_counts.turret_first_blood_event_packet_candidates = 1;
+    analysis.event_counts.turret_die_event_packet_candidates = 2;
+    analysis.semantic = { candidate_associations: { [profile.capability]: association } };
+  });
+  return { ...fixture, row, association, semanticPath, analysisPath,
+    eventPath: path.join(fixture.replayDirectory,
+      `${TURRET_FIRST_BLOOD_DIE_PAIR_EVENT}.jsonl`) };
+}
+
+function doubleMultiAssociationArtifact(t) {
+  const fixture = associationArtifact(t, MULTI_GROUP_EVENT);
+  const profile = CHAMPION_DOUBLE_KILL_MULTI_GROUP_821_PROFILE;
+  const imageSha = profile.evidence_runtime_image_sha256;
+  const source = 0x400000af;
+  const victim = 0x400000ae;
+  const ref = (offset, packetId, payloadLength, rawParam) => ({
+    source_path: 'synthetic.rofl', replay_sha256: SHA,
+    chunk_index: 1, chunk_id: 2, chunk_stream: 'game_chunk', chunk_file_offset: 8,
+    decompressed_block_offset: offset, decompressed_payload_offset: offset + 6,
+    packet_id: packetId, replay_time_ms: 100, payload_length: payloadLength,
+    raw_param: rawParam, raw_payload_sha256: 'b'.repeat(64),
+  });
+  const die = ref(10, 0x040a, 116, victim);
+  const named = ref(20, 0x040a, 104, source);
+  const multi = ref(30, 0x040a, 88, source);
+  const heroes = [ref(40, 0x0259, 5, victim), ref(50, 0x0438, 12, victim)];
+  const row = {
+    event_type: 'CHAMPION_DOUBLE_KILL_MULTI_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE',
+    game_version: profile.replay_version, patch: '16.19', build_profile: profile.id,
+    replay_sha256: SHA, replay_time_ms: 100,
+    on_champion_double_kill_child_event_id: 0x000b,
+    on_champion_double_kill_registered_event_name: 'OnChampionDoubleKill',
+    on_champion_double_kill_raw_param: source,
+    on_champion_double_kill_event_blob_sha256: 'c'.repeat(64),
+    on_champion_multiple_kill_child_event_id: 0x0009,
+    on_champion_multiple_kill_raw_param: source,
+    on_champion_multiple_kill_opaque_u32_0x08: 2,
+    upstream_multi_group_profile_id:
+      CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE.id,
+    raw_packet_ref: named, on_champion_double_kill_raw_packet_ref: named,
+    on_champion_multiple_kill_raw_packet_ref: multi,
+    on_champion_die_raw_packet_ref: die, hero_death_raw_packet_refs: heroes,
+    raw_packet_refs: [die, named, multi, ...heroes],
+    confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_821_DOUBLE_KILL_NAMED_MULTI_DIE_HERO_PACKET_GROUP',
+  };
+  const association = {
+    profile_id: profile.id, evidence_runtime_image_sha256: imageSha,
+    depends_on: [...profile.depends_on], known_limits: [...profile.known_limits],
+    status: 'CANDIDATE', evidence_status: row.semantic_status,
+    replay_sha256: SHA, on_champion_double_kill_count: 1,
+    on_champion_multiple_kill_group_count: 1,
+    matched_multi_u32_0x08_2_count: 1,
+    excluded_other_multi_u32_0x08_count: 0,
+    unmatched_on_champion_double_kill_count: 0,
+    unpaired_multi_u32_0x08_2_count: 0, pair_count: 1, event_count: 1,
+  };
+  rewriteJson(fixture.semanticPath, (semantic) => {
+    semantic.requested_capabilities.push('champion_double_kill_event_packet');
+    semantic.capability_results.champion_double_kill_event_packet = {
+      status: 'CANDIDATE', profile_id: CHAMPION_DOUBLE_KILL_EVENT_PACKET_821_PROFILE.id,
+      evidence_status: 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD',
+      input_packet_id: 0x040a, child_event_id: 0x000b,
+      input_count: 1, target_packet_count: 1, excluded_child_count: 0,
+      event_count: 1, evidence_runtime_image_sha256: imageSha,
+      runtime_image_sha256: imageSha, runtime_image_status: 'MATCHED_USED',
+      runtime_image_used: true,
+    };
+    semantic.candidate_associations[profile.capability] = association;
+  });
+  rewriteJson(fixture.analysisPath, (analysis) => {
+    analysis.event_counts.champion_double_kill_event_packet_candidates = 1;
+    analysis.event_counts[DOUBLE_MULTI_GROUP_EVENT] = 1;
+    analysis.event_jsonl_files[DOUBLE_MULTI_GROUP_EVENT] = `${DOUBLE_MULTI_GROUP_EVENT}.jsonl`;
+    analysis.semantic.candidate_associations[profile.capability] = association;
+  });
+  const eventPath = path.join(fixture.replayDirectory, `${DOUBLE_MULTI_GROUP_EVENT}.jsonl`);
+  const line = JSON.stringify(row);
+  fs.writeFileSync(eventPath, `${line}\n`);
+  return { ...fixture, row, association, eventPath, line };
+}
+
+function doublePacketArtifact(t) {
+  const fixture = doubleMultiAssociationArtifact(t);
+  const ref = fixture.row.on_champion_double_kill_raw_packet_ref;
+  const row = {
+    event_type: 'CHAMPION_DOUBLE_KILL_EVENT_PACKET_CANDIDATE',
+    game_version: '16.19.821.7343', patch: '16.19',
+    build_profile: CHAMPION_DOUBLE_KILL_EVENT_PACKET_821_PROFILE.id,
+    replay_sha256: SHA, replay_time_ms: ref.replay_time_ms,
+    raw_param: ref.raw_param, child_event_id: 0x000b,
+    registered_event_name: 'OnChampionDoubleKill', raw_event_id_hex: '0x4968',
+    event_blob_sha256: 'c'.repeat(64), confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD',
+    raw_packet_ref: ref,
+  };
+  rewriteJson(fixture.analysisPath, (analysis) => {
+    analysis.event_jsonl_files[DOUBLE_PACKET_EVENT] = `${DOUBLE_PACKET_EVENT}.jsonl`;
+  });
+  const eventPath = path.join(fixture.replayDirectory, `${DOUBLE_PACKET_EVENT}.jsonl`);
+  const line = JSON.stringify(row);
+  fs.writeFileSync(eventPath, `${line}\n`);
+  return { ...fixture, packetRow: row, packetPath: eventPath, packetLine: line };
+}
+
+function tripleQuadraAssociationArtifact(t, childId = 0x000c) {
+  const fixture = doubleMultiAssociationArtifact(t);
+  const profile = CHAMPION_TRIPLE_QUADRA_MULTI_GROUP_821_PROFILE;
+  const childProfile = CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_821_PROFILE;
+  const childName = childId === 0x000c ? 'OnChampionTripleKill' : 'OnChampionQuadraKill';
+  const multiValue = childId === 0x000c ? 3 : 4;
+  const rawEventId = childId === 0x000c ? '0x49c8' : '0x4988';
+  const groupRow = structuredClone(fixture.row);
+  groupRow.event_type =
+    'CHAMPION_TRIPLE_QUADRA_MULTI_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE';
+  groupRow.build_profile = profile.id;
+  groupRow.semantic_status =
+    'CANDIDATE_821_TRIPLE_QUADRA_NAMED_MULTI_DIE_HERO_PACKET_GROUP';
+  groupRow.on_champion_triple_quadra_child_event_id = childId;
+  groupRow.on_champion_triple_quadra_registered_event_name = childName;
+  groupRow.on_champion_triple_quadra_raw_param =
+    groupRow.on_champion_double_kill_raw_param;
+  groupRow.on_champion_triple_quadra_event_blob_sha256 =
+    groupRow.on_champion_double_kill_event_blob_sha256;
+  groupRow.on_champion_triple_quadra_raw_packet_ref =
+    groupRow.on_champion_double_kill_raw_packet_ref;
+  groupRow.on_champion_multiple_kill_opaque_u32_0x08 = multiValue;
+  for (const field of ['on_champion_double_kill_child_event_id',
+    'on_champion_double_kill_registered_event_name',
+    'on_champion_double_kill_raw_param',
+    'on_champion_double_kill_event_blob_sha256',
+    'on_champion_double_kill_raw_packet_ref']) delete groupRow[field];
+  const packetRow = {
+    event_type: 'CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_CANDIDATE',
+    game_version: profile.replay_version, patch: '16.19',
+    build_profile: childProfile.id,
+    replay_sha256: SHA, replay_time_ms: 100,
+    raw_param: groupRow.on_champion_triple_quadra_raw_param,
+    child_event_id: childId, registered_event_name: childName,
+    raw_event_id_hex: rawEventId,
+    event_blob_sha256: groupRow.on_champion_triple_quadra_event_blob_sha256,
+    confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD',
+    raw_packet_ref: groupRow.on_champion_triple_quadra_raw_packet_ref,
+  };
+  const association = {
+    profile_id: profile.id,
+    evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+    depends_on: [...profile.depends_on], known_limits: [...profile.known_limits],
+    status: 'CANDIDATE', evidence_status: groupRow.semantic_status,
+    replay_sha256: SHA, on_champion_triple_quadra_count: 1,
+    on_champion_multiple_kill_group_count: 1,
+    matched_multi_u32_0x08_3_count: childId === 0x000c ? 1 : 0,
+    matched_multi_u32_0x08_4_count: childId === 0x000d ? 1 : 0,
+    excluded_other_multi_u32_0x08_count: 0,
+    unmatched_on_champion_triple_quadra_count: 0,
+    unpaired_multi_u32_0x08_3_or_4_count: 0,
+    pair_count: 1, event_count: 1,
+  };
+  const childResult = {
+    status: 'CANDIDATE', profile_id: childProfile.id,
+    evidence_runtime_image_sha256: childProfile.evidence_runtime_image_sha256,
+    evidence_status: 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD',
+    runtime_image_sha256: childProfile.evidence_runtime_image_sha256,
+    runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+    input_packet_id: 0x040a, child_event_ids: [...childProfile.child_event_ids],
+    input_count: 1, target_packet_count: 1, excluded_child_count: 0,
+    event_count: 1,
+  };
+  rewriteJson(fixture.semanticPath, (semantic) => {
+    semantic.requested_capabilities.push('champion_triple_quadra_event_packet');
+    semantic.capability_results.champion_triple_quadra_event_packet = childResult;
+    semantic.candidate_associations[profile.capability] = association;
+  });
+  rewriteJson(fixture.analysisPath, (analysis) => {
+    analysis.event_counts[TRIPLE_QUADRA_PACKET_EVENT] = 1;
+    analysis.event_counts[TRIPLE_QUADRA_MULTI_GROUP_EVENT] = 1;
+    analysis.event_jsonl_files[TRIPLE_QUADRA_PACKET_EVENT] =
+      `${TRIPLE_QUADRA_PACKET_EVENT}.jsonl`;
+    analysis.event_jsonl_files[TRIPLE_QUADRA_MULTI_GROUP_EVENT] =
+      `${TRIPLE_QUADRA_MULTI_GROUP_EVENT}.jsonl`;
+    analysis.semantic.candidate_associations[profile.capability] = association;
+  });
+  const packetPath = path.join(fixture.replayDirectory,
+    `${TRIPLE_QUADRA_PACKET_EVENT}.jsonl`);
+  const groupPath = path.join(fixture.replayDirectory,
+    `${TRIPLE_QUADRA_MULTI_GROUP_EVENT}.jsonl`);
+  const packetLine = JSON.stringify(packetRow);
+  const groupLine = JSON.stringify(groupRow);
+  fs.writeFileSync(packetPath, `${packetLine}\n`);
+  fs.writeFileSync(groupPath, `${groupLine}\n`);
+  return { ...fixture, association, packetRow, groupRow,
+    packetPath, groupPath, packetLine, groupLine };
+}
+
+function artifact(t, rows = [
+  { replay_sha256: SHA, replay_time_ms: 0, participant_id_candidate: 1,
+    confidence: 'CANDIDATE', field_confidence: { level: 'CANDIDATE' } },
+  { replay_sha256: SHA, replay_time_ms: 1000, participant_id_candidate: null,
+    confidence: 'CANDIDATE', raw_packet_ref: { replay_sha256: SHA } },
+  { replay_sha256: SHA, replay_time_ms: 2000, participant_id_candidate: 1,
+    confidence: 'CANDIDATE', raw_packet_ref: { replay_sha256: SHA } },
+  { replay_sha256: SHA, replay_time_ms: 2000, participant_id_candidate: 2,
+    confidence: 'CANDIDATE', raw_packet_ref: { replay_sha256: SHA } },
+], compact = true, eventKey = EVENT) {
+  const capability = eventKey.slice(0, -'_candidates'.length);
+  const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT,
+    HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT, CAST_SPELL_ANS_EVENT,
+    BUFF_ADD_EVENT, BUFF_REMOVE_EVENT, BUFF_UPDATE_COUNTER_EVENT,
+    BUFF_UPDATE_COUNT_EVENT, BUFF_REPLACE_EVENT,
+    SET_SPELL_TIMER_FROM_BUFF_EVENT,
+    SET_SPELL_LEVEL_EVENT,
+    CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
+    CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT,
+    RESURRECT_PACKET_EVENT, REVIVE_ALLY_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
+    DAMPENER_DIE_PACKET_EVENT,
+    DOUBLE_PACKET_EVENT, DOUBLE_MULTI_GROUP_EVENT, TRIPLE_QUADRA_PACKET_EVENT,
+    TRIPLE_QUADRA_MULTI_GROUP_EVENT,
+    HERO_DEATH_EVENT, HERO_ASSIST_EVENT, ...ASSOCIATION_EVENTS].includes(eventKey)
+    ? '16.19.821.7343' : VERSION;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const replayDirectory = path.join(root, 'replays', 'synthetic');
+  fs.mkdirSync(replayDirectory, { recursive: true });
+  const semantic = {
+    replay_version: replayVersion, replay_sha256: SHA, container_status: 'PASS',
+    status: 'PARTIAL', api_status: 'PARTIAL',
+    requested_capabilities: [capability, 'hero_path'],
+    capability_results: {
+      [capability]: { status: 'CANDIDATE', input_count: rows.length,
+        event_count: rows.length, evidence_status: 'CANDIDATE_SYNTHETIC' },
+      hero_path: { status: 'MISSING_INPUT', input_count: null, event_count: null,
+        missing_input: 'exact runtime image' },
+    },
+  };
+  const analysis = {
+    patch: '16.19', replay_version: replayVersion, replay_sha256: SHA,
+    event_counts: { [eventKey]: rows.length },
+    ...(compact ? { event_storage: 'JSONL_ONLY',
+      event_jsonl_files: { [eventKey]: `${eventKey}.jsonl` }, events: null }
+      : { events: { [eventKey]: rows } }),
+  };
+  fs.writeFileSync(path.join(replayDirectory, 'semantic_run.json'), JSON.stringify(semantic));
+  fs.writeFileSync(path.join(replayDirectory, 'replay_analysis.json'), JSON.stringify(analysis));
+  const lines = rows.map((row) => JSON.stringify(row));
+  fs.writeFileSync(path.join(replayDirectory, `${eventKey}.jsonl`),
+    lines.length ? `${lines.join('\n')}\n` : '');
+  return { root, replayDirectory, semantic, analysis, lines };
+}
+
+function run(...args) {
+  return spawnSync(process.execPath, [CLI, 'query-events', ...args],
+    { encoding: 'utf8', cwd: path.dirname(CLI) });
+}
+
+function reviveAllyRow(time, fields = {}) {
+  return {
+    event_type: 'REVIVE_ALLY_EVENT_PACKET_CANDIDATE',
+    game_version: REVIVE_ALLY_EVENT_PACKET_821_PROFILE.replay_version,
+    patch: '16.19', build_profile: REVIVE_ALLY_EVENT_PACKET_821_PROFILE.id,
+    replay_sha256: SHA, replay_time_ms: time,
+    raw_param: 0x400000b5, event_id: 0x002c, event_name: 'OnReviveAlly',
+    raw_event_id_hex: '0x49ca', confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_EXACT_RUNTIME_ON_REVIVE_ALLY_PACKET',
+    raw_packet_ref: { replay_sha256: SHA, packet_id: 0x040a,
+      payload_length: 16, raw_param: 0x400000b5 },
+    ...fields,
+  };
+}
+
+function reviveAllyArtifact(t, rows) {
+  const fixture = artifact(t, rows, true, REVIVE_ALLY_PACKET_EVENT);
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    Object.assign(semantic.capability_results.revive_ally_event_packet, {
+      profile_id: REVIVE_ALLY_EVENT_PACKET_821_PROFILE.id,
+      evidence_runtime_image_sha256:
+        REVIVE_ALLY_EVENT_PACKET_821_PROFILE.evidence_runtime_image_sha256,
+      runtime_image_sha256:
+        REVIVE_ALLY_EVENT_PACKET_821_PROFILE.evidence_runtime_image_sha256,
+      runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+      evidence_status: 'CANDIDATE_EXACT_RUNTIME_ON_REVIVE_ALLY_PACKET',
+      input_packet_id: 0x040a, child_event_id: 0x002c,
+    });
+  });
+  return fixture;
+}
+
+function dampenerDieRow(time, rawParam, blockOffset = 32) {
+  const blob = Buffer.alloc(108, rawParam & 0xff);
+  return {
+    event_type: 'DAMPENER_DIE_EVENT_PACKET_CANDIDATE',
+    game_version: DAMPENER_DIE_EVENT_PACKET_821_PROFILE.replay_version,
+    patch: '16.19', build_profile: DAMPENER_DIE_EVENT_PACKET_821_PROFILE.id,
+    replay_sha256: SHA, replay_time_ms: time, raw_param: rawParam,
+    event_id: 0x0035, event_name: 'OnDampenerDie', raw_event_id_hex: '0x4906',
+    event_blob_hex: blob.toString('hex'),
+    event_blob_sha256: crypto.createHash('sha256').update(blob).digest('hex'),
+    confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_EXACT_RUNTIME_ON_DAMPENER_DIE_PACKET',
+    raw_packet_ref: {
+      source_path: 'synthetic.rofl', replay_sha256: SHA,
+      chunk_index: 1, chunk_id: 2, chunk_stream: 'game_chunk',
+      chunk_file_offset: 8, decompressed_block_offset: blockOffset,
+      decompressed_payload_offset: blockOffset + 6,
+      packet_id: 0x040a, replay_time_ms: time, payload_length: 116,
+      raw_param: rawParam, raw_payload_sha256: 'b'.repeat(64),
+    },
+  };
+}
+
+function dampenerDieArtifact(t, rows = [dampenerDieRow(100, 0x400000af)]) {
+  const fixture = artifact(t, rows, true, DAMPENER_DIE_PACKET_EVENT);
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    Object.assign(semantic.capability_results.dampener_die_event_packet, {
+      profile_id: DAMPENER_DIE_EVENT_PACKET_821_PROFILE.id,
+      evidence_runtime_image_sha256:
+        DAMPENER_DIE_EVENT_PACKET_821_PROFILE.evidence_runtime_image_sha256,
+      runtime_image_sha256:
+        DAMPENER_DIE_EVENT_PACKET_821_PROFILE.evidence_runtime_image_sha256,
+      runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+      evidence_status: 'CANDIDATE_EXACT_RUNTIME_ON_DAMPENER_DIE_PACKET',
+      input_packet_id: 0x040a, input_packet_scope: 'child_0035_length_116',
+      child_event_id: 0x0035, input_count: rows.length, event_count: rows.length,
+      observed_same_length_packet_count: rows.length,
+      excluded_same_length_foreign_count: 0,
+      excluded_same_length_foreign_packet_refs: [],
+    });
+  });
+  return fixture;
+}
+
+function assistRow(time, victim, killer, assistants) {
+  const available = assistants !== null;
+  return {
+    event_type: 'HERO_ASSIST_ATTRIBUTION_CANDIDATE',
+    game_version: HERO_ASSIST_CANDIDATE_PROFILE_821.replay_version,
+    patch: '16.19', build_profile: HERO_ASSIST_CANDIDATE_PROFILE_821.id,
+    replay_sha256: SHA, replay_time_ms: time,
+    victim_participant_id_candidate: victim,
+    killer_participant_id_candidate: killer,
+    assisting_participant_ids_candidate: assistants,
+    assist_pair_count: available ? assistants.length : null,
+    assist_observation_status: available ? HERO_ASSIST_EVIDENCE : 'UNAVAILABLE_NONHERO_SOURCE',
+    semantic_status: available ? HERO_ASSIST_EVIDENCE : 'UNAVAILABLE_NONHERO_SOURCE',
+    confidence: 'CANDIDATE',
+    field_confidence: { killer_participant_id_candidate: killer === null
+      ? 'UNAVAILABLE' : 'CANDIDATE_821_SOURCE_ID_KILL_TAIL_ALIGNMENT' },
+  };
+}
+
+function deathRow(time, victim, killer) {
+  return {
+    event_type: 'death', game_version: HERO_DEATH_CANDIDATE_PROFILE_821.replay_version,
+    patch: '16.19', build_profile: HERO_DEATH_CANDIDATE_PROFILE_821.id,
+    replay_sha256: SHA, replay_time_ms: time, timestamp_ms: time,
+    victim_participant_id: victim, target_participant_id: victim,
+    killer_participant_id_candidate: killer,
+    confidence: 'CANDIDATE', semantic_status: HERO_DEATH_EVIDENCE,
+    field_confidence: { killer_participant_id_candidate: killer === null
+      ? 'UNAVAILABLE' : 'CANDIDATE_821_SOURCE_ID_KILL_TAIL_ALIGNMENT' },
+  };
+}
+
+function deathArtifact(t, rows) {
+  const fixture = artifact(t, rows, true, HERO_DEATH_EVENT);
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.hero_death.profile_id = HERO_DEATH_CANDIDATE_PROFILE_821.id;
+    semantic.capability_results.hero_death.evidence_status = HERO_DEATH_EVIDENCE;
+  });
+  return fixture;
+}
+
+function assistArtifact(t, rows) {
+  const fixture = artifact(t, rows, true, HERO_ASSIST_EVENT);
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.hero_assist.profile_id = HERO_ASSIST_CANDIDATE_PROFILE_821.id;
+    semantic.capability_results.hero_assist.evidence_status = HERO_ASSIST_EVIDENCE;
+  });
+  return fixture;
+}
+
+function batchArtifact(t) {
+  const first = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 100,
+    participant_id_candidate: 1 }]);
+  const second = artifact(t, [{ replay_sha256: 'b'.repeat(64), replay_time_ms: 200,
+    participant_id_candidate: 2 }]);
+  const secondDirectory = path.join(first.root, 'replays', 'second');
+  fs.cpSync(second.replayDirectory, secondDirectory, { recursive: true });
+  const manifest = {
+    command_args: ['batch', 'synthetic-input'],
+    replay_inputs: [
+      { sha256: SHA, version: VERSION, artifact_directory: 'replays/synthetic' },
+      { sha256: 'b'.repeat(64), version: VERSION,
+        artifact_directory: 'replays/second' },
+    ],
+  };
+  rewriteJson(path.join(secondDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.replay_sha256 = 'b'.repeat(64);
+  });
+  rewriteJson(path.join(secondDirectory, 'replay_analysis.json'), (analysis) => {
+    analysis.replay_sha256 = 'b'.repeat(64);
+  });
+  const manifestPath = path.join(first.root, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  refreshBatchHashes(manifestPath);
+  return { root: first.root, first, secondDirectory, manifestPath };
+}
+
+function refreshBatchHashes(manifestPath, eventKey = EVENT) {
+  rewriteJson(manifestPath, (manifest) => {
+    const root = path.dirname(manifestPath);
+    const hashes = {};
+    for (const entry of manifest.replay_inputs) {
+      for (const name of ['semantic_run.json', 'replay_analysis.json', `${eventKey}.jsonl`]) {
+        const relative = `${entry.artifact_directory}/${name}`;
+        const filename = path.join(root, relative);
+        if (fs.existsSync(filename)) {
+          hashes[relative] = crypto.createHash('sha256')
+            .update(fs.readFileSync(filename)).digest('hex');
+        }
+      }
+    }
+    manifest.output_hashes_excluding_manifest = hashes;
+  });
+}
+
+test('query-events reads batch JSONL with a global limit and per-Replay counts', (t) => {
+  const batch = batchArtifact(t);
+  const result = run(batch.root, '--event', EVENT, '--limit', '1');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${batch.first.lines[0]}\n`);
+  const summary = JSON.parse(result.stderr);
+  assert.equal(summary.query_status, 'COMPLETE');
+  assert.equal(summary.replay_count, 2);
+  assert.equal(summary.completed_replay_count, 2);
+  assert.equal(summary.scanned_count, 2);
+  assert.equal(summary.matched_count, 2);
+  assert.equal(summary.emitted_count, 1);
+  assert.deepEqual(summary.replay_results.map((entry) => entry.emitted_count), [1, 0]);
+});
+
+test('query-events reads a multi-Replay decode output with the same hash checks', (t) => {
+  const decoded = batchArtifact(t);
+  rewriteJson(decoded.manifestPath, (manifest) => {
+    manifest.command_args = ['decode', 'synthetic-input-directory', '--events', CAPABILITY];
+  });
+  const complete = run(decoded.root, '--event', EVENT);
+  assert.equal(complete.status, 0, complete.stderr);
+  assert.equal(complete.stdout,
+    `${decoded.first.lines[0]}\n${JSON.stringify({
+      replay_sha256: 'b'.repeat(64), replay_time_ms: 200,
+      participant_id_candidate: 2,
+    })}\n`);
+  const summary = JSON.parse(complete.stderr);
+  assert.equal(summary.query_status, 'COMPLETE');
+  assert.equal(summary.replay_count, 2);
+  assert.equal(summary.completed_replay_count, 2);
+  assert.equal(summary.scanned_count, 2);
+  assert.equal(summary.emitted_count, 2);
+
+  rewriteJson(path.join(decoded.secondDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results[CAPABILITY] = {
+      status: 'PROFILE_UNAVAILABLE', event_count: null,
+      missing_input: 'exact runtime image',
+    };
+  });
+  fs.rmSync(path.join(decoded.secondDirectory, `${EVENT}.jsonl`));
+  refreshBatchHashes(decoded.manifestPath);
+  const partial = run(decoded.root, '--event', EVENT);
+  assert.equal(partial.status, 0, partial.stderr);
+  assert.equal(partial.stdout, `${decoded.first.lines[0]}\n`);
+  assert.equal(JSON.parse(partial.stderr).query_status, 'PARTIAL');
+  assert.equal(JSON.parse(partial.stderr).replay_results[1].code,
+    'CAPABILITY_UNAVAILABLE');
+
+  fs.appendFileSync(path.join(decoded.first.replayDirectory, `${EVENT}.jsonl`), '{}\n');
+  const corrupt = run(decoded.root, '--event', EVENT);
+  assert.equal(corrupt.status, 2);
+  assert.equal(JSON.parse(corrupt.stderr).code, 'ARTIFACT_HASH_MISMATCH');
+
+  rewriteJson(decoded.manifestPath, (manifest) => {
+    manifest.command_args[0] = 'analyze';
+  });
+  const wrongCommand = run(decoded.root, '--event', EVENT);
+  assert.equal(wrongCommand.status, 2);
+  assert.equal(JSON.parse(wrongCommand.stderr).code, 'INVALID_BATCH_METADATA');
+});
+
+test('query-events reads a single-Replay decode root and rejects malformed roots', (t) => {
+  const decoded = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 100,
+    participant_id_candidate: 1 }]);
+  const manifestPath = path.join(decoded.root, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify({
+    command_args: ['decode', 'synthetic.rofl'],
+    replay_inputs: [{ sha256: SHA, version: VERSION,
+      artifact_directory: 'replays/synthetic' }],
+  }));
+  refreshBatchHashes(manifestPath);
+  const complete = run(decoded.root, '--event', EVENT);
+  assert.equal(complete.status, 0, complete.stderr);
+  assert.equal(complete.stdout, `${decoded.lines[0]}\n`);
+  assert.equal(JSON.parse(complete.stderr).replay_count, 1);
+
+  rewriteJson(manifestPath, (manifest) => {
+    manifest.replay_inputs[0].artifact_directory = 'replays/../outside';
+  });
+  const malformed = run(decoded.root, '--event', EVENT);
+  assert.equal(malformed.status, 2);
+  assert.equal(JSON.parse(malformed.stderr).code, 'INVALID_BATCH_METADATA');
+});
+
+test('query-events marks unavailable batch Replays and refuses an all-unavailable batch', (t) => {
+  const batch = batchArtifact(t);
+  rewriteJson(path.join(batch.secondDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results[CAPABILITY] = {
+      status: 'PROFILE_UNAVAILABLE', event_count: null,
+      missing_input: 'exact 821 image',
+    };
+  });
+  fs.rmSync(path.join(batch.secondDirectory, `${EVENT}.jsonl`));
+  refreshBatchHashes(batch.manifestPath);
+  const partial = run(batch.root, '--event', EVENT);
+  assert.equal(partial.status, 0, partial.stderr);
+  assert.equal(partial.stdout, `${batch.first.lines[0]}\n`);
+  const summary = JSON.parse(partial.stderr);
+  assert.equal(summary.query_status, 'PARTIAL');
+  assert.equal(summary.unavailable_replay_count, 1);
+  assert.equal(summary.replay_results[1].code, 'CAPABILITY_UNAVAILABLE');
+  assert.equal(summary.replay_results[1].capability_status, 'PROFILE_UNAVAILABLE');
+
+  rewriteJson(path.join(batch.first.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results[CAPABILITY] = {
+      status: 'PROFILE_UNAVAILABLE', event_count: null,
+    };
+  });
+  refreshBatchHashes(batch.manifestPath);
+  const output = path.join(batch.root, 'unavailable.jsonl');
+  const unavailable = run(batch.root, '--event', EVENT, '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'BATCH_EVENT_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+});
+
+test('query-events rejects unsafe or corrupt batch artifacts and removes partial output', (t) => {
+  const batch = batchArtifact(t);
+  const output = path.join(batch.root, 'partial.jsonl');
+  fs.writeFileSync(path.join(batch.secondDirectory, `${EVENT}.jsonl`),
+    '{invalid-json}\n');
+  refreshBatchHashes(batch.manifestPath);
+  const corrupt = run(batch.root, '--event', EVENT, '--output', output);
+  assert.equal(corrupt.status, 2);
+  assert.equal(JSON.parse(corrupt.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
+
+  rewriteJson(batch.manifestPath, (manifest) => {
+    manifest.replay_inputs[1].artifact_directory = 'replays/../outside';
+  });
+  const unsafe = run(batch.root, '--event', EVENT);
+  assert.equal(unsafe.status, 2);
+  assert.equal(JSON.parse(unsafe.stderr).code, 'INVALID_BATCH_METADATA');
+});
+
+test('query-events refuses changed batch rows and omitted manifest Replay entries', (t) => {
+  const changed = batchArtifact(t);
+  const eventPath = path.join(changed.first.replayDirectory, `${EVENT}.jsonl`);
+  const original = JSON.parse(changed.first.lines[0]);
+  fs.writeFileSync(eventPath, `${JSON.stringify({ ...original, replay_time_ms: 101 })}\n`);
+  const altered = run(changed.root, '--event', EVENT);
+  assert.equal(altered.status, 2);
+  assert.equal(JSON.parse(altered.stderr).code, 'ARTIFACT_HASH_MISMATCH');
+
+  const omitted = batchArtifact(t);
+  rewriteJson(omitted.manifestPath, (manifest) => {
+    manifest.replay_inputs.pop();
+  });
+  const query = run(omitted.root, '--event', EVENT);
+  assert.equal(query.status, 2);
+  assert.equal(JSON.parse(query.stderr).code, 'INVALID_BATCH_METADATA');
+});
+
+test('query-events keeps batch Replay identity and metadata hash gates', (t) => {
+  for (const [field, value] of [
+    ['sha256', 'c'.repeat(64)],
+    ['version', '16.19.821.9999'],
+  ]) {
+    const batch = batchArtifact(t);
+    rewriteJson(batch.manifestPath, (manifest) => {
+      manifest.replay_inputs[0][field] = value;
+    });
+    const mismatch = run(batch.root, '--event', EVENT);
+    assert.equal(mismatch.status, 2);
+    assert.equal(JSON.parse(mismatch.stderr).code, 'ARTIFACT_IDENTITY_MISMATCH');
+  }
+
+  const unavailable = batchArtifact(t);
+  rewriteJson(path.join(unavailable.secondDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results[CAPABILITY] = {
+      status: 'PROFILE_UNAVAILABLE', event_count: null,
+    };
+  });
+  refreshBatchHashes(unavailable.manifestPath);
+  rewriteJson(unavailable.manifestPath, (manifest) => {
+    manifest.replay_inputs[1].version = '16.19.821.9999';
+  });
+  const unavailableMismatch = run(unavailable.root, '--event', EVENT);
+  assert.equal(unavailableMismatch.status, 2);
+  assert.equal(JSON.parse(unavailableMismatch.stderr).code, 'ARTIFACT_IDENTITY_MISMATCH');
+
+  const changedMetadata = batchArtifact(t);
+  rewriteJson(path.join(changedMetadata.first.replayDirectory, 'replay_analysis.json'),
+    (analysis) => { analysis.note = 'changed after manifest'; });
+  const hashMismatch = run(changedMetadata.root, '--event', EVENT);
+  assert.equal(hashMismatch.status, 2);
+  assert.equal(JSON.parse(hashMismatch.stderr).code, 'ARTIFACT_HASH_MISMATCH');
+});
+
+test('query-events filters exact 821 pair and group association rows without modifying JSONL', (t) => {
+  for (const eventKey of ASSOCIATION_EVENTS) {
+    const fixture = associationArtifact(t, eventKey);
+    const selected = run(fixture.replayDirectory, '--event', eventKey,
+      '--from-ms', '100', '--to-ms', '100', '--raw-param', '0x400000af',
+      '--opaque-u32', '0x400000ae');
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, eventKey !== DIE_PAIR_EVENT
+      ? `${fixture.lines[0]}\n` : '');
+    const summary = JSON.parse(selected.stderr);
+    assert.equal(summary.capability_status, 'CANDIDATE');
+    assert.equal(summary.declared_event_count, 1);
+    assert.equal(summary.scanned_count, 1);
+    assert.equal(summary.filters.opaque_u32, 0x400000ae);
+    assert.equal(summary.opaque_u32_unavailable_count, 0);
+    const rawParam = run(fixture.replayDirectory, '--event', eventKey,
+      '--raw-param', eventKey === DIE_PAIR_EVENT ? '0x400000ae' : '0x400000af');
+    assert.equal(rawParam.status, 0, rawParam.stderr);
+    assert.equal(rawParam.stdout, `${fixture.lines[0]}\n`);
+    const dieChild = run(fixture.replayDirectory, '--event', eventKey,
+      '--opaque-u32', '0x400000af');
+    assert.equal(dieChild.status, 0, dieChild.stderr);
+    assert.equal(dieChild.stdout, `${fixture.lines[0]}\n`);
+    assert.equal(fs.readFileSync(fixture.eventPath, 'utf8'), `${fixture.lines[0]}\n`);
+  }
+});
+
+test('query-events filters exact 821 turret packet pairs by time and either raw parameter', (t) => {
+  const fixture = turretPairArtifact(t);
+  for (const rawParam of ['0x400000af', '0x400001af']) {
+    const result = run(fixture.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT,
+      '--from-ms', '100', '--to-ms', '100', '--raw-param', rawParam);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `${fixture.lines[0]}\n`);
+    const summary = JSON.parse(result.stderr);
+    assert.equal(summary.capability_status, 'CANDIDATE');
+    assert.equal(summary.declared_event_count, 1);
+    assert.equal(summary.matched_count, 1);
+    assert.equal(summary.raw_param_unavailable_count, 0);
+  }
+  const absent = run(fixture.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT,
+    '--raw-param', '0x400000aa');
+  assert.equal(absent.status, 0, absent.stderr);
+  assert.equal(absent.stdout, '');
+  assert.equal(JSON.parse(absent.stderr).matched_count, 0);
+  assert.equal(fs.readFileSync(fixture.eventPath, 'utf8'), `${fixture.lines[0]}\n`);
+});
+
+test('query-events requires exact turret pair association and both exact-image dependencies', (t) => {
+  const wrongBuild = turretPairArtifact(t);
+  rewriteJson(wrongBuild.semanticPath, (semantic) => { semantic.replay_version = VERSION; });
+  rewriteJson(wrongBuild.analysisPath, (analysis) => { analysis.replay_version = VERSION; });
+  const old = run(wrongBuild.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT);
+  assert.equal(old.status, 2);
+  assert.equal(JSON.parse(old.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+
+  const absent = turretPairArtifact(t);
+  rewriteJson(absent.semanticPath, (semantic) => {
+    delete semantic.candidate_associations.turret_first_blood_die_pair;
+  });
+  const unavailable = run(absent.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'ASSOCIATION_UNAVAILABLE');
+
+  const stale = turretPairArtifact(t);
+  rewriteJson(stale.semanticPath, (semantic) => {
+    semantic.candidate_associations.turret_first_blood_die_pair.profile_id = 'stale';
+  });
+  const wrongProfile = run(stale.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT);
+  assert.equal(wrongProfile.status, 2);
+  assert.equal(JSON.parse(wrongProfile.stderr).code, 'ASSOCIATION_METADATA_MISMATCH');
+
+  const failed = turretPairArtifact(t);
+  rewriteJson(failed.semanticPath, (semantic) => {
+    semantic.capability_results.turret_die_event_packet.status = 'MISSING_INPUT';
+    semantic.capability_results.turret_die_event_packet.event_count = null;
+  });
+  const dependency = run(failed.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT);
+  assert.equal(dependency.status, 2);
+  assert.equal(JSON.parse(dependency.stderr).code, 'CAPABILITY_UNAVAILABLE');
+
+  const wrongImage = turretPairArtifact(t);
+  rewriteJson(wrongImage.semanticPath, (semantic) => {
+    semantic.capability_results.turret_first_blood_event_packet.runtime_image_sha256 =
+      'f'.repeat(64);
+  });
+  const image = run(wrongImage.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT);
+  assert.equal(image.status, 2);
+  assert.equal(JSON.parse(image.stderr).code, 'ASSOCIATION_METADATA_MISMATCH');
+});
+
+test('query-events rejects malformed turret pair rows and removes partial output', (t) => {
+  for (const corrupt of [
+    (row) => { row.turret_die_child_event_id = 0; },
+    (row) => { row.source_order_block_offset_gap = 1; },
+    (row) => { row.turret_die_raw_param = row.turret_first_blood_raw_param; },
+    (row) => { row.turret_die_raw_packet_ref.chunk_id = 3; },
+    (row) => { row.raw_packet_refs[0].raw_param = 0; },
+    (row) => { delete row.turret_first_blood_raw_packet_ref; },
+  ]) {
+    const fixture = turretPairArtifact(t);
+    const row = structuredClone(fixture.row);
+    corrupt(row);
+    fs.writeFileSync(fixture.eventPath, `${JSON.stringify(row)}\n`);
+    const output = path.join(fixture.root, 'corrupt-turret-pair.jsonl');
+    const result = run(fixture.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT,
+      '--output', output);
+    assert.equal(result.status, 2);
+    assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
+});
+
+test('query-events reads exact 821 named double-kill packet groups with candidate filters', (t) => {
+  const fixture = doubleMultiAssociationArtifact(t);
+  const selected = run(fixture.replayDirectory, '--event', DOUBLE_MULTI_GROUP_EVENT,
+    '--from-ms', '100', '--to-ms', '100', '--raw-param', '0x400000af',
+    '--opaque-u32', '2');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.line}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.capability_status, 'CANDIDATE');
+  assert.equal(summary.declared_event_count, 1);
+  assert.equal(summary.scanned_count, 1);
+  assert.equal(summary.opaque_u32_unavailable_count, 0);
+  assert.equal(fs.readFileSync(fixture.eventPath, 'utf8'), `${fixture.line}\n`);
+
+  const absent = run(fixture.replayDirectory, '--event', DOUBLE_MULTI_GROUP_EVENT,
+    '--opaque-u32', '3');
+  assert.equal(absent.status, 0, absent.stderr);
+  assert.equal(absent.stdout, '');
+  assert.equal(JSON.parse(absent.stderr).matched_count, 0);
+});
+
+test('query-events validates and filters exact 821 named double-kill packets and groups', (t) => {
+  const fixture = doublePacketArtifact(t);
+  for (const [eventKey, line] of [
+    [DOUBLE_PACKET_EVENT, fixture.packetLine],
+    [DOUBLE_MULTI_GROUP_EVENT, fixture.line],
+  ]) {
+    const selected = run(fixture.replayDirectory, '--event', eventKey,
+      '--child-event-id', '0x000b');
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, `${line}\n`);
+    assert.equal(JSON.parse(selected.stderr).child_event_id_unavailable_count, 0);
+    const invalid = run(fixture.replayDirectory, '--event', eventKey,
+      '--child-event-id', '0x000c');
+    assert.equal(invalid.status, 1);
+    assert.match(invalid.stderr, /--child-event-id must be 0x000b/);
+  }
+  const corrupt = structuredClone(fixture.packetRow);
+  corrupt.raw_event_id_hex = '0x49c8';
+  fs.writeFileSync(fixture.packetPath, `${JSON.stringify(corrupt)}\n`);
+  const bad = run(fixture.replayDirectory, '--event', DOUBLE_PACKET_EVENT);
+  assert.equal(bad.status, 2);
+  assert.equal(JSON.parse(bad.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('query-events reads a batch of exact 821 named double-kill packet groups', (t) => {
+  const fixture = doubleMultiAssociationArtifact(t);
+  const relative = 'replays/synthetic';
+  const hashes = {};
+  for (const basename of ['semantic_run.json', 'replay_analysis.json',
+    `${DOUBLE_MULTI_GROUP_EVENT}.jsonl`]) {
+    hashes[`${relative}/${basename}`] = crypto.createHash('sha256')
+      .update(fs.readFileSync(path.join(fixture.replayDirectory, basename)))
+      .digest('hex');
+  }
+  fs.writeFileSync(path.join(fixture.root, 'manifest.json'), JSON.stringify({
+    command_args: ['batch', 'synthetic-input'],
+    replay_inputs: [{ sha256: SHA, version: '16.19.821.7343',
+      artifact_directory: relative }],
+    output_hashes_excluding_manifest: hashes,
+  }));
+  const result = run(fixture.root, '--event', DOUBLE_MULTI_GROUP_EVENT,
+    '--opaque-u32', '2');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${fixture.line}\n`);
+  const summary = JSON.parse(result.stderr);
+  assert.equal(summary.query_status, 'COMPLETE');
+  assert.equal(summary.completed_replay_count, 1);
+  assert.equal(summary.scanned_count, 1);
+
+  const changed = { ...fixture.row, replay_time_ms: 101 };
+  fs.writeFileSync(fixture.eventPath, `${JSON.stringify(changed)}\n`);
+  const output = path.join(fixture.root, 'changed-batch-row.jsonl');
+  const tampered = run(fixture.root, '--event', DOUBLE_MULTI_GROUP_EVENT,
+    '--output', output);
+  assert.equal(tampered.status, 2);
+  assert.equal(JSON.parse(tampered.stderr).code, 'ARTIFACT_HASH_MISMATCH');
+  assert.equal(fs.existsSync(output), false);
+});
+
+test('query-events fails closed on 821 named double-kill group metadata and row corruption', (t) => {
+  const wrongBuild = doubleMultiAssociationArtifact(t);
+  rewriteJson(wrongBuild.semanticPath, (semantic) => {
+    semantic.replay_version = VERSION;
+  });
+  rewriteJson(wrongBuild.analysisPath, (analysis) => {
+    analysis.replay_version = VERSION;
+  });
+  const oldBuild = run(wrongBuild.replayDirectory, '--event', DOUBLE_MULTI_GROUP_EVENT);
+  assert.equal(oldBuild.status, 2);
+  assert.equal(JSON.parse(oldBuild.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+
+  const unavailable = doubleMultiAssociationArtifact(t);
+  rewriteJson(unavailable.semanticPath, (semantic) => {
+    semantic.candidate_associations.champion_double_kill_multi_group.status = 'INCONSISTENT';
+  });
+  const failed = run(unavailable.replayDirectory, '--event', DOUBLE_MULTI_GROUP_EVENT);
+  assert.equal(failed.status, 2);
+  assert.equal(JSON.parse(failed.stderr).code, 'ASSOCIATION_UNAVAILABLE');
+
+  const count = doubleMultiAssociationArtifact(t);
+  rewriteJson(count.semanticPath, (semantic) => {
+    semantic.candidate_associations.champion_double_kill_multi_group
+      .matched_multi_u32_0x08_2_count = 0;
+  });
+  const wrongCount = run(count.replayDirectory, '--event', DOUBLE_MULTI_GROUP_EVENT);
+  assert.equal(wrongCount.status, 2);
+  assert.equal(JSON.parse(wrongCount.stderr).code, 'ASSOCIATION_METADATA_MISMATCH');
+
+  const corrupt = doubleMultiAssociationArtifact(t);
+  const row = structuredClone(corrupt.row);
+  row.on_champion_multiple_kill_raw_packet_ref.decompressed_block_offset = 15;
+  fs.writeFileSync(corrupt.eventPath, `${JSON.stringify(row)}\n`);
+  const output = path.join(corrupt.root, 'bad-double-multi.jsonl');
+  const bad = run(corrupt.replayDirectory, '--event', DOUBLE_MULTI_GROUP_EVENT,
+    '--output', output);
+  assert.equal(bad.status, 2);
+  assert.equal(JSON.parse(bad.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
+});
+
+test('query-events reads exact 821 triple and quadra packet and group candidates', (t) => {
+  for (const [childId, opaque] of [[0x000c, 3], [0x000d, 4]]) {
+    const fixture = tripleQuadraAssociationArtifact(t, childId);
+    const packet = run(fixture.replayDirectory, '--event', TRIPLE_QUADRA_PACKET_EVENT,
+      '--raw-param', '0x400000af');
+    assert.equal(packet.status, 0, packet.stderr);
+    assert.equal(packet.stdout, `${fixture.packetLine}\n`);
+    assert.equal(JSON.parse(packet.stderr).capability_status, 'CANDIDATE');
+
+    const group = run(fixture.replayDirectory, '--event', TRIPLE_QUADRA_MULTI_GROUP_EVENT,
+      '--opaque-u32', String(opaque));
+    assert.equal(group.status, 0, group.stderr);
+    assert.equal(group.stdout, `${fixture.groupLine}\n`);
+    assert.equal(JSON.parse(group.stderr).opaque_u32_unavailable_count, 0);
+    const absent = run(fixture.replayDirectory, '--event', TRIPLE_QUADRA_MULTI_GROUP_EVENT,
+      '--opaque-u32', String(opaque === 3 ? 4 : 3));
+    assert.equal(absent.status, 0, absent.stderr);
+    assert.equal(absent.stdout, '');
+    assert.equal(JSON.parse(absent.stderr).matched_count, 0);
+  }
+});
+
+test('query-events selects exact triple and quadra child IDs in packets and groups', (t) => {
+  for (const childId of [0x000c, 0x000d]) {
+    const fixture = tripleQuadraAssociationArtifact(t, childId);
+    for (const [eventKey, line] of [
+      [TRIPLE_QUADRA_PACKET_EVENT, fixture.packetLine],
+      [TRIPLE_QUADRA_MULTI_GROUP_EVENT, fixture.groupLine],
+    ]) {
+      const matched = run(fixture.replayDirectory, '--event', eventKey,
+        '--child-event-id', `0x${childId.toString(16).padStart(4, '0')}`);
+      assert.equal(matched.status, 0, matched.stderr);
+      assert.equal(matched.stdout, `${line}\n`);
+      assert.equal(JSON.parse(matched.stderr).matched_count, 1);
+      const absent = run(fixture.replayDirectory, '--event', eventKey,
+        '--child-event-id', childId === 0x000c ? '0x000d' : '0x000c');
+      assert.equal(absent.status, 0, absent.stderr);
+      assert.equal(absent.stdout, '');
+      assert.equal(JSON.parse(absent.stderr).matched_count, 0);
+    }
+    const invalid = run(fixture.replayDirectory, '--event',
+      TRIPLE_QUADRA_PACKET_EVENT, '--child-event-id', '0x0101');
+    assert.equal(invalid.status, 1);
+    assert.match(invalid.stderr, /--child-event-id must be 0x000c/);
+  }
+  const unrelated = doubleMultiAssociationArtifact(t);
+  const rejected = run(unrelated.replayDirectory, '--event',
+    MULTI_GROUP_EVENT, '--child-event-id', '0x000c');
+  assert.equal(rejected.status, 1);
+  assert.match(rejected.stderr, /--child-event-id requires/);
+});
+
+test('query-events fails closed on 821 triple and quadra identity or packet order corruption', (t) => {
+  const wrongBuild = tripleQuadraAssociationArtifact(t);
+  rewriteJson(wrongBuild.semanticPath, (semantic) => {
+    semantic.replay_version = VERSION;
+  });
+  rewriteJson(wrongBuild.analysisPath, (analysis) => {
+    analysis.replay_version = VERSION;
+  });
+  const old = run(wrongBuild.replayDirectory, '--event', TRIPLE_QUADRA_MULTI_GROUP_EVENT);
+  assert.equal(old.status, 2);
+  assert.equal(JSON.parse(old.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+  const oldPacket = run(wrongBuild.replayDirectory, '--event', TRIPLE_QUADRA_PACKET_EVENT);
+  assert.equal(oldPacket.status, 2);
+  assert.equal(JSON.parse(oldPacket.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+
+  const image = tripleQuadraAssociationArtifact(t);
+  rewriteJson(image.semanticPath, (semantic) => {
+    semantic.capability_results.champion_triple_quadra_event_packet
+      .runtime_image_sha256 = 'f'.repeat(64);
+  });
+  const wrongImage = run(image.replayDirectory, '--event', TRIPLE_QUADRA_PACKET_EVENT);
+  assert.equal(wrongImage.status, 2);
+  assert.equal(JSON.parse(wrongImage.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+
+  const counts = tripleQuadraAssociationArtifact(t);
+  rewriteJson(counts.semanticPath, (semantic) => {
+    const joined = semantic.candidate_associations.champion_triple_quadra_multi_group;
+    joined.matched_multi_u32_0x08_3_count = 0;
+    joined.matched_multi_u32_0x08_4_count = 1;
+  });
+  rewriteJson(counts.analysisPath, (analysis) => {
+    const joined = analysis.semantic.candidate_associations.champion_triple_quadra_multi_group;
+    joined.matched_multi_u32_0x08_3_count = 0;
+    joined.matched_multi_u32_0x08_4_count = 1;
+  });
+  const wrongDistribution = run(counts.replayDirectory,
+    '--event', TRIPLE_QUADRA_MULTI_GROUP_EVENT);
+  assert.equal(wrongDistribution.status, 2);
+  assert.equal(JSON.parse(wrongDistribution.stderr).code, 'EVENT_COUNT_MISMATCH');
+
+  const packet = tripleQuadraAssociationArtifact(t);
+  const badPacket = structuredClone(packet.packetRow);
+  badPacket.registered_event_name = 'OnChampionQuadraKill';
+  fs.writeFileSync(packet.packetPath, `${JSON.stringify(badPacket)}\n`);
+  const packetOutput = path.join(packet.root, 'bad-triple-packet.jsonl');
+  const invalidPacket = run(packet.replayDirectory, '--event', TRIPLE_QUADRA_PACKET_EVENT,
+    '--output', packetOutput);
+  assert.equal(invalidPacket.status, 2);
+  assert.equal(JSON.parse(invalidPacket.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(packetOutput), false);
+
+  const group = tripleQuadraAssociationArtifact(t, 0x000d);
+  const badGroup = structuredClone(group.groupRow);
+  badGroup.on_champion_multiple_kill_opaque_u32_0x08 = 3;
+  fs.writeFileSync(group.groupPath, `${JSON.stringify(badGroup)}\n`);
+  const groupOutput = path.join(group.root, 'bad-quadra-group.jsonl');
+  const invalidGroup = run(group.replayDirectory, '--event', TRIPLE_QUADRA_MULTI_GROUP_EVENT,
+    '--output', groupOutput);
+  assert.equal(invalidGroup.status, 2);
+  assert.equal(JSON.parse(invalidGroup.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(groupOutput), false);
+
+  const order = tripleQuadraAssociationArtifact(t);
+  const badOrder = structuredClone(order.groupRow);
+  badOrder.on_champion_triple_quadra_raw_packet_ref.decompressed_block_offset = 35;
+  fs.writeFileSync(order.groupPath, `${JSON.stringify(badOrder)}\n`);
+  const invalidOrder = run(order.replayDirectory, '--event', TRIPLE_QUADRA_MULTI_GROUP_EVENT);
+  assert.equal(invalidOrder.status, 2);
+  assert.equal(JSON.parse(invalidOrder.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('query-events rejects wrong-build or unavailable 821 association without treating it as zero', (t) => {
+  const wrongBuild = associationArtifact(t, DIE_PAIR_EVENT);
+  rewriteJson(wrongBuild.semanticPath, (semantic) => {
+    semantic.replay_version = VERSION;
+  });
+  rewriteJson(wrongBuild.analysisPath, (analysis) => {
+    analysis.replay_version = VERSION;
+  });
+  const oldBuild = run(wrongBuild.replayDirectory, '--event', DIE_PAIR_EVENT);
+  assert.equal(oldBuild.status, 2);
+  assert.equal(JSON.parse(oldBuild.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+
+  const absent = associationArtifact(t, DIE_PAIR_EVENT);
+  rewriteJson(absent.semanticPath, (semantic) => {
+    delete semantic.candidate_associations.champion_die_hero_death_pair;
+  });
+  const unavailable = run(absent.replayDirectory, '--event', DIE_PAIR_EVENT);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'ASSOCIATION_UNAVAILABLE');
+
+  const failedAssociation = associationArtifact(t, DIE_PAIR_EVENT);
+  rewriteJson(failedAssociation.semanticPath, (semantic) => {
+    semantic.candidate_associations.champion_die_hero_death_pair.status = 'MISSING_INPUT';
+    semantic.candidate_associations.champion_die_hero_death_pair.event_count = null;
+  });
+  const absentRows = run(failedAssociation.replayDirectory, '--event', DIE_PAIR_EVENT);
+  assert.equal(absentRows.status, 2);
+  assert.equal(JSON.parse(absentRows.stderr).code, 'ASSOCIATION_UNAVAILABLE');
+
+  const missing = associationArtifact(t, KILL_GROUP_EVENT);
+  rewriteJson(missing.semanticPath, (semantic) => {
+    semantic.capability_results.champion_kill_event_packet.status = 'MISSING_INPUT';
+    semantic.capability_results.champion_kill_event_packet.event_count = null;
+  });
+  const failedDependency = run(missing.replayDirectory, '--event', KILL_GROUP_EVENT);
+  assert.equal(failedDependency.status, 2);
+  assert.equal(JSON.parse(failedDependency.stderr).code, 'CAPABILITY_UNAVAILABLE');
+
+  const notRequested = associationArtifact(t, MULTI_GROUP_EVENT);
+  rewriteJson(notRequested.semanticPath, (semantic) => {
+    semantic.requested_capabilities = ['champion_die_event_packet',
+      'champion_multiple_kill_event_packet'];
+  });
+  const absentDependency = run(notRequested.replayDirectory, '--event', MULTI_GROUP_EVENT);
+  assert.equal(absentDependency.status, 2);
+  assert.equal(JSON.parse(absentDependency.stderr).code, 'CAPABILITY_NOT_REQUESTED');
+});
+
+test('query-events rejects association profile, count and row identity corruption with output cleanup', (t) => {
+  for (const eventKey of ASSOCIATION_EVENTS) {
+    const profile = associationArtifact(t, eventKey);
+    rewriteJson(profile.semanticPath, (semantic) => {
+      semantic.candidate_associations[eventKey.slice(0, -'_candidates'.length)].profile_id =
+        'stale-profile';
+    });
+    const stale = run(profile.replayDirectory, '--event', eventKey);
+    assert.equal(stale.status, 2);
+    assert.equal(JSON.parse(stale.stderr).code, 'ASSOCIATION_METADATA_MISMATCH');
+
+    const count = associationArtifact(t, eventKey);
+    rewriteJson(count.analysisPath, (analysis) => {
+      analysis.event_counts[eventKey] = 2;
+    });
+    const countResult = run(count.replayDirectory, '--event', eventKey);
+    assert.equal(countResult.status, 2);
+    assert.equal(JSON.parse(countResult.stderr).code, 'EVENT_COUNT_MISMATCH');
+
+    const corrupt = associationArtifact(t, eventKey);
+    const output = path.join(corrupt.root, 'invalid-association.jsonl');
+    const row = structuredClone(corrupt.row);
+    row.on_champion_die_raw_packet_ref.replay_sha256 = 'b'.repeat(64);
+    fs.writeFileSync(corrupt.eventPath, `${JSON.stringify(row)}\n`);
+    const invalid = run(corrupt.replayDirectory, '--event', eventKey,
+      '--output', output);
+    assert.equal(invalid.status, 2);
+    assert.equal(JSON.parse(invalid.stderr).code, 'ARTIFACT_IDENTITY_MISMATCH');
+    assert.equal(fs.existsSync(output), false);
+  }
+});
+
+test('query-events rejects missing 821 association child fields instead of returning zero matches', (t) => {
+  for (const eventKey of ASSOCIATION_EVENTS) {
+    const fixture = associationArtifact(t, eventKey);
+    const row = structuredClone(fixture.row);
+    delete row.on_champion_die_event_u32_0x04;
+    if (eventKey === KILL_GROUP_EVENT) delete row.on_champion_kill_event_u32_0x04;
+    if (eventKey === MULTI_GROUP_EVENT) {
+      delete row.on_champion_multiple_kill_event_u32_0x04;
+    }
+    if (eventKey === SHUTDOWN_GROUP_EVENT) delete row.on_shutdown_event_u32_0x04;
+    fs.writeFileSync(fixture.eventPath, `${JSON.stringify(row)}\n`);
+    const output = path.join(fixture.root, 'missing-child-field.jsonl');
+    const result = run(fixture.replayDirectory, '--event', eventKey,
+      '--opaque-u32', '0', '--output', output);
+    assert.equal(result.status, 2);
+    assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
+});
+
+test('query-events streams filtered unmodified JSONL and reports full counts and original status', (t) => {
+  const fixture = artifact(t);
+  const output = path.join(fixture.root, 'selected.jsonl');
+  const result = run(fixture.replayDirectory, '--event', EVENT,
+    '--from-ms', '0', '--to-ms', '2000', '--participant', '1', '--limit', '1',
+    '--output', output);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.query_status, 'COMPLETE');
+  assert.equal(summary.capability_status, 'CANDIDATE');
+  assert.equal(summary.semantic_run_status, 'PARTIAL');
+  assert.equal(summary.replay_sha256, SHA);
+  assert.equal(summary.declared_event_count, 4);
+  assert.equal(summary.scanned_count, 4);
+  assert.equal(summary.matched_count, 2);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.participant_unavailable_count, 1);
+  assert.deepEqual(summary.filters,
+    { from_ms: 0, to_ms: 2000, participant_id: 1, limit: 1 });
+  assert.equal(fs.readFileSync(output, 'utf8'), `${fixture.lines[0]}\n`);
+  assert.equal(fs.readFileSync(path.join(fixture.replayDirectory, `${EVENT}.jsonl`), 'utf8'),
+    `${fixture.lines.join('\n')}\n`);
+});
+
+test('query-events keeps stdout as JSONL and puts its query summary on stderr', (t) => {
+  const fixture = artifact(t);
+  const result = run(fixture.replayDirectory, '--event', EVENT, '--from-ms=1000',
+    '--to-ms=2000', '--participant=2');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${fixture.lines[3]}\n`);
+  const summary = JSON.parse(result.stderr);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.output, '-');
+});
+
+test('query-events filters exact 821 assist candidates without changing JSONL rows', (t) => {
+  const rows = [
+    assistRow(100, 1, 6, [2, 3]),
+    assistRow(200, 2, 7, []),
+    assistRow(300, 3, null, null),
+    assistRow(400, 4, 8, [1]),
+  ];
+  const fixture = assistArtifact(t, rows);
+  const result = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant=2', '--participant=1', '--limit=1');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${fixture.lines[0]}\n`);
+  const summary = JSON.parse(result.stderr);
+  assert.equal(summary.scanned_count, 4);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.assisting_participant_unavailable_count, 1);
+  assert.equal(summary.filters.assisting_participant_id, 2);
+  assert.equal(summary.filters.participant_id, 1);
+  assert.equal(summary.rows_unmodified, true);
+
+  const noMatch = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '10');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(noMatch.stdout, '');
+  assert.equal(JSON.parse(noMatch.stderr).matched_count, 0);
+  assert.equal(JSON.parse(noMatch.stderr).assisting_participant_unavailable_count, 1);
+  const availableZero = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '1');
+  assert.equal(availableZero.status, 0, availableZero.stderr);
+  assert.equal(availableZero.stdout, `${fixture.lines[3]}\n`);
+});
+
+test('query-events distinguishes missing assist lists, available zero, and empty streams', (t) => {
+  const missing = assistRow(100, 1, 6, [2]);
+  delete missing.assisting_participant_ids_candidate;
+  const fixture = assistArtifact(t, [missing]);
+  const output = path.join(fixture.root, 'assist-query.jsonl');
+  const unavailable = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'ASSISTING_PARTICIPANT_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const zeroFixture = assistArtifact(t, [assistRow(100, 1, 6, [])]);
+  const zero = run(zeroFixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, '');
+  assert.equal(JSON.parse(zero.stderr).assisting_participant_unavailable_count, 0);
+
+  const emptyFixture = assistArtifact(t, []);
+  const empty = run(emptyFixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2');
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.equal(JSON.parse(empty.stderr).scanned_count, 0);
+});
+
+test('query-events rejects malformed present assist lists and exact-build mismatch', (t) => {
+  const fixture = assistArtifact(t, [assistRow(100, 1, 6, [2])]);
+  const eventPath = path.join(fixture.replayDirectory, `${HERO_ASSIST_EVENT}.jsonl`);
+  const output = path.join(fixture.root, 'assist-bad.jsonl');
+  for (const invalidList of [0, '2', {}, [0], [11], [2, 2], [3, 2], [6], [1], [2.5]]) {
+    fs.writeFileSync(eventPath, `${JSON.stringify({
+      ...assistRow(100, 1, 6, [2]),
+      assisting_participant_ids_candidate: invalidList,
+    })}\n`);
+    const result = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+      '--assisting-participant', '2', '--output', output);
+    assert.equal(result.status, 2, JSON.stringify(invalidList));
+    assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
+  fs.writeFileSync(eventPath, `${fixture.lines[0]}\n`);
+  const invalidParticipant = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '11');
+  assert.equal(invalidParticipant.status, 1);
+  const otherEventFixture = artifact(t);
+  const otherEvent = run(otherEventFixture.replayDirectory, '--event', EVENT,
+    '--assisting-participant', '2');
+  assert.equal(otherEvent.status, 1);
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.hero_assist.profile_id = 'foreign-profile';
+  });
+  const wrongProfile = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2');
+  assert.equal(wrongProfile.status, 2);
+  assert.equal(JSON.parse(wrongProfile.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.hero_assist.profile_id = HERO_ASSIST_CANDIDATE_PROFILE_821.id;
+    semantic.replay_version = VERSION;
+  });
+  rewriteJson(path.join(fixture.replayDirectory, 'replay_analysis.json'), (analysis) => {
+    analysis.replay_version = VERSION;
+  });
+  const wrongBuild = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2');
+  assert.equal(wrongBuild.status, 2);
+  assert.equal(JSON.parse(wrongBuild.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
+test('query-events marks an all-null assist candidate Replay unavailable within a batch', (t) => {
+  const first = assistArtifact(t, [assistRow(100, 1, 6, [2])]);
+  const secondDirectory = path.join(first.root, 'replays', 'unavailable');
+  fs.cpSync(first.replayDirectory, secondDirectory, { recursive: true });
+  const secondSha = 'b'.repeat(64);
+  rewriteJson(path.join(secondDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.replay_sha256 = secondSha;
+  });
+  rewriteJson(path.join(secondDirectory, 'replay_analysis.json'), (analysis) => {
+    analysis.replay_sha256 = secondSha;
+  });
+  fs.writeFileSync(path.join(secondDirectory, `${HERO_ASSIST_EVENT}.jsonl`),
+    `${JSON.stringify({ ...assistRow(200, 2, null, null), replay_sha256: secondSha })}\n`);
+  const manifestPath = path.join(first.root, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify({
+    command_args: ['batch', 'synthetic-input'],
+    replay_inputs: [
+      { sha256: SHA, version: HERO_ASSIST_CANDIDATE_PROFILE_821.replay_version,
+        artifact_directory: 'replays/synthetic' },
+      { sha256: secondSha, version: HERO_ASSIST_CANDIDATE_PROFILE_821.replay_version,
+        artifact_directory: 'replays/unavailable' },
+    ],
+  }));
+  refreshBatchHashes(manifestPath, HERO_ASSIST_EVENT);
+  const partial = run(first.root, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2');
+  assert.equal(partial.status, 0, partial.stderr);
+  assert.equal(partial.stdout, `${first.lines[0]}\n`);
+  const summary = JSON.parse(partial.stderr);
+  assert.equal(summary.query_status, 'PARTIAL');
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.unavailable_replay_count, 1);
+  assert.equal(summary.replay_results[1].code, 'ASSISTING_PARTICIPANT_UNAVAILABLE');
+
+  const missing = assistRow(100, 1, 6, [2]);
+  delete missing.assisting_participant_ids_candidate;
+  fs.writeFileSync(path.join(first.replayDirectory, `${HERO_ASSIST_EVENT}.jsonl`),
+    `${JSON.stringify(missing)}\n`);
+  refreshBatchHashes(manifestPath, HERO_ASSIST_EVENT);
+  const unavailable = run(first.root, '--event', HERO_ASSIST_EVENT,
+    '--assisting-participant', '2');
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'BATCH_EVENT_UNAVAILABLE');
+});
+
+test('query-events filters exact 821 death killer candidates and keeps original rows', (t) => {
+  const fixture = deathArtifact(t, [
+    deathRow(100, 1, 6), deathRow(200, 2, null), deathRow(300, 3, 7),
+  ]);
+  const selected = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant=6', '--participant=1', '--limit=1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 3);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.killer_participant_unavailable_count, 1);
+  assert.equal(summary.filters.killer_participant_id, 6);
+  assert.equal(summary.filters.participant_id, 1);
+  assert.equal(summary.rows_unmodified, true);
+
+  const zero = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '10');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, '');
+  assert.equal(JSON.parse(zero.stderr).matched_count, 0);
+  assert.equal(JSON.parse(zero.stderr).killer_participant_unavailable_count, 1);
+});
+
+test('query-events combines exact 821 assist killer and assisting candidates', (t) => {
+  const fixture = assistArtifact(t, [
+    assistRow(100, 1, 6, [2, 3]),
+    assistRow(200, 2, 6, []),
+    assistRow(300, 3, null, null),
+    assistRow(400, 4, 7, [2]),
+  ]);
+  const selected = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--killer-participant', '6', '--assisting-participant', '2');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 4);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.killer_participant_unavailable_count, 1);
+  assert.equal(summary.assisting_participant_unavailable_count, 1);
+  assert.equal(summary.filters.killer_participant_id, 6);
+  assert.equal(summary.filters.assisting_participant_id, 2);
+});
+
+test('query-events treats missing or null killer candidates as unavailable', (t) => {
+  const missing = deathRow(100, 1, 6);
+  delete missing.killer_participant_id_candidate;
+  const fixture = deathArtifact(t, [missing, deathRow(200, 2, null)]);
+  const output = path.join(fixture.root, 'killer-unavailable.jsonl');
+  const unavailable = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '6', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'KILLER_PARTICIPANT_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const zeroFixture = deathArtifact(t, [deathRow(100, 1, 6)]);
+  const zero = run(zeroFixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '7');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(JSON.parse(zero.stderr).matched_count, 0);
+  assert.equal(JSON.parse(zero.stderr).killer_participant_unavailable_count, 0);
+
+  const emptyFixture = deathArtifact(t, []);
+  const empty = run(emptyFixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '7');
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.equal(JSON.parse(empty.stderr).scanned_count, 0);
+});
+
+test('query-events rejects malformed present killer candidates and exact-build mismatches', (t) => {
+  const fixture = deathArtifact(t, [deathRow(100, 1, 6)]);
+  const eventPath = path.join(fixture.replayDirectory, `${HERO_DEATH_EVENT}.jsonl`);
+  const output = path.join(fixture.root, 'killer-bad.jsonl');
+  for (const invalidKiller of [0, 11, '6', true, [], {}, 1, 2.5]) {
+    fs.writeFileSync(eventPath, `${JSON.stringify({
+      ...deathRow(100, 1, 6), killer_participant_id_candidate: invalidKiller,
+    })}\n`);
+    const invalid = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+      '--killer-participant', '6', '--output', output);
+    assert.equal(invalid.status, 2, JSON.stringify(invalidKiller));
+    assert.equal(JSON.parse(invalid.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
+  fs.writeFileSync(eventPath, `${JSON.stringify({
+    ...deathRow(100, 1, 6), field_confidence: {
+      killer_participant_id_candidate: 'UNAVAILABLE',
+    },
+  })}\n`);
+  const conflicting = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '6');
+  assert.equal(conflicting.status, 2);
+  assert.equal(JSON.parse(conflicting.stderr).code, 'INVALID_EVENT_ROW');
+  fs.writeFileSync(eventPath, `${fixture.lines[0]}\n`);
+
+  const invalidParticipant = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '11');
+  assert.equal(invalidParticipant.status, 1);
+  const otherEvent = artifact(t);
+  assert.equal(run(otherEvent.replayDirectory, '--event', EVENT,
+    '--killer-participant', '6').status, 1);
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.hero_death.profile_id = 'foreign-profile';
+  });
+  const wrongProfile = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '6');
+  assert.equal(wrongProfile.status, 2);
+  assert.equal(JSON.parse(wrongProfile.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.hero_death.profile_id = HERO_DEATH_CANDIDATE_PROFILE_821.id;
+    semantic.replay_version = VERSION;
+  });
+  rewriteJson(path.join(fixture.replayDirectory, 'replay_analysis.json'), (analysis) => {
+    analysis.replay_version = VERSION;
+  });
+  const wrongBuild = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '6');
+  assert.equal(wrongBuild.status, 2);
+  assert.equal(JSON.parse(wrongBuild.stderr).code, 'UNSUPPORTED_FILTER');
+
+  const assist = assistArtifact(t, [assistRow(100, 1, 6, [2])]);
+  fs.writeFileSync(path.join(assist.replayDirectory, `${HERO_ASSIST_EVENT}.jsonl`),
+    `${JSON.stringify({ ...assistRow(100, 1, 6, [2]),
+      killer_participant_id_candidate: 0 })}\n`);
+  const invalidAssist = run(assist.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--killer-participant', '6');
+  assert.equal(invalidAssist.status, 2);
+  assert.equal(JSON.parse(invalidAssist.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('query-events marks an all-unavailable killer Replay partial within a batch', (t) => {
+  const first = deathArtifact(t, [deathRow(100, 1, 6)]);
+  const secondDirectory = path.join(first.root, 'replays', 'unavailable');
+  fs.cpSync(first.replayDirectory, secondDirectory, { recursive: true });
+  const secondSha = 'b'.repeat(64);
+  rewriteJson(path.join(secondDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.replay_sha256 = secondSha;
+  });
+  rewriteJson(path.join(secondDirectory, 'replay_analysis.json'), (analysis) => {
+    analysis.replay_sha256 = secondSha;
+  });
+  fs.writeFileSync(path.join(secondDirectory, `${HERO_DEATH_EVENT}.jsonl`),
+    `${JSON.stringify({ ...deathRow(200, 2, null), replay_sha256: secondSha })}\n`);
+  const manifestPath = path.join(first.root, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify({
+    command_args: ['batch', 'synthetic-input'],
+    replay_inputs: [
+      { sha256: SHA, version: HERO_DEATH_CANDIDATE_PROFILE_821.replay_version,
+        artifact_directory: 'replays/synthetic' },
+      { sha256: secondSha, version: HERO_DEATH_CANDIDATE_PROFILE_821.replay_version,
+        artifact_directory: 'replays/unavailable' },
+    ],
+  }));
+  refreshBatchHashes(manifestPath, HERO_DEATH_EVENT);
+  const partial = run(first.root, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '6');
+  assert.equal(partial.status, 0, partial.stderr);
+  assert.equal(partial.stdout, `${first.lines[0]}\n`);
+  const summary = JSON.parse(partial.stderr);
+  assert.equal(summary.query_status, 'PARTIAL');
+  assert.equal(summary.unavailable_replay_count, 1);
+  assert.equal(summary.replay_results[1].code, 'KILLER_PARTICIPANT_UNAVAILABLE');
+
+  const missing = deathRow(100, 1, 6);
+  delete missing.killer_participant_id_candidate;
+  fs.writeFileSync(path.join(first.replayDirectory, `${HERO_DEATH_EVENT}.jsonl`),
+    `${JSON.stringify(missing)}\n`);
+  refreshBatchHashes(manifestPath, HERO_DEATH_EVENT);
+  const unavailable = run(first.root, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '6');
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'BATCH_EVENT_UNAVAILABLE');
+});
+
+test('query-events filters recorded raw packet parameters without resolving participants', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, confidence: 'CANDIDATE',
+      raw_param: 0x400000ae, raw_packet_ref: { replay_sha256: SHA, raw_param: 0x400000ae } },
+    { replay_sha256: SHA, replay_time_ms: 20, confidence: 'CANDIDATE',
+      raw_packet_refs: [{ replay_sha256: SHA, raw_param: 0x400000af }] },
+    { replay_sha256: SHA, replay_time_ms: 30, confidence: 'CANDIDATE' },
+  ];
+  const fixture = artifact(t, rows);
+  const result = run(fixture.replayDirectory, '--event', EVENT,
+    '--raw-param', '0x400000af', '--limit', '1');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${fixture.lines[1]}\n`);
+  const summary = JSON.parse(result.stderr);
+  assert.equal(summary.scanned_count, 3);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.raw_param_unavailable_count, 1);
+  assert.equal(summary.filters.raw_param, 0x400000af);
+  assert.equal(summary.filters.participant_id, null);
+
+  const decimal = run(fixture.replayDirectory, '--event', EVENT,
+    '--raw-param', String(0x400000ae));
+  assert.equal(decimal.status, 0, decimal.stderr);
+  assert.equal(decimal.stdout, `${fixture.lines[0]}\n`);
+});
+
+test('query-events distinguishes absent raw parameters from zero matches', (t) => {
+  const fixture = artifact(t);
+  const output = path.join(fixture.root, 'missing-raw-param.jsonl');
+  const unavailable = run(fixture.replayDirectory, '--event', EVENT,
+    '--raw-param', '0', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'RAW_PARAM_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const rows = [{ replay_sha256: SHA, replay_time_ms: 10,
+    raw_param: 0, raw_packet_ref: { replay_sha256: SHA, raw_param: 0 } }];
+  const withParam = artifact(t, rows);
+  const zeroMatch = run(withParam.replayDirectory, '--event', EVENT,
+    '--raw-param', '1');
+  assert.equal(zeroMatch.status, 0, zeroMatch.stderr);
+  assert.equal(zeroMatch.stdout, '');
+  assert.equal(JSON.parse(zeroMatch.stderr).matched_count, 0);
+});
+
+test('query-events filters only current inventory packet records by decimal or hex item ID', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, participant_id_candidate: 1,
+      record_count: 2, records_candidate: [
+        { slot_candidate: 0, item_id_candidate: 1001 },
+        { slot_candidate: 6, item_id_candidate: 3340 },
+      ], packet_slot_snapshot_candidate: [{ slot_candidate: 0, item_id_candidate: 1001 }] },
+    { replay_sha256: SHA, replay_time_ms: 20, participant_id_candidate: 1,
+      record_count: 1, records_candidate: [{ slot_candidate: 0, item_id_candidate: 2031 }],
+      packet_slot_snapshot_candidate: [{ slot_candidate: 6, item_id_candidate: 3340 }] },
+    { replay_sha256: SHA, replay_time_ms: 30, participant_id_candidate: 2,
+      record_count: 0, records_candidate: [],
+      packet_slot_snapshot_candidate: [{ slot_candidate: 6, item_id_candidate: 3340 }] },
+  ];
+  const fixture = artifact(t, rows, true, INVENTORY_EVENT);
+  const output = path.join(fixture.root, 'item-3340.jsonl');
+  const hex = run(fixture.replayDirectory, '--event', INVENTORY_EVENT,
+    '--item-id', '0xd0c', '--output', output);
+  assert.equal(hex.status, 0, hex.stderr);
+  assert.equal(hex.stderr, '');
+  const summary = JSON.parse(hex.stdout);
+  assert.equal(summary.query_status, 'COMPLETE');
+  assert.equal(summary.capability_status, 'CANDIDATE');
+  assert.equal(summary.scanned_count, 3);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.item_id_unavailable_count, 0);
+  assert.equal(summary.filters.item_id, 3340);
+  assert.equal(fs.readFileSync(output, 'utf8'), `${fixture.lines[0]}\n`);
+  assert.equal(fs.readFileSync(path.join(fixture.replayDirectory, `${INVENTORY_EVENT}.jsonl`), 'utf8'),
+    `${fixture.lines.join('\n')}\n`);
+
+  const decimal = run(fixture.replayDirectory, '--event', INVENTORY_EVENT,
+    '--item-id=2031', '--participant', '1');
+  assert.equal(decimal.status, 0, decimal.stderr);
+  assert.equal(decimal.stdout, `${fixture.lines[1]}\n`);
+  assert.equal(JSON.parse(decimal.stderr).matched_count, 1);
+
+  const zero = run(fixture.replayDirectory, '--event', INVENTORY_EVENT, '--item-id', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(JSON.parse(zero.stderr).matched_count, 0);
+});
+
+test('query-events distinguishes unavailable inventory item fields from a confirmed zero match', (t) => {
+  const missing = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, record_count: 1 },
+    { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+      records_candidate: [{ slot_candidate: 0 }] },
+  ], true, INVENTORY_EVENT);
+  const output = path.join(missing.root, 'unavailable.jsonl');
+  const unavailable = run(missing.replayDirectory, '--event', INVENTORY_EVENT,
+    '--item-id', '1001', '--output', output);
+  assert.equal(unavailable.status, 2);
+  const error = JSON.parse(unavailable.stderr);
+  assert.equal(error.code, 'ITEM_ID_UNAVAILABLE');
+  assert.equal(error.item_id_unavailable_count, 2);
+  assert.equal(fs.existsSync(output), false);
+
+  const known = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, record_count: 1,
+      records_candidate: [{ slot_candidate: 0, item_id_candidate: 1001 }] },
+    { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+      records_candidate: [{ slot_candidate: 0 }] },
+  ], true, INVENTORY_EVENT);
+  const zero = run(known.replayDirectory, '--event', INVENTORY_EVENT, '--item-id', '2001');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, '');
+  const summary = JSON.parse(zero.stderr);
+  assert.equal(summary.matched_count, 0);
+  assert.equal(summary.item_id_unavailable_count, 1);
+
+  const empty = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    record_count: 0, records_candidate: [] }], true, INVENTORY_EVENT);
+  const emptyResult = run(empty.replayDirectory, '--event', INVENTORY_EVENT, '--item-id', '1001');
+  assert.equal(emptyResult.status, 0, emptyResult.stderr);
+  assert.equal(JSON.parse(emptyResult.stderr).item_id_unavailable_count, 0);
+});
+
+test('query-events preserves decoded zero item values in 821 Broadcast records', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, record_count: 2,
+      records_candidate: [
+        { slot_candidate: 0, item_id_candidate: 0 },
+        { slot_candidate: 1, item_id_candidate: 3340 },
+      ], packet_slot_snapshot_candidate: [
+        { slot_candidate: 0, item_id_candidate: 0 },
+        { slot_candidate: 2, item_id_candidate: null },
+      ] },
+    { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+      records_candidate: [{ slot_candidate: 0, item_id_candidate: 2031 }] },
+  ];
+  const fixture = artifact(t, rows, true, BROADCAST_EVENT);
+  const zero = run(fixture.replayDirectory, '--event', BROADCAST_EVENT,
+    '--item-id', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${fixture.lines[0]}\n`);
+  assert.equal(JSON.parse(zero.stderr).matched_count, 1);
+  const item = run(fixture.replayDirectory, '--event', BROADCAST_EVENT,
+    '--item-id', '0xd0c');
+  assert.equal(item.status, 0, item.stderr);
+  assert.equal(item.stdout, `${fixture.lines[0]}\n`);
+});
+
+test('query-events filters the decoded scalar item key in 821 SetItem packets', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, slot_candidate: 8,
+      item_id_candidate: 1200 },
+    { replay_sha256: SHA, replay_time_ms: 20, slot_candidate: 8,
+      item_id_candidate: 1202 },
+  ];
+  const fixture = artifact(t, rows, true, SET_ITEM_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', SET_ITEM_EVENT,
+    '--item-id', '0x4b2');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[1]}\n`);
+  assert.equal(JSON.parse(selected.stderr).matched_count, 1);
+
+  const missing = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    slot_candidate: 8, item_id_candidate: null }], true, SET_ITEM_EVENT);
+  const unavailable = run(missing.replayDirectory, '--event', SET_ITEM_EVENT,
+    '--item-id', '1200');
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'ITEM_ID_UNAVAILABLE');
+});
+
+test('query-events filters observed packet slots including zero, without using snapshots', (t) => {
+  for (const eventKey of [INVENTORY_EVENT, BROADCAST_EVENT]) {
+    const rows = [
+      { replay_sha256: SHA, replay_time_ms: 10, record_count: 2,
+        records_candidate: [
+          { slot_candidate: 0, item_id_candidate: 1001 },
+          { slot_candidate: 6, item_id_candidate: 3340 },
+        ] },
+      { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+        records_candidate: [{ slot_candidate: 6, item_id_candidate: 2031 }],
+        packet_slot_snapshot_candidate: [{ slot_candidate: 0, item_id_candidate: 1001 }] },
+      { replay_sha256: SHA, replay_time_ms: 30, record_count: 0,
+        records_candidate: [] },
+    ];
+    const fixture = artifact(t, rows, true, eventKey);
+    const selected = run(fixture.replayDirectory, '--event', eventKey, '--slot', '0');
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+    const summary = JSON.parse(selected.stderr);
+    assert.equal(summary.scanned_count, 3);
+    assert.equal(summary.matched_count, 1);
+    assert.equal(summary.slot_unavailable_count, 0);
+    assert.equal(summary.filters.slot, 0);
+  }
+});
+
+test('query-events combines item and slot on the same inventory record', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, record_count: 2,
+      records_candidate: [
+        { slot_candidate: 0, item_id_candidate: 1001 },
+        { slot_candidate: 6, item_id_candidate: 3340 },
+      ] },
+    { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+      records_candidate: [{ slot_candidate: 0, item_id_candidate: 3340 }] },
+  ];
+  const fixture = artifact(t, rows, true, INVENTORY_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', INVENTORY_EVENT,
+    '--slot', '0', '--item-id', '3340');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[1]}\n`);
+  assert.equal(JSON.parse(selected.stderr).matched_count, 1);
+
+  const setItem = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, slot_candidate: 8,
+      item_id_candidate: 1200 },
+    { replay_sha256: SHA, replay_time_ms: 20, slot_candidate: 8,
+      item_id_candidate: 1202 },
+  ], true, SET_ITEM_EVENT);
+  const setItemMatch = run(setItem.replayDirectory, '--event', SET_ITEM_EVENT,
+    '--slot', '8', '--item-id', '1202');
+  assert.equal(setItemMatch.status, 0, setItemMatch.stderr);
+  assert.equal(setItemMatch.stdout, `${setItem.lines[1]}\n`);
+  const noMatch = run(setItem.replayDirectory, '--event', SET_ITEM_EVENT,
+    '--slot', '0');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(JSON.parse(noMatch.stderr).matched_count, 0);
+});
+
+test('query-events distinguishes unavailable slots from zero matches and rejects corrupt slots', (t) => {
+  for (const eventKey of [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT]) {
+    const missingRows = eventKey === SET_ITEM_EVENT
+      ? [{ replay_sha256: SHA, replay_time_ms: 10, item_id_candidate: 1200 }]
+      : [{ replay_sha256: SHA, replay_time_ms: 10, record_count: 1,
+        records_candidate: [{ item_id_candidate: 1200 }] }];
+    const missing = artifact(t, missingRows, true, eventKey);
+    const unavailable = run(missing.replayDirectory, '--event', eventKey, '--slot', '0');
+    assert.equal(unavailable.status, 2, unavailable.stderr);
+    assert.equal(JSON.parse(unavailable.stderr).code, 'SLOT_UNAVAILABLE');
+
+    const knownRows = eventKey === SET_ITEM_EVENT
+      ? [{ replay_sha256: SHA, replay_time_ms: 10, slot_candidate: 8,
+        item_id_candidate: 1200 }, ...missingRows]
+      : [{ replay_sha256: SHA, replay_time_ms: 10, record_count: 1,
+        records_candidate: [{ slot_candidate: 8, item_id_candidate: 1200 }] },
+      ...missingRows];
+    const known = artifact(t, knownRows, true, eventKey);
+    const zero = run(known.replayDirectory, '--event', eventKey, '--slot', '0');
+    assert.equal(zero.status, 0, zero.stderr);
+    assert.equal(zero.stdout, '');
+    assert.equal(JSON.parse(zero.stderr).slot_unavailable_count, 1);
+
+    for (const invalidSlot of [-1, 10, 1.5, '0']) {
+      const badRows = eventKey === SET_ITEM_EVENT
+        ? [{ replay_sha256: SHA, replay_time_ms: 10, slot_candidate: 8 },
+          { replay_sha256: SHA, replay_time_ms: 20, slot_candidate: invalidSlot }]
+        : [{ replay_sha256: SHA, replay_time_ms: 10, record_count: 1,
+          records_candidate: [{ slot_candidate: 8 }] },
+        { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+          records_candidate: [{ slot_candidate: invalidSlot }] }];
+      const bad = artifact(t, badRows, true, eventKey);
+      const output = path.join(bad.root, 'invalid-slot.jsonl');
+      const result = run(bad.replayDirectory, '--event', eventKey,
+        '--slot', '8', '--output', output);
+      assert.equal(result.status, 2, result.stderr);
+      assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+      assert.equal(fs.existsSync(output), false);
+    }
+  }
+});
+
+test('query-events limits slot filter to exact 821 inventory streams and 0..9', (t) => {
+  const unsupported = artifact(t);
+  const wrongEvent = run(unsupported.replayDirectory, '--event', EVENT, '--slot', '0');
+  assert.equal(wrongEvent.status, 1);
+  assert.match(wrongEvent.stderr, /--slot requires an 821 inventory packet event/);
+  const fixture = artifact(t, [], true, INVENTORY_EVENT);
+  for (const value of ['-1', '10', '1.5', '0x8', '01']) {
+    const result = run(fixture.replayDirectory, '--event', INVENTORY_EVENT,
+      '--slot', value);
+    assert.equal(result.status, 1, value);
+  }
+  const empty = run(fixture.replayDirectory, '--event', INVENTORY_EVENT,
+    '--slot', '0');
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.equal(JSON.parse(empty.stderr).scanned_count, 0);
+
+  const oldBuild = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    record_count: 1, records_candidate: [{ slot_candidate: 0 }] }], true,
+  INVENTORY_EVENT);
+  rewriteJson(path.join(oldBuild.replayDirectory, 'semantic_run.json'),
+    (semantic) => { semantic.replay_version = VERSION; });
+  rewriteJson(path.join(oldBuild.replayDirectory, 'replay_analysis.json'),
+    (analysis) => { analysis.replay_version = VERSION; });
+  const wrongBuild = run(oldBuild.replayDirectory, '--event', INVENTORY_EVENT,
+    '--slot', '0');
+  assert.equal(wrongBuild.status, 2, wrongBuild.stderr);
+  assert.equal(JSON.parse(wrongBuild.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
+test('query-events filters either anonymous 821 heal or shield u32 without inferring a role', (t) => {
+  const healRows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 7,
+      event_entity_u32_0x04: 0x400000ae, event_entity_u32_0x14: 0x400000af },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000af,
+      event_entity_u32_0x04: 0, event_entity_u32_0x14: 0x400000b0 },
+  ];
+  const heal = artifact(t, healRows, true, HEAL_PACKET_EVENT);
+  const selectedHeal = run(heal.replayDirectory, '--event', HEAL_PACKET_EVENT,
+    '--opaque-u32', '0x400000af');
+  assert.equal(selectedHeal.status, 0, selectedHeal.stderr);
+  assert.equal(selectedHeal.stdout, `${heal.lines[0]}\n`);
+  assert.equal(JSON.parse(selectedHeal.stderr).matched_count, 1);
+  const zero = run(heal.replayDirectory, '--event', HEAL_PACKET_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${heal.lines[1]}\n`);
+
+  const shieldRows = [
+    { replay_sha256: SHA, replay_time_ms: 30,
+      event_u32_0x08: 0x400000b4, event_u32_0x0c: 0x400000b5,
+      raw_packet_refs: [{ replay_sha256: SHA, raw_param: 1 },
+        { replay_sha256: SHA, raw_param: 2 }] },
+    { replay_sha256: SHA, replay_time_ms: 40,
+      event_u32_0x08: 0x400000b6, event_u32_0x0c: 0x400000b7 },
+  ];
+  const shield = artifact(t, shieldRows, true, SHIELD_PAIR_EVENT);
+  const selectedShield = run(shield.replayDirectory, '--event', SHIELD_PAIR_EVENT,
+    '--opaque-u32', String(0x400000b5));
+  assert.equal(selectedShield.status, 0, selectedShield.stderr);
+  assert.equal(selectedShield.stdout, `${shield.lines[0]}\n`);
+  assert.equal(JSON.parse(selectedShield.stderr).filters.opaque_u32, 0x400000b5);
+});
+
+test('query-events filters packet-local 821 BuffAdd2 and BuffRemove2 opaque u32', (t) => {
+  for (const eventKey of [BUFF_ADD_EVENT, BUFF_REMOVE_EVENT]) {
+    const rows = [
+      { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae,
+        opaque_u32_0x10: 0 },
+      { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000af,
+        opaque_u32_0x10: 0x12345678 },
+      { replay_sha256: SHA, replay_time_ms: 30, raw_param: 0x400000b0 },
+    ];
+    const fixture = artifact(t, rows, true, eventKey);
+    const selected = run(fixture.replayDirectory, '--event', eventKey,
+      '--opaque-u32', '0x12345678');
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, `${fixture.lines[1]}\n`);
+    assert.equal(JSON.parse(selected.stderr).opaque_u32_unavailable_count, 1);
+    const zero = run(fixture.replayDirectory, '--event', eventKey,
+      '--opaque-u32', '0');
+    assert.equal(zero.status, 0, zero.stderr);
+    assert.equal(zero.stdout, `${fixture.lines[0]}\n`);
+    const corrupt = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+      opaque_u32_0x10: -1 }], true, eventKey);
+    const rejected = run(corrupt.replayDirectory, '--event', eventKey,
+      '--opaque-u32', '0');
+    assert.equal(rejected.status, 2);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+  }
+});
+
+test('query-events filters either anonymous 821 BuffUpdateNumCounter u32', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae,
+      opaque_u32_0x14: 7, opaque_u32_0x1c: 0 },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000af,
+      opaque_u32_0x14: 0, opaque_u32_0x1c: 9 },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 0x400000b0 },
+  ];
+  const fixture = artifact(t, rows, true, BUFF_UPDATE_COUNTER_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', BUFF_UPDATE_COUNTER_EVENT,
+    '--opaque-u32', '9');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[1]}\n`);
+  assert.equal(JSON.parse(selected.stderr).opaque_u32_unavailable_count, 1);
+  const zero = run(fixture.replayDirectory, '--event', BUFF_UPDATE_COUNTER_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${fixture.lines[0]}\n${fixture.lines[1]}\n`);
+  const corrupt = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x14: 1, opaque_u32_0x1c: 0x100000000 }], true,
+  BUFF_UPDATE_COUNTER_EVENT);
+  const rejected = run(corrupt.replayDirectory, '--event', BUFF_UPDATE_COUNTER_EVENT,
+    '--opaque-u32', '1');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('query-events filters the exact 821 Buff Add/Remove/Update anonymous pair', (t) => {
+  for (const [eventKey, u32Field, u8Field] of [
+    [BUFF_ADD_EVENT, 'opaque_u32_0x10', 'opaque_u8_0x14'],
+    [BUFF_REMOVE_EVENT, 'opaque_u32_0x10', 'opaque_u8_0x14'],
+    [BUFF_UPDATE_COUNTER_EVENT, 'opaque_u32_0x14', 'opaque_u8_0x18'],
+  ]) {
+    const rows = [
+      { replay_sha256: SHA, replay_time_ms: 10, [u32Field]: 7, [u8Field]: 3,
+        opaque_u8_0x10: 9, opaque_u32_0x1c: 9 },
+      { replay_sha256: SHA, replay_time_ms: 20, [u32Field]: 7, [u8Field]: 4 },
+      { replay_sha256: SHA, replay_time_ms: 30, [u32Field]: 8, [u8Field]: 3 },
+      { replay_sha256: SHA, replay_time_ms: 40 },
+    ];
+    const fixture = artifact(t, rows, true, eventKey);
+    const selected = run(fixture.replayDirectory, '--event', eventKey,
+      '--opaque-pair', '0x7:3');
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+    const summary = JSON.parse(selected.stderr);
+    assert.deepEqual(summary.filters.opaque_pair, { u32: 7, u8: 3 });
+    assert.equal(summary.opaque_pair_unavailable_count, 1);
+    const none = run(fixture.replayDirectory, '--event', eventKey,
+      '--opaque-pair', '7:9');
+    assert.equal(none.status, 0, none.stderr);
+    assert.equal(none.stdout, '');
+    const invalidRow = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+      [u32Field]: 7, [u8Field]: 256 }], true, eventKey);
+    const rejected = run(invalidRow.replayDirectory, '--event', eventKey,
+      '--opaque-pair', '7:3');
+    assert.equal(rejected.status, 2);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+  }
+  const wrongEvent = artifact(t);
+  const unsupported = run(wrongEvent.replayDirectory, '--event', EVENT,
+    '--opaque-pair', '7:3');
+  assert.equal(unsupported.status, 1);
+  assert.match(unsupported.stderr, /--opaque-pair requires/);
+});
+
+test('query-events distinguishes unavailable Buff pair fields and rejects a foreign build', (t) => {
+  const missing = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10 }],
+    true, BUFF_ADD_EVENT);
+  const unavailable = run(missing.replayDirectory, '--event', BUFF_ADD_EVENT,
+    '--opaque-pair', '0:0');
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'OPAQUE_PAIR_UNAVAILABLE');
+
+  const foreign = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x10: 7, opaque_u8_0x14: 3 }], true, BUFF_ADD_EVENT);
+  for (const filename of ['semantic_run.json', 'replay_analysis.json']) {
+    rewriteJson(path.join(foreign.replayDirectory, filename), (document) => {
+      document.replay_version = VERSION;
+    });
+  }
+  const rejected = run(foreign.replayDirectory, '--event', BUFF_ADD_EVENT,
+    '--opaque-pair', '7:3');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
+test('query-events filters only anonymous 821 BuffUpdateCount +0x14 u32', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae,
+      opaque_u32_0x14: 7, opaque_f32_0x18: 9,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x02d9 } },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 9,
+      opaque_u32_0x14: 0,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x02d9 } },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 0x400000b0,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x02d9 } },
+  ];
+  const fixture = artifact(t, rows, true, BUFF_UPDATE_COUNT_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', BUFF_UPDATE_COUNT_EVENT,
+    '--opaque-u32', '7');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+  assert.equal(JSON.parse(selected.stderr).opaque_u32_unavailable_count, 1);
+  const zero = run(fixture.replayDirectory, '--event', BUFF_UPDATE_COUNT_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${fixture.lines[1]}\n`);
+  const rawOnly = run(fixture.replayDirectory, '--event', BUFF_UPDATE_COUNT_EVENT,
+    '--opaque-u32', '9');
+  assert.equal(rawOnly.status, 0, rawOnly.stderr);
+  assert.equal(rawOnly.stdout, '');
+  assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
+
+  const corrupt = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x14: 0x100000000 }], true, BUFF_UPDATE_COUNT_EVENT);
+  const rejected = run(corrupt.replayDirectory, '--event', BUFF_UPDATE_COUNT_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+
+  const foreignSource = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x14: 7,
+    raw_packet_ref: { replay_sha256: 'b'.repeat(64), packet_id: 0x02d9 } }],
+  true, BUFF_UPDATE_COUNT_EVENT);
+  const rejectedSource = run(foreignSource.replayDirectory,
+    '--event', BUFF_UPDATE_COUNT_EVENT, '--opaque-u32', '7');
+  assert.equal(rejectedSource.status, 2);
+  assert.equal(JSON.parse(rejectedSource.stderr).code, 'ARTIFACT_IDENTITY_MISMATCH');
+
+  const wrongBuild = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x14: 7 }], true, BUFF_UPDATE_COUNT_EVENT);
+  for (const filename of ['semantic_run.json', 'replay_analysis.json']) {
+    rewriteJson(path.join(wrongBuild.replayDirectory, filename), (document) => {
+      document.replay_version = VERSION;
+    });
+  }
+  const rejectedBuild = run(wrongBuild.replayDirectory,
+    '--event', BUFF_UPDATE_COUNT_EVENT, '--opaque-u32', '7');
+  assert.equal(rejectedBuild.status, 2);
+  assert.equal(JSON.parse(rejectedBuild.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
+test('query-events filters only anonymous 821 BuffReplace +0x18 u32', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae,
+      opaque_u32_0x18: 7, opaque_f32_0x14: 9,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x01ad } },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 9,
+      opaque_u32_0x18: 0,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x01ad } },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 0x400000b0,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x01ad } },
+  ];
+  const fixture = artifact(t, rows, true, BUFF_REPLACE_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', BUFF_REPLACE_EVENT,
+    '--opaque-u32', '7');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+  assert.equal(JSON.parse(selected.stderr).opaque_u32_unavailable_count, 1);
+  const zero = run(fixture.replayDirectory, '--event', BUFF_REPLACE_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${fixture.lines[1]}\n`);
+  const rawOrFloatOnly = run(fixture.replayDirectory, '--event', BUFF_REPLACE_EVENT,
+    '--opaque-u32', '9');
+  assert.equal(rawOrFloatOnly.status, 0, rawOrFloatOnly.stderr);
+  assert.equal(rawOrFloatOnly.stdout, '');
+  assert.equal(JSON.parse(rawOrFloatOnly.stderr).matched_count, 0);
+
+  const corrupt = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x18: 0x100000000 }], true, BUFF_REPLACE_EVENT);
+  const rejected = run(corrupt.replayDirectory, '--event', BUFF_REPLACE_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+
+  const foreignSource = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x18: 7,
+    raw_packet_ref: { replay_sha256: 'b'.repeat(64), packet_id: 0x01ad } }],
+  true, BUFF_REPLACE_EVENT);
+  const rejectedSource = run(foreignSource.replayDirectory,
+    '--event', BUFF_REPLACE_EVENT, '--opaque-u32', '7');
+  assert.equal(rejectedSource.status, 2);
+  assert.equal(JSON.parse(rejectedSource.stderr).code, 'ARTIFACT_IDENTITY_MISMATCH');
+
+  const wrongBuild = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x18: 7 }], true, BUFF_REPLACE_EVENT);
+  for (const filename of ['semantic_run.json', 'replay_analysis.json']) {
+    rewriteJson(path.join(wrongBuild.replayDirectory, filename), (document) => {
+      document.replay_version = VERSION;
+    });
+  }
+  const rejectedBuild = run(wrongBuild.replayDirectory,
+    '--event', BUFF_REPLACE_EVENT, '--opaque-u32', '7');
+  assert.equal(rejectedBuild.status, 2);
+  assert.equal(JSON.parse(rejectedBuild.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
+test('query-events filters only anonymous 821 SetSpellTimerFromBuff +0x18/+0x1c u32', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000b4,
+      opaque_u32_0x18: 7, opaque_u32_0x1c: 11,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x00fd } },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000b5,
+      opaque_u32_0x18: 0, opaque_u32_0x1c: 9,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x00fd } },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 13,
+      opaque_f32_0x14: 13, opaque_u8_0x20: 13,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x00fd } },
+  ];
+  const fixture = artifact(t, rows, true, SET_SPELL_TIMER_FROM_BUFF_EVENT);
+  for (const [value, index] of [[7, 0], [11, 0], [0, 1], [9, 1]]) {
+    const selected = run(fixture.replayDirectory, '--event', SET_SPELL_TIMER_FROM_BUFF_EVENT,
+      '--opaque-u32', String(value));
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, `${fixture.lines[index]}\n`);
+    assert.equal(JSON.parse(selected.stderr).opaque_u32_unavailable_count, 1);
+  }
+  const noMatch = run(fixture.replayDirectory, '--event', SET_SPELL_TIMER_FROM_BUFF_EVENT,
+    '--opaque-u32', '13');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(noMatch.stdout, '');
+  assert.equal(JSON.parse(noMatch.stderr).matched_count, 0);
+  assert.equal(JSON.parse(noMatch.stderr).opaque_u32_unavailable_count, 1);
+
+  const unavailable = artifact(t, [rows[2]], true, SET_SPELL_TIMER_FROM_BUFF_EVENT);
+  const missing = run(unavailable.replayDirectory, '--event', SET_SPELL_TIMER_FROM_BUFF_EVENT,
+    '--opaque-u32', '13');
+  assert.equal(missing.status, 2);
+  assert.equal(JSON.parse(missing.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+
+  const corrupt = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x18: 7, opaque_u32_0x1c: 0x100000000 }],
+  true, SET_SPELL_TIMER_FROM_BUFF_EVENT);
+  const rejected = run(corrupt.replayDirectory, '--event', SET_SPELL_TIMER_FROM_BUFF_EVENT,
+    '--opaque-u32', '7');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+
+  const wrongBuild = artifact(t, [rows[0]], true, SET_SPELL_TIMER_FROM_BUFF_EVENT);
+  for (const filename of ['semantic_run.json', 'replay_analysis.json']) {
+    rewriteJson(path.join(wrongBuild.replayDirectory, filename), (document) => {
+      document.replay_version = VERSION;
+    });
+  }
+  const rejectedBuild = run(wrongBuild.replayDirectory,
+    '--event', SET_SPELL_TIMER_FROM_BUFF_EVENT, '--opaque-u32', '7');
+  assert.equal(rejectedBuild.status, 2);
+  assert.equal(JSON.parse(rejectedBuild.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
+test('query-events filters only anonymous 821 SetSpellLevel +0x10/+0x14 u32', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000b4,
+      opaque_u32_0x10: 7, opaque_u32_0x14: 11,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x025d } },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000b5,
+      opaque_u32_0x10: 0, opaque_u32_0x14: 9,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x025d } },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 13,
+      raw_packet_ref: { replay_sha256: SHA, packet_id: 0x025d } },
+  ];
+  const fixture = artifact(t, rows, true, SET_SPELL_LEVEL_EVENT);
+  for (const [value, index] of [[7, 0], [11, 0], [0, 1], [9, 1]]) {
+    const selected = run(fixture.replayDirectory, '--event', SET_SPELL_LEVEL_EVENT,
+      '--opaque-u32', String(value));
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, `${fixture.lines[index]}\n`);
+    assert.equal(JSON.parse(selected.stderr).opaque_u32_unavailable_count, 1);
+  }
+  const noMatch = run(fixture.replayDirectory, '--event', SET_SPELL_LEVEL_EVENT,
+    '--opaque-u32', '13');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(noMatch.stdout, '');
+  assert.equal(JSON.parse(noMatch.stderr).matched_count, 0);
+  assert.equal(JSON.parse(noMatch.stderr).opaque_u32_unavailable_count, 1);
+
+  const unavailable = artifact(t, [rows[2]], true, SET_SPELL_LEVEL_EVENT);
+  const missing = run(unavailable.replayDirectory, '--event', SET_SPELL_LEVEL_EVENT,
+    '--opaque-u32', '13');
+  assert.equal(missing.status, 2);
+  assert.equal(JSON.parse(missing.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+
+  const corrupt = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x10: 7, opaque_u32_0x14: 0x100000000 }],
+  true, SET_SPELL_LEVEL_EVENT);
+  const rejected = run(corrupt.replayDirectory, '--event', SET_SPELL_LEVEL_EVENT,
+    '--opaque-u32', '7');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+
+  const otherEvent = artifact(t, [rows[0]], true, SET_SPELL_TIMER_FROM_BUFF_EVENT);
+  const wrongFields = run(otherEvent.replayDirectory,
+    '--event', SET_SPELL_TIMER_FROM_BUFF_EVENT, '--opaque-u32', '7');
+  assert.equal(wrongFields.status, 2);
+  assert.equal(JSON.parse(wrongFields.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+
+  const wrongBuild = artifact(t, [rows[0]], true, SET_SPELL_LEVEL_EVENT);
+  for (const filename of ['semantic_run.json', 'replay_analysis.json']) {
+    rewriteJson(path.join(wrongBuild.replayDirectory, filename), (document) => {
+      document.replay_version = VERSION;
+    });
+  }
+  const rejectedBuild = run(wrongBuild.replayDirectory,
+    '--event', SET_SPELL_LEVEL_EVENT, '--opaque-u32', '7');
+  assert.equal(rejectedBuild.status, 2);
+  assert.equal(JSON.parse(rejectedBuild.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
+test('query-events filters only decoded CastSpellAns signed i32, including both bounds and zero', (t) => {
+  const values = [-0x80000000, -1, 0, 0x7fffffff];
+  const rows = values.map((value, index) => ({
+    replay_sha256: SHA, replay_time_ms: index + 1, raw_param: 0x400000ae,
+    opaque_i32_0x14c: value, confidence: 'CANDIDATE',
+  }));
+  rows.push({ replay_sha256: SHA, replay_time_ms: 5, raw_param: 0x400000ae,
+    confidence: 'CANDIDATE' });
+  const fixture = artifact(t, rows, true, CAST_SPELL_ANS_EVENT);
+  for (const [index, value] of values.entries()) {
+    const result = run(fixture.replayDirectory, '--event', CAST_SPELL_ANS_EVENT,
+      `--opaque-i32=${value}`);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `${fixture.lines[index]}\n`);
+    const summary = JSON.parse(result.stderr);
+    assert.equal(summary.capability_status, 'CANDIDATE');
+    assert.equal(summary.scanned_count, rows.length);
+    assert.equal(summary.matched_count, 1);
+    assert.equal(summary.opaque_i32_unavailable_count, 1);
+    assert.equal(summary.filters.opaque_i32, value);
+    assert.equal(summary.rows_unmodified, true);
+  }
+  const noMatch = run(fixture.replayDirectory, '--event', CAST_SPELL_ANS_EVENT,
+    '--opaque-i32', '17');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(noMatch.stdout, '');
+  assert.equal(JSON.parse(noMatch.stderr).matched_count, 0);
+  assert.equal(JSON.parse(noMatch.stderr).opaque_i32_unavailable_count, 1);
+});
+
+test('query-events reports wholly missing CastSpellAns i32 and rejects malformed present fields', (t) => {
+  const missing = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 1 }],
+    true, CAST_SPELL_ANS_EVENT);
+  const missingOutput = path.join(missing.root, 'missing-cast-i32.jsonl');
+  const unavailable = run(missing.replayDirectory, '--event', CAST_SPELL_ANS_EVENT,
+    '--opaque-i32', '0', '--output', missingOutput);
+  assert.equal(unavailable.status, 2, unavailable.stderr);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'OPAQUE_I32_UNAVAILABLE');
+  assert.equal(JSON.parse(unavailable.stderr).opaque_i32_unavailable_count, 1);
+  assert.equal(fs.existsSync(missingOutput), false);
+
+  for (const value of [null, '0', 1.5, -0x80000001, 0x80000000]) {
+    const fixture = artifact(t, [
+      { replay_sha256: SHA, replay_time_ms: 1, opaque_i32_0x14c: 0 },
+      { replay_sha256: SHA, replay_time_ms: 2, opaque_i32_0x14c: value },
+    ], true, CAST_SPELL_ANS_EVENT);
+    const output = path.join(fixture.root, 'invalid-cast-i32.jsonl');
+    const result = run(fixture.replayDirectory, '--event', CAST_SPELL_ANS_EVENT,
+      '--opaque-i32', '0', '--to-ms', '1', '--output', output);
+    assert.equal(result.status, 2, `${value}: ${result.stderr}`);
+    assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
+});
+
+test('query-events limits CastSpellAns i32 filter to exact 821 event and signed decimal range', (t) => {
+  const wrongEvent = artifact(t);
+  const unsupported = run(wrongEvent.replayDirectory, '--event', EVENT,
+    '--opaque-i32', '0');
+  assert.equal(unsupported.status, 1, unsupported.stderr);
+  assert.match(unsupported.stderr, /--opaque-i32 requires an 821 cast_spell_ans_packet_candidates event/);
+
+  const oldBuild = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 1,
+    opaque_i32_0x14c: 0 }], true, CAST_SPELL_ANS_EVENT);
+  rewriteJson(path.join(oldBuild.replayDirectory, 'semantic_run.json'),
+    (semantic) => { semantic.replay_version = VERSION; });
+  rewriteJson(path.join(oldBuild.replayDirectory, 'replay_analysis.json'),
+    (analysis) => { analysis.replay_version = VERSION; });
+  const wrongBuild = run(oldBuild.replayDirectory, '--event', CAST_SPELL_ANS_EVENT,
+    '--opaque-i32', '0');
+  assert.equal(wrongBuild.status, 2, wrongBuild.stderr);
+  assert.equal(JSON.parse(wrongBuild.stderr).code, 'UNSUPPORTED_FILTER');
+
+  for (const value of ['-2147483649', '2147483648', '0x1', '-0', '1.0', '1e2', '+1']) {
+    const invalid = run(oldBuild.replayDirectory, '--event', CAST_SPELL_ANS_EVENT,
+      '--opaque-i32', value);
+    assert.equal(invalid.status, 1, `${value}: ${invalid.stderr}`);
+    assert.equal(invalid.stdout, '');
+  }
+});
+
+test('query-events filters exact 821 stealth child u32 without substituting Replay raw_param', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      child_event_id: 0x0101, registered_event_name: 'OnEnterStealth',
+      raw_param: 0x400000ae, event_u32_0x04: 0x400000ae,
+      raw_packet_ref: { replay_sha256: SHA, raw_param: 0x400000ae } },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      child_event_id: 0x0102, registered_event_name: 'OnExitStealth',
+      raw_param: 0x400001ae, event_u32_0x04: 0x400000ae,
+      raw_packet_ref: { replay_sha256: SHA, raw_param: 0x400001ae } },
+    { replay_sha256: SHA, replay_time_ms: 30,
+      child_event_id: 0x0101, registered_event_name: 'OnEnterStealth',
+      raw_param: 0x400002ae, event_u32_0x04: 0 },
+    { replay_sha256: SHA, replay_time_ms: 40,
+      child_event_id: 0x0102, raw_param: 0x400003ae },
+  ];
+  const fixture = artifact(t, rows, true, STEALTH_PACKET_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--opaque-u32', '0x400000ae');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[0]}\n${fixture.lines[1]}\n`);
+  assert.equal(JSON.parse(selected.stderr).matched_count, 2);
+
+  const rawOnly = run(fixture.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--opaque-u32', '0x400001ae');
+  assert.equal(rawOnly.status, 0, rawOnly.stderr);
+  assert.equal(rawOnly.stdout, '');
+  assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
+  assert.equal(JSON.parse(rawOnly.stderr).opaque_u32_unavailable_count, 1);
+
+  const zero = run(fixture.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${fixture.lines[2]}\n`);
+});
+
+test('query-events keeps missing 821 stealth u32 unavailable and enforces exact build and capability', (t) => {
+  const missing = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      raw_param: 0x400000ae,
+      raw_packet_ref: { replay_sha256: SHA, raw_param: 0x400000ae } },
+  ], true, STEALTH_PACKET_EVENT);
+  const output = path.join(missing.root, 'missing-stealth-u32.jsonl');
+  const unavailable = run(missing.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--opaque-u32', '0x400000ae', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const wrongBuild = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, event_u32_0x04: 0 },
+  ], true, STEALTH_PACKET_EVENT);
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(wrongBuild.replayDirectory, name);
+    const document = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    document.replay_version = VERSION;
+    fs.writeFileSync(filename, JSON.stringify(document));
+  }
+  const rejected = run(wrongBuild.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'UNSUPPORTED_FILTER');
+
+  const unavailableCapability = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, event_u32_0x04: 0 },
+  ], true, STEALTH_PACKET_EVENT);
+  const semanticPath = path.join(unavailableCapability.replayDirectory, 'semantic_run.json');
+  const semantic = JSON.parse(fs.readFileSync(semanticPath, 'utf8'));
+  semantic.capability_results.stealth_event_packet.status = 'MISSING_INPUT';
+  semantic.capability_results.stealth_event_packet.event_count = null;
+  fs.writeFileSync(semanticPath, JSON.stringify(semantic));
+  const notDecoded = run(unavailableCapability.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(notDecoded.status, 2);
+  assert.equal(JSON.parse(notDecoded.stderr).code, 'CAPABILITY_UNAVAILABLE');
+});
+
+test('query-events filters exact 821 stealth child IDs while preserving rows and full counts', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x0102, child_event_id: 0x0101,
+      registered_event_name: 'OnEnterStealth', event_u32_0x04: 4 },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x0101, child_event_id: 0x0102,
+      registered_event_name: 'OnExitStealth', event_u32_0x04: 5 },
+    { replay_sha256: SHA, replay_time_ms: 30, child_event_id: 0x0101,
+      registered_event_name: 'OnEnterStealth', event_u32_0x04: 6 },
+    { replay_sha256: SHA, replay_time_ms: 40, child_event_id: null },
+  ];
+  const fixture = artifact(t, rows, true, STEALTH_PACKET_EVENT);
+  const enter = run(fixture.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--child-event-id', '257', '--limit', '1');
+  assert.equal(enter.status, 0, enter.stderr);
+  assert.equal(enter.stdout, `${fixture.lines[0]}\n`);
+  const summary = JSON.parse(enter.stderr);
+  assert.equal(summary.scanned_count, 4);
+  assert.equal(summary.matched_count, 2);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.child_event_id_unavailable_count, 1);
+  assert.equal(summary.filters.child_event_id, 0x0101);
+  assert.equal(summary.rows_unmodified, true);
+  const exit = run(fixture.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--child-event-id=0x0102', '--opaque-u32', '5');
+  assert.equal(exit.status, 0, exit.stderr);
+  assert.equal(exit.stdout, `${fixture.lines[1]}\n`);
+  assert.equal(JSON.parse(exit.stderr).matched_count, 1);
+});
+
+test('query-events distinguishes missing stealth child ID from explicit zero', (t) => {
+  const missing = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae },
+    { replay_sha256: SHA, replay_time_ms: 20, child_event_id: null },
+  ], true, STEALTH_PACKET_EVENT);
+  const output = path.join(missing.root, 'missing-child-id.jsonl');
+  const unavailable = run(missing.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--child-event-id', '0x0101', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'CHILD_EVENT_ID_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const zero = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, child_event_id: 0 },
+  ], true, STEALTH_PACKET_EVENT);
+  const invalid = run(zero.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--child-event-id', '0x0101');
+  assert.equal(invalid.status, 2);
+  assert.equal(JSON.parse(invalid.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('query-events rejects unsupported stealth child IDs, streams, and builds before row scan', (t) => {
+  const absentDirectory = path.join(os.tmpdir(), 'rofl-child-id-unopened-artifact');
+  for (const value of ['0', '0x0103', '0xffffffff', '-1', '4294967296', '0xgg']) {
+    const rejected = run(absentDirectory, '--event', STEALTH_PACKET_EVENT,
+      '--child-event-id', value);
+    assert.equal(rejected.status, 1, `${value}: ${rejected.stderr}`);
+    assert.match(rejected.stderr, /--child-event-id/, value);
+    assert.doesNotMatch(rejected.stderr, /MISSING_METADATA/, value);
+  }
+  const otherStream = run(absentDirectory, '--event', HEAL_PACKET_EVENT,
+    '--child-event-id', '0x0101');
+  assert.equal(otherStream.status, 1);
+  assert.match(otherStream.stderr, /--child-event-id requires/);
+
+  const wrongBuild = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, child_event_id: 0x0101 },
+  ], true, STEALTH_PACKET_EVENT);
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(wrongBuild.replayDirectory, name);
+    const document = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    document.replay_version = VERSION;
+    fs.writeFileSync(filename, JSON.stringify(document));
+  }
+  const wrongVersion = run(wrongBuild.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--child-event-id', '0x0101');
+  assert.equal(wrongVersion.status, 2);
+  assert.equal(JSON.parse(wrongVersion.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
+test('query-events filters OnChampionDie child u32 without using its different raw param', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae,
+      event_u32_0x04: 0x400000af,
+      raw_packet_ref: { replay_sha256: SHA, raw_param: 0x400000ae } },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000af,
+      event_u32_0x04: 0 },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 0x400000b0 },
+  ];
+  const fixture = artifact(t, rows, true, CHAMPION_DIE_EVENT);
+  const decoded = run(fixture.replayDirectory, '--event', CHAMPION_DIE_EVENT,
+    '--opaque-u32', '0x400000af');
+  assert.equal(decoded.status, 0, decoded.stderr);
+  assert.equal(decoded.stdout, `${fixture.lines[0]}\n`);
+  assert.equal(JSON.parse(decoded.stderr).opaque_u32_unavailable_count, 1);
+  const rawOnly = run(fixture.replayDirectory, '--event', CHAMPION_DIE_EVENT,
+    '--opaque-u32', '0x400000ae');
+  assert.equal(rawOnly.status, 0, rawOnly.stderr);
+  assert.equal(rawOnly.stdout, '');
+  assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
+  const zero = run(fixture.replayDirectory, '--event', CHAMPION_DIE_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${fixture.lines[1]}\n`);
+
+  const missing = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000af },
+  ], true, CHAMPION_DIE_EVENT);
+  const unavailable = run(missing.replayDirectory, '--event', CHAMPION_DIE_EVENT,
+    '--opaque-u32', '0x400000af');
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+
+  const wrongBuild = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, event_u32_0x04: 0 },
+  ], true, CHAMPION_DIE_EVENT);
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(wrongBuild.replayDirectory, name);
+    const document = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    document.replay_version = VERSION;
+    fs.writeFileSync(filename, JSON.stringify(document));
+  }
+  const rejected = run(wrongBuild.replayDirectory, '--event', CHAMPION_DIE_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
+test('query-events matches only OnChampionKill decoded u32 fields and rejects invalid rows', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000aa,
+      event_u32_0x04: 0x400000ab, event_u32_0x58: 0xffffffff,
+      event_u32_0x5c: 0 },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 8,
+      event_u32_0x04: 5, event_u32_0x58: 6, event_u32_0x5c: 7 },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 10,
+      event_u32_0x04: null, event_u32_0x58: null, event_u32_0x5c: 9 },
+    { replay_sha256: SHA, replay_time_ms: 40, raw_param: 9 },
+  ];
+  const fixture = artifact(t, rows, true, CHAMPION_KILL_EVENT);
+  for (const [value, expectedLine] of [
+    ['0x400000ab', 0], ['0xffffffff', 0], ['0', 0], ['6', 1], ['9', 2],
+  ]) {
+    const selected = run(fixture.replayDirectory, '--event', CHAMPION_KILL_EVENT,
+      '--opaque-u32', value);
+    assert.equal(selected.status, 0, `${value}: ${selected.stderr}`);
+    assert.equal(selected.stdout, `${fixture.lines[expectedLine]}\n`, value);
+  }
+  const rawOnly = run(fixture.replayDirectory, '--event', CHAMPION_KILL_EVENT,
+    '--opaque-u32', '0x400000aa');
+  assert.equal(rawOnly.status, 0, rawOnly.stderr);
+  assert.equal(rawOnly.stdout, '');
+  assert.equal(JSON.parse(rawOnly.stderr).opaque_u32_unavailable_count, 2);
+
+  const invalid = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      event_u32_0x04: 1, event_u32_0x58: 2, event_u32_0x5c: 3 },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      event_u32_0x04: 1, event_u32_0x58: -1, event_u32_0x5c: 0 },
+  ], true, CHAMPION_KILL_EVENT);
+  const output = path.join(invalid.root, 'invalid-kill-u32.jsonl');
+  const failed = run(invalid.replayDirectory, '--event', CHAMPION_KILL_EVENT,
+    '--opaque-u32', '1', '--output', output);
+  assert.equal(failed.status, 2);
+  assert.equal(JSON.parse(failed.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
+
+  const semanticPath = path.join(fixture.replayDirectory, 'semantic_run.json');
+  const semantic = JSON.parse(fs.readFileSync(semanticPath, 'utf8'));
+  semantic.capability_results.champion_kill_event_packet.status = 'MISSING_INPUT';
+  semantic.capability_results.champion_kill_event_packet.event_count = null;
+  fs.writeFileSync(semanticPath, JSON.stringify(semantic));
+  const unavailable = run(fixture.replayDirectory, '--event', CHAMPION_KILL_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'CAPABILITY_UNAVAILABLE');
+});
+
+test('query-events filters anonymous OnShutdown child fields without using outer raw param', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000b0,
+      event_u32_0x04: 0x400000b4, event_u32_0x58: 63, event_u32_0x5c: 0 },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000b1,
+      event_u32_0x04: 0x400000b5, event_u32_0x58: 64,
+      event_u32_0x5c: 0xffffffff },
+  ];
+  const fixture = artifact(t, rows, true, SHUTDOWN_PACKET_EVENT);
+  for (const [value, selectedIndex] of [
+    ['0x400000b4', 0], ['63', 0], ['0', 0], ['0xffffffff', 1],
+  ]) {
+    const selected = run(fixture.replayDirectory, '--event', SHUTDOWN_PACKET_EVENT,
+      '--opaque-u32', value);
+    assert.equal(selected.status, 0, `${value}: ${selected.stderr}`);
+    assert.equal(selected.stdout, `${fixture.lines[selectedIndex]}\n`);
+    assert.equal(JSON.parse(selected.stderr).capability_status, 'CANDIDATE');
+  }
+  const rawOnly = run(fixture.replayDirectory, '--event', SHUTDOWN_PACKET_EVENT,
+    '--opaque-u32', '0x400000b0');
+  assert.equal(rawOnly.status, 0, rawOnly.stderr);
+  assert.equal(rawOnly.stdout, '');
+  assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
+});
+
+test('query-events filters anonymous OnResurrect child fields without using outer raw param', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000b0,
+      event_u32_0x04: 0x400000b4, event_u32_0x08: 0 },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000b1,
+      event_u32_0x04: 0x400000b5, event_u32_0x08: 0xffffffff },
+  ];
+  const fixture = artifact(t, rows, true, RESURRECT_PACKET_EVENT);
+  for (const [value, selectedIndex] of [
+    ['0x400000b4', 0], ['0', 0], ['0xffffffff', 1],
+  ]) {
+    const selected = run(fixture.replayDirectory, '--event', RESURRECT_PACKET_EVENT,
+      '--opaque-u32', value);
+    assert.equal(selected.status, 0, `${value}: ${selected.stderr}`);
+    assert.equal(selected.stdout, `${fixture.lines[selectedIndex]}\n`);
+    assert.equal(JSON.parse(selected.stderr).capability_status, 'CANDIDATE');
+  }
+  const rawOnly = run(fixture.replayDirectory, '--event', RESURRECT_PACKET_EVENT,
+    '--opaque-u32', '0x400000b0');
+  assert.equal(rawOnly.status, 0, rawOnly.stderr);
+  assert.equal(rawOnly.stdout, '');
+  assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
+});
+
+test('query-events filters the anonymous OnReviveAlly child u32 and preserves JSONL', (t) => {
+  const fixture = reviveAllyArtifact(t, [
+    reviveAllyRow(10, { event_u32_0x04: 0x400000b6 }),
+    reviveAllyRow(20, { event_u32_0x04: 0 }),
+    reviveAllyRow(30),
+    reviveAllyRow(40, { event_u32_0x04: null }),
+  ]);
+  const matched = run(fixture.replayDirectory, '--event', REVIVE_ALLY_PACKET_EVENT,
+    '--opaque-u32', '0x400000b6');
+  assert.equal(matched.status, 0, matched.stderr);
+  assert.equal(matched.stdout, `${fixture.lines[0]}\n`);
+  const summary = JSON.parse(matched.stderr);
+  assert.equal(summary.scanned_count, 4);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.opaque_u32_unavailable_count, 2);
+  assert.equal(summary.rows_unmodified, true);
+
+  const zeroValue = run(fixture.replayDirectory, '--event', REVIVE_ALLY_PACKET_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zeroValue.status, 0, zeroValue.stderr);
+  assert.equal(zeroValue.stdout, `${fixture.lines[1]}\n`);
+  const noMatch = run(fixture.replayDirectory, '--event', REVIVE_ALLY_PACKET_EVENT,
+    '--opaque-u32', '0x400000b5');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(noMatch.stdout, '');
+  assert.equal(JSON.parse(noMatch.stderr).matched_count, 0);
+});
+
+test('query-events keeps missing OnReviveAlly u32 unavailable and rejects identity or field corruption', (t) => {
+  const unavailable = reviveAllyArtifact(t, [
+    reviveAllyRow(10), reviveAllyRow(20, { event_u32_0x04: null }),
+  ]);
+  const output = path.join(unavailable.root, 'unavailable.jsonl');
+  const absent = run(unavailable.replayDirectory, '--event', REVIVE_ALLY_PACKET_EVENT,
+    '--opaque-u32', '0', '--output', output);
+  assert.equal(absent.status, 2);
+  assert.equal(JSON.parse(absent.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const wrongBuild = reviveAllyArtifact(t, [reviveAllyRow(10, { event_u32_0x04: 0 })]);
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    rewriteJson(path.join(wrongBuild.replayDirectory, name), (document) => {
+      document.replay_version = VERSION;
+    });
+  }
+  const buildRejected = run(wrongBuild.replayDirectory,
+    '--event', REVIVE_ALLY_PACKET_EVENT, '--opaque-u32', '0');
+  assert.equal(buildRejected.status, 2);
+  assert.equal(JSON.parse(buildRejected.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+
+  const wrongProfile = reviveAllyArtifact(t, [reviveAllyRow(10, { event_u32_0x04: 0 })]);
+  rewriteJson(path.join(wrongProfile.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.revive_ally_event_packet.profile_id = 'foreign-profile';
+  });
+  const profileRejected = run(wrongProfile.replayDirectory,
+    '--event', REVIVE_ALLY_PACKET_EVENT, '--opaque-u32', '0');
+  assert.equal(profileRejected.status, 2);
+  assert.equal(JSON.parse(profileRejected.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+
+  const wrongRow = reviveAllyArtifact(t, [reviveAllyRow(10,
+    { event_u32_0x04: 0, build_profile: 'foreign-profile' })]);
+  const rowRejected = run(wrongRow.replayDirectory,
+    '--event', REVIVE_ALLY_PACKET_EVENT, '--opaque-u32', '0');
+  assert.equal(rowRejected.status, 2);
+  assert.equal(JSON.parse(rowRejected.stderr).code, 'INVALID_EVENT_ROW');
+
+  for (const value of [-1, 0x100000000, '7']) {
+    const malformed = reviveAllyArtifact(t, [
+      reviveAllyRow(10, { event_u32_0x04: 0 }),
+      reviveAllyRow(20, { event_u32_0x04: value }),
+    ]);
+    const failedOutput = path.join(malformed.root, 'invalid-u32.jsonl');
+    const rejected = run(malformed.replayDirectory,
+      '--event', REVIVE_ALLY_PACKET_EVENT,
+      '--opaque-u32', '0', '--output', failedOutput);
+    assert.equal(rejected.status, 2);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(failedOutput), false);
+  }
+});
+
+test('query-events preserves exact 821 OnDampenerDie rows under time and raw-param filters', (t) => {
+  const fixture = dampenerDieArtifact(t, [
+    dampenerDieRow(100, 0x400000af, 32),
+    dampenerDieRow(200, 0x400000b0, 64),
+  ]);
+  const selected = run(fixture.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT,
+    '--from-ms', '200', '--to-ms', '200', '--raw-param', '0x400000b0');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[1]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.capability_status, 'CANDIDATE');
+  assert.equal(summary.declared_event_count, 2);
+  assert.equal(summary.scanned_count, 2);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.raw_param_unavailable_count, 0);
+  assert.equal(summary.rows_unmodified, true);
+
+  const all = run(fixture.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT);
+  assert.equal(all.status, 0, all.stderr);
+  assert.equal(all.stdout, `${fixture.lines.join('\n')}\n`);
+});
+
+test('query-events gates OnDampenerDie on exact build, image, status and counts', (t) => {
+  const wrongBuild = dampenerDieArtifact(t);
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    rewriteJson(path.join(wrongBuild.replayDirectory, name), (document) => {
+      document.replay_version = VERSION;
+    });
+  }
+  const old = run(wrongBuild.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT);
+  assert.equal(old.status, 2);
+  assert.equal(JSON.parse(old.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+
+  const unavailable = dampenerDieArtifact(t);
+  rewriteJson(path.join(unavailable.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.dampener_die_event_packet.status = 'MISSING_INPUT';
+    semantic.capability_results.dampener_die_event_packet.event_count = null;
+  });
+  const absent = run(unavailable.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT);
+  assert.equal(absent.status, 2);
+  assert.equal(JSON.parse(absent.stderr).code, 'CAPABILITY_UNAVAILABLE');
+
+  for (const corrupt of [
+    (result) => { result.profile_id = 'foreign-profile'; },
+    (result) => { result.runtime_image_sha256 = 'f'.repeat(64); },
+    (result) => { result.runtime_image_used = false; },
+    (result) => { result.child_event_id = 0x003b; },
+    (result) => { result.input_packet_scope = 'child_003b_length_116'; },
+    (result) => { result.input_count = 2; },
+    (result) => { result.excluded_same_length_foreign_count = 1; },
+  ]) {
+    const fixture = dampenerDieArtifact(t);
+    rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+      corrupt(semantic.capability_results.dampener_die_event_packet);
+    });
+    const rejected = run(fixture.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT);
+    assert.equal(rejected.status, 2);
+    assert.equal(JSON.parse(rejected.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+  }
+});
+
+test('query-events rejects malformed OnDampenerDie blobs and raw references', (t) => {
+  for (const corrupt of [
+    (row) => { row.event_id = 0x003b; },
+    (row) => { row.event_name = 'OnTurretDie'; },
+    (row) => { row.raw_event_id_hex = '0x4966'; },
+    (row) => { row.event_blob_hex = '00'; },
+    (row) => { row.event_blob_sha256 = 'f'.repeat(64); },
+    (row) => { row.raw_packet_ref.payload_length = 104; },
+    (row) => { row.raw_packet_ref.raw_param += 1; },
+    (row) => { row.raw_packet_ref.raw_payload_sha256 = 'invalid'; },
+  ]) {
+    const rows = [dampenerDieRow(100, 0x400000af, 32),
+      dampenerDieRow(200, 0x400000b0, 64)];
+    corrupt(rows[1]);
+    const fixture = dampenerDieArtifact(t, rows);
+    const output = path.join(fixture.root, 'invalid-dampener.jsonl');
+    const rejected = run(fixture.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT,
+      '--output', output);
+    assert.equal(rejected.status, 2);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
+  const duplicate = dampenerDieArtifact(t, [
+    dampenerDieRow(100, 0x400000af, 32),
+    dampenerDieRow(200, 0x400000b0, 32),
+  ]);
+  const rejected = run(duplicate.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT);
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('query-events filters anonymous turret plate child field without using outer raw param', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000b0,
+      event_schema_u32_0x00: 469, event_u32_0x04: 0x400000a8 },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000b1,
+      event_schema_u32_0x00: 469, event_u32_0x04: 0x400000a9 },
+  ];
+  const fixture = artifact(t, rows, true, TURRET_PLATE_PACKET_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', TURRET_PLATE_PACKET_EVENT,
+    '--opaque-u32', '0x400000a8');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+  assert.equal(JSON.parse(selected.stderr).capability_status, 'CANDIDATE');
+  for (const value of ['0x400000b0', '469']) {
+    const noMatch = run(fixture.replayDirectory, '--event', TURRET_PLATE_PACKET_EVENT,
+      '--opaque-u32', value);
+    assert.equal(noMatch.status, 0, noMatch.stderr);
+    assert.equal(noMatch.stdout, '');
+    assert.equal(JSON.parse(noMatch.stderr).matched_count, 0);
+  }
+});
+
+test('query-events filters only OnChampionMultipleKill decoded scalar u32 fields', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000aa,
+      event_u32_0x04: 0x400000ab, event_u32_0x08: 0, event_u32_0x0c: 2,
+      event_u32_list_0x10: [0x400000aa, 0x400000ae] },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000ab,
+      event_u32_0x04: 5, event_u32_0x08: 6, event_u32_0x0c: 1,
+      event_u32_list_0x10: [9] },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 9,
+      event_u32_0x04: null, event_u32_0x08: null,
+      event_u32_0x0c: null, event_u32_list_0x10: [9] },
+  ];
+  const fixture = artifact(t, rows, true, CHAMPION_MULTIPLE_KILL_EVENT);
+  for (const [value, expectedLine] of [
+    ['0x400000ab', 0], ['0', 0], ['2', 0], ['5', 1], ['6', 1],
+  ]) {
+    const selected = run(fixture.replayDirectory, '--event', CHAMPION_MULTIPLE_KILL_EVENT,
+      '--opaque-u32', value);
+    assert.equal(selected.status, 0, `${value}: ${selected.stderr}`);
+    assert.equal(selected.stdout, `${fixture.lines[expectedLine]}\n`, value);
+    assert.equal(JSON.parse(selected.stderr).opaque_u32_unavailable_count, 1);
+  }
+  for (const value of ['0x400000aa', '9']) {
+    const excluded = run(fixture.replayDirectory, '--event', CHAMPION_MULTIPLE_KILL_EVENT,
+      '--opaque-u32', value);
+    assert.equal(excluded.status, 0, `${value}: ${excluded.stderr}`);
+    assert.equal(excluded.stdout, '', `raw param or +0x10 list matched ${value}`);
+    assert.equal(JSON.parse(excluded.stderr).matched_count, 0);
+  }
+});
+
+test('query-events keeps missing multikill scalar u32 unavailable and rejects corruption and old build', (t) => {
+  const missing = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 5,
+      event_u32_list_0x10: [0] },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      event_u32_0x04: null, event_u32_0x08: null,
+      event_u32_0x0c: null, event_u32_list_0x10: [5] },
+  ], true, CHAMPION_MULTIPLE_KILL_EVENT);
+  const output = path.join(missing.root, 'missing-multikill-u32.jsonl');
+  const unavailable = run(missing.replayDirectory, '--event', CHAMPION_MULTIPLE_KILL_EVENT,
+    '--opaque-u32', '0', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const invalid = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      event_u32_0x04: 5, event_u32_0x08: 0, event_u32_0x0c: 2 },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      event_u32_0x04: 6, event_u32_0x08: -1, event_u32_0x0c: 2 },
+  ], true, CHAMPION_MULTIPLE_KILL_EVENT);
+  const invalidOutput = path.join(invalid.root, 'invalid-multikill-u32.jsonl');
+  const failed = run(invalid.replayDirectory, '--event', CHAMPION_MULTIPLE_KILL_EVENT,
+    '--opaque-u32', '5', '--output', invalidOutput);
+  assert.equal(failed.status, 2);
+  assert.equal(JSON.parse(failed.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(invalidOutput), false);
+
+  const wrongBuild = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      event_u32_0x04: 5, event_u32_0x08: 0, event_u32_0x0c: 1 },
+  ], true, CHAMPION_MULTIPLE_KILL_EVENT);
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(wrongBuild.replayDirectory, name);
+    const document = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    document.replay_version = VERSION;
+    fs.writeFileSync(filename, JSON.stringify(document));
+  }
+  const oldBuild = run(wrongBuild.replayDirectory, '--event', CHAMPION_MULTIPLE_KILL_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(oldBuild.status, 2);
+  assert.equal(JSON.parse(oldBuild.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
+test('query-events distinguishes missing anonymous u32 fields from zero matches', (t) => {
+  const missing = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10 },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      event_entity_u32_0x04: null, event_entity_u32_0x14: null },
+  ], true, HEAL_PACKET_EVENT);
+  const output = path.join(missing.root, 'missing-u32.jsonl');
+  const unavailable = run(missing.replayDirectory, '--event', HEAL_PACKET_EVENT,
+    '--opaque-u32', '1', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const partial = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      event_entity_u32_0x04: 5, event_entity_u32_0x14: null },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      event_entity_u32_0x04: 7, event_entity_u32_0x14: 8 },
+  ], true, HEAL_PACKET_EVENT);
+  const noMatch = run(partial.replayDirectory, '--event', HEAL_PACKET_EVENT,
+    '--opaque-u32', '9');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(noMatch.stdout, '');
+  const summary = JSON.parse(noMatch.stderr);
+  assert.equal(summary.matched_count, 0);
+  assert.equal(summary.opaque_u32_unavailable_count, 1);
+});
+
+test('query-events rejects opaque-u32 on other streams and invalid anonymous fields', (t) => {
+  const unsupported = artifact(t);
+  const wrongEvent = run(unsupported.replayDirectory, '--event', EVENT,
+    '--opaque-u32', '1');
+  assert.equal(wrongEvent.status, 1);
+  assert.match(wrongEvent.stderr, /--opaque-u32 requires a supported 821 packet/);
+  const corrupt = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      event_entity_u32_0x04: 1, event_entity_u32_0x14: 2 },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      event_entity_u32_0x04: -1, event_entity_u32_0x14: 3 },
+  ], true, HEAL_PACKET_EVENT);
+  const output = path.join(corrupt.root, 'invalid-u32.jsonl');
+  const result = run(corrupt.replayDirectory, '--event', HEAL_PACKET_EVENT,
+    '--opaque-u32', '1', '--output', output);
+  assert.equal(result.status, 2);
+  assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
+});
+
+test('query-events rejects item ID filters on other streams and corrupt inventory records', (t) => {
+  const unsupported = artifact(t);
+  const wrongEvent = run(unsupported.replayDirectory, '--event', EVENT, '--item-id', '1001');
+  assert.equal(wrongEvent.status, 1);
+  assert.match(wrongEvent.stderr, /--item-id requires an 821 inventory packet event/);
+
+  for (const bad of [-1, 0, 4294967296, '1001']) {
+    const fixture = artifact(t, [
+      { replay_sha256: SHA, replay_time_ms: 10, record_count: 1,
+        records_candidate: [{ slot_candidate: 0, item_id_candidate: 1001 }] },
+      { replay_sha256: SHA, replay_time_ms: 20, record_count: 1,
+        records_candidate: [{ slot_candidate: 0, item_id_candidate: bad }] },
+    ], true, INVENTORY_EVENT);
+    const output = path.join(fixture.root, 'invalid-item.jsonl');
+    const result = run(fixture.replayDirectory, '--event', INVENTORY_EVENT,
+      '--item-id', '1001', '--output', output);
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
+});
+
+test('query-events rejects invalid recorded raw parameters and removes partial output', (t) => {
+  const fixture = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 1, raw_param: 7 },
+    { replay_sha256: SHA, replay_time_ms: 2, raw_param: -1 },
+  ]);
+  const output = path.join(fixture.root, 'invalid-raw-param.jsonl');
+  const result = run(fixture.replayDirectory, '--event', EVENT,
+    '--raw-param', '7', '--output', output);
+  assert.equal(result.status, 2);
+  assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
+});
+
+test('query-events reads default 16.19 artifacts with embedded arrays and existing JSONL', (t) => {
+  const fixture = artifact(t, undefined, false);
+  const result = run(fixture.replayDirectory, '--event', EVENT,
+    '--participant', '1', '--from-ms', '2000');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${fixture.lines[2]}\n`);
+  const summary = JSON.parse(result.stderr);
+  assert.equal(summary.event_storage, 'EMBEDDED_AND_JSONL');
+  assert.equal(summary.scanned_count, 4);
+  assert.equal(summary.capability_status, 'CANDIDATE');
+});
+
+test('query-events reports missing capability without inventing zero events', (t) => {
+  const fixture = artifact(t);
+  const result = run(fixture.replayDirectory, '--event', 'hero_path_candidates');
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  const error = JSON.parse(result.stderr);
+  assert.equal(error.code, 'CAPABILITY_UNAVAILABLE');
+  assert.equal(error.capability_status, 'MISSING_INPUT');
+  assert.equal(error.missing_input, 'exact runtime image');
+});
+
+test('query-events rejects unsafe keys, mismatched identity, count corruption, and output replacement', (t) => {
+  const fixture = artifact(t);
+  const unsafe = run(fixture.replayDirectory, '--event', '../semantic_run');
+  assert.equal(unsafe.status, 2);
+  assert.equal(JSON.parse(unsafe.stderr).code, 'INVALID_EVENT_KEY');
+
+  const alias = run(fixture.replayDirectory, '--event', EVENT,
+    '--output', path.join(fixture.replayDirectory, `${EVENT}.jsonl`));
+  assert.equal(alias.status, 2);
+  assert.equal(JSON.parse(alias.stderr).code, 'UNSAFE_OUTPUT');
+
+  const analysisPath = path.join(fixture.replayDirectory, 'replay_analysis.json');
+  const analysis = JSON.parse(fs.readFileSync(analysisPath));
+  analysis.replay_sha256 = 'b'.repeat(64);
+  fs.writeFileSync(analysisPath, JSON.stringify(analysis));
+  const mismatch = run(fixture.replayDirectory, '--event', EVENT);
+  assert.equal(mismatch.status, 2);
+  assert.equal(JSON.parse(mismatch.stderr).code, 'ARTIFACT_IDENTITY_MISMATCH');
+
+  analysis.replay_sha256 = SHA;
+  fs.writeFileSync(analysisPath, JSON.stringify(analysis));
+  fs.appendFileSync(path.join(fixture.replayDirectory, `${EVENT}.jsonl`), `${fixture.lines[0]}\n`);
+  const badOutput = path.join(fixture.root, 'bad-output.jsonl');
+  const corrupted = run(fixture.replayDirectory, '--event', EVENT, '--output', badOutput);
+  assert.equal(corrupted.status, 2);
+  assert.equal(JSON.parse(corrupted.stderr).code, 'EVENT_COUNT_MISMATCH');
+  assert.equal(fs.existsSync(badOutput), false);
+});
+
+test('query-events distinguishes zero candidates from an unresolved participant filter', (t) => {
+  const fixture = artifact(t, []);
+  const zero = run(fixture.replayDirectory, '--event', EVENT);
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, '');
+  const summary = JSON.parse(zero.stderr);
+  assert.equal(summary.scanned_count, 0);
+  assert.equal(summary.capability_status, 'CANDIDATE');
+
+  const row = { replay_sha256: SHA, replay_time_ms: 10, confidence: 'CANDIDATE' };
+  const analysisPath = path.join(fixture.replayDirectory, 'replay_analysis.json');
+  const semanticPath = path.join(fixture.replayDirectory, 'semantic_run.json');
+  const analysis = JSON.parse(fs.readFileSync(analysisPath));
+  const semantic = JSON.parse(fs.readFileSync(semanticPath));
+  analysis.event_counts[EVENT] = 1;
+  semantic.capability_results[CAPABILITY].event_count = 1;
+  fs.writeFileSync(analysisPath, JSON.stringify(analysis));
+  fs.writeFileSync(semanticPath, JSON.stringify(semantic));
+  fs.writeFileSync(path.join(fixture.replayDirectory, `${EVENT}.jsonl`), `${JSON.stringify(row)}\n`);
+  const unknown = run(fixture.replayDirectory, '--event', EVENT, '--participant', '1');
+  assert.equal(unknown.status, 2);
+  assert.equal(JSON.parse(unknown.stderr).code, 'PARTICIPANT_UNAVAILABLE');
+});
+
+test('query-events rejects malformed numeric filters before scanning', (t) => {
+  const fixture = artifact(t);
+  for (const args of [
+    ['--from-ms', '-1'], ['--to-ms', '2.5'], ['--participant', '11'],
+    ['--participant', '0'], ['--limit', '0'], ['--from-ms', '2', '--to-ms', '1'],
+    ['--raw-param', '-1'], ['--raw-param', '0x100000000'],
+    ['--raw-param', '4294967296'], ['--raw-param', '0xgg'],
+    ['--item-id', '-1'], ['--item-id', '0x100000000'],
+    ['--item-id', '4294967296'], ['--item-id', '0xgg'],
+    ['--opaque-u32', '-1'], ['--opaque-u32', '0x100000000'],
+    ['--opaque-u32', '4294967296'], ['--opaque-u32', '0xgg'],
+    ['--opaque-pair', '7'], ['--opaque-pair', '7:256'],
+    ['--opaque-pair', '0x100000000:1'], ['--opaque-pair', '7:-1'],
+  ]) {
+    const result = run(fixture.replayDirectory, '--event', EVENT, ...args);
+    assert.equal(result.status, 1, args.join(' '));
+    assert.equal(result.stdout, '');
+  }
+});
+
+test('query-events refuses metadata path traversal and invalid timestamp or participant rows', (t) => {
+  const fixture = artifact(t);
+  const analysisPath = path.join(fixture.replayDirectory, 'replay_analysis.json');
+  const eventPath = path.join(fixture.replayDirectory, `${EVENT}.jsonl`);
+  const analysis = JSON.parse(fs.readFileSync(analysisPath));
+  analysis.event_jsonl_files[EVENT] = '../outside.jsonl';
+  fs.writeFileSync(analysisPath, JSON.stringify(analysis));
+  const unsafe = run(fixture.replayDirectory, '--event', EVENT);
+  assert.equal(unsafe.status, 2);
+  assert.equal(JSON.parse(unsafe.stderr).code, 'UNSAFE_ARTIFACT');
+
+  analysis.event_jsonl_files[EVENT] = `${EVENT}.jsonl`;
+  fs.writeFileSync(analysisPath, JSON.stringify(analysis));
+  const original = fs.readFileSync(eventPath, 'utf8');
+  for (const corrupt of [
+    { replay_sha256: SHA, replay_time_ms: -1, participant_id_candidate: 1 },
+    { replay_sha256: SHA, replay_time_ms: 1, participant_id_candidate: 11 },
+    { replay_time_ms: 1, participant_id_candidate: 1 },
+    { replay_sha256: SHA, replay_time_ms: 1, participant_id_candidate: 1,
+      raw_packet_ref: {} },
+    { replay_sha256: SHA, replay_time_ms: 1, participant_id_candidate: 1,
+      raw_packet_refs: [{ replay_sha256: 'b'.repeat(64) }] },
+  ]) {
+    fs.writeFileSync(eventPath, `${JSON.stringify(corrupt)}\n${fixture.lines.slice(1).join('\n')}\n`);
+    const result = run(fixture.replayDirectory, '--event', EVENT,
+      '--output', path.join(fixture.root, 'rejected.jsonl'));
+    assert.equal(result.status, 2);
+    assert.equal(fs.existsSync(path.join(fixture.root, 'rejected.jsonl')), false);
+    assert.ok(['INVALID_EVENT_ROW', 'ARTIFACT_IDENTITY_MISMATCH']
+      .includes(JSON.parse(result.stderr).code));
+  }
+  fs.writeFileSync(eventPath, original);
+});

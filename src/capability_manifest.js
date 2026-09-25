@@ -1152,6 +1152,13 @@ function buildRecords(build) {
     || unavailable(capability, build)));
 }
 
+function publishedBuilds() {
+  // This canonical artifact is the frozen published baseline. Experimental
+  // build profiles remain visible through build_registry and semantic_api.
+  return Object.keys(BUILD_PROFILES).filter((build) =>
+    BUILD_PROFILES[build].release_status !== 'EXPERIMENTAL_CANDIDATE');
+}
+
 function createCapabilityManifest() {
   return {
     schema: CAPABILITY_MANIFEST_SCHEMA_VERSION,
@@ -1163,7 +1170,7 @@ function createCapabilityManifest() {
     evidence_grade_vocabulary: [...EVIDENCE_GRADES],
     validation_status_vocabulary: [...VALIDATION_STATUSES],
     capability_vocabulary: [...CAPABILITY_VOCABULARY],
-    build_profiles: Object.fromEntries(Object.keys(BUILD_PROFILES).map((build) => [build, {
+    build_profiles: Object.fromEntries(publishedBuilds().map((build) => [build, {
       patch: BUILD_PROFILES[build].patch,
       decoder_profile: `rofl-${build}`,
       release_status: BUILD_PROFILES[build].release_status,
@@ -1179,7 +1186,7 @@ function validateCapabilityManifest(manifest) {
   if (manifest.schema_version !== 1) errors.push('invalid schema_version');
   if (manifest.canonical_semantic_schema_version !== CANONICAL_SEMANTIC_SCHEMA_VERSION) errors.push('invalid canonical schema');
   if (manifest.exact_build_only !== true || manifest.nearest_build_fallback !== 'FORBIDDEN') errors.push('exact-build fallback policy missing');
-  for (const build of Object.keys(BUILD_PROFILES)) {
+  for (const build of publishedBuilds()) {
     const profile = manifest.build_profiles?.[build];
     if (!profile) { errors.push(`missing build ${build}`); continue; }
     const seen = new Set();

@@ -4,10 +4,24 @@ The parser owns replay protocol semantics only. Do not add map truth, behavior
 inference, offline corpus collection, live acquisition/cache/state or UI. Consumers
 use published interfaces; do not copy decoder logic across ownership boundaries.
 
-## Current state and ordinary maintenance
+## Active 16.19 development
 
-Protocol development is `SOURCE_FROZEN_DURING_MIGRATION`; the semantic baseline is
-2026-08-21. This is not a second active protocol implementation. Read
+The current development branch is authorized to adapt the parser for the user's
+16.19 replay build, connect real CLI/API output, and research additional protocol
+fields. Work in small, tested commits. Confirm the full replay and runtime build;
+do not reuse 16.15/16.16 opcodes, RVAs, transforms, or image profiles as 16.19
+facts. Keep candidate findings separate from confirmed default semantic output.
+Preserve raw inputs, negative evidence, historical profiles, and user changes.
+
+The 2026-08-21 semantic baseline and the public migration freeze below remain
+historical records. They are not a stop condition for this authorized 16.19
+development branch. Do not treat development results as published capabilities
+without their required evidence and governance.
+
+## Public baseline and ordinary maintenance
+
+The published baseline is `SOURCE_FROZEN_DURING_MIGRATION`; its semantic baseline
+is 2026-08-21. This is not a second active protocol implementation. Read
 `PROJECT_CHARTER.md`, `project_contract.json`, `docs/PUBLIC_DEVELOPMENT.md`, then
 only the source and tests needed for the current task.
 

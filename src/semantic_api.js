@@ -8,6 +8,172 @@ const path = require('node:path');
 
 const { resolveBuildProfile } = require('./build_registry');
 const {
+  collectCandidateRoutes,
+  collectCandidateRoutesAndHeroStats,
+  decodeHeroDeathCandidates,
+  decodeHeroDeathTimerCandidates,
+  decodeHeroRespawnCandidates,
+  decodeHeroLevelStateCandidates,
+  decodeHeroInventoryMapViewCandidates,
+  decodeHeroInventorySetItemCandidates,
+  decodeHeroInventoryBroadcastCandidates,
+} = require('./decoders/rofl_16_19_820_7193');
+const { decodeHeroDeathCandidates821 } = require('./decoders/rofl_16_19_821_7343');
+const { decodeHeroDeathTimerCandidates821 } =
+  require('./decoders/rofl_16_19_821_death_timer_candidate');
+const { decodeHeroRespawnCandidates821 } =
+  require('./decoders/rofl_16_19_821_respawn_candidate');
+const {
+  HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE,
+  decodeHeroDeathsSnapshotCandidates821,
+  decodeHeroChampionKillsSnapshotCandidates821,
+  decodeHeroAssistsSnapshotCandidates821,
+  decodeHeroMissionsMinionsKilledSnapshotCandidates821,
+} =
+  require('./decoders/rofl_16_19_821_hero_stats_candidate');
+const { decodeHeroLevelCandidates821 } =
+  require('./decoders/rofl_16_19_821_level_candidate');
+const {
+  decodeHeroWardStatsSnapshotCandidates821,
+  decodeHeroMissionsCannonMinionsKilledSnapshotCandidates821,
+} = require('./decoders/rofl_16_19_821_aux_counts_candidate');
+const { decodeHeroFloatSnapshotCandidates821 } =
+  require('./decoders/rofl_16_19_821_float_stats_candidate');
+const { decodeHeroKillStatsSnapshotCandidates821 } =
+  require('./decoders/rofl_16_19_821_kill_stats_candidate');
+const { decodeHeroAssistCandidates821 } =
+  require('./decoders/rofl_16_19_821_assist_candidate');
+const {
+  HERO_INVENTORY_PACKET_CANDIDATE_PROFILE_821,
+  decodeHeroInventoryPacketCandidates821,
+} =
+  require('./decoders/rofl_16_19_821_inventory_packet_candidate');
+const { decodeHeroInventoryBroadcastPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_inventory_broadcast_packet_candidate');
+const { decodeHeroInventorySetItemPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_inventory_set_item_packet_candidate');
+const { decodeParamsHealPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_params_heal_packet_candidate');
+const { decodeShieldingParamsPacketPairCandidates821 } =
+  require('./decoders/rofl_16_19_821_shielding_params_packet_pair_candidate');
+const { decodeStealthEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_stealth_event_packet_candidate');
+const { decodeChampionDieEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_die_event_packet_candidate');
+const { decodeChampionKillEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_kill_event_packet_candidate');
+const { decodeChampionMultipleKillEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_multiple_kill_event_packet_candidate');
+const { decodeChampionDoubleKillEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_double_kill_event_packet_candidate');
+const { decodeChampionTripleQuadraEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_triple_quadra_event_packet_candidate');
+const { decodeOnShutdownEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
+const { decodeResurrectEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_resurrect_event_packet_candidate');
+const { decodeReviveAllyEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
+const { decodeTurretDieEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_turret_die_event_packet_candidate');
+const { decodeDampenerDieEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_dampener_die_event_packet_candidate');
+const { decodeTurretFirstBloodEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_turret_first_blood_event_packet_candidate');
+const { decodeHqKillEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_hq_kill_event_packet_candidate');
+const { decodeTurretPlateEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_turret_plate_event_packet_candidate');
+const { decodeObjectiveBountyClaimedEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_objective_bounty_claimed_packet_candidate');
+const { decodeCastSpellAnsPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
+const { decodeNpcBuffRemovePacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_buff_remove_packet_candidate');
+const { decodeNpcBuffAddPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_buff_add_packet_candidate');
+const { decodeNpcBuffUpdateNumCounterPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_buff_update_num_counter_packet_candidate');
+const { decodeNpcBuffUpdateCountPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_buff_update_count_packet_candidate');
+const { decodeNpcBuffReplacePacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_buff_replace_packet_candidate');
+const { decodeSetSpellTimerFromBuffPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_set_spell_timer_from_buff_packet_candidate');
+const { decodeSetSpellLevelPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_set_spell_level_packet_candidate');
+const {
+  DIRECT_INPUT_MOVEMENT_TURN_PACKET_CANDIDATE_PROFILE_821,
+  decodeDirectInputMovementTurnPacketCandidates821,
+} =
+  require('./decoders/rofl_16_19_821_direct_input_turn_packet_candidate');
+const {
+  SET_MOVEMENT_DRIVER_PACKET_CANDIDATE_PROFILE_821,
+  decodeSetMovementDriverPacketCandidates821,
+} =
+  require('./decoders/rofl_16_19_821_set_movement_driver_packet_candidate');
+const { decodeIncrementMinionKillsPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_increment_minion_kills_packet_candidate');
+const { decodeFaceDirectionPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_face_direction_packet_candidate');
+const { associateFaceDirectionKeyframeRosterPairs821 } =
+  require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
+const { RUNTIME_IMAGE_SHA256: RUNTIME_IMAGE_SHA256_821 } =
+  require('./decoders/rofl_16_19_821_runtime_bytes');
+const { decodeHeroDamageSnapshotCandidates821 } =
+  require('./decoders/rofl_16_19_821_damage_float_candidate');
+const { decodeHeroTimeSnapshotCandidates821 } =
+  require('./decoders/rofl_16_19_821_time_stats_candidate');
+const { decodeHeroHealSnapshotCandidates821 } =
+  require('./decoders/rofl_16_19_821_heal_stats_candidate');
+const { decodeHeroEpicCcSnapshotCandidates821 } =
+  require('./decoders/rofl_16_19_821_epic_cc_candidate');
+const { collect821Routes } = require('./decoders/rofl_16_19_821_scan');
+const { decodeNpcBuffRemovePacketCandidates } =
+  require('./decoders/rofl_16_19_buff_remove_candidate');
+const { decodeNpcBuffAddPacketCandidates } =
+  require('./decoders/rofl_16_19_buff_add_candidate');
+const { analyzeBuffPacketKeyCompatibility } =
+  require('./decoders/rofl_16_19_buff_key_compatibility');
+const { analyzeBuffPacketKeyCompatibility821 } =
+  require('./decoders/rofl_16_19_821_buff_key_compatibility');
+const { analyzeBuffAddUpdateNumCounterCompatibility821 } =
+  require('./decoders/rofl_16_19_821_buff_add_update_compatibility');
+const { associateChampionDieHeroDeathCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_die_hero_death_pair_candidate');
+const { associateChampionKillDieHeroDeathCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_kill_die_hero_death_pair_candidate');
+const { associateChampionMultipleKillDieHeroDeathCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_multiple_kill_die_hero_death_pair_candidate');
+const { associateChampionDoubleKillMultiGroupCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_double_kill_multi_group_candidate');
+const { associateChampionTripleQuadraMultiGroupCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_triple_quadra_multi_group_candidate');
+const { associateOnShutdownDieHeroDeathCandidates821 } =
+  require('./decoders/rofl_16_19_821_on_shutdown_die_hero_death_pair_candidate');
+const { associateTurretFirstBloodDieCandidates821 } =
+  require('./decoders/rofl_16_19_821_turret_first_blood_die_pair_candidate');
+const { associateObjectiveBountyTurretPairCandidates821 } =
+  require('./decoders/rofl_16_19_821_objective_bounty_turret_pair_candidate');
+const { associateHeroDeathEpisodeCandidates821 } =
+  require('./decoders/rofl_16_19_821_hero_death_episode_candidate');
+const { associateWardInventoryKeyframePairCandidates821 } =
+  require('./decoders/rofl_16_19_821_ward_inventory_keyframe_pair_candidate');
+const { deriveInventoryKeyframeIntervalDifferenceCandidates821 } =
+  require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
+const { deriveExperienceKeyframeIntervalDifferenceCandidates821 } =
+  require('./decoders/rofl_16_19_821_experience_keyframe_interval_difference_candidate');
+const { associateInventoryGameBroadcastKeyframeBracketCandidates821 } =
+  require('./decoders/rofl_16_19_821_inventory_game_broadcast_keyframe_bracket_candidate');
+const { associateIncrementMinionKeyframeBracketCandidates821 } =
+  require('./decoders/rofl_16_19_821_increment_minion_keyframe_bracket_candidate');
+const { analyzeMovementParticipantAssociations821 } =
+  require('./decoders/rofl_16_19_821_movement_participant_association_candidate');
+const {
+  HERO_STATS_SNAPSHOT_CAPABILITIES,
+  decodeHeroStatsSnapshotCandidateSet,
+} = require('./decoders/rofl_16_19_hero_stats_candidate');
+const {
   createSweeperCapabilityExport,
   emptySweeperEvents,
 } = require('./sweeper_capability');
@@ -1760,6 +1926,1216 @@ function decode1616(replay, buildProfile, options = {}) {
   }
 }
 
+function decode1619(replay, profile, options = {}) {
+  const requested = options.capabilities ?? [];
+  if (!Array.isArray(requested)
+      || requested.some((capability) => typeof capability !== 'string' || !capability)) {
+    throw new TypeError('16.19 capabilities must be an array of nonempty names');
+  }
+  const capabilities = [...new Set(requested)];
+  const capabilityResults = {};
+  const events = {};
+  const decoders = {
+    hero_death: decodeHeroDeathCandidates,
+    hero_death_timer: decodeHeroDeathTimerCandidates,
+    hero_respawn: decodeHeroRespawnCandidates,
+    hero_level_state: decodeHeroLevelStateCandidates,
+    hero_inventory_mapview: decodeHeroInventoryMapViewCandidates,
+    hero_inventory_set_item: decodeHeroInventorySetItemCandidates,
+    hero_inventory_broadcast: decodeHeroInventoryBroadcastCandidates,
+    npc_buff_remove_packet: decodeNpcBuffRemovePacketCandidates,
+    npc_buff_add_packet: decodeNpcBuffAddPacketCandidates,
+    hero_minions_killed_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_jungle_minions_killed_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_experience_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_gold_earned_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_gold_spent_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_champion_kills_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_deaths_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_assists_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_kill_stats_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_ward_stats_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_damage_totals_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_damage_taken_from_champions_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_damage_self_mitigated_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_longest_living_time_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_total_time_spent_dead_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_total_heal_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_total_units_healed_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_vision_score_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_epic_monster_damage_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_crowd_control_time_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_structure_objective_damage_snapshot: decodeHeroStatsSnapshotCandidateSet,
+  };
+  const outputKeys = {
+    hero_death: 'hero_death_candidates',
+    hero_death_timer: 'hero_death_timer_candidates',
+    hero_respawn: 'hero_respawn_candidates',
+    hero_level_state: 'hero_level_state_candidates',
+    hero_inventory_mapview: 'hero_inventory_mapview_candidates',
+    hero_inventory_set_item: 'hero_inventory_set_item_candidates',
+    hero_inventory_broadcast: 'hero_inventory_broadcast_candidates',
+    npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
+    npc_buff_add_packet: 'npc_buff_add_packet_candidates',
+    hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
+    hero_jungle_minions_killed_snapshot: 'hero_jungle_minions_killed_snapshot_candidates',
+    hero_experience_snapshot: 'hero_experience_snapshot_candidates',
+    hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
+    hero_gold_spent_snapshot: 'hero_gold_spent_snapshot_candidates',
+    hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
+    hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
+    hero_assists_snapshot: 'hero_assists_snapshot_candidates',
+    hero_kill_stats_snapshot: 'hero_kill_stats_snapshot_candidates',
+    hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
+    hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
+    hero_damage_taken_from_champions_snapshot:
+      'hero_damage_taken_from_champions_snapshot_candidates',
+    hero_damage_self_mitigated_snapshot:
+      'hero_damage_self_mitigated_snapshot_candidates',
+    hero_longest_living_time_snapshot:
+      'hero_longest_living_time_snapshot_candidates',
+    hero_total_time_spent_dead_snapshot:
+      'hero_total_time_spent_dead_snapshot_candidates',
+    hero_total_heal_snapshot: 'hero_total_heal_snapshot_candidates',
+    hero_total_units_healed_snapshot: 'hero_total_units_healed_snapshot_candidates',
+    hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
+    hero_epic_monster_damage_snapshot: 'hero_epic_monster_damage_snapshot_candidates',
+    hero_crowd_control_time_snapshot: 'hero_crowd_control_time_snapshot_candidates',
+    hero_structure_objective_damage_snapshot: 'hero_structure_objective_damage_snapshot_candidates',
+  };
+  const gameRouteCapabilities = new Set([
+    'hero_death', 'hero_death_timer', 'hero_respawn', 'hero_level_state',
+    'hero_inventory_mapview', 'hero_inventory_set_item', 'hero_inventory_broadcast',
+  ]);
+  const heroStatsCapabilities = new Set(HERO_STATS_SNAPSHOT_CAPABILITIES);
+  const selectsGameRoutes = capabilities.some((capability) => gameRouteCapabilities.has(capability));
+  const selectsHeroStats = capabilities.some((capability) => heroStatsCapabilities.has(capability));
+  const selectsBuffAdd = capabilities.includes('npc_buff_add_packet');
+  const selectsBuffRemove = capabilities.includes('npc_buff_remove_packet');
+  const routeOptions = { includeBuffAdd: selectsBuffAdd, includeBuffRemove: selectsBuffRemove };
+  // Single Buff requests retain their original narrow walks. Share the route
+  // scan when both Buffs or another selected capability can use it.
+  const selectsRouteScan = selectsGameRoutes
+    || (selectsBuffAdd && selectsBuffRemove)
+    || ((selectsBuffAdd || selectsBuffRemove) && selectsHeroStats);
+  const sharedScans = selectsRouteScan && selectsHeroStats
+    && options.candidateRouteScan == null && options.heroStatsScan == null
+    ? collectCandidateRoutesAndHeroStats(replay, routeOptions) : null;
+  const collected = options.candidateRouteScan != null ? options.candidateRouteScan
+    : sharedScans !== null ? sharedScans.candidateRouteScan
+      : selectsRouteScan ? collectCandidateRoutes(replay, routeOptions) : null;
+  const heroStatsScan = options.heroStatsScan ?? sharedScans?.heroStatsScan ?? undefined;
+  let timerOutcome = null;
+  let heroStatsOutcomes = null;
+  for (const capability of capabilities) {
+    if (!Object.hasOwn(decoders, capability)) {
+      capabilityResults[capability] = {
+        status: 'UNSUPPORTED', event_count: null, input_count: null,
+        error: `16.19.820.7193 has no decoder for ${capability}`,
+      };
+      continue;
+    }
+    let outcome;
+    try {
+      if (capability === 'hero_death_timer' || capability === 'hero_respawn') {
+        timerOutcome ??= decodeHeroDeathTimerCandidates(replay, collected);
+        outcome = capability === 'hero_respawn'
+          ? decodeHeroRespawnCandidates(replay, collected, timerOutcome) : timerOutcome;
+      } else if (heroStatsCapabilities.has(capability)) {
+        heroStatsOutcomes ??= decodeHeroStatsSnapshotCandidateSet(replay,
+          capabilities.filter((name) => heroStatsCapabilities.has(name)),
+          heroStatsScan);
+        outcome = heroStatsOutcomes[capability];
+      } else if (capability === 'hero_inventory_mapview'
+          || capability === 'hero_inventory_set_item'
+          || capability === 'hero_inventory_broadcast'
+          || capability === 'npc_buff_remove_packet'
+          || capability === 'npc_buff_add_packet') {
+        // A stream-2 framing error invalidates the shared route token, but a
+        // game-stream-only BuffRemove candidate may still decode independently.
+        const packetScan = capability === 'npc_buff_remove_packet' && collected?.error
+          ? null : collected;
+        outcome = decoders[capability](replay, packetScan, options);
+      } else {
+        outcome = decoders[capability](replay, collected);
+      }
+    } catch (error) {
+      outcome = { status: 'DECODE_FAILED', input_count: null, event_count: null,
+        events: null, error: error.message || String(error) };
+    }
+    const { events: candidateEvents, ...result } = outcome;
+    result.runtime_image_status ??= options.runtimeImagePath
+      ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
+    result.runtime_image_used ??= false;
+    capabilityResults[capability] = result;
+    if (result.status === 'CANDIDATE') {
+      events[outputKeys[capability]] = candidateEvents;
+    }
+  }
+  const results = Object.values(capabilityResults);
+  const usable = results.filter((result) => result.status === 'CANDIDATE' || result.status === 'PASS');
+  const failed = results.filter((result) => result.status !== 'CANDIDATE' && result.status !== 'PASS');
+  const status = results.length === 0 ? 'PROFILE_RESOLVED'
+    : failed.length > 0 ? (usable.length > 0 ? 'PARTIAL' : failed[0].status)
+      : 'EXPERIMENTAL_CANDIDATE';
+  const uniqueDecodedInputCounts = new Map();
+  for (const result of usable) {
+    const packetId = result.input_packet_id;
+    uniqueDecodedInputCounts.set(packetId,
+      Math.max(uniqueDecodedInputCounts.get(packetId) ?? 0, result.input_count));
+  }
+  const candidateAssociations = {};
+  if (selectsBuffAdd && selectsBuffRemove) {
+    const addRows = events.npc_buff_add_packet_candidates;
+    const removeRows = events.npc_buff_remove_packet_candidates;
+    if (Array.isArray(addRows) && Array.isArray(removeRows)) {
+      try {
+        candidateAssociations.npc_buff_add_remove_opaque_key =
+          analyzeBuffPacketKeyCompatibility(addRows, removeRows,
+            replay.source_sha256);
+      } catch (error) {
+        candidateAssociations.npc_buff_add_remove_opaque_key = {
+          status: 'DECODE_FAILED',
+          error: error.message || String(error),
+        };
+      }
+    } else {
+      candidateAssociations.npc_buff_add_remove_opaque_key = {
+        status: 'UNAVAILABLE',
+        required_capabilities: ['npc_buff_add_packet', 'npc_buff_remove_packet'],
+        dependency_statuses: {
+          npc_buff_add_packet: capabilityResults.npc_buff_add_packet?.status ?? 'UNEXECUTED',
+          npc_buff_remove_packet: capabilityResults.npc_buff_remove_packet?.status ?? 'UNEXECUTED',
+        },
+      };
+    }
+  }
+  return {
+    status,
+    game_version: profile.game_version,
+    profile,
+    events: usable.length > 0 ? events : null,
+    capability_results: capabilityResults,
+    candidate_associations: candidateAssociations,
+    decoded_packet_count: [...uniqueDecodedInputCounts.values()]
+      .reduce((sum, count) => sum + count, 0),
+    runtime_image_used: results.some((result) => result.runtime_image_used === true),
+    runtime_image_sha256: results.find((result) => result.runtime_image_used === true)
+      ?.runtime_image_sha256 ?? null,
+    sweeper_capability: createSweeperCapabilityExport(profile.game_version),
+  };
+}
+
+function movementAssociationInput821(outcome, sourceProfile, allowAbsent = false) {
+  if (allowAbsent && outcome?.status === 'PROFILE_UNAVAILABLE') {
+    return outcome.profile_id === sourceProfile.id
+      && outcome.input_packet_id === sourceProfile.replay_block_packet_id
+      && outcome.observed_raw_route_count === 0
+      && outcome.input_count === null && outcome.event_count === null
+      && outcome.events === null
+      && Number.isSafeInteger(outcome.scanned_block_count)
+      && outcome.scanned_block_count > 0
+      ? { status: 'ABSENT', events: [] } : { status: 'INVALID' };
+  }
+  if (outcome?.status !== 'CANDIDATE') return { status: 'UNAVAILABLE' };
+  const events = outcome.events;
+  const complete = outcome.profile_id === sourceProfile.id
+    && outcome.input_packet_id === sourceProfile.replay_block_packet_id
+    && outcome.evidence_runtime_image_sha256 === RUNTIME_IMAGE_SHA256_821
+    && Array.isArray(events) && events.length > 0
+    && events.every((row) => row?.build_profile === sourceProfile.id)
+    && Number.isSafeInteger(outcome.input_count)
+    && outcome.input_count === events.length
+    && outcome.event_count === events.length
+    && Number.isSafeInteger(outcome.scanned_block_count)
+    && outcome.scanned_block_count >= events.length;
+  const imageBound = sourceProfile.runtime_image_required
+    ? outcome.runtime_image_status === 'MATCHED_USED'
+      && outcome.runtime_image_used === true
+      && outcome.runtime_image_sha256 === RUNTIME_IMAGE_SHA256_821
+    : outcome.runtime_image_status === 'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED'
+      && outcome.runtime_image_used === false
+      && outcome.lookup_table_sha256 === sourceProfile.lookup_table_sha256
+      && outcome.observed_participant_count === 10;
+  return complete && imageBound
+    ? { status: 'READY', events } : { status: 'INVALID' };
+}
+
+function decode1619821(replay, profile, options = {}) {
+  const requested = options.capabilities ?? [];
+  if (!Array.isArray(requested)
+      || requested.some((capability) => typeof capability !== 'string' || !capability)) {
+    throw new TypeError('16.19 capabilities must be an array of nonempty names');
+  }
+  const capabilities = [...new Set(requested)];
+  const decoders = {
+    hero_death: decodeHeroDeathCandidates821,
+    hero_assist: (input, collected) => decodeHeroAssistCandidates821(input, collected, {
+      runtimeImagePath: options.runtimeImagePath,
+      pythonExecutable: options.pythonExecutable,
+    }),
+    hero_death_timer: decodeHeroDeathTimerCandidates821,
+    hero_respawn: decodeHeroRespawnCandidates821,
+    hero_deaths_snapshot: decodeHeroDeathsSnapshotCandidates821,
+    hero_champion_kills_snapshot: decodeHeroChampionKillsSnapshotCandidates821,
+    hero_assists_snapshot: decodeHeroAssistsSnapshotCandidates821,
+    hero_missions_minions_killed_snapshot: decodeHeroMissionsMinionsKilledSnapshotCandidates821,
+    hero_ward_stats_snapshot: decodeHeroWardStatsSnapshotCandidates821,
+    hero_missions_cannon_minions_killed_snapshot:
+      decodeHeroMissionsCannonMinionsKilledSnapshotCandidates821,
+    hero_minions_killed_snapshot: (input, collected) =>
+      decodeHeroFloatSnapshotCandidates821(input, 'hero_minions_killed_snapshot', collected),
+    hero_jungle_minions_killed_snapshot: (input, collected) =>
+      decodeHeroFloatSnapshotCandidates821(input,
+        'hero_jungle_minions_killed_snapshot', collected),
+    hero_kill_stats_snapshot: decodeHeroKillStatsSnapshotCandidates821,
+    hero_experience_snapshot: (input, collected) =>
+      decodeHeroFloatSnapshotCandidates821(input, 'hero_experience_snapshot', collected),
+    hero_vision_score_snapshot: (input, collected) =>
+      decodeHeroFloatSnapshotCandidates821(input, 'hero_vision_score_snapshot', collected),
+    hero_gold_earned_snapshot: (input, collected) =>
+      decodeHeroFloatSnapshotCandidates821(input, 'hero_gold_earned_snapshot', collected),
+    hero_gold_spent_snapshot: (input, collected) =>
+      decodeHeroFloatSnapshotCandidates821(input, 'hero_gold_spent_snapshot', collected),
+    hero_damage_totals_snapshot: (input, collected) =>
+      decodeHeroDamageSnapshotCandidates821(input, 'hero_damage_totals_snapshot', collected),
+    hero_damage_taken_from_champions_snapshot: (input, collected) =>
+      decodeHeroDamageSnapshotCandidates821(input,
+        'hero_damage_taken_from_champions_snapshot', collected),
+    hero_damage_self_mitigated_snapshot: (input, collected) =>
+      decodeHeroDamageSnapshotCandidates821(input,
+        'hero_damage_self_mitigated_snapshot', collected),
+    hero_structure_objective_damage_snapshot: (input, collected) =>
+      decodeHeroDamageSnapshotCandidates821(input,
+        'hero_structure_objective_damage_snapshot', collected),
+    hero_longest_living_time_snapshot: (input, collected) =>
+      decodeHeroTimeSnapshotCandidates821(input,
+        'hero_longest_living_time_snapshot', collected),
+    hero_total_time_spent_dead_snapshot: (input, collected) =>
+      decodeHeroTimeSnapshotCandidates821(input,
+        'hero_total_time_spent_dead_snapshot', collected),
+    hero_total_heal_snapshot: (input, collected) =>
+      decodeHeroHealSnapshotCandidates821(input, 'hero_total_heal_snapshot', collected),
+    hero_total_units_healed_snapshot: (input, collected) =>
+      decodeHeroHealSnapshotCandidates821(input,
+        'hero_total_units_healed_snapshot', collected),
+    hero_epic_monster_damage_snapshot: (input, collected) =>
+      decodeHeroEpicCcSnapshotCandidates821(input,
+        'hero_epic_monster_damage_snapshot', collected),
+    hero_crowd_control_time_snapshot: (input, collected) =>
+      decodeHeroEpicCcSnapshotCandidates821(input,
+        'hero_crowd_control_time_snapshot', collected),
+    hero_level_state: decodeHeroLevelCandidates821,
+    hero_inventory_packet: (input, collected) =>
+      decodeHeroInventoryPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    hero_inventory_broadcast_packet: (input, collected) =>
+      decodeHeroInventoryBroadcastPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    hero_inventory_set_item_packet: (input, collected) =>
+      decodeHeroInventorySetItemPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    params_heal_packet: (input, collected) =>
+      decodeParamsHealPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    shielding_params_packet_pair: (input, collected) =>
+      decodeShieldingParamsPacketPairCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    stealth_event_packet: (input, collected) =>
+      decodeStealthEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    champion_die_event_packet: (input, collected) =>
+      decodeChampionDieEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    champion_kill_event_packet: (input, collected) =>
+      decodeChampionKillEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    champion_multiple_kill_event_packet: (input, collected) =>
+      decodeChampionMultipleKillEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    champion_double_kill_event_packet: (input, collected) =>
+      decodeChampionDoubleKillEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    champion_triple_quadra_event_packet: (input, collected) =>
+      decodeChampionTripleQuadraEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    on_shutdown_event_packet: (input, collected) =>
+      decodeOnShutdownEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    resurrect_event_packet: (input, collected) =>
+      decodeResurrectEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    revive_ally_event_packet: (input, collected) =>
+      decodeReviveAllyEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    turret_die_event_packet: (input, collected) =>
+      decodeTurretDieEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    dampener_die_event_packet: (input, collected) =>
+      decodeDampenerDieEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    turret_first_blood_event_packet: (input, collected) =>
+      decodeTurretFirstBloodEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    hq_kill_event_packet: (input, collected) =>
+      decodeHqKillEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    turret_plate_event_packet: (input, collected) =>
+      decodeTurretPlateEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    objective_bounty_claimed_packet: (input, collected) =>
+      decodeObjectiveBountyClaimedEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    cast_spell_ans_packet: (input, collected) =>
+      decodeCastSpellAnsPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    npc_buff_remove_packet: (input, collected) =>
+      decodeNpcBuffRemovePacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    npc_buff_add_packet: (input, collected) =>
+      decodeNpcBuffAddPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    npc_buff_update_num_counter_packet: (input, collected) =>
+      decodeNpcBuffUpdateNumCounterPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    npc_buff_update_count_packet: (input, collected) =>
+      decodeNpcBuffUpdateCountPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    npc_buff_replace_packet: (input, collected) =>
+      decodeNpcBuffReplacePacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    set_spell_timer_from_buff_packet: (input, collected) =>
+      decodeSetSpellTimerFromBuffPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    set_spell_level_packet: (input, collected) =>
+      decodeSetSpellLevelPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    direct_input_movement_turn_packet: (input, collected) =>
+      decodeDirectInputMovementTurnPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    set_movement_driver_packet: (input, collected) =>
+      decodeSetMovementDriverPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    increment_minion_kills_packet: (input, collected) =>
+      decodeIncrementMinionKillsPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    face_direction_packet: (input, collected) =>
+      decodeFaceDirectionPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+  };
+  const outputKeys = {
+    hero_death: 'hero_death_candidates',
+    hero_assist: 'hero_assist_candidates',
+    hero_death_timer: 'hero_death_timer_candidates',
+    hero_respawn: 'hero_respawn_candidates',
+    hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
+    hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
+    hero_assists_snapshot: 'hero_assists_snapshot_candidates',
+    hero_missions_minions_killed_snapshot: 'hero_missions_minions_killed_snapshot_candidates',
+    hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
+    hero_missions_cannon_minions_killed_snapshot:
+      'hero_missions_cannon_minions_killed_snapshot_candidates',
+    hero_minions_killed_snapshot: 'hero_minions_killed_snapshot_candidates',
+    hero_jungle_minions_killed_snapshot: 'hero_jungle_minions_killed_snapshot_candidates',
+    hero_kill_stats_snapshot: 'hero_kill_stats_snapshot_candidates',
+    hero_experience_snapshot: 'hero_experience_snapshot_candidates',
+    hero_vision_score_snapshot: 'hero_vision_score_snapshot_candidates',
+    hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
+    hero_gold_spent_snapshot: 'hero_gold_spent_snapshot_candidates',
+    hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
+    hero_damage_taken_from_champions_snapshot:
+      'hero_damage_taken_from_champions_snapshot_candidates',
+    hero_damage_self_mitigated_snapshot:
+      'hero_damage_self_mitigated_snapshot_candidates',
+    hero_structure_objective_damage_snapshot:
+      'hero_structure_objective_damage_snapshot_candidates',
+    hero_longest_living_time_snapshot: 'hero_longest_living_time_snapshot_candidates',
+    hero_total_time_spent_dead_snapshot: 'hero_total_time_spent_dead_snapshot_candidates',
+    hero_total_heal_snapshot: 'hero_total_heal_snapshot_candidates',
+    hero_total_units_healed_snapshot: 'hero_total_units_healed_snapshot_candidates',
+    hero_epic_monster_damage_snapshot: 'hero_epic_monster_damage_snapshot_candidates',
+    hero_crowd_control_time_snapshot: 'hero_crowd_control_time_snapshot_candidates',
+    hero_level_state: 'hero_level_state_candidates',
+    hero_inventory_packet: 'hero_inventory_packet_candidates',
+    hero_inventory_broadcast_packet: 'hero_inventory_broadcast_packet_candidates',
+    hero_inventory_set_item_packet: 'hero_inventory_set_item_packet_candidates',
+    params_heal_packet: 'params_heal_packet_candidates',
+    shielding_params_packet_pair: 'shielding_params_packet_pair_candidates',
+    stealth_event_packet: 'stealth_event_packet_candidates',
+    champion_die_event_packet: 'champion_die_event_packet_candidates',
+    champion_kill_event_packet: 'champion_kill_event_packet_candidates',
+    champion_multiple_kill_event_packet: 'champion_multiple_kill_event_packet_candidates',
+    champion_double_kill_event_packet: 'champion_double_kill_event_packet_candidates',
+    champion_triple_quadra_event_packet: 'champion_triple_quadra_event_packet_candidates',
+    on_shutdown_event_packet: 'on_shutdown_event_packet_candidates',
+    resurrect_event_packet: 'resurrect_event_packet_candidates',
+    revive_ally_event_packet: 'revive_ally_event_packet_candidates',
+    turret_die_event_packet: 'turret_die_event_packet_candidates',
+    dampener_die_event_packet: 'dampener_die_event_packet_candidates',
+    turret_first_blood_event_packet: 'turret_first_blood_event_packet_candidates',
+    hq_kill_event_packet: 'hq_kill_event_packet_candidates',
+    turret_plate_event_packet: 'turret_plate_event_packet_candidates',
+    objective_bounty_claimed_packet: 'objective_bounty_claimed_packet_candidates',
+    cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
+    npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
+    npc_buff_add_packet: 'npc_buff_add_packet_candidates',
+    npc_buff_update_num_counter_packet: 'npc_buff_update_num_counter_packet_candidates',
+    npc_buff_update_count_packet: 'npc_buff_update_count_packet_candidates',
+    npc_buff_replace_packet: 'npc_buff_replace_packet_candidates',
+    set_spell_timer_from_buff_packet: 'set_spell_timer_from_buff_packet_candidates',
+    set_spell_level_packet: 'set_spell_level_packet_candidates',
+    direct_input_movement_turn_packet: 'direct_input_movement_turn_packet_candidates',
+    set_movement_driver_packet: 'set_movement_driver_packet_candidates',
+    increment_minion_kills_packet: 'increment_minion_kills_packet_candidates',
+    face_direction_packet: 'face_direction_packet_candidates',
+    face_direction_keyframe_roster_pair: 'face_direction_keyframe_roster_pair_candidates',
+  };
+  const capabilityResults = {};
+  const events = {};
+  const outcomes = {};
+  const sharedScanCapabilities = new Set([
+    'hero_death', 'hero_assist', 'hero_death_timer', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+    'hero_assists_snapshot', 'hero_level_state', 'hero_respawn',
+    'hero_missions_minions_killed_snapshot',
+    'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
+    'hero_minions_killed_snapshot', 'hero_jungle_minions_killed_snapshot',
+    'hero_kill_stats_snapshot',
+    'hero_experience_snapshot', 'hero_vision_score_snapshot',
+    'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
+    'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
+    'hero_damage_self_mitigated_snapshot',
+    'hero_structure_objective_damage_snapshot',
+    'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
+    'hero_total_heal_snapshot', 'hero_total_units_healed_snapshot',
+    'hero_epic_monster_damage_snapshot', 'hero_crowd_control_time_snapshot',
+    'hero_inventory_packet', 'hero_inventory_broadcast_packet',
+    'hero_inventory_set_item_packet',
+    'params_heal_packet',
+    'shielding_params_packet_pair',
+    'stealth_event_packet',
+    'champion_die_event_packet',
+    'champion_kill_event_packet',
+    'champion_multiple_kill_event_packet',
+    'champion_double_kill_event_packet',
+    'champion_triple_quadra_event_packet',
+    'on_shutdown_event_packet',
+    'resurrect_event_packet',
+    'revive_ally_event_packet',
+    'turret_die_event_packet',
+    'dampener_die_event_packet',
+    'turret_first_blood_event_packet',
+    'hq_kill_event_packet',
+    'turret_plate_event_packet',
+    'objective_bounty_claimed_packet',
+    'cast_spell_ans_packet',
+    'npc_buff_remove_packet',
+    'npc_buff_add_packet',
+    'npc_buff_update_num_counter_packet',
+    'npc_buff_update_count_packet',
+    'npc_buff_replace_packet',
+    'set_spell_timer_from_buff_packet',
+    'set_spell_level_packet',
+    'direct_input_movement_turn_packet',
+    'set_movement_driver_packet',
+    'increment_minion_kills_packet',
+    'face_direction_packet',
+  ]);
+  const pairSelected = capabilities.includes('face_direction_keyframe_roster_pair');
+  const supported = [...new Set([
+    ...capabilities.filter((capability) => sharedScanCapabilities.has(capability)),
+    ...(pairSelected ? ['face_direction_packet', 'hero_minions_killed_snapshot'] : []),
+  ])];
+  let candidate821Scan = options.candidate821Scan ?? null;
+  if (candidate821Scan === null
+      && (supported.length > 1 || supported.includes('hero_respawn'))) {
+    try {
+      candidate821Scan = collect821Routes(replay, supported);
+    } catch {
+      // Keep the original independent error boundary when one stream fails:
+      // a sound keyframe scan can still return snapshots after a game-stream
+      // framing failure. Each decoder's strict walk reports its own outcome.
+      candidate821Scan = null;
+    }
+  }
+  const decodedSources = new Map();
+  function decodeCapability(capability) {
+    if (decodedSources.has(capability)) return decodedSources.get(capability);
+    let outcome;
+    try {
+      if (capability === 'face_direction_keyframe_roster_pair') {
+        outcome = associateFaceDirectionKeyframeRosterPairs821(replay, {
+          faceDirectionPacketOutcome: decodeCapability('face_direction_packet'),
+          minionsKilledSnapshotOutcome: decodeCapability('hero_minions_killed_snapshot'),
+        });
+      } else if (decoders[capability]) {
+        outcome = decoders[capability](replay, candidate821Scan);
+      } else {
+        outcome = { status: 'UNSUPPORTED', input_count: null, event_count: null,
+          error: `16.19.821.7343 has no decoder for ${capability}`, events: null };
+      }
+    } catch (error) {
+      outcome = { status: 'DECODE_FAILED', input_count: null, event_count: null,
+        error: error.message || String(error), events: null };
+    }
+    decodedSources.set(capability, outcome);
+    return outcome;
+  }
+  for (const capability of capabilities) {
+    const outcome = decodeCapability(capability);
+    outcomes[capability] = outcome;
+    const { events: candidateEvents, ...result } = outcome;
+    if (capability === 'hero_assist'
+        || capability === 'hero_inventory_packet'
+        || capability === 'hero_inventory_broadcast_packet'
+        || capability === 'hero_inventory_set_item_packet'
+        || capability === 'params_heal_packet'
+        || capability === 'shielding_params_packet_pair'
+        || capability === 'stealth_event_packet'
+        || capability === 'champion_die_event_packet'
+        || capability === 'champion_kill_event_packet'
+        || capability === 'champion_multiple_kill_event_packet'
+        || capability === 'champion_double_kill_event_packet'
+        || capability === 'champion_triple_quadra_event_packet'
+        || capability === 'on_shutdown_event_packet'
+        || capability === 'resurrect_event_packet'
+        || capability === 'revive_ally_event_packet'
+        || capability === 'turret_die_event_packet'
+        || capability === 'dampener_die_event_packet'
+        || capability === 'turret_first_blood_event_packet'
+        || capability === 'hq_kill_event_packet'
+        || capability === 'turret_plate_event_packet'
+        || capability === 'objective_bounty_claimed_packet'
+        || capability === 'cast_spell_ans_packet'
+        || capability === 'npc_buff_remove_packet' || capability === 'npc_buff_add_packet'
+        || capability === 'npc_buff_update_num_counter_packet'
+        || capability === 'npc_buff_update_count_packet'
+        || capability === 'npc_buff_replace_packet'
+        || capability === 'set_spell_timer_from_buff_packet'
+        || capability === 'set_spell_level_packet'
+        || capability === 'direct_input_movement_turn_packet'
+        || capability === 'set_movement_driver_packet'
+        || capability === 'increment_minion_kills_packet'
+        || capability === 'face_direction_packet'
+        || capability === 'face_direction_keyframe_roster_pair') {
+      result.runtime_image_status ??= options.runtimeImagePath
+        ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
+      result.runtime_image_used ??= false;
+    } else {
+      result.runtime_image_status = options.runtimeImagePath
+        ? 'PROVIDED_NOT_USED' : result.runtime_image_status ?? 'NOT_REQUIRED';
+      result.runtime_image_used = false;
+    }
+    capabilityResults[capability] = result;
+    if (result.status === 'CANDIDATE') {
+      events[outputKeys[capability]] = candidateEvents;
+    }
+  }
+  const results = Object.values(capabilityResults);
+  const usable = results.filter((result) => result.status === 'CANDIDATE');
+  const failed = results.filter((result) => result.status !== 'CANDIDATE');
+  const uniqueDecodedInputCounts = new Map();
+  if (pairSelected) {
+    for (const dependency of ['face_direction_packet', 'hero_minions_killed_snapshot']) {
+      const source = decodedSources.get(dependency);
+      if (source?.status === 'CANDIDATE'
+          && Number.isSafeInteger(source.input_count) && source.input_count >= 0) {
+        uniqueDecodedInputCounts.set(source.input_packet_id, source.input_count);
+      }
+    }
+  }
+  for (const [capability, result] of Object.entries(capabilityResults)) {
+    if (result.status !== 'CANDIDATE') continue;
+    if (capability === 'face_direction_keyframe_roster_pair') continue;
+    // The 0x040a route carries disjoint child packet shapes. The stealth
+    // scan also natively checks six other length-17 child IDs as controls.
+    const packetGroup = capability === 'params_heal_packet'
+      ? '0x040a/child_004b'
+      : capability === 'shielding_params_packet_pair'
+        ? '0x040a/child_00ef_00f0'
+        : capability === 'stealth_event_packet'
+          ? '0x040a/child_0101_0102'
+          : capability === 'champion_die_event_packet'
+            ? '0x040a/child_0004'
+            : capability === 'champion_kill_event_packet'
+              ? '0x040a/child_0007'
+              : capability === 'champion_multiple_kill_event_packet'
+                ? '0x040a/child_0009'
+                : capability === 'champion_double_kill_event_packet'
+                  ? '0x040a/child_000b'
+                  : capability === 'champion_triple_quadra_event_packet'
+                    ? '0x040a/child_000c_000d'
+                : capability === 'on_shutdown_event_packet'
+                  ? '0x040a/child_00e8'
+                  : capability === 'resurrect_event_packet'
+                    ? '0x040a/child_002d'
+                    : capability === 'revive_ally_event_packet'
+                      ? '0x040a/child_002c'
+                     : capability === 'turret_die_event_packet'
+                       ? '0x040a/child_003b'
+                     : capability === 'dampener_die_event_packet'
+                       ? '0x040a/child_0035'
+                     : capability === 'turret_first_blood_event_packet'
+                      ? '0x040a/child_003d'
+                    : capability === 'hq_kill_event_packet'
+                      ? '0x040a/child_0046'
+                    : capability === 'turret_plate_event_packet'
+                      ? '0x040a/child_0107'
+                    : capability === 'objective_bounty_claimed_packet'
+                      ? '0x040a/child_0113' : result.input_packet_id;
+    const decodedCount = capability === 'stealth_event_packet'
+      ? result.target_packet_count
+      : capability === 'champion_die_event_packet'
+        ? result.event_count
+        : capability === 'champion_kill_event_packet'
+          ? result.target_packet_count
+          : capability === 'champion_multiple_kill_event_packet'
+            ? result.event_count
+            : capability === 'champion_double_kill_event_packet'
+              ? result.event_count
+              : capability === 'champion_triple_quadra_event_packet'
+                ? result.event_count
+            : capability === 'on_shutdown_event_packet'
+              ? result.event_count
+              : capability === 'resurrect_event_packet'
+                ? result.event_count
+                : capability === 'revive_ally_event_packet'
+                  ? result.event_count
+                 : capability === 'turret_die_event_packet'
+                   ? result.event_count
+                 : capability === 'dampener_die_event_packet'
+                   ? result.event_count
+                 : capability === 'turret_first_blood_event_packet'
+                  ? result.event_count
+                : capability === 'hq_kill_event_packet'
+                  ? result.event_count
+                : capability === 'turret_plate_event_packet'
+                  ? result.event_count
+                : capability === 'objective_bounty_claimed_packet'
+                  ? result.event_count : result.input_count;
+    uniqueDecodedInputCounts.set(packetGroup,
+      Math.max(uniqueDecodedInputCounts.get(packetGroup) ?? 0, decodedCount));
+  }
+  const candidateAssociations = {};
+  const movementRoutes = ['direct_input_movement_turn_packet', 'set_movement_driver_packet']
+    .filter((name) => capabilities.includes(name));
+  if (capabilities.includes('hero_inventory_packet')
+      && capabilities.includes('hero_deaths_snapshot') && movementRoutes.length > 0) {
+    const specs = {
+      hero_inventory_packet: [HERO_INVENTORY_PACKET_CANDIDATE_PROFILE_821, false],
+      hero_deaths_snapshot: [HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE, false],
+      direct_input_movement_turn_packet:
+        [DIRECT_INPUT_MOVEMENT_TURN_PACKET_CANDIDATE_PROFILE_821, true],
+      set_movement_driver_packet: [SET_MOVEMENT_DRIVER_PACKET_CANDIDATE_PROFILE_821, true],
+    };
+    const required = ['hero_inventory_packet', 'hero_deaths_snapshot', ...movementRoutes];
+    const checked = Object.fromEntries(required.map((name) => [name,
+      movementAssociationInput821(outcomes[name], ...specs[name])]));
+    const dependencyStatuses = Object.fromEntries(required.map((name) =>
+      [name, outcomes[name]?.status ?? 'UNEXECUTED']));
+    const associationKey = 'movement_full_param_participant_candidate';
+    if (required.some((name) => checked[name].status === 'INVALID')) {
+      candidateAssociations[associationKey] = {
+        status: 'DECODE_FAILED', required_capabilities: required,
+        dependency_statuses: dependencyStatuses,
+        error: 'Selected 821 decoder outcome lacks complete exact-build candidate evidence.',
+      };
+    } else if (required.some((name) => checked[name].status === 'UNAVAILABLE')) {
+      candidateAssociations[associationKey] = {
+        status: 'UNAVAILABLE', required_capabilities: required,
+        dependency_statuses: dependencyStatuses,
+      };
+    } else {
+      try {
+        const association = analyzeMovementParticipantAssociations821(replay, {
+          inventoryEvents: checked.hero_inventory_packet.events,
+          snapshotEvents: checked.hero_deaths_snapshot.events,
+          directInputEvents: movementRoutes.includes('direct_input_movement_turn_packet')
+            ? checked.direct_input_movement_turn_packet.events : null,
+          setMovementDriverEvents: movementRoutes.includes('set_movement_driver_packet')
+            ? checked.set_movement_driver_packet.events : null,
+        });
+        candidateAssociations[associationKey] = {
+          ...association,
+          association_scope: 'REPLAY_FULL_RAW_PARAM_CANDIDATE_COVERAGE_ONLY',
+          per_packet_actor_status: 'UNVERIFIED',
+          dependency_statuses: dependencyStatuses,
+        };
+      } catch (error) {
+        candidateAssociations[associationKey] = {
+          status: 'DECODE_FAILED', required_capabilities: required,
+          dependency_statuses: dependencyStatuses,
+          error: error.message || String(error),
+        };
+      }
+    }
+  }
+  if (capabilities.includes('npc_buff_add_packet')
+      && capabilities.includes('npc_buff_remove_packet')) {
+    const addRows = events.npc_buff_add_packet_candidates;
+    const removeRows = events.npc_buff_remove_packet_candidates;
+    if (Array.isArray(addRows) && Array.isArray(removeRows)) {
+      try {
+        candidateAssociations.npc_buff_add_remove_opaque_key =
+          analyzeBuffPacketKeyCompatibility821(addRows, removeRows,
+            replay.source_sha256);
+      } catch (error) {
+        candidateAssociations.npc_buff_add_remove_opaque_key = {
+          status: 'DECODE_FAILED',
+          error: error.message || String(error),
+        };
+      }
+    } else {
+      candidateAssociations.npc_buff_add_remove_opaque_key = {
+        status: 'UNAVAILABLE',
+        required_capabilities: ['npc_buff_add_packet', 'npc_buff_remove_packet'],
+        dependency_statuses: {
+          npc_buff_add_packet: capabilityResults.npc_buff_add_packet?.status ?? 'UNEXECUTED',
+          npc_buff_remove_packet: capabilityResults.npc_buff_remove_packet?.status ?? 'UNEXECUTED',
+        },
+      };
+    }
+  }
+  if (capabilities.includes('npc_buff_add_packet')
+      && capabilities.includes('npc_buff_update_num_counter_packet')) {
+    const addRows = events.npc_buff_add_packet_candidates;
+    const updateRows = events.npc_buff_update_num_counter_packet_candidates;
+    if (Array.isArray(addRows) && Array.isArray(updateRows)) {
+      try {
+        candidateAssociations.npc_buff_add_update_num_counter_opaque_pair =
+          analyzeBuffAddUpdateNumCounterCompatibility821(addRows, updateRows,
+            replay.source_sha256);
+      } catch (error) {
+        candidateAssociations.npc_buff_add_update_num_counter_opaque_pair = {
+          status: 'DECODE_FAILED', error: error.message || String(error),
+        };
+      }
+    } else {
+      candidateAssociations.npc_buff_add_update_num_counter_opaque_pair = {
+        status: 'UNAVAILABLE',
+        required_capabilities: ['npc_buff_add_packet',
+          'npc_buff_update_num_counter_packet'],
+        dependency_statuses: {
+          npc_buff_add_packet: capabilityResults.npc_buff_add_packet?.status ?? 'UNEXECUTED',
+          npc_buff_update_num_counter_packet:
+            capabilityResults.npc_buff_update_num_counter_packet?.status ?? 'UNEXECUTED',
+        },
+      };
+    }
+  }
+  if (capabilities.includes('hero_death')
+      && capabilities.includes('champion_die_event_packet')) {
+    try {
+      const association = associateChampionDieHeroDeathCandidates821(replay, {
+        championDieEventPacketOutcome: outcomes.champion_die_event_packet,
+        heroDeathOutcome: outcomes.hero_death,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: pairEvents, ...summary } = association;
+        candidateAssociations.champion_die_hero_death_pair = summary;
+        events.champion_die_hero_death_pair_candidates = pairEvents;
+      } else {
+        candidateAssociations.champion_die_hero_death_pair = association;
+      }
+    } catch (error) {
+      candidateAssociations.champion_die_hero_death_pair = {
+        status: 'DECODE_FAILED',
+        error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_death')
+      && capabilities.includes('champion_die_event_packet')
+      && capabilities.includes('champion_kill_event_packet')) {
+    try {
+      const association = associateChampionKillDieHeroDeathCandidates821(replay, {
+        championKillEventPacketOutcome: outcomes.champion_kill_event_packet,
+        championDieEventPacketOutcome: outcomes.champion_die_event_packet,
+        heroDeathOutcome: outcomes.hero_death,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: groupEvents, ...summary } = association;
+        candidateAssociations.champion_kill_die_hero_death_pair = summary;
+        events.champion_kill_die_hero_death_pair_candidates = groupEvents;
+      } else {
+        candidateAssociations.champion_kill_die_hero_death_pair = association;
+      }
+    } catch (error) {
+      candidateAssociations.champion_kill_die_hero_death_pair = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  let multipleKillGroupOutcome = null;
+  if (capabilities.includes('hero_death')
+      && capabilities.includes('champion_die_event_packet')
+      && capabilities.includes('champion_multiple_kill_event_packet')) {
+    try {
+      const association = associateChampionMultipleKillDieHeroDeathCandidates821(replay, {
+        championMultipleKillEventPacketOutcome: outcomes.champion_multiple_kill_event_packet,
+        championDieEventPacketOutcome: outcomes.champion_die_event_packet,
+        heroDeathOutcome: outcomes.hero_death,
+      });
+      multipleKillGroupOutcome = association;
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: groupEvents, ...summary } = association;
+        candidateAssociations.champion_multiple_kill_die_hero_death_pair = summary;
+        events.champion_multiple_kill_die_hero_death_pair_candidates = groupEvents;
+      } else {
+        candidateAssociations.champion_multiple_kill_die_hero_death_pair = association;
+      }
+    } catch (error) {
+      multipleKillGroupOutcome = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+      candidateAssociations.champion_multiple_kill_die_hero_death_pair =
+        multipleKillGroupOutcome;
+    }
+  }
+  if (capabilities.includes('hero_death')
+      && capabilities.includes('champion_die_event_packet')
+      && capabilities.includes('champion_multiple_kill_event_packet')
+      && capabilities.includes('champion_double_kill_event_packet')) {
+    try {
+      const association = associateChampionDoubleKillMultiGroupCandidates821(replay, {
+        championDoubleKillEventPacketOutcome: outcomes.champion_double_kill_event_packet,
+        championMultipleKillDieHeroDeathPairOutcome: multipleKillGroupOutcome,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: groupEvents, ...summary } = association;
+        candidateAssociations.champion_double_kill_multi_group = summary;
+        events.champion_double_kill_multi_group_candidates = groupEvents;
+      } else {
+        candidateAssociations.champion_double_kill_multi_group = association;
+      }
+    } catch (error) {
+      candidateAssociations.champion_double_kill_multi_group = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_death')
+      && capabilities.includes('champion_die_event_packet')
+      && capabilities.includes('champion_multiple_kill_event_packet')
+      && capabilities.includes('champion_triple_quadra_event_packet')) {
+    try {
+      const association = associateChampionTripleQuadraMultiGroupCandidates821(replay, {
+        championTripleQuadraEventPacketOutcome:
+          outcomes.champion_triple_quadra_event_packet,
+        championMultipleKillDieHeroDeathPairOutcome: multipleKillGroupOutcome,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: groupEvents, ...summary } = association;
+        candidateAssociations.champion_triple_quadra_multi_group = summary;
+        events.champion_triple_quadra_multi_group_candidates = groupEvents;
+      } else {
+        candidateAssociations.champion_triple_quadra_multi_group = association;
+      }
+    } catch (error) {
+      candidateAssociations.champion_triple_quadra_multi_group = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_death')
+      && capabilities.includes('champion_die_event_packet')
+      && capabilities.includes('on_shutdown_event_packet')) {
+    try {
+      const association = associateOnShutdownDieHeroDeathCandidates821(replay, {
+        onShutdownEventPacketOutcome: outcomes.on_shutdown_event_packet,
+        championDieEventPacketOutcome: outcomes.champion_die_event_packet,
+        heroDeathOutcome: outcomes.hero_death,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: groupEvents, ...summary } = association;
+        candidateAssociations.on_shutdown_die_hero_death_pair = summary;
+        events.on_shutdown_die_hero_death_pair_candidates = groupEvents;
+      } else {
+        candidateAssociations.on_shutdown_die_hero_death_pair = association;
+      }
+    } catch (error) {
+      candidateAssociations.on_shutdown_die_hero_death_pair = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('turret_die_event_packet')
+      && capabilities.includes('turret_first_blood_event_packet')) {
+    try {
+      const association = associateTurretFirstBloodDieCandidates821(replay, {
+        turretDieEventPacketOutcome: outcomes.turret_die_event_packet,
+        turretFirstBloodEventPacketOutcome: outcomes.turret_first_blood_event_packet,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: pairEvents, ...summary } = association;
+        candidateAssociations.turret_first_blood_die_pair = summary;
+        events.turret_first_blood_die_pair_candidates = pairEvents;
+      } else {
+        candidateAssociations.turret_first_blood_die_pair = association;
+      }
+    } catch (error) {
+      candidateAssociations.turret_first_blood_die_pair = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('objective_bounty_claimed_packet')
+      && capabilities.includes('turret_plate_event_packet')
+      && capabilities.includes('turret_die_event_packet')) {
+    try {
+      const association = associateObjectiveBountyTurretPairCandidates821(replay, {
+        objectiveBountyClaimedPacketOutcome: outcomes.objective_bounty_claimed_packet,
+        turretPlateEventPacketOutcome: outcomes.turret_plate_event_packet,
+        turretDieEventPacketOutcome: outcomes.turret_die_event_packet,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: tripleEvents, ...summary } = association;
+        candidateAssociations.objective_bounty_turret_pair = summary;
+        events.objective_bounty_turret_pair_candidates = tripleEvents;
+      } else {
+        candidateAssociations.objective_bounty_turret_pair = association;
+      }
+    } catch (error) {
+      candidateAssociations.objective_bounty_turret_pair = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_assist')
+      && capabilities.includes('hero_death_timer')
+      && capabilities.includes('hero_respawn')) {
+    try {
+      const association = associateHeroDeathEpisodeCandidates821(replay, {
+        heroAssistOutcome: outcomes.hero_assist,
+        heroDeathTimerOutcome: outcomes.hero_death_timer,
+        heroRespawnOutcome: outcomes.hero_respawn,
+        precollected: candidate821Scan,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: episodeEvents, ...summary } = association;
+        candidateAssociations.hero_death_episode = summary;
+        events.hero_death_episode_candidates = episodeEvents;
+      } else {
+        candidateAssociations.hero_death_episode = association;
+      }
+    } catch (error) {
+      candidateAssociations.hero_death_episode = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_ward_stats_snapshot')
+      && capabilities.includes('hero_inventory_broadcast_packet')) {
+    try {
+      const association = associateWardInventoryKeyframePairCandidates821(replay, {
+        wardStatsOutcome: outcomes.hero_ward_stats_snapshot,
+        inventoryBroadcastOutcome: outcomes.hero_inventory_broadcast_packet,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: pairEvents, ...summary } = association;
+        candidateAssociations.ward_inventory_keyframe_pair = summary;
+        events.ward_inventory_keyframe_pair_candidates = pairEvents;
+      } else {
+        candidateAssociations.ward_inventory_keyframe_pair = association;
+      }
+    } catch (error) {
+      candidateAssociations.ward_inventory_keyframe_pair = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_inventory_broadcast_packet')) {
+    let inventoryIntervalOutcome;
+    try {
+      inventoryIntervalOutcome = deriveInventoryKeyframeIntervalDifferenceCandidates821(replay, {
+        inventoryBroadcastOutcome: outcomes.hero_inventory_broadcast_packet,
+      });
+      if (inventoryIntervalOutcome.status === 'CANDIDATE'
+          && Array.isArray(inventoryIntervalOutcome.events)) {
+        const { events: intervalEvents, ...summary } = inventoryIntervalOutcome;
+        candidateAssociations.inventory_keyframe_interval_difference = summary;
+        events.inventory_keyframe_interval_difference_candidates = intervalEvents;
+      } else {
+        candidateAssociations.inventory_keyframe_interval_difference = inventoryIntervalOutcome;
+      }
+    } catch (error) {
+      inventoryIntervalOutcome = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+      candidateAssociations.inventory_keyframe_interval_difference = inventoryIntervalOutcome;
+    }
+    try {
+      const association = associateInventoryGameBroadcastKeyframeBracketCandidates821(replay, {
+        inventoryBroadcastOutcome: outcomes.hero_inventory_broadcast_packet,
+        inventoryIntervalOutcome,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: bracketEvents, ...summary } = association;
+        candidateAssociations.inventory_game_broadcast_keyframe_bracket = summary;
+        events.inventory_game_broadcast_keyframe_bracket_candidates = bracketEvents;
+      } else {
+        candidateAssociations.inventory_game_broadcast_keyframe_bracket = association;
+      }
+    } catch (error) {
+      candidateAssociations.inventory_game_broadcast_keyframe_bracket = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_experience_snapshot')) {
+    try {
+      const association = deriveExperienceKeyframeIntervalDifferenceCandidates821(replay, {
+        experienceSnapshotOutcome: outcomes.hero_experience_snapshot,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: intervalEvents, ...summary } = association;
+        candidateAssociations.experience_keyframe_interval_difference = summary;
+        events.experience_keyframe_interval_difference_candidates = intervalEvents;
+      } else {
+        candidateAssociations.experience_keyframe_interval_difference = association;
+      }
+    } catch (error) {
+      candidateAssociations.experience_keyframe_interval_difference = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('increment_minion_kills_packet')
+      && capabilities.includes('hero_minions_killed_snapshot')) {
+    try {
+      const association = associateIncrementMinionKeyframeBracketCandidates821(replay, {
+        incrementMinionKillsPacketOutcome: outcomes.increment_minion_kills_packet,
+        minionsKilledSnapshotOutcome: outcomes.hero_minions_killed_snapshot,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: bracketEvents, ...summary } = association;
+        candidateAssociations.increment_minion_keyframe_bracket = summary;
+        events.increment_minion_keyframe_bracket_candidates = bracketEvents;
+      } else {
+        candidateAssociations.increment_minion_keyframe_bracket = association;
+      }
+    } catch (error) {
+      candidateAssociations.increment_minion_keyframe_bracket = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  const associationDecodeFailed = Object.values(candidateAssociations)
+    .some((association) => ['DECODE_FAILED', 'INCONSISTENT'].includes(association?.status));
+  return {
+    status: results.length === 0 ? 'PROFILE_RESOLVED'
+      : failed.length > 0 || associationDecodeFailed
+        ? (usable.length > 0 ? 'PARTIAL' : failed[0].status)
+        : 'EXPERIMENTAL_CANDIDATE',
+    game_version: profile.game_version,
+    profile,
+    events: usable.length > 0 ? events : null,
+    capability_results: capabilityResults,
+    candidate_associations: candidateAssociations,
+    decoded_packet_count: [...uniqueDecodedInputCounts.values()]
+      .reduce((sum, count) => sum + count, 0),
+    runtime_image_used: results.some((result) => result.runtime_image_used === true),
+    runtime_image_sha256: results.find((result) => result.runtime_image_used === true)
+      ?.runtime_image_sha256 ?? null,
+    sweeper_capability: createSweeperCapabilityExport(profile.game_version),
+  };
+}
+
 function decodeSemanticReplay(input, options = {}) {
   const { replay, status, profile, game_version: gameVersion } = profileResolution(input);
   if (!profile) {
@@ -1768,6 +3144,7 @@ function decodeSemanticReplay(input, options = {}) {
       game_version: gameVersion,
       profile: null,
       events: null,
+      capability_results: {},
       decoded_packet_count: 0,
       sweeper_capability: createSweeperCapabilityExport(gameVersion),
     };
@@ -1778,10 +3155,13 @@ function decodeSemanticReplay(input, options = {}) {
       game_version: gameVersion,
       profile,
       events: null,
+      capability_results: {},
       decoded_packet_count: 0,
       sweeper_capability: createSweeperCapabilityExport(gameVersion),
     };
   }
+  if (gameVersion === '16.19.820.7193') return decode1619(replay, profile, options);
+  if (gameVersion === '16.19.821.7343') return decode1619821(replay, profile, options);
   if (gameVersion === '16.16.805.0442') return decode1616(replay, profile, options);
   const legacy = require('./semantic_pipeline').decodeSemanticReplay(replay, options);
   return {
@@ -1851,6 +3231,138 @@ function getHeroDamage(decoded) {
 
 function getHeroDeaths(decoded) {
   return decoded?.events?.death_events ?? [];
+}
+
+function getHeroDeathCandidates(decoded) {
+  return decoded?.events?.hero_death_candidates ?? null;
+}
+
+function getHeroDeathTimerCandidates(decoded) {
+  return decoded?.events?.hero_death_timer_candidates ?? null;
+}
+
+function getHeroRespawnCandidates(decoded) {
+  return decoded?.events?.hero_respawn_candidates ?? null;
+}
+
+function getHeroLevelStateCandidates(decoded) {
+  return decoded?.events?.hero_level_state_candidates ?? null;
+}
+
+function getHeroInventoryMapViewCandidates(decoded) {
+  return decoded?.events?.hero_inventory_mapview_candidates ?? null;
+}
+
+function getHeroInventorySetItemCandidates(decoded) {
+  return decoded?.events?.hero_inventory_set_item_candidates ?? null;
+}
+
+function getHeroInventoryBroadcastCandidates(decoded) {
+  return decoded?.events?.hero_inventory_broadcast_candidates ?? null;
+}
+
+function getNpcBuffRemovePacketCandidates(decoded) {
+  return decoded?.events?.npc_buff_remove_packet_candidates ?? null;
+}
+
+function getNpcBuffAddPacketCandidates(decoded) {
+  return decoded?.events?.npc_buff_add_packet_candidates ?? null;
+}
+
+function getDirectInputMovementTurnPacketCandidates(decoded) {
+  return decoded?.events?.direct_input_movement_turn_packet_candidates ?? null;
+}
+
+function getSetMovementDriverPacketCandidates(decoded) {
+  return decoded?.events?.set_movement_driver_packet_candidates ?? null;
+}
+
+function getHeroMinionsKilledSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_minions_killed_snapshot_candidates ?? null;
+}
+
+function getHeroJungleMinionsKilledSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_jungle_minions_killed_snapshot_candidates ?? null;
+}
+
+function getHeroExperienceSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_experience_snapshot_candidates ?? null;
+}
+
+function getHeroGoldEarnedSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_gold_earned_snapshot_candidates ?? null;
+}
+
+function getHeroGoldSpentSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_gold_spent_snapshot_candidates ?? null;
+}
+
+function getHeroChampionKillsSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_champion_kills_snapshot_candidates ?? null;
+}
+
+function getHeroDeathsSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_deaths_snapshot_candidates ?? null;
+}
+
+function getHeroAssistsSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_assists_snapshot_candidates ?? null;
+}
+
+function getHeroKillStatsSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_kill_stats_snapshot_candidates ?? null;
+}
+
+function getHeroWardStatsSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_ward_stats_snapshot_candidates ?? null;
+}
+
+function getHeroDamageTotalsSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_damage_totals_snapshot_candidates ?? null;
+}
+
+function getHeroDamageTakenFromChampionsSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_damage_taken_from_champions_snapshot_candidates ?? null;
+}
+
+function getHeroDamageSelfMitigatedSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_damage_self_mitigated_snapshot_candidates ?? null;
+}
+
+function getHeroLongestLivingTimeSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_longest_living_time_snapshot_candidates ?? null;
+}
+
+function getHeroTotalTimeSpentDeadSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_total_time_spent_dead_snapshot_candidates ?? null;
+}
+
+function getHeroTotalHealSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_total_heal_snapshot_candidates ?? null;
+}
+
+function getHeroTotalUnitsHealedSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_total_units_healed_snapshot_candidates ?? null;
+}
+
+function getHeroVisionScoreSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_vision_score_snapshot_candidates ?? null;
+}
+
+function getHeroEpicMonsterDamageSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_epic_monster_damage_snapshot_candidates ?? null;
+}
+
+function getHeroCrowdControlTimeSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_crowd_control_time_snapshot_candidates ?? null;
+}
+
+function getHeroStructureObjectiveDamageSnapshotCandidates(decoded) {
+  return decoded?.events?.hero_structure_objective_damage_snapshot_candidates ?? null;
+}
+
+function getCastSpellAnsPacketCandidates(decoded) {
+  return decoded?.events?.cast_spell_ans_packet_candidates ?? null;
 }
 
 function getHeroStates(decoded) {
@@ -1960,6 +3472,39 @@ module.exports = {
   getGameplayRouteTailEvents,
   getHeroDamage,
   getHeroDeaths,
+  getHeroDeathCandidates,
+  getHeroDeathTimerCandidates,
+  getHeroRespawnCandidates,
+  getHeroLevelStateCandidates,
+  getHeroInventoryMapViewCandidates,
+  getHeroInventorySetItemCandidates,
+  getHeroInventoryBroadcastCandidates,
+  getNpcBuffRemovePacketCandidates,
+  getNpcBuffAddPacketCandidates,
+  getDirectInputMovementTurnPacketCandidates,
+  getSetMovementDriverPacketCandidates,
+  getHeroMinionsKilledSnapshotCandidates,
+  getHeroJungleMinionsKilledSnapshotCandidates,
+  getHeroExperienceSnapshotCandidates,
+  getHeroGoldEarnedSnapshotCandidates,
+  getHeroGoldSpentSnapshotCandidates,
+  getHeroChampionKillsSnapshotCandidates,
+  getHeroDeathsSnapshotCandidates,
+  getHeroAssistsSnapshotCandidates,
+  getHeroKillStatsSnapshotCandidates,
+  getHeroWardStatsSnapshotCandidates,
+  getHeroDamageTotalsSnapshotCandidates,
+  getHeroDamageTakenFromChampionsSnapshotCandidates,
+  getHeroDamageSelfMitigatedSnapshotCandidates,
+  getHeroLongestLivingTimeSnapshotCandidates,
+  getHeroTotalTimeSpentDeadSnapshotCandidates,
+  getHeroTotalHealSnapshotCandidates,
+  getHeroTotalUnitsHealedSnapshotCandidates,
+  getHeroVisionScoreSnapshotCandidates,
+  getHeroEpicMonsterDamageSnapshotCandidates,
+  getHeroCrowdControlTimeSnapshotCandidates,
+  getHeroStructureObjectiveDamageSnapshotCandidates,
+  getCastSpellAnsPacketCandidates,
   getHeroPaths,
   getHeroRespawns,
   getHeroStates,
