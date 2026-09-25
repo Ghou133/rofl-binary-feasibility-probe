@@ -48,6 +48,7 @@ const STEALTH_PACKET_EVENT = 'stealth_event_packet_candidates';
 const CAST_SPELL_ANS_EVENT = 'cast_spell_ans_packet_candidates';
 const BUFF_ADD_EVENT = 'npc_buff_add_packet_candidates';
 const BUFF_REMOVE_EVENT = 'npc_buff_remove_packet_candidates';
+const BUFF_UPDATE_COUNTER_EVENT = 'npc_buff_update_num_counter_packet_candidates';
 const CHAMPION_DIE_EVENT = 'champion_die_event_packet_candidates';
 const CHAMPION_KILL_EVENT = 'champion_kill_event_packet_candidates';
 const CHAMPION_MULTIPLE_KILL_EVENT = 'champion_multiple_kill_event_packet_candidates';
@@ -413,7 +414,7 @@ function artifact(t, rows = [
   const capability = eventKey.slice(0, -'_candidates'.length);
   const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT,
     HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT, CAST_SPELL_ANS_EVENT,
-    BUFF_ADD_EVENT, BUFF_REMOVE_EVENT,
+    BUFF_ADD_EVENT, BUFF_REMOVE_EVENT, BUFF_UPDATE_COUNTER_EVENT,
     CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
     CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT,
     RESURRECT_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
@@ -1390,6 +1391,33 @@ test('query-events filters packet-local 821 BuffAdd2 and BuffRemove2 opaque u32'
     assert.equal(rejected.status, 2);
     assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
   }
+});
+
+test('query-events filters either anonymous 821 BuffUpdateNumCounter u32', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae,
+      opaque_u32_0x14: 7, opaque_u32_0x1c: 0 },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000af,
+      opaque_u32_0x14: 0, opaque_u32_0x1c: 9 },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 0x400000b0 },
+  ];
+  const fixture = artifact(t, rows, true, BUFF_UPDATE_COUNTER_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', BUFF_UPDATE_COUNTER_EVENT,
+    '--opaque-u32', '9');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[1]}\n`);
+  assert.equal(JSON.parse(selected.stderr).opaque_u32_unavailable_count, 1);
+  const zero = run(fixture.replayDirectory, '--event', BUFF_UPDATE_COUNTER_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${fixture.lines[0]}\n${fixture.lines[1]}\n`);
+  const corrupt = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x14: 1, opaque_u32_0x1c: 0x100000000 }], true,
+  BUFF_UPDATE_COUNTER_EVENT);
+  const rejected = run(corrupt.replayDirectory, '--event', BUFF_UPDATE_COUNTER_EVENT,
+    '--opaque-u32', '1');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
 });
 
 test('query-events filters only decoded CastSpellAns signed i32, including both bounds and zero', (t) => {
