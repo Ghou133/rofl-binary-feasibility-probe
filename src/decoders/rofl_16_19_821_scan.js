@@ -27,6 +27,7 @@ const CAPABILITIES = new Set([
   'champion_die_event_packet',
   'champion_kill_event_packet',
   'champion_multiple_kill_event_packet',
+  'on_shutdown_event_packet',
   'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
   'direct_input_movement_turn_packet',
   'set_movement_driver_packet',
@@ -43,6 +44,7 @@ const MAX_STEALTH_EVENT_PACKET_ROWS = 5_000;
 const MAX_CHAMPION_DIE_EVENT_PACKET_ROWS = 10_000;
 const MAX_CHAMPION_KILL_EVENT_PACKET_ROWS = 2_000;
 const MAX_CHAMPION_MULTIPLE_KILL_EVENT_PACKET_ROWS = 10_000;
+const MAX_ON_SHUTDOWN_EVENT_PACKET_ROWS = 2_000;
 const MAX_DIRECT_INPUT_TURN_PACKET_ROWS = 20_000;
 const MAX_SET_MOVEMENT_DRIVER_PACKET_ROWS = 20_000;
 const SCAN_SOURCE = new WeakMap();
@@ -93,6 +95,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     champion_die_event_packet: [],
     champion_kill_event_packet: [],
     champion_multiple_kill_event_packet: [],
+    on_shutdown_event_packet: [],
     cast_spell_ans_packet: [],
     npc_buff_remove_packet: [],
     npc_buff_add_packet: [],
@@ -162,6 +165,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let championDieEventPacketCount = 0;
   let championKillEventPacketCount = 0;
   let championMultipleKillEventPacketCount = 0;
+  let onShutdownEventPacketCount = 0;
   let directInputTurnPacketCount = 0;
   let setMovementDriverPacketCount = 0;
   let finished = false;
@@ -175,6 +179,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsChampionDieEvent = selected.has('champion_die_event_packet');
   const selectsChampionKillEvent = selected.has('champion_kill_event_packet');
   const selectsChampionMultipleKillEvent = selected.has('champion_multiple_kill_event_packet');
+  const selectsOnShutdownEvent = selected.has('on_shutdown_event_packet');
   const selectsInventoryPacket = selected.has('hero_inventory_packet');
   const selectsInventoryBroadcast = selected.has('hero_inventory_broadcast_packet');
   const selectsInventorySetItem = selected.has('hero_inventory_set_item_packet');
@@ -244,6 +249,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
         if (rows.champion_multiple_kill_event_packet.length
             < MAX_CHAMPION_MULTIPLE_KILL_EVENT_PACKET_ROWS) {
           rows.champion_multiple_kill_event_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsOnShutdownEvent
+          && block.packet_id === 0x040a && block.payload_length === 105) {
+        onShutdownEventPacketCount += 1;
+        if (rows.on_shutdown_event_packet.length < MAX_ON_SHUTDOWN_EVENT_PACKET_ROWS) {
+          rows.on_shutdown_event_packet.push(copyRow(block, chunk));
         }
       }
       if (selectsInventoryPacket && chunk.stream_tag === 1
@@ -326,6 +338,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         championDieEventPacketCount,
         championKillEventPacketCount,
         championMultipleKillEventPacketCount,
+        onShutdownEventPacketCount,
         directInputTurnPacketCount,
         setMovementDriverPacketCount,
         error: token.error,
@@ -426,6 +439,13 @@ function rowsFor821Capability(replay, token, capability) {
         > MAX_CHAMPION_MULTIPLE_KILL_EVENT_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.championMultipleKillEventPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'on_shutdown_event_packet'
+      && bound.onShutdownEventPacketCount > MAX_ON_SHUTDOWN_EVENT_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.onShutdownEventPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }

@@ -10,12 +10,16 @@ const { CHAMPION_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
   require('./decoders/rofl_16_19_821_champion_kill_die_hero_death_pair_candidate');
 const { CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
   require('./decoders/rofl_16_19_821_champion_multiple_kill_die_hero_death_pair_candidate');
+const { ON_SHUTDOWN_DIE_HERO_DEATH_PAIR_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_on_shutdown_die_hero_death_pair_candidate');
 const { CHAMPION_DIE_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_champion_die_event_packet_candidate');
 const { CHAMPION_KILL_EVENT_PACKET_CANDIDATE_PROFILE_821 } =
   require('./decoders/rofl_16_19_821_champion_kill_event_packet_candidate');
 const { CHAMPION_MULTIPLE_KILL_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_champion_multiple_kill_event_packet_candidate');
+const { ON_SHUTDOWN_EVENT_PACKET_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
 const { HERO_DEATH_CANDIDATE_PROFILE_821 } =
   require('./decoders/rofl_16_19_821_7343');
 
@@ -42,6 +46,9 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
   champion_multiple_kill_event_packet_candidates: Object.freeze([
     'event_u32_0x04', 'event_u32_0x08', 'event_u32_0x0c',
   ]),
+  on_shutdown_event_packet_candidates: Object.freeze([
+    'event_u32_0x04', 'event_u32_0x58', 'event_u32_0x5c',
+  ]),
   champion_die_hero_death_pair_candidates: Object.freeze([
     'on_champion_die_event_u32_0x04',
   ]),
@@ -50,6 +57,10 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
   ]),
   champion_multiple_kill_die_hero_death_pair_candidates: Object.freeze([
     'on_champion_multiple_kill_event_u32_0x04', 'on_champion_die_event_u32_0x04',
+  ]),
+  on_shutdown_die_hero_death_pair_candidates: Object.freeze([
+    'on_shutdown_event_u32_0x04', 'on_shutdown_event_u32_0x58',
+    'on_shutdown_event_u32_0x5c', 'on_champion_die_event_u32_0x04',
   ]),
 });
 const ASSOCIATION_EVENTS_821 = Object.freeze({
@@ -90,6 +101,22 @@ const ASSOCIATION_EVENTS_821 = Object.freeze({
     unmatchedField: 'unmatched_on_champion_multiple_kill_count',
     dependencyProfiles: Object.freeze({
       champion_multiple_kill_event_packet: CHAMPION_MULTIPLE_KILL_EVENT_PACKET_821_PROFILE,
+      champion_die_event_packet: CHAMPION_DIE_EVENT_PACKET_821_PROFILE,
+      hero_death: HERO_DEATH_CANDIDATE_PROFILE_821,
+    }),
+  }),
+  on_shutdown_die_hero_death_pair_candidates: Object.freeze({
+    profile: ON_SHUTDOWN_DIE_HERO_DEATH_PAIR_821_PROFILE,
+    eventType: 'ON_SHUTDOWN_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_821_ON_SHUTDOWN_DIE_HERO_DIE_PACKET_GROUP',
+    groupDependency: 'on_shutdown_event_packet',
+    groupCountField: 'on_shutdown_count',
+    groupRawParamField: 'on_shutdown_raw_param',
+    groupChildField: 'on_shutdown_event_u32_0x04',
+    groupRefField: 'on_shutdown_raw_packet_ref',
+    unmatchedField: 'unmatched_on_shutdown_count',
+    dependencyProfiles: Object.freeze({
+      on_shutdown_event_packet: ON_SHUTDOWN_EVENT_PACKET_821_PROFILE,
       champion_die_event_packet: CHAMPION_DIE_EVENT_PACKET_821_PROFILE,
       hero_death: HERO_DEATH_CANDIDATE_PROFILE_821,
     }),
@@ -651,7 +678,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   if (opaqueU32 != null && (!opaqueU32Fields
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
-      '--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, OnChampionKill, OnChampionMultipleKill, or supported packet association candidate event.');
+      '--opaque-u32 requires a supported 821 packet or packet-association candidate event.');
   }
   if (opaqueI32 != null && (prepared.eventKey !== 'cast_spell_ans_packet_candidates'
       || prepared.replayVersion !== '16.19.821.7343')) {

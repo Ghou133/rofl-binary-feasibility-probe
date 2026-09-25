@@ -60,6 +60,8 @@ const { decodeChampionKillEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_kill_event_packet_candidate');
 const { decodeChampionMultipleKillEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_multiple_kill_event_packet_candidate');
+const { decodeOnShutdownEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
 const { decodeCastSpellAnsPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const { decodeNpcBuffRemovePacketCandidates821 } =
@@ -93,6 +95,8 @@ const { associateChampionKillDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_kill_die_hero_death_pair_candidate');
 const { associateChampionMultipleKillDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_multiple_kill_die_hero_death_pair_candidate');
+const { associateOnShutdownDieHeroDeathCandidates821 } =
+  require('./decoders/rofl_16_19_821_on_shutdown_die_hero_death_pair_candidate');
 const {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   decodeHeroStatsSnapshotCandidateSet,
@@ -2166,6 +2170,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    on_shutdown_event_packet: (input, collected) =>
+      decodeOnShutdownEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     cast_spell_ans_packet: (input, collected) =>
       decodeCastSpellAnsPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2239,6 +2249,7 @@ function decode1619821(replay, profile, options = {}) {
     champion_die_event_packet: 'champion_die_event_packet_candidates',
     champion_kill_event_packet: 'champion_kill_event_packet_candidates',
     champion_multiple_kill_event_packet: 'champion_multiple_kill_event_packet_candidates',
+    on_shutdown_event_packet: 'on_shutdown_event_packet_candidates',
     cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
     npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
     npc_buff_add_packet: 'npc_buff_add_packet_candidates',
@@ -2271,6 +2282,7 @@ function decode1619821(replay, profile, options = {}) {
     'champion_die_event_packet',
     'champion_kill_event_packet',
     'champion_multiple_kill_event_packet',
+    'on_shutdown_event_packet',
     'cast_spell_ans_packet',
     'npc_buff_remove_packet',
     'npc_buff_add_packet',
@@ -2314,6 +2326,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'champion_die_event_packet'
         || capability === 'champion_kill_event_packet'
         || capability === 'champion_multiple_kill_event_packet'
+        || capability === 'on_shutdown_event_packet'
         || capability === 'cast_spell_ans_packet'
         || capability === 'npc_buff_remove_packet' || capability === 'npc_buff_add_packet'
         || capability === 'direct_input_movement_turn_packet'
@@ -2350,7 +2363,9 @@ function decode1619821(replay, profile, options = {}) {
             : capability === 'champion_kill_event_packet'
               ? '0x040a/child_0007'
               : capability === 'champion_multiple_kill_event_packet'
-                ? '0x040a/child_0009' : result.input_packet_id;
+                ? '0x040a/child_0009'
+                : capability === 'on_shutdown_event_packet'
+                  ? '0x040a/child_00e8' : result.input_packet_id;
     const decodedCount = capability === 'stealth_event_packet'
       ? result.target_packet_count
       : capability === 'champion_die_event_packet'
@@ -2358,7 +2373,9 @@ function decode1619821(replay, profile, options = {}) {
         : capability === 'champion_kill_event_packet'
           ? result.target_packet_count
           : capability === 'champion_multiple_kill_event_packet'
-            ? result.event_count : result.input_count;
+            ? result.event_count
+            : capability === 'on_shutdown_event_packet'
+              ? result.event_count : result.input_count;
     uniqueDecodedInputCounts.set(packetGroup,
       Math.max(uniqueDecodedInputCounts.get(packetGroup) ?? 0, decodedCount));
   }
@@ -2450,6 +2467,28 @@ function decode1619821(replay, profile, options = {}) {
       }
     } catch (error) {
       candidateAssociations.champion_multiple_kill_die_hero_death_pair = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_death')
+      && capabilities.includes('champion_die_event_packet')
+      && capabilities.includes('on_shutdown_event_packet')) {
+    try {
+      const association = associateOnShutdownDieHeroDeathCandidates821(replay, {
+        onShutdownEventPacketOutcome: outcomes.on_shutdown_event_packet,
+        championDieEventPacketOutcome: outcomes.champion_die_event_packet,
+        heroDeathOutcome: outcomes.hero_death,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: groupEvents, ...summary } = association;
+        candidateAssociations.on_shutdown_die_hero_death_pair = summary;
+        events.on_shutdown_die_hero_death_pair_candidates = groupEvents;
+      } else {
+        candidateAssociations.on_shutdown_die_hero_death_pair = association;
+      }
+    } catch (error) {
+      candidateAssociations.on_shutdown_die_hero_death_pair = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }

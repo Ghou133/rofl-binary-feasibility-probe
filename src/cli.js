@@ -140,7 +140,8 @@ Legacy semantic CLI scope: exact 16.15.801.3452. The separate 16.16 public API
 is not dispatched by this CLI; see docs/PUBLIC_DEVELOPMENT.md.
 16.19 decode and batch use the exact-build semantic API when --events is selected.
 For 821, hero_death with champion_die_event_packet emits a candidate packet pair;
-adding champion_kill_event_packet or champion_multiple_kill_event_packet emits
+adding champion_kill_event_packet, champion_multiple_kill_event_packet, or
+on_shutdown_event_packet emits
 the corresponding candidate three-route packet group.
 Inspect reads the container and packet framing without a runtime image.
 Capabilities reads the container/build registry without packet framing or semantic decode.
@@ -380,11 +381,13 @@ function parseArgs(argv) {
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
       'champion_multiple_kill_event_packet_candidates',
+      'on_shutdown_event_packet_candidates',
       'champion_die_hero_death_pair_candidates',
       'champion_kill_die_hero_death_pair_candidates',
       'champion_multiple_kill_die_hero_death_pair_candidates',
+      'on_shutdown_die_hero_death_pair_candidates',
     ].includes(options.event)) {
-      throw new Error('--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, OnChampionKill, OnChampionMultipleKill, or candidate packet-group event');
+      throw new Error('--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, OnChampionKill, OnChampionMultipleKill, OnShutdown, or candidate packet-group event');
     }
     if (options.opaqueI32 !== null && options.event !== 'cast_spell_ans_packet_candidates') {
       throw new Error('--opaque-i32 requires an 821 cast_spell_ans_packet_candidates event');
@@ -675,6 +678,7 @@ function parseOne1619(replay, options, started) {
       'champion_die_event_packet',
       'champion_kill_event_packet',
       'champion_multiple_kill_event_packet',
+      'on_shutdown_event_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',
@@ -1876,6 +1880,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'champion_die_event_packet'
             || capability === 'champion_kill_event_packet'
             || capability === 'champion_multiple_kill_event_packet'
+            || capability === 'on_shutdown_event_packet'
             || capability === 'cast_spell_ans_packet'))
         || capability === 'npc_buff_remove_packet'
         || capability === 'npc_buff_add_packet'
@@ -2173,6 +2178,11 @@ function capabilityQuery(replay, options = {}) {
           'OnChampionMultipleKill image label and anonymous u32 fields; no effective multikill, actor, or lifecycle inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'on_shutdown_event_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x00e8 packet consumption',
+          'OnShutdown image label and anonymous u32 fields; no gameplay shutdown effect, actor, or lifecycle inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'cast_spell_ans_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x01da full packet consumption',
           'callback-transformed opaque fields and raw packet provenance; no successful-cast or spell identity inference');
@@ -2392,6 +2402,7 @@ function capabilityQuery(replay, options = {}) {
             champion_die_event_packet: 'champion_die_event_packet_candidates',
             champion_kill_event_packet: 'champion_kill_event_packet_candidates',
             champion_multiple_kill_event_packet: 'champion_multiple_kill_event_packet_candidates',
+            on_shutdown_event_packet: 'on_shutdown_event_packet_candidates',
             cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
             npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
             npc_buff_add_packet: 'npc_buff_add_packet_candidates',

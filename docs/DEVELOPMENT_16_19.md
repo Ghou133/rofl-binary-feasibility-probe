@@ -4,15 +4,23 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
-- **Completed:** `query-events` now reads the three exact-821 derived packet
+- **Completed:** The shared 821 scan now resolves selected route flags once
+  per scan instead of checking the selected set for every packet block. A
+  same-process alternating 12-scan comparison on three KR Replays measured
+  2449 to 1778 ms for the collector; the 11-Replay candidate JSONLs were
+  byte-identical in the focused comparison. Evidence is under
+  `artifacts/16_19_development/performance_followup_821/`.
+- **Completed:** `query-events` now reads the four exact-821 derived packet
   group JSONLs using their `candidate_associations` summaries and selected
   upstream capability results. It checks profile/build, Replay identity,
   dependency statuses and counts, row/ref integrity, and refuses missing or
   inconsistent associations. Time, any recorded raw parameter, and directly
   decoded child `+0x04` u32 filters return unmodified candidate rows. Real
-  queries succeeded for all three groups in both an ordinary KR Replay and
+  queries succeeded for the first three groups in both an ordinary KR Replay and
   a Replay containing an optional death-route omission. These checks do
-  not promote the underlying candidate fields to confirmed semantics.
+  not promote the underlying candidate fields to confirmed semantics. The
+  OnShutdown group has also passed selected KR CLI query smoke with its
+  anonymous `+0x04/+0x58/+0x5c` fields.
 - **Completed:** KR 821 `hero_death,champion_die_event_packet,
   champion_multiple_kill_event_packet` now emits a third selected CLI/API
   candidate packet group. All 653 OnChampionMultipleKill children in 11 KR
@@ -89,12 +97,23 @@ Current progress (older notes below retain their original research context):
   level or gameplay effect. A seven-capability CLI smoke on `KR_8392938200`
   emitted 71 such packets with zero framing errors. Ignored independent
   evidence is under `artifacts/16_19_development/on_champion_multiple_kill_821/`.
-- **Investigated, not enabled:** Exact 821 name table labels child `0x00e8`
-  OnShutdown. All 72 observed 105-byte packets in 11 KR Replays natively
-  decoded, but there were no real same-length foreign-child controls and
-  the registered closure invokes an unresolved indirect callback. Its
-  numeric fields and gameplay effect remain UNKNOWN. The ignored evidence
-  is under `artifacts/16_19_development/on_shutdown_821/`.
+- **Completed:** KR 821 `on_shutdown_event_packet` is a selected exact-image
+  CLI/API candidate for OnEvent child `0x00e8`, labeled OnShutdown by the
+  image name table. All 72 observed 105-byte packets in 11 KR Replays were
+  natively fully consumed and emitted as candidates with anonymous child
+  `+0x04/+0x58/+0x5c` u32 and raw refs. The selected
+  `hero_death,champion_die_event_packet,on_shutdown_event_packet` route
+  also emitted 72 three-route candidate groups with zero framing or
+  association errors. All 72 Shutdown packets join unique same-Replay,
+  chunk, and millisecond Die/Hero_Die groups, and no observed Kill group;
+  581 other observed Multi groups join Kill groups. Without the exact image,
+  the Shutdown packet and derived group report `MISSING_INPUT` and write no
+  JSONL. Same-length foreign-child controls were absent, and the registered
+  closure invokes an unresolved indirect callback. No gameplay shutdown
+  effect, actor, or state transition is established. Ignored evidence is
+  under `artifacts/16_19_development/on_shutdown_821/`,
+  `artifacts/16_19_development/on_shutdown_death_link_821/`, and
+  `artifacts/16_19_development/on_shutdown_group_cli_batch_821/`.
 - **Completed:** KR 821 `champion_kill_event_packet` is an unpublished
   selected CLI/API candidate for exact-image OnEvent child `0x0007`. The
   exact name table labels it OnChampionKill, and the registered callback

@@ -12,12 +12,16 @@ const { CHAMPION_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_champion_kill_die_hero_death_pair_candidate');
 const { CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_champion_multiple_kill_die_hero_death_pair_candidate');
+const { ON_SHUTDOWN_DIE_HERO_DEATH_PAIR_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_on_shutdown_die_hero_death_pair_candidate');
 const { CHAMPION_DIE_EVENT_PACKET_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_champion_die_event_packet_candidate');
 const { CHAMPION_KILL_EVENT_PACKET_CANDIDATE_PROFILE_821 } =
   require('../src/decoders/rofl_16_19_821_champion_kill_event_packet_candidate');
 const { CHAMPION_MULTIPLE_KILL_EVENT_PACKET_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_champion_multiple_kill_event_packet_candidate');
+const { ON_SHUTDOWN_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
 const { HERO_DEATH_CANDIDATE_PROFILE_821 } =
   require('../src/decoders/rofl_16_19_821_7343');
 
@@ -36,10 +40,13 @@ const CAST_SPELL_ANS_EVENT = 'cast_spell_ans_packet_candidates';
 const CHAMPION_DIE_EVENT = 'champion_die_event_packet_candidates';
 const CHAMPION_KILL_EVENT = 'champion_kill_event_packet_candidates';
 const CHAMPION_MULTIPLE_KILL_EVENT = 'champion_multiple_kill_event_packet_candidates';
+const SHUTDOWN_PACKET_EVENT = 'on_shutdown_event_packet_candidates';
 const DIE_PAIR_EVENT = 'champion_die_hero_death_pair_candidates';
 const KILL_GROUP_EVENT = 'champion_kill_die_hero_death_pair_candidates';
 const MULTI_GROUP_EVENT = 'champion_multiple_kill_die_hero_death_pair_candidates';
-const ASSOCIATION_EVENTS = [DIE_PAIR_EVENT, KILL_GROUP_EVENT, MULTI_GROUP_EVENT];
+const SHUTDOWN_GROUP_EVENT = 'on_shutdown_die_hero_death_pair_candidates';
+const ASSOCIATION_EVENTS = [DIE_PAIR_EVENT, KILL_GROUP_EVENT, MULTI_GROUP_EVENT,
+  SHUTDOWN_GROUP_EVENT];
 
 function rewriteJson(filename, edit) {
   const value = JSON.parse(fs.readFileSync(filename, 'utf8'));
@@ -50,14 +57,17 @@ function rewriteJson(filename, edit) {
 function associationArtifact(t, eventKey) {
   const killGroup = eventKey === KILL_GROUP_EVENT;
   const multiGroup = eventKey === MULTI_GROUP_EVENT;
-  const grouped = killGroup || multiGroup;
+  const shutdownGroup = eventKey === SHUTDOWN_GROUP_EVENT;
+  const grouped = killGroup || multiGroup || shutdownGroup;
   const profile = killGroup ? CHAMPION_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE
     : multiGroup ? CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE
-      : CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE;
+      : shutdownGroup ? ON_SHUTDOWN_DIE_HERO_DEATH_PAIR_821_PROFILE
+        : CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE;
   const evidenceStatus = killGroup
     ? 'CANDIDATE_821_ON_CHAMPION_KILL_DIE_HERO_DIE_PACKET_GROUP'
     : multiGroup ? 'CANDIDATE_821_ON_CHAMPION_MULTIPLE_KILL_DIE_HERO_DIE_PACKET_GROUP'
-      : 'CANDIDATE_821_ON_CHAMPION_DIE_HERO_DIE_PACKET_PAIR';
+      : shutdownGroup ? 'CANDIDATE_821_ON_SHUTDOWN_DIE_HERO_DIE_PACKET_GROUP'
+        : 'CANDIDATE_821_ON_CHAMPION_DIE_HERO_DIE_PACKET_PAIR';
   const time = 100;
   const dieRaw = 0x400000ae;
   const source = 0x400000af;
@@ -86,7 +96,8 @@ function associationArtifact(t, eventKey) {
   const row = grouped ? {
     ...common, event_type: multiGroup
       ? 'CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE'
-      : 'CHAMPION_KILL_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE',
+      : shutdownGroup ? 'ON_SHUTDOWN_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE'
+        : 'CHAMPION_KILL_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE',
     ...(multiGroup ? {
       on_champion_multiple_kill_raw_param: source,
       on_champion_multiple_kill_event_u32_0x04: heroRaw,
@@ -96,6 +107,14 @@ function associationArtifact(t, eventKey) {
       multi_0x04_xor_hero_raw_delta: 0,
       multi_0x04_exact_hero_raw_equal: true,
       on_champion_multiple_kill_raw_packet_ref: groupRef,
+    } : shutdownGroup ? {
+      on_shutdown_raw_param: source,
+      on_shutdown_event_u32_0x04: heroRaw,
+      on_shutdown_event_u32_0x58: 17,
+      on_shutdown_event_u32_0x5c: 19,
+      shutdown_0x04_xor_hero_raw_delta: 0,
+      shutdown_0x04_exact_hero_raw_equal: true,
+      on_shutdown_raw_packet_ref: groupRef,
     } : {
       on_champion_kill_raw_param: source,
       on_champion_kill_event_u32_0x04: heroRaw,
@@ -123,6 +142,11 @@ function associationArtifact(t, eventKey) {
         unmatched_on_champion_multiple_kill_count: 0,
         exact_multi_0x04_hero_raw_equal_count: 1,
         multi_0x04_xor_hero_raw_delta_counts: { '0x00000000': 1 },
+      } : shutdownGroup ? {
+        on_shutdown_count: 1,
+        unmatched_on_shutdown_count: 0,
+        exact_shutdown_0x04_hero_raw_equal_count: 1,
+        shutdown_0x04_xor_hero_raw_delta_counts: { '0x00000000': 1 },
       } : {
         on_champion_kill_count: 1,
         unmatched_on_champion_kill_count: 0,
@@ -140,6 +164,7 @@ function associationArtifact(t, eventKey) {
     champion_die_event_packet: CHAMPION_DIE_EVENT_PACKET_821_PROFILE,
     champion_kill_event_packet: CHAMPION_KILL_EVENT_PACKET_CANDIDATE_PROFILE_821,
     champion_multiple_kill_event_packet: CHAMPION_MULTIPLE_KILL_EVENT_PACKET_821_PROFILE,
+    on_shutdown_event_packet: ON_SHUTDOWN_EVENT_PACKET_821_PROFILE,
   };
   const semanticPath = path.join(fixture.replayDirectory, 'semantic_run.json');
   const analysisPath = path.join(fixture.replayDirectory, 'replay_analysis.json');
@@ -186,7 +211,7 @@ function artifact(t, rows = [
   const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT,
     HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT, CAST_SPELL_ANS_EVENT,
     CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
-    CHAMPION_MULTIPLE_KILL_EVENT, ...ASSOCIATION_EVENTS].includes(eventKey)
+    CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT, ...ASSOCIATION_EVENTS].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -339,6 +364,7 @@ test('query-events rejects missing 821 association child fields instead of retur
     if (eventKey === MULTI_GROUP_EVENT) {
       delete row.on_champion_multiple_kill_event_u32_0x04;
     }
+    if (eventKey === SHUTDOWN_GROUP_EVENT) delete row.on_shutdown_event_u32_0x04;
     fs.writeFileSync(fixture.eventPath, `${JSON.stringify(row)}\n`);
     const output = path.join(fixture.root, 'missing-child-field.jsonl');
     const result = run(fixture.replayDirectory, '--event', eventKey,
@@ -1054,6 +1080,31 @@ test('query-events matches only OnChampionKill decoded u32 fields and rejects in
     '--opaque-u32', '0');
   assert.equal(unavailable.status, 2);
   assert.equal(JSON.parse(unavailable.stderr).code, 'CAPABILITY_UNAVAILABLE');
+});
+
+test('query-events filters anonymous OnShutdown child fields without using outer raw param', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000b0,
+      event_u32_0x04: 0x400000b4, event_u32_0x58: 63, event_u32_0x5c: 0 },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000b1,
+      event_u32_0x04: 0x400000b5, event_u32_0x58: 64,
+      event_u32_0x5c: 0xffffffff },
+  ];
+  const fixture = artifact(t, rows, true, SHUTDOWN_PACKET_EVENT);
+  for (const [value, selectedIndex] of [
+    ['0x400000b4', 0], ['63', 0], ['0', 0], ['0xffffffff', 1],
+  ]) {
+    const selected = run(fixture.replayDirectory, '--event', SHUTDOWN_PACKET_EVENT,
+      '--opaque-u32', value);
+    assert.equal(selected.status, 0, `${value}: ${selected.stderr}`);
+    assert.equal(selected.stdout, `${fixture.lines[selectedIndex]}\n`);
+    assert.equal(JSON.parse(selected.stderr).capability_status, 'CANDIDATE');
+  }
+  const rawOnly = run(fixture.replayDirectory, '--event', SHUTDOWN_PACKET_EVENT,
+    '--opaque-u32', '0x400000b0');
+  assert.equal(rawOnly.status, 0, rawOnly.stderr);
+  assert.equal(rawOnly.stdout, '');
+  assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
 });
 
 test('query-events filters only OnChampionMultipleKill decoded scalar u32 fields', (t) => {

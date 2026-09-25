@@ -184,6 +184,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'champion_die_event_packet',
       'champion_kill_event_packet',
       'champion_multiple_kill_event_packet',
+      'on_shutdown_event_packet',
       'cast_spell_ans_packet',
       'npc_buff_remove_packet', 'npc_buff_add_packet',
       'direct_input_movement_turn_packet', 'set_movement_driver_packet']);
