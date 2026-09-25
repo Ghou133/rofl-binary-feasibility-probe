@@ -347,6 +347,23 @@ Current progress (older notes below retain their original research context):
   against a live receiver absent from the capture. Actor, coordinates,
   path, and direction effect remain `UNKNOWN`. Local output is ignored at
   `artifacts/16_19_development/face_direction_batch_11_821/`.
+- **Completed 821 FaceDirection keyframe roster pair:** The independently
+  selectable `face_direction_keyframe_roster_pair` decodes its exact-image
+  FaceDirection and `0x0089` minions-snapshot sources, then matches only
+  canonical full raw parameters in the same keyframe and timestamp with
+  HeroStats preceding FaceDirection. Across the same 11 Replays, 327
+  keyframes yielded 3,270/3,270 candidate pairs and 265,663 physically
+  checked source packet references; 194,394 game packets and 64,729
+  noncanonical keyframe FaceDirection packets were excluded. A rotated-key
+  control preserved chunk, time and order but produced zero full-key matches.
+  The real pair-only CLI batch returned 11/11 `CANDIDATE` with zero framing
+  errors. `query-events --participant 4` scanned 3,270 rows and matched
+  327 roster-participant candidates. The participant label belongs to the
+  HeroStats roster, not a proven FaceDirection actor; receiver, position,
+  path and direction effect remain `UNKNOWN`. The initial one-Replay CLI
+  failure caused by a missing `input_count` contract field and the corrected
+  rerun are both retained locally. Batch output is ignored at
+  `artifacts/16_19_development/face_direction_roster_pair_batch_11_821/`.
 
 - **Completed candidate marker:** Exact KR 821 CLI/API now selects native
   `0x040a` child `0x000b`, named `OnChampionDoubleKill` in the pinned image.
