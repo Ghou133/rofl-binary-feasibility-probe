@@ -37,6 +37,12 @@ const { HERO_ASSIST_CANDIDATE_PROFILE_821 } =
   require('../src/decoders/rofl_16_19_821_assist_candidate');
 const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_revive_ally_packet_candidate');
+const { TURRET_FIRST_BLOOD_DIE_PAIR_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_turret_first_blood_die_pair_candidate');
+const { TURRET_FIRST_BLOOD_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_turret_first_blood_event_packet_candidate');
+const { TURRET_DIE_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_turret_die_event_packet_candidate');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const SHA = 'a'.repeat(64);
@@ -64,6 +70,7 @@ const SHUTDOWN_PACKET_EVENT = 'on_shutdown_event_packet_candidates';
 const RESURRECT_PACKET_EVENT = 'resurrect_event_packet_candidates';
 const REVIVE_ALLY_PACKET_EVENT = 'revive_ally_event_packet_candidates';
 const TURRET_PLATE_PACKET_EVENT = 'turret_plate_event_packet_candidates';
+const TURRET_FIRST_BLOOD_DIE_PAIR_EVENT = 'turret_first_blood_die_pair_candidates';
 const DIE_PAIR_EVENT = 'champion_die_hero_death_pair_candidates';
 const KILL_GROUP_EVENT = 'champion_kill_die_hero_death_pair_candidates';
 const MULTI_GROUP_EVENT = 'champion_multiple_kill_die_hero_death_pair_candidates';
@@ -226,6 +233,73 @@ function associationArtifact(t, eventKey) {
   });
   return { ...fixture, row, association, semanticPath, analysisPath,
     eventPath: path.join(fixture.replayDirectory, `${eventKey}.jsonl`) };
+}
+
+function turretPairArtifact(t) {
+  const profile = TURRET_FIRST_BLOOD_DIE_PAIR_821_PROFILE;
+  const time = 100;
+  const ref = (offset, rawParam) => ({
+    source_path: 'synthetic.rofl', replay_sha256: SHA,
+    chunk_index: 1, chunk_id: 2, chunk_stream: 'game_chunk', chunk_file_offset: 8,
+    decompressed_block_offset: offset, decompressed_payload_offset: offset + 6,
+    packet_id: 0x040a, replay_time_ms: time, payload_length: 116,
+    raw_param: rawParam, raw_payload_sha256: 'b'.repeat(64),
+  });
+  const dieRef = ref(10, 0x400000af);
+  const firstRef = ref(169, 0x400001af);
+  const row = {
+    event_type: 'TURRET_FIRST_BLOOD_DIE_PACKET_PAIR_CANDIDATE',
+    game_version: profile.replay_version, patch: '16.19', build_profile: profile.id,
+    replay_sha256: SHA, replay_time_ms: time,
+    turret_die_child_event_id: 0x003b,
+    turret_first_blood_child_event_id: 0x003d,
+    turret_die_raw_param: dieRef.raw_param,
+    turret_first_blood_raw_param: firstRef.raw_param,
+    source_order_block_offset_gap: 159, intervening_on_event_count: 0,
+    raw_packet_ref: firstRef,
+    turret_die_raw_packet_ref: dieRef,
+    turret_first_blood_raw_packet_ref: firstRef,
+    raw_packet_refs: [dieRef, firstRef],
+    confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_821_TURRET_FIRST_BLOOD_DIE_PACKET_PAIR',
+  };
+  const fixture = artifact(t, [row], true, TURRET_FIRST_BLOOD_DIE_PAIR_EVENT);
+  const association = {
+    profile_id: profile.id,
+    evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+    depends_on: [...profile.depends_on], known_limits: [...profile.known_limits],
+    status: 'CANDIDATE', evidence_status: row.semantic_status,
+    replay_sha256: SHA, turret_first_blood_count: 1, turret_die_count: 2,
+    unmatched_turret_first_blood_count: 0, unpaired_turret_die_count: 1,
+    pair_count: 1, event_count: 1,
+  };
+  const semanticPath = path.join(fixture.replayDirectory, 'semantic_run.json');
+  const analysisPath = path.join(fixture.replayDirectory, 'replay_analysis.json');
+  rewriteJson(semanticPath, (semantic) => {
+    semantic.replay_version = profile.replay_version;
+    semantic.requested_capabilities = [...profile.depends_on];
+    semantic.capability_results = Object.fromEntries([
+      [TURRET_FIRST_BLOOD_EVENT_PACKET_821_PROFILE, 1],
+      [TURRET_DIE_EVENT_PACKET_821_PROFILE, 2],
+    ].map(([dependency, count]) => [dependency.capability, {
+      status: 'CANDIDATE', profile_id: dependency.id,
+      evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+      runtime_image_sha256: profile.evidence_runtime_image_sha256,
+      runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+      input_packet_id: 0x040a, child_event_id: dependency.child_event_id,
+      input_count: count, event_count: count,
+    }]));
+    semantic.candidate_associations = { [profile.capability]: association };
+  });
+  rewriteJson(analysisPath, (analysis) => {
+    analysis.replay_version = profile.replay_version;
+    analysis.event_counts.turret_first_blood_event_packet_candidates = 1;
+    analysis.event_counts.turret_die_event_packet_candidates = 2;
+    analysis.semantic = { candidate_associations: { [profile.capability]: association } };
+  });
+  return { ...fixture, row, association, semanticPath, analysisPath,
+    eventPath: path.join(fixture.replayDirectory,
+      `${TURRET_FIRST_BLOOD_DIE_PAIR_EVENT}.jsonl`) };
 }
 
 function doubleMultiAssociationArtifact(t) {
@@ -744,6 +818,92 @@ test('query-events filters exact 821 pair and group association rows without mod
     assert.equal(dieChild.status, 0, dieChild.stderr);
     assert.equal(dieChild.stdout, `${fixture.lines[0]}\n`);
     assert.equal(fs.readFileSync(fixture.eventPath, 'utf8'), `${fixture.lines[0]}\n`);
+  }
+});
+
+test('query-events filters exact 821 turret packet pairs by time and either raw parameter', (t) => {
+  const fixture = turretPairArtifact(t);
+  for (const rawParam of ['0x400000af', '0x400001af']) {
+    const result = run(fixture.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT,
+      '--from-ms', '100', '--to-ms', '100', '--raw-param', rawParam);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `${fixture.lines[0]}\n`);
+    const summary = JSON.parse(result.stderr);
+    assert.equal(summary.capability_status, 'CANDIDATE');
+    assert.equal(summary.declared_event_count, 1);
+    assert.equal(summary.matched_count, 1);
+    assert.equal(summary.raw_param_unavailable_count, 0);
+  }
+  const absent = run(fixture.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT,
+    '--raw-param', '0x400000aa');
+  assert.equal(absent.status, 0, absent.stderr);
+  assert.equal(absent.stdout, '');
+  assert.equal(JSON.parse(absent.stderr).matched_count, 0);
+  assert.equal(fs.readFileSync(fixture.eventPath, 'utf8'), `${fixture.lines[0]}\n`);
+});
+
+test('query-events requires exact turret pair association and both exact-image dependencies', (t) => {
+  const wrongBuild = turretPairArtifact(t);
+  rewriteJson(wrongBuild.semanticPath, (semantic) => { semantic.replay_version = VERSION; });
+  rewriteJson(wrongBuild.analysisPath, (analysis) => { analysis.replay_version = VERSION; });
+  const old = run(wrongBuild.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT);
+  assert.equal(old.status, 2);
+  assert.equal(JSON.parse(old.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+
+  const absent = turretPairArtifact(t);
+  rewriteJson(absent.semanticPath, (semantic) => {
+    delete semantic.candidate_associations.turret_first_blood_die_pair;
+  });
+  const unavailable = run(absent.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'ASSOCIATION_UNAVAILABLE');
+
+  const stale = turretPairArtifact(t);
+  rewriteJson(stale.semanticPath, (semantic) => {
+    semantic.candidate_associations.turret_first_blood_die_pair.profile_id = 'stale';
+  });
+  const wrongProfile = run(stale.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT);
+  assert.equal(wrongProfile.status, 2);
+  assert.equal(JSON.parse(wrongProfile.stderr).code, 'ASSOCIATION_METADATA_MISMATCH');
+
+  const failed = turretPairArtifact(t);
+  rewriteJson(failed.semanticPath, (semantic) => {
+    semantic.capability_results.turret_die_event_packet.status = 'MISSING_INPUT';
+    semantic.capability_results.turret_die_event_packet.event_count = null;
+  });
+  const dependency = run(failed.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT);
+  assert.equal(dependency.status, 2);
+  assert.equal(JSON.parse(dependency.stderr).code, 'CAPABILITY_UNAVAILABLE');
+
+  const wrongImage = turretPairArtifact(t);
+  rewriteJson(wrongImage.semanticPath, (semantic) => {
+    semantic.capability_results.turret_first_blood_event_packet.runtime_image_sha256 =
+      'f'.repeat(64);
+  });
+  const image = run(wrongImage.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT);
+  assert.equal(image.status, 2);
+  assert.equal(JSON.parse(image.stderr).code, 'ASSOCIATION_METADATA_MISMATCH');
+});
+
+test('query-events rejects malformed turret pair rows and removes partial output', (t) => {
+  for (const corrupt of [
+    (row) => { row.turret_die_child_event_id = 0; },
+    (row) => { row.source_order_block_offset_gap = 1; },
+    (row) => { row.turret_die_raw_param = row.turret_first_blood_raw_param; },
+    (row) => { row.turret_die_raw_packet_ref.chunk_id = 3; },
+    (row) => { row.raw_packet_refs[0].raw_param = 0; },
+    (row) => { delete row.turret_first_blood_raw_packet_ref; },
+  ]) {
+    const fixture = turretPairArtifact(t);
+    const row = structuredClone(fixture.row);
+    corrupt(row);
+    fs.writeFileSync(fixture.eventPath, `${JSON.stringify(row)}\n`);
+    const output = path.join(fixture.root, 'corrupt-turret-pair.jsonl');
+    const result = run(fixture.replayDirectory, '--event', TURRET_FIRST_BLOOD_DIE_PAIR_EVENT,
+      '--output', output);
+    assert.equal(result.status, 2);
+    assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
   }
 });
 

@@ -4,6 +4,12 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed query:** `query-events --event turret_first_blood_die_pair_candidates`
+  reads exact 821 single-Replay or batch artifacts and filters by time or either
+  recorded raw packet parameter. The query checks the pair and both source
+  capability identities, pinned image, counts and row packet references before
+  returning unchanged candidate rows. The real 11-Replay batch query matched
+  11/11 rows with no unavailable Replay; no structure or actor identity follows.
 - **Completed candidate association:** Selecting both exact KR 821
   `turret_die_event_packet,turret_first_blood_event_packet` capabilities also
   emits `turret_first_blood_die_pair_candidates` and

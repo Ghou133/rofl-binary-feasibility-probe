@@ -149,6 +149,7 @@ resurrect_event_packet emits a separate packet-local OnResurrect candidate.
 revive_ally_event_packet emits a separate packet-local OnReviveAlly candidate.
 turret_die_event_packet emits a separate packet-local OnTurretDie candidate.
 turret_first_blood_event_packet emits a separate packet-local OnTurretFirstBlood candidate.
+Selecting both also emits a candidate OnTurretDie/OnTurretFirstBlood packet-order pair.
 turret_plate_event_packet emits a separate packet-local OnTurretPlateDestroyed candidate.
 npc_buff_update_num_counter_packet emits an exact-821 packet-local opaque candidate.
 npc_buff_update_count_packet emits an exact-821 packet-local opaque candidate.

@@ -509,7 +509,12 @@ node src/cli.js query-events "work\16-19-821-triple-quadra-groups" `
   --output "work\quadra-named-packet-groups.jsonl"
 node src/cli.js query-events "work\16-19-821-revive-ally-batch" `
   --event revive_ally_event_packet_candidates --opaque-u32 0x400000b6
+node src/cli.js query-events "work\16-19-821-turret-first-blood-die-pairs" `
+  --event turret_first_blood_die_pair_candidates --raw-param 0x4000008c
 ```
+
+炮塔候选配对可按回放毫秒或任一原始包的 `--raw-param` 查询；查询保留原 JSONL 行，
+并核对双源能力、精确镜像与候选关联的产物身份。原始参数不代表建筑或参与者身份。
 
 按 821 单次助攻候选的参与者列表查询，可输入单场或 `batch` 输出目录：
 
