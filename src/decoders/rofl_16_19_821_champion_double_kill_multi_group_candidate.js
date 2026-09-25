@@ -360,4 +360,8 @@ function associateChampionDoubleKillMultiGroupCandidates821(replay, {
 module.exports = {
   CHAMPION_DOUBLE_KILL_MULTI_GROUP_821_PROFILE,
   associateChampionDoubleKillMultiGroupCandidates821,
+  // Shared exact-build packet/group integrity checks for named child packet joins.
+  packetGroupCandidate821Internals: Object.freeze({
+    u32, count, sha, key, position, validRef, validMultiGroupRow,
+  }),
 };
