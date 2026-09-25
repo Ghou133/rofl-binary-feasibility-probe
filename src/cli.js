@@ -162,6 +162,8 @@ npc_buff_replace_packet emits an exact-821 packet-local opaque candidate.
 set_spell_timer_from_buff_packet emits an exact-821 packet-local opaque candidate.
 set_spell_level_packet emits an exact-821 packet-local opaque candidate.
 increment_minion_kills_packet emits an exact-821 packet-local lookup-key candidate.
+Selecting it with hero_minions_killed_snapshot also emits packet-to-keyframe bracket candidates;
+the endpoint difference does not establish a per-packet CS effect or last hit.
 Inspect reads the container and packet framing without a runtime image.
 Capabilities reads the container/build registry without packet framing or semantic decode.
 

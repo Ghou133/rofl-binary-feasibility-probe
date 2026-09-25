@@ -151,6 +151,8 @@ const { associateWardInventoryKeyframePairCandidates821 } =
   require('./decoders/rofl_16_19_821_ward_inventory_keyframe_pair_candidate');
 const { deriveInventoryKeyframeIntervalDifferenceCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
+const { associateIncrementMinionKeyframeBracketCandidates821 } =
+  require('./decoders/rofl_16_19_821_increment_minion_keyframe_bracket_candidate');
 const { analyzeMovementParticipantAssociations821 } =
   require('./decoders/rofl_16_19_821_movement_participant_association_candidate');
 const {
@@ -2952,6 +2954,26 @@ function decode1619821(replay, profile, options = {}) {
       }
     } catch (error) {
       candidateAssociations.inventory_keyframe_interval_difference = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('increment_minion_kills_packet')
+      && capabilities.includes('hero_minions_killed_snapshot')) {
+    try {
+      const association = associateIncrementMinionKeyframeBracketCandidates821(replay, {
+        incrementMinionKillsPacketOutcome: outcomes.increment_minion_kills_packet,
+        minionsKilledSnapshotOutcome: outcomes.hero_minions_killed_snapshot,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: bracketEvents, ...summary } = association;
+        candidateAssociations.increment_minion_keyframe_bracket = summary;
+        events.increment_minion_keyframe_bracket_candidates = bracketEvents;
+      } else {
+        candidateAssociations.increment_minion_keyframe_bracket = association;
+      }
+    } catch (error) {
+      candidateAssociations.increment_minion_keyframe_bracket = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }
