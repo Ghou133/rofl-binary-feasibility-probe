@@ -4,6 +4,15 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed 821 game Broadcast comparison query:** Saved
+  `inventory_game_broadcast_keyframe_bracket_candidates` now accepts one of
+  five exact endpoint-comparison labels, with optional slot and game item
+  key required on the same explicit record. The 11-Replay batch was
+  `COMPLETE`: 55 rows checked, 25 unmodified rows contained one of the 31
+  `DIFFERS_FROM_EQUAL_ENDPOINTS` records (SHA-256
+  `97bb23d56a2d8b603571e22b33c9f2febc97d91c517df1328445ad1a043cc198`).
+  The label describes three packet observations, not an action or a
+  continuous inventory state.
 - **Completed 821 game Broadcast/keyframe bracket candidate:** Selecting
   `hero_inventory_broadcast_packet` now also emits
   `inventory_game_broadcast_keyframe_bracket_candidates` through the API/CLI.
