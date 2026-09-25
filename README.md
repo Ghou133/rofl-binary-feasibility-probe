@@ -256,6 +256,22 @@ OnShutdown 子包 `on_shutdown_event_packet`、OnResurrect 子包
 也需要 `--runtime-image` 指向同一完整 build 的镜像。
 这些能力仅报告包候选，不能由镜像中的事件名称推断游戏效果。
 
+821 的 `hero_inventory_packet`、`hero_deaths_snapshot` 与至少一种移动包路由一起选择时，
+`semantic_run.json` 和 API 的 `candidate_associations.movement_full_param_participant_candidate`
+会给出回放级完整 `raw_param` 候选关联。它要求十人快照、最新库存包与回放结算物品
+七槽唯一匹配，并逐场报告匹配或排除的移动包数量。例如：
+
+```powershell
+node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
+  --events hero_inventory_packet,hero_deaths_snapshot,direct_input_movement_turn_packet,set_movement_driver_packet `
+  --runtime-image "D:\PrivateInputs\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --out-dir "work\16-19-821-movement-association"
+```
+
+这是独立的候选汇总；单条移动事件不新增参与者字段。非标准完整参数变体仍不绑定，
+候选键共享的行数不证明每个包的行动者。缺少所选能力或证据不完整时，关联状态会明确为
+`UNAVAILABLE` 或 `DECODE_FAILED`。
+
 对 HN 路由的同一完整 build，可单独选择计时候选，或用
 `--events hero_death,hero_death_timer` 一起运行。计时输出包含原始包引用、
 候选参与者、解出的秒数，以及存在匹配时的复活包引用；它要求十名参与者的死亡总数、

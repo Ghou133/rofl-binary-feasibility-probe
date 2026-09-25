@@ -4,6 +4,15 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** `query-events` accepts a batch artifact root, keeps the
+  manifest's Replay order, validates each Replay and full JSONL, and reports
+  per-Replay unavailable states. The existing 11-Replay OnResurrect batch
+  produced 29 rows from seven queryable Replays; four remained
+  `PROFILE_UNAVAILABLE` and the query reported `PARTIAL`.
+- **Completed candidate integration:** Selecting the 821 inventory packet,
+  deaths snapshot, and a movement route now exposes the Replay-scoped
+  full-parameter participant association in CLI/API summaries. It does not
+  add an actor to movement rows; details and negative keys are below.
 - **Completed:** The shared 821 scan now resolves selected route flags once
   per scan instead of checking the selected set for every packet block. A
   same-process alternating 12-scan comparison on three KR Replays measured
@@ -262,17 +271,23 @@ Current progress (older notes below retain their original research context):
   from one Replay with zero framing errors. The 29 observed byte values do
   not identify a spell, owner, target or cast action. Ignored evidence is
   under `artifacts/16_19_development/cast821_next/`.
-- **Research-only:** The isolated KR 821 movement/full-parameter association
-  utility checks a complete candidate `0x0089` roster, latest `0x018d`
+- **Completed candidate integration:** The selected KR 821 CLI/API now emits
+  `candidate_associations.movement_full_param_participant_candidate` only when
+  inventory, deaths snapshot, and at least one movement route are selected
+  with complete exact-build decoder outcomes. The utility checks a complete
+  candidate `0x0089` roster, latest `0x018d`
   packet-local inventory, and a unique 7/7 Replay-tail item match for each
   shared full `raw_param`. A run over all 11 Replays found five replay/key
   candidates; 6,160 `0x00ba` and 98 `0x0335` rows share those keys. Those
   row counts do not establish an actor for each packet. Another 1,648 direct
   and 14 Set rows use noncanonical parameter variants and remain unbound.
   The utility accepts trusted complete decoder arrays; it does not rewalk
-  each referenced payload. It is not wired to default CLI/API output or
-  participant fields. A per-packet callback/receiver identity anchor remains
-  missing. Ignored positive and negative evidence is under
+  each referenced payload. The API records Replay-scoped candidate coverage
+  but leaves every movement packet row unchanged and its actor unverified.
+  A per-packet callback/receiver identity anchor remains missing. A fresh
+  real CLI run reproduced the one-key Direct/Set association on
+  `KR_8392938200`, and `KR_8394000013` retained a Set-only association with
+  Direct `PROFILE_UNAVAILABLE`. Ignored positive and negative evidence is under
   `artifacts/16_19_development/movement821_identity/`.
 - **Completed:** KR 821 `cast_spell_ans_packet` profile v2 retains protected
   native bytes and the decoded anonymous f32 at packet object `+0xe0`.

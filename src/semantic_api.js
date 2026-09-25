@@ -24,6 +24,7 @@ const { decodeHeroDeathTimerCandidates821 } =
 const { decodeHeroRespawnCandidates821 } =
   require('./decoders/rofl_16_19_821_respawn_candidate');
 const {
+  HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE,
   decodeHeroDeathsSnapshotCandidates821,
   decodeHeroChampionKillsSnapshotCandidates821,
   decodeHeroAssistsSnapshotCandidates821,
@@ -42,7 +43,10 @@ const { decodeHeroKillStatsSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_kill_stats_candidate');
 const { decodeHeroAssistCandidates821 } =
   require('./decoders/rofl_16_19_821_assist_candidate');
-const { decodeHeroInventoryPacketCandidates821 } =
+const {
+  HERO_INVENTORY_PACKET_CANDIDATE_PROFILE_821,
+  decodeHeroInventoryPacketCandidates821,
+} =
   require('./decoders/rofl_16_19_821_inventory_packet_candidate');
 const { decodeHeroInventoryBroadcastPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_broadcast_packet_candidate');
@@ -72,10 +76,18 @@ const { decodeNpcBuffRemovePacketCandidates821 } =
   require('./decoders/rofl_16_19_821_buff_remove_packet_candidate');
 const { decodeNpcBuffAddPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_buff_add_packet_candidate');
-const { decodeDirectInputMovementTurnPacketCandidates821 } =
+const {
+  DIRECT_INPUT_MOVEMENT_TURN_PACKET_CANDIDATE_PROFILE_821,
+  decodeDirectInputMovementTurnPacketCandidates821,
+} =
   require('./decoders/rofl_16_19_821_direct_input_turn_packet_candidate');
-const { decodeSetMovementDriverPacketCandidates821 } =
+const {
+  SET_MOVEMENT_DRIVER_PACKET_CANDIDATE_PROFILE_821,
+  decodeSetMovementDriverPacketCandidates821,
+} =
   require('./decoders/rofl_16_19_821_set_movement_driver_packet_candidate');
+const { RUNTIME_IMAGE_SHA256: RUNTIME_IMAGE_SHA256_821 } =
+  require('./decoders/rofl_16_19_821_runtime_bytes');
 const { decodeHeroDamageSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
 const { decodeHeroTimeSnapshotCandidates821 } =
@@ -101,6 +113,8 @@ const { associateChampionMultipleKillDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_multiple_kill_die_hero_death_pair_candidate');
 const { associateOnShutdownDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_on_shutdown_die_hero_death_pair_candidate');
+const { analyzeMovementParticipantAssociations821 } =
+  require('./decoders/rofl_16_19_821_movement_participant_association_candidate');
 const {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   decodeHeroStatsSnapshotCandidateSet,
@@ -2058,6 +2072,41 @@ function decode1619(replay, profile, options = {}) {
   };
 }
 
+function movementAssociationInput821(outcome, sourceProfile, allowAbsent = false) {
+  if (allowAbsent && outcome?.status === 'PROFILE_UNAVAILABLE') {
+    return outcome.profile_id === sourceProfile.id
+      && outcome.input_packet_id === sourceProfile.replay_block_packet_id
+      && outcome.observed_raw_route_count === 0
+      && outcome.input_count === null && outcome.event_count === null
+      && outcome.events === null
+      && Number.isSafeInteger(outcome.scanned_block_count)
+      && outcome.scanned_block_count > 0
+      ? { status: 'ABSENT', events: [] } : { status: 'INVALID' };
+  }
+  if (outcome?.status !== 'CANDIDATE') return { status: 'UNAVAILABLE' };
+  const events = outcome.events;
+  const complete = outcome.profile_id === sourceProfile.id
+    && outcome.input_packet_id === sourceProfile.replay_block_packet_id
+    && outcome.evidence_runtime_image_sha256 === RUNTIME_IMAGE_SHA256_821
+    && Array.isArray(events) && events.length > 0
+    && events.every((row) => row?.build_profile === sourceProfile.id)
+    && Number.isSafeInteger(outcome.input_count)
+    && outcome.input_count === events.length
+    && outcome.event_count === events.length
+    && Number.isSafeInteger(outcome.scanned_block_count)
+    && outcome.scanned_block_count >= events.length;
+  const imageBound = sourceProfile.runtime_image_required
+    ? outcome.runtime_image_status === 'MATCHED_USED'
+      && outcome.runtime_image_used === true
+      && outcome.runtime_image_sha256 === RUNTIME_IMAGE_SHA256_821
+    : outcome.runtime_image_status === 'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED'
+      && outcome.runtime_image_used === false
+      && outcome.lookup_table_sha256 === sourceProfile.lookup_table_sha256
+      && outcome.observed_participant_count === 10;
+  return complete && imageBound
+    ? { status: 'READY', events } : { status: 'INVALID' };
+}
+
 function decode1619821(replay, profile, options = {}) {
   const requested = options.capabilities ?? [];
   if (!Array.isArray(requested)
@@ -2410,6 +2459,59 @@ function decode1619821(replay, profile, options = {}) {
       Math.max(uniqueDecodedInputCounts.get(packetGroup) ?? 0, decodedCount));
   }
   const candidateAssociations = {};
+  const movementRoutes = ['direct_input_movement_turn_packet', 'set_movement_driver_packet']
+    .filter((name) => capabilities.includes(name));
+  if (capabilities.includes('hero_inventory_packet')
+      && capabilities.includes('hero_deaths_snapshot') && movementRoutes.length > 0) {
+    const specs = {
+      hero_inventory_packet: [HERO_INVENTORY_PACKET_CANDIDATE_PROFILE_821, false],
+      hero_deaths_snapshot: [HERO_DEATHS_SNAPSHOT_821_CANDIDATE_PROFILE, false],
+      direct_input_movement_turn_packet:
+        [DIRECT_INPUT_MOVEMENT_TURN_PACKET_CANDIDATE_PROFILE_821, true],
+      set_movement_driver_packet: [SET_MOVEMENT_DRIVER_PACKET_CANDIDATE_PROFILE_821, true],
+    };
+    const required = ['hero_inventory_packet', 'hero_deaths_snapshot', ...movementRoutes];
+    const checked = Object.fromEntries(required.map((name) => [name,
+      movementAssociationInput821(outcomes[name], ...specs[name])]));
+    const dependencyStatuses = Object.fromEntries(required.map((name) =>
+      [name, outcomes[name]?.status ?? 'UNEXECUTED']));
+    const associationKey = 'movement_full_param_participant_candidate';
+    if (required.some((name) => checked[name].status === 'INVALID')) {
+      candidateAssociations[associationKey] = {
+        status: 'DECODE_FAILED', required_capabilities: required,
+        dependency_statuses: dependencyStatuses,
+        error: 'Selected 821 decoder outcome lacks complete exact-build candidate evidence.',
+      };
+    } else if (required.some((name) => checked[name].status === 'UNAVAILABLE')) {
+      candidateAssociations[associationKey] = {
+        status: 'UNAVAILABLE', required_capabilities: required,
+        dependency_statuses: dependencyStatuses,
+      };
+    } else {
+      try {
+        const association = analyzeMovementParticipantAssociations821(replay, {
+          inventoryEvents: checked.hero_inventory_packet.events,
+          snapshotEvents: checked.hero_deaths_snapshot.events,
+          directInputEvents: movementRoutes.includes('direct_input_movement_turn_packet')
+            ? checked.direct_input_movement_turn_packet.events : null,
+          setMovementDriverEvents: movementRoutes.includes('set_movement_driver_packet')
+            ? checked.set_movement_driver_packet.events : null,
+        });
+        candidateAssociations[associationKey] = {
+          ...association,
+          association_scope: 'REPLAY_FULL_RAW_PARAM_CANDIDATE_COVERAGE_ONLY',
+          per_packet_actor_status: 'UNVERIFIED',
+          dependency_statuses: dependencyStatuses,
+        };
+      } catch (error) {
+        candidateAssociations[associationKey] = {
+          status: 'DECODE_FAILED', required_capabilities: required,
+          dependency_statuses: dependencyStatuses,
+          error: error.message || String(error),
+        };
+      }
+    }
+  }
   if (capabilities.includes('npc_buff_add_packet')
       && capabilities.includes('npc_buff_remove_packet')) {
     const addRows = events.npc_buff_add_packet_candidates;
