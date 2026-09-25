@@ -136,6 +136,13 @@ def decode_i32_byte(encoded):
     return (ror8((~value) & 0xff, 6) - 2) & 0xff
 
 
+def decode_nested_bits(encoded):
+    # Nested +0x14 is packet +0x24. The exact 821 callback conversion at
+    # RVA 0x8d7eb9..0x8d7f26 splits this decoded byte into opaque bit fields.
+    value = swap(encoded)
+    return ((((value - 0x54) & 0xff) ^ 0xcc) + 0x48) & 0xff
+
+
 def decode_packet(emulator, context, raw_param, payload, table):
     context['raw_param'] = raw_param
     native = emulator.decode(payload, PROFILE)
@@ -172,12 +179,16 @@ def decode_packet(emulator, context, raw_param, payload, table):
                        return_al=return_al, consumed=consumed)
     raw_byte = obj[0x140]
     opaque_byte = NESTED_BYTE_INVERSE[raw_byte]
+    raw_nested_bits = obj[0x24]
+    opaque_nested_bits = decode_nested_bits(raw_nested_bits)
     return {'status': 'DECODED', 'deserialize_return_al': return_al,
             'bytes_consumed': consumed, 'native_packet_id': PACKET_ID,
             'native_raw_param': raw_param, 'raw_flag_byte_hex': f'{raw_flag:02x}',
             'opaque_flag_0x148': opaque_flag,
             'raw_f32_bytes_hex': raw_float.hex(), 'opaque_f32_0xe0': opaque_float,
             'raw_u8_0x140_hex': f'{raw_byte:02x}', 'opaque_u8_0x140': opaque_byte,
+            'raw_nested_bits_0x24_hex': f'{raw_nested_bits:02x}',
+            'opaque_nested_bits_0x24': opaque_nested_bits,
             'raw_i32_bytes_hex': raw_i32.hex(), 'opaque_i32_0x14c': opaque_i32}
 
 

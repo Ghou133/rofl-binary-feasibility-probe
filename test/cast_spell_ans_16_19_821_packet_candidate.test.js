@@ -66,6 +66,8 @@ function nativeResult(request, values = []) {
       opaque_f32_0xe0: values[inputIndex]?.float ?? 0,
       raw_u8_0x140_hex: values[inputIndex]?.byte === 13 ? '5f' : '2c',
       opaque_u8_0x140: values[inputIndex]?.byte ?? 0,
+      raw_nested_bits_0x24_hex: values[inputIndex]?.nestedBits === 1 ? 'c6' : 'c8',
+      opaque_nested_bits_0x24: values[inputIndex]?.nestedBits ?? 4,
     })),
   };
 }
@@ -84,7 +86,8 @@ test('821 CastSpellAns candidate exposes only provenance and opaque packet field
     assert.deepEqual(request.packets.map((row) => row.raw_param),
       [0x400000ae, 0x4000023c]);
     return { status: 0, stderr: '', stdout: JSON.stringify(nativeResult(request, [
-      { flag: 1 }, { i32: 80444, float: -0.06680679321289062, byte: 13 },
+      { flag: 1 }, { i32: 80444, float: -0.06680679321289062,
+        byte: 13, nestedBits: 1 },
     ])) };
   });
   const result = decode(replay, { runtimeImagePath: image });
@@ -101,6 +104,10 @@ test('821 CastSpellAns candidate exposes only provenance and opaque packet field
   assert.equal(result.events[0].opaque_u8_0x140, 0);
   assert.equal(result.events[1].raw_u8_0x140_hex, '5f');
   assert.equal(result.events[1].opaque_u8_0x140, 13);
+  assert.equal(result.events[0].raw_nested_bits_0x24_hex, 'c8');
+  assert.equal(result.events[0].opaque_nested_bits_0x24, 4);
+  assert.equal(result.events[1].raw_nested_bits_0x24_hex, 'c6');
+  assert.equal(result.events[1].opaque_nested_bits_0x24, 1);
   assert.equal(result.events[1].raw_packet_ref.chunk_stream, 'keyframe');
   assert.equal(result.events[1].raw_packet_ref.raw_param, 0x4000023c);
   assert.equal(result.events[0].raw_packet_ref.replay_sha256, replay.source_sha256);
@@ -167,6 +174,80 @@ test('821 CastSpellAns rejects a nested byte inconsistent with native bytes', (t
   const second = decode(replay, { runtimeImagePath: image });
   assert.equal(second.status, 'DECODE_FAILED');
   assert.equal(second.events, null);
+});
+
+test('821 CastSpellAns rejects nested callback bits inconsistent with native bytes', (t) => {
+  const image = fakeImage(t);
+  const replay = replayWithChunks([{ packets: [packet()] }]);
+  const wrongValue = t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const output = nativeResult(JSON.parse(options.input));
+    output.results[0].opaque_nested_bits_0x24 = 3;
+    return { status: 0, stderr: '', stdout: JSON.stringify(output) };
+  });
+  const first = decode(replay, { runtimeImagePath: image });
+  assert.equal(first.status, 'DECODE_FAILED');
+  assert.equal(first.events, null);
+  wrongValue.mock.restore();
+  t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const output = nativeResult(JSON.parse(options.input));
+    output.results[0].raw_nested_bits_0x24_hex = 'xx';
+    return { status: 0, stderr: '', stdout: JSON.stringify(output) };
+  });
+  const second = decode(replay, { runtimeImagePath: image });
+  assert.equal(second.status, 'DECODE_FAILED');
+  assert.equal(second.events, null);
+});
+
+test('821 native CastSpellAns reads callback bits at the pinned packet offset', (t) => {
+  const image = path.resolve(__dirname, '..', 'artifacts', '16_19_development',
+    'kr_821_runtime_capture', 'LeagueOfLegends_16.19.821.7343.memory.bin');
+  const rowsFile = path.resolve(__dirname, '..', 'artifacts', '16_19_development',
+    'kr_821_cast_probe', 'route_01da_rows.jsonl');
+  if (!fs.existsSync(image) || !fs.existsSync(rowsFile)) {
+    t.skip('exact private 821 image and Replay route rows are unavailable');
+    return;
+  }
+  const fixtures = [
+    { name: 'KR_8392938200.rofl', chunkIndex: 20, blockOffset: 180878,
+      payloadSha256: '73c3b3d126bc061cd20fd930bfa32f5ab95b6be545a1fd528b00bcf0583174be',
+      raw: 'c6', value: 1 },
+    { name: 'KR_8394000013.rofl', chunkIndex: 4, blockOffset: 151920,
+      payloadSha256: '96168c950828b827eb445d3ea020376084e68b963d61431a491a61541a918610',
+      raw: '18', value: 100 },
+  ];
+  const selected = new Map();
+  for (const line of fs.readFileSync(rowsFile, 'utf8').split(/\r?\n/)) {
+    if (!line) continue;
+    const row = JSON.parse(line);
+    const fixture = fixtures.find((entry) => entry.name === row.name
+      && entry.chunkIndex === row.chunk_index
+      && entry.blockOffset === row.block_offset);
+    if (fixture) selected.set(fixture.name, row);
+  }
+  const packets = fixtures.map((fixture) => {
+    const row = selected.get(fixture.name);
+    assert.ok(row, `missing exact Replay packet ${fixture.name}`);
+    assert.equal(crypto.createHash('sha256').update(Buffer.from(row.payload_hex, 'hex'))
+      .digest('hex'), fixture.payloadSha256);
+    return { raw_param: row.raw_param, payload_hex: row.payload_hex };
+  });
+  const script = path.resolve(__dirname, '..', 'scripts',
+    'decode_cast_spell_ans_packet_16_19_821.py');
+  const run = childProcess.spawnSync(process.env.PYTHON || 'python',
+    ['-B', script, '--image', image], {
+      input: JSON.stringify({ replay_version: BUILD, packets }),
+      encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 60000,
+    });
+  assert.equal(run.status, 0, run.error?.message || run.stderr);
+  const decoded = JSON.parse(run.stdout);
+  assert.equal(decoded.runtime_image_sha256, IMAGE_SHA256);
+  assert.equal(decoded.status, 'PASS');
+  for (let index = 0; index < fixtures.length; index += 1) {
+    assert.equal(decoded.results[index].status, 'DECODED');
+    assert.equal(decoded.results[index].bytes_consumed, packets[index].payload_hex.length / 2);
+    assert.equal(decoded.results[index].raw_nested_bits_0x24_hex, fixtures[index].raw);
+    assert.equal(decoded.results[index].opaque_nested_bits_0x24, fixtures[index].value);
+  }
 });
 
 test('821 CastSpellAns requires exact Replay build and leaves absent route unavailable', () => {

@@ -25,7 +25,7 @@ const MAX_OBSERVED_PAYLOAD_BYTES = 189;
 const OBSERVED_SELECTORS = new Set([0x05, 0x11, 0x15, 0x17, 0x19, 0x1b]);
 
 const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
-  id: 'rofl-16.19.821.7343-kr-cast-spell-ans-packet-runtime-candidate-v3',
+  id: 'rofl-16.19.821.7343-kr-cast-spell-ans-packet-runtime-candidate-v4',
   replay_version: REPLAY_VERSION,
   capability: CAPABILITY,
   status: 'CANDIDATE',
@@ -37,12 +37,13 @@ const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
   evidence_nested_float_inverse_sha256: NESTED_FLOAT_INVERSE_SHA256,
   evidence_nested_byte_inverse_sha256: NESTED_BYTE_INVERSE_SHA256,
   runtime_image_required: true,
-  evidence_scope: 'exact 821 native constructor/deserializer fully consumed 63496 route packets from 11 KR Replays; two callback-transformed fields, one nested protected float and one nested protected byte remain opaque',
+  evidence_scope: 'exact 821 native constructor/deserializer fully consumed 63496 route packets from 11 KR Replays; packet +0x148/+0x14c and nested +0xd0/+0x130/+0x14 callback fields remain opaque',
   known_limits: Object.freeze([
     'The packet class name does not prove a successful spell cast.',
     'Spell identity, slot, owner, target, cast action and gameplay meaning are unavailable.',
     'The nested float has no established position, timing or action meaning.',
     'The nested byte has no established spell, owner or action meaning.',
+    'The nested +0x14 callback bit field has no established gameplay meaning.',
     'Only observed 821 packet selectors, payload lengths and stream tags are accepted.',
     'The pinned exact-build mapped runtime image and Python Unicorn are required.',
   ]),
@@ -103,6 +104,13 @@ function decodeNestedFloat(rawHex) {
   const bytes = Buffer.from(raw.map((value) => NESTED_FLOAT_INVERSE[value]));
   const value = bytes.readFloatLE(0);
   return Number.isFinite(value) ? value : null;
+}
+
+function decodeNestedBits(rawHex) {
+  if (!/^[0-9a-f]{2}$/.test(rawHex)) return null;
+  // Exact 821 callback conversion at RVA 0x8d7eb9..0x8d7f26.
+  const value = swap(Number.parseInt(rawHex, 16));
+  return ((((value - 0x54) & 0xff) ^ 0xcc) + 0x48) & 0xff;
 }
 
 function packetRef(replay, block, chunk) {
@@ -291,6 +299,7 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
           || !/^[0-9a-f]{8}$/.test(row.raw_i32_bytes_hex)
           || !/^[0-9a-f]{8}$/.test(row.raw_f32_bytes_hex)
           || !/^[0-9a-f]{2}$/.test(row.raw_u8_0x140_hex)
+          || !/^[0-9a-f]{2}$/.test(row.raw_nested_bits_0x24_hex)
           || ![0, 1].includes(row.opaque_flag_0x148)
           || !Number.isInteger(row.opaque_i32_0x14c)
           || row.opaque_i32_0x14c < -0x80000000
@@ -299,7 +308,9 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
           || !Number.isFinite(row.opaque_f32_0xe0)
           || !Object.is(row.opaque_f32_0xe0, decodeNestedFloat(row.raw_f32_bytes_hex))
           || !Number.isInteger(row.opaque_u8_0x140)
-          || row.opaque_u8_0x140 !== decodeNestedByte(row.raw_u8_0x140_hex)) {
+          || row.opaque_u8_0x140 !== decodeNestedByte(row.raw_u8_0x140_hex)
+          || !Number.isInteger(row.opaque_nested_bits_0x24)
+          || row.opaque_nested_bits_0x24 !== decodeNestedBits(row.raw_nested_bits_0x24_hex)) {
         return failed('DECODE_FAILED', `runtime cast packet ${start + index} did not fully decode`, {
           runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
           runtime_image_sha256: IMAGE_SHA256, first_failed_packet_ref: ref,
@@ -320,6 +331,8 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
         opaque_f32_0xe0: row.opaque_f32_0xe0,
         raw_u8_0x140_hex: row.raw_u8_0x140_hex,
         opaque_u8_0x140: row.opaque_u8_0x140,
+        raw_nested_bits_0x24_hex: row.raw_nested_bits_0x24_hex,
+        opaque_nested_bits_0x24: row.opaque_nested_bits_0x24,
         confidence: 'CANDIDATE',
         semantic_status: 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS',
         raw_packet_ref: ref,
