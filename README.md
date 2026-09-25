@@ -84,6 +84,7 @@
 | `16.19.821.7343 --events unit_apply_damage_roster_key_pair --runtime-image PATH` | 将原生验证的 `0x005f` 完整原始参数与同回放完整十人 `0x0089` HeroStats 阵容键精确配对，输出两个来源引用和阵容一侧的候选参与者标签；11 份回放匹配 49,473/628,909 包 | 仅写入 `unit_apply_damage_roster_key_candidates`，状态为 `CANDIDATE`；10,284 个 `+0x100` 别名和其他键明确排除，不把阵容标签当作伤害包行动者、来源或目标，也不推断实际伤害 |
 | `16.19.821.7343 --events unit_apply_damage_lookup_roster_key_pair --runtime-image PATH` | 将原生回调解出的 `0x005f` 对象 `+0x24` 完整查找键与同回放完整十人 `0x0089` HeroStats 阵容键精确配对，保留原始参数与查找键的关系及两个来源引用；11 份回放匹配 62,860/628,909 包，其中 10,284 包的原始参数为匹配键 `+0x100` | 另写入 `unit_apply_damage_lookup_roster_key_candidates`，状态为 `CANDIDATE`；阵容标签仅属于查找键共现，不能确定对象查找成功、行动者、来源、目标、实际伤害或血量变化 |
 | `16.19.821.7343 --events unit_apply_damage_lookup2c_roster_key_pair --runtime-image PATH` | 独立检查原生回调对象 `+0x2c` 完整查找键与同回放完整十人 HeroStats 阵容键的精确共现，同时保留 `+0x24` 键、原始参数关系和两个来源引用；11 份回放匹配 173,125/628,909 包 | 另写入 `unit_apply_damage_lookup2c_roster_key_candidates`，状态为 `CANDIDATE`；阵容标签仅属于 `+0x2c` 键共现，不能确定查找成功、行动者、来源、目标、击杀者或伤害效果 |
+| `16.19.821.7343 --events hero_death_damage_lookup_key_cooccurrence --runtime-image PATH` | 以每个 `hero_death` 候选死亡为锚点，收集同一 chunk、同一毫秒中原生 `0x005f` 包 `+0x24` 键等于候选受害者完整阵容键的所有包，并逐包记录 `+0x2c` 是否等于死亡路由解出的来源 ID；重新核对死亡路由、伤害包和完整十人 HeroStats 原始来源 | 另写入 `hero_death_damage_lookup_key_cooccurrence_candidates`，每个死亡锚点一行，保留零匹配、多包、非阵容 `+0x2c` 和不相等的证据；状态为 `CANDIDATE`，不指定致死包，也不推断伤害行动者、来源、目标、对象查找成功或实际效果 |
 | `16.19.821.7343 --events face_direction_keyframe_roster_pair --runtime-image PATH` | 自动解码 FaceDirection 包和 `0x0089` 标准补刀快照，在同一关键帧按完整原始参数及先后顺序配对规范英雄行 | 仅写入 `face_direction_keyframe_roster_pair_candidates`；参与者标签来自 HeroStats 阵容，不能当作 FaceDirection 包的行动者；不推断方向效果、位置或路径 |
 | `16.19.821.7343 --events npc_buff_add_packet,npc_buff_remove_packet --runtime-image PATH` | 分别解码 KR `0x00ae/0x047c` 原生包，并在两项均成功时汇总相同不透明 `(u32, u8)` 键的重合与时序歧义 | 逐包候选分别写入两个 JSONL；`candidate_associations.npc_buff_add_remove_opaque_key` 仅含回放内统计，不配对单个包，不推断 Buff 名称、归属或生命周期 |
 | `16.19.821.7343 --events npc_buff_update_num_counter_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x0194` BuffUpdateNumCounter 包，保留四个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_update_num_counter_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 名称、归属、计数含义或生命周期 |
@@ -840,6 +841,27 @@ node src/cli.js query-events "work\16-19-821-damage-lookup2c-roster" `
 ```
 
 保存查询仍按原始伤害包参数筛选，并逐行核对已保存的候选字段、原始字节和来源引用；它不会重新打开 ROFL，物理包核对发生在解码阶段。`+0x24` 与 `+0x2c` 可以同时落在阵容内，也可以分别落在阵容外；不能把其中一个字段的标签转给另一个字段，或从同一回放毫秒选出唯一致死包。11 份回放的 CLI 输出为 11/11 `CANDIDATE`、零 framing 错误；其中两键都在阵容内的有 34,712 包，仅 15 包是相同键。
+
+按死亡锚点查看同刻原生查找键的共现候选时，只需选择关联能力；CLI/API 会运行并核对 `hero_death`、原生 `unit_apply_damage_packet`、`hero_minions_killed_snapshot` 和原始参数阵容键配对这四项来源：
+
+```powershell
+node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
+  --events hero_death_damage_lookup_key_cooccurrence `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-death-damage-lookup"
+```
+
+API 可调用 `decodeSemanticReplay(parseReplayFile(replayPath), { capabilities: ['hero_death_damage_lookup_key_cooccurrence'], runtimeImagePath: imagePath })`，从 `events.hero_death_damage_lookup_key_cooccurrence_candidates` 读取逐次结果，并从 `capability_results.hero_death_damage_lookup_key_cooccurrence` 读取来源状态与计数。
+
+逐次结果写入 `hero_death_damage_lookup_key_cooccurrence_candidates.jsonl`，汇总和来源状态写入 `semantic_run.json` 的 `capability_results.hero_death_damage_lookup_key_cooccurrence`。每行保留死亡锚点、候选受害者完整阵容键、死亡来源 ID、所有同 chunk 同毫秒且 `+0x24` 键相等的伤害包原始引用，并分别统计这些包中 `+0x2c` 键等于死亡来源 ID 的数量。死亡候选的原始参数可能是阵容键 `+0x100` 别名，因此关联使用候选参与者的完整阵容键，不把原始参数直接当作查找键。多包全部保留；`NO_SAME_TIME_MATCH`、`DIE_SOURCE_UNAVAILABLE` 和零包均有各自含义。11 份精确 build 回放的本能力批量运行是 11/11 `CANDIDATE`、零 framing 错误：655 个死亡锚点对应 1,035 个同刻候选伤害包，227 个锚点有多个包；633 个锚点至少有一包的 `+0x2c` 与死亡来源 ID 相等，22 个没有。即使两个键同时相等，包的致死关系、行动者、来源、目标、对象查找结果和实际血量效果仍为 `UNKNOWN`。
+
+保存结果可按候选受害者或嵌套伤害包的**原始参数**查询；`--raw-param` 不筛选死亡路由原始参数或解码查找键。查询先完整核对所有保存行和来源引用，再应用 `--limit`，不重新打开原始 ROFL：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-death-damage-lookup" `
+  --event hero_death_damage_lookup_key_cooccurrence_candidates `
+  --participant 1 --limit 20
+```
 
 对 821 `UnitApplyDamage` 保存结果，仅筛选具有上述旧版匿名回调浮点值的包：
 

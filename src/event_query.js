@@ -88,6 +88,8 @@ const { UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
 const { UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_lookup2c_roster_key_candidate');
+const { HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_hero_death_damage_lookup_key_cooccurrence_candidate');
 const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
 const { TURRET_FIRST_BLOOD_DIE_PAIR_821_PROFILE } =
@@ -255,6 +257,57 @@ const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_ROW_FIELDS_821 = new Set([
 ]);
 const UNIT_APPLY_DAMAGE_LOOKUP2C_KEY24_ROSTER_RELATIONS_821 = Object.freeze([
   'SAME_ROSTER_KEY', 'DIFFERENT_ROSTER_KEY', 'KEY24_NOT_IN_ROSTER',
+]);
+const HERO_DEATH_DAMAGE_LOOKUP_RESULT_FIELDS_821 = new Set([
+  'profile_id', 'depends_on', 'evidence_runtime_image_sha256',
+  'evidence_lookup_key_0x24_table_sha256',
+  'evidence_lookup_key_0x2c_table_sha256', 'known_limits', 'status',
+  'evidence_status', 'replay_sha256', 'runtime_image_status',
+  'runtime_image_used', 'runtime_image_sha256', 'dependency_statuses',
+  'death_anchor_count', 'damage_packet_count', 'snapshot_count',
+  'canonical_roster_key_count', 'verified_raw_damage_roster_packet_count',
+  'verified_hero_death_route_packet_count',
+  'matched_victim_key24_packet_count',
+  'death_anchor_with_victim_key24_packet_count',
+  'death_anchor_without_victim_key24_packet_count',
+  'multiple_victim_key24_packet_anchor_count',
+  'max_victim_key24_packet_count_per_anchor',
+  'matched_die_source_key2c_packet_count',
+  'death_anchor_with_die_source_key2c_match_count',
+  'death_anchor_without_die_source_key2c_match_count',
+  'death_anchor_die_source_unavailable_count', 'input_count', 'event_count',
+]);
+const HERO_DEATH_DAMAGE_LOOKUP_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'victim_participant_id_candidate', 'victim_raw_param',
+  'victim_lookup_roster_key_u32_candidate',
+  'die_source_network_id_candidate',
+  'same_time_victim_key24_packet_candidate_count',
+  'same_time_victim_key24_packet_before_primary_count',
+  'same_time_victim_key24_packet_after_primary_count',
+  'same_time_die_source_key2c_packet_candidate_count',
+  'die_source_key2c_match_status',
+  'same_time_victim_key24_packet_candidates',
+  'hero_death_raw_packet_ref', 'hero_death_die_source_raw_packet_ref',
+  'hero_death_raw_packet_refs', 'hero_stats_roster_raw_packet_ref',
+  'raw_packet_refs', 'pair_basis', 'lookup_resolution_status',
+  'actor_assignment_status', 'source_target_role_status',
+  'semantic_effect_status', 'confidence', 'semantic_status',
+]);
+const HERO_DEATH_DAMAGE_LOOKUP_PACKET_FIELDS_821 = new Set([
+  'raw_param', 'native_callback_lookup_key_u32_0x24_candidate',
+  'native_callback_lookup_key_0x24_encoded_bytes_hex',
+  'native_callback_lookup_key_u32_0x2c_candidate',
+  'native_callback_lookup_key_0x2c_encoded_bytes_hex',
+  'native_callback_lookup_key_0x24_raw_param_relation',
+  'die_source_key2c_equal', 'relative_to_death_primary',
+  'unit_apply_damage_raw_packet_ref',
+]);
+const HERO_DEATH_DAMAGE_LOOKUP_DEATH_REF_FIELDS_821 = new Set([
+  'role', 'source_path', 'replay_sha256', 'chunk_index', 'chunk_id',
+  'chunk_stream', 'chunk_file_offset', 'decompressed_block_offset',
+  'decompressed_payload_offset', 'packet_id', 'replay_time_ms',
+  'payload_length', 'raw_param', 'raw_payload_sha256',
 ]);
 const MAX_MINION_BRACKET_SOURCE_ROWS_821 = 10_000;
 const MAX_EXPERIENCE_INTERVAL_SOURCE_ROWS_821 = 100_000;
@@ -2033,6 +2086,10 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
     prepareUnitApplyDamageLookup2cRosterKeyEvent(semantic, analysis, eventKey,
       capabilityResult);
   }
+  if (eventKey === 'hero_death_damage_lookup_key_cooccurrence_candidates') {
+    prepareHeroDeathDamageLookupKeyCooccurrenceEvent(semantic, analysis,
+      eventKey, capabilityResult);
+  }
   const capabilityStatus = capabilityResult?.status ?? null;
   if (capabilityStatus && !['CANDIDATE', 'PASS'].includes(capabilityStatus)) {
     throw new EventQueryError('CAPABILITY_UNAVAILABLE',
@@ -2988,6 +3045,141 @@ function prepareUnitApplyDamageLookup2cRosterKeyEvent(semantic, analysis,
         lookup24Pair)) {
     throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
       `${profile.capability} identity, native v3 dependencies or counts differ.`,
+      { capability: profile.capability });
+  }
+}
+
+function prepareHeroDeathDamageLookupKeyCooccurrenceEvent(semantic, analysis,
+  eventKey, result) {
+  const profile = HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`);
+  }
+  if (result?.status !== 'CANDIDATE') return;
+  const death = semantic.capability_results?.hero_death;
+  const damage = semantic.capability_results?.unit_apply_damage_packet;
+  const snapshot = semantic.capability_results?.hero_minions_killed_snapshot;
+  const rawPair = semantic.capability_results?.unit_apply_damage_roster_key_pair;
+  const recorded = analysis.semantic?.capability_results;
+  const expectedDependencies = Object.fromEntries(
+    profile.depends_on.map((dependency) => [dependency, 'CANDIDATE']));
+  const deathCount = result.death_anchor_count;
+  const damageCount = result.damage_packet_count;
+  const snapshotCount = result.snapshot_count;
+  if (Object.keys(result).length
+        !== HERO_DEATH_DAMAGE_LOOKUP_RESULT_FIELDS_821.size
+      || Object.keys(result).some((field) =>
+        !HERO_DEATH_DAMAGE_LOOKUP_RESULT_FIELDS_821.has(field))
+      || result.profile_id !== profile.id
+      || result.evidence_status !== profile.evidence_status
+      || result.replay_sha256 !== semantic.replay_sha256
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.evidence_lookup_key_0x24_table_sha256
+        !== profile.evidence_lookup_key_0x24_table_sha256
+      || result.evidence_lookup_key_0x2c_table_sha256
+        !== profile.evidence_lookup_key_0x2c_table_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || !isDeepStrictEqual(result.depends_on, [...profile.depends_on])
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(result.dependency_statuses, expectedDependencies)
+      || !isCount(deathCount) || result.event_count !== deathCount
+      || !isCount(damageCount) || damageCount === 0
+      || !isCount(snapshotCount) || snapshotCount === 0
+      || snapshotCount % 10 !== 0
+      || result.canonical_roster_key_count !== 10
+      || result.verified_raw_damage_roster_packet_count
+        !== damageCount + snapshotCount
+      || !isCount(result.verified_hero_death_route_packet_count)
+      || result.verified_hero_death_route_packet_count < 3 * deathCount
+      || result.verified_hero_death_route_packet_count > 4 * deathCount
+      || result.input_count !== deathCount + damageCount
+      || !isCount(result.matched_victim_key24_packet_count)
+      || result.matched_victim_key24_packet_count > damageCount
+      || !isCount(result.death_anchor_with_victim_key24_packet_count)
+      || !isCount(result.death_anchor_without_victim_key24_packet_count)
+      || result.death_anchor_with_victim_key24_packet_count
+        + result.death_anchor_without_victim_key24_packet_count !== deathCount
+      || !isCount(result.multiple_victim_key24_packet_anchor_count)
+      || result.multiple_victim_key24_packet_anchor_count
+        > result.death_anchor_with_victim_key24_packet_count
+      || !isCount(result.max_victim_key24_packet_count_per_anchor)
+      || result.max_victim_key24_packet_count_per_anchor
+        > result.matched_victim_key24_packet_count
+      || (result.death_anchor_with_victim_key24_packet_count === 0)
+        !== (result.max_victim_key24_packet_count_per_anchor === 0)
+      || !isCount(result.matched_die_source_key2c_packet_count)
+      || result.matched_die_source_key2c_packet_count
+        > result.matched_victim_key24_packet_count
+      || !isCount(result.death_anchor_with_die_source_key2c_match_count)
+      || !isCount(result.death_anchor_without_die_source_key2c_match_count)
+      || !isCount(result.death_anchor_die_source_unavailable_count)
+      || result.death_anchor_with_die_source_key2c_match_count
+        + result.death_anchor_without_die_source_key2c_match_count
+        + result.death_anchor_die_source_unavailable_count !== deathCount
+      || analysis.event_counts?.[eventKey] !== result.event_count
+      || !isDeepStrictEqual(recorded?.[profile.capability], result)
+      || (death && (death.status !== 'CANDIDATE'
+        || death.profile_id !== HERO_DEATH_CANDIDATE_PROFILE_821.id
+        || death.evidence_status
+          !== 'CANDIDATE_821_REPLAY_TAIL_ROUTE_FINGERPRINT'
+        || death.evidence_runtime_image_sha256
+          !== profile.evidence_runtime_image_sha256
+        || death.source_id_lookup_table_sha256
+          !== HERO_DEATH_CANDIDATE_PROFILE_821.source_id_lookup_table_sha256
+        || death.event_count !== deathCount
+        || death.matched_core_count !== deathCount
+        || death.matched_core_supporting_packet_count
+          !== result.verified_hero_death_route_packet_count))
+      || (damage && (damage.status !== 'CANDIDATE'
+        || damage.profile_id !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id
+        || damage.evidence_status
+          !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.evidence_status
+        || damage.event_count !== damageCount
+        || damage.input_count !== damage.event_count
+        || damage.native_witness_status !== 'FULLY_CONSUMED_ALL'
+        || damage.native_full_success_count !== damageCount
+        || damage.native_callback_lookup_full_write_count !== damageCount
+        || !REPLAY_SHA.test(damage.native_input_sha256 ?? '')
+        || damage.evidence_lookup_key_0x24_table_sha256
+          !== profile.evidence_lookup_key_0x24_table_sha256
+        || damage.evidence_lookup_key_0x2c_table_sha256
+          !== profile.evidence_lookup_key_0x2c_table_sha256
+        || damage.runtime_image_status !== 'MATCHED_USED'
+        || damage.runtime_image_used !== true
+        || damage.runtime_image_sha256
+          !== profile.evidence_runtime_image_sha256))
+      || (snapshot && (snapshot.status !== 'CANDIDATE'
+        || snapshot.profile_id
+          !== FLOAT_STATS_821_PROFILES.hero_minions_killed_snapshot.id
+        || snapshot.event_count !== snapshotCount
+        || snapshot.input_count !== snapshot.event_count
+        || snapshot.keyframe_count !== snapshotCount / 10
+        || snapshot.observed_participant_count !== 10))
+      || (rawPair && (rawPair.status !== 'CANDIDATE'
+        || rawPair.profile_id !== UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE.id
+        || rawPair.evidence_status
+          !== UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE.evidence_status
+        || rawPair.damage_packet_count !== damageCount
+        || rawPair.snapshot_count !== snapshotCount
+        || rawPair.canonical_roster_key_count !== 10
+        || rawPair.verified_raw_packet_count
+          !== result.verified_raw_damage_roster_packet_count
+        || rawPair.input_count !== rawPair.verified_raw_packet_count
+        || rawPair.runtime_image_status !== 'MATCHED_USED'
+        || rawPair.runtime_image_used !== true
+        || rawPair.runtime_image_sha256
+          !== profile.evidence_runtime_image_sha256))
+      || !isDeepStrictEqual(recorded?.hero_death, death)
+      || !isDeepStrictEqual(recorded?.unit_apply_damage_packet, damage)
+      || !isDeepStrictEqual(recorded?.hero_minions_killed_snapshot, snapshot)
+      || !isDeepStrictEqual(recorded?.unit_apply_damage_roster_key_pair,
+        rawPair)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} identity, exact-build dependencies or counts differ.`,
       { capability: profile.capability });
   }
 }
@@ -5836,6 +6028,232 @@ function unitApplyDamageLookup2cRosterKeyRow(row, prepared, lineNumber, state) {
   state.key24RosterCounts[key24RosterRelation] += 1;
 }
 
+function validHeroDeathDamageLookupDeathRef(ref, prepared, role, packetId,
+  payloadLength, replayTime, chunkIndex) {
+  return !!ref && typeof ref === 'object' && !Array.isArray(ref)
+    && Object.keys(ref).length
+      === HERO_DEATH_DAMAGE_LOOKUP_DEATH_REF_FIELDS_821.size
+    && Object.keys(ref).every((field) =>
+      HERO_DEATH_DAMAGE_LOOKUP_DEATH_REF_FIELDS_821.has(field))
+    && ref.role === role
+    && ref.source_path === (prepared.sourcePath ?? null)
+    && ref.replay_sha256 === prepared.replaySha
+    && ref.chunk_stream === 'game_chunk'
+    && Number.isSafeInteger(ref.chunk_index) && ref.chunk_index >= 0
+    && (chunkIndex === null || ref.chunk_index === chunkIndex)
+    && Number.isSafeInteger(ref.chunk_id) && ref.chunk_id >= 0
+    && Number.isSafeInteger(ref.chunk_file_offset)
+    && ref.chunk_file_offset >= 0
+    && Number.isSafeInteger(ref.decompressed_block_offset)
+    && ref.decompressed_block_offset >= 0
+    && Number.isSafeInteger(ref.decompressed_payload_offset)
+    && ref.decompressed_payload_offset > ref.decompressed_block_offset
+    && ref.packet_id === packetId
+    && ref.replay_time_ms === replayTime
+    && Number.isSafeInteger(ref.payload_length)
+    && (Array.isArray(payloadLength)
+      ? payloadLength.includes(ref.payload_length)
+      : payloadLength === null ? ref.payload_length > 5
+        : ref.payload_length === payloadLength)
+    && Number.isSafeInteger(ref.raw_param) && ref.raw_param >= 0
+    && ref.raw_param <= 0xffffffff
+    && REPLAY_SHA.test(ref.raw_payload_sha256);
+}
+
+function heroDeathDamageLookupKeyCooccurrenceRow(row, prepared, lineNumber,
+  state) {
+  if (prepared.eventKey
+      !== 'hero_death_damage_lookup_key_cooccurrence_candidates') return;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid hero death/damage lookup cooccurrence at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const profile = HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE;
+  const deathRefs = row.hero_death_raw_packet_refs;
+  const primary = row.hero_death_raw_packet_ref;
+  const dieSourceRef = row.hero_death_die_source_raw_packet_ref;
+  const rosterRef = row.hero_stats_roster_raw_packet_ref;
+  const packets = row.same_time_victim_key24_packet_candidates;
+  const victim = row.victim_participant_id_candidate;
+  const victimKey = 0x400000ad + victim;
+  const dieSource = row.die_source_network_id_candidate;
+  if (Object.keys(row).length !== HERO_DEATH_DAMAGE_LOOKUP_ROW_FIELDS_821.size
+      || Object.keys(row).some((field) =>
+        !HERO_DEATH_DAMAGE_LOOKUP_ROW_FIELDS_821.has(field))
+      || row.event_type !== 'HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.replay_sha256 !== prepared.replaySha
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== profile.evidence_status
+      || row.pair_basis
+        !== 'SAME_CHUNK_SAME_MILLISECOND_EXACT_CANONICAL_VICTIM_KEY24'
+      || row.lookup_resolution_status !== 'UNKNOWN'
+      || row.actor_assignment_status !== 'UNKNOWN'
+      || row.source_target_role_status !== 'UNKNOWN'
+      || row.semantic_effect_status !== 'UNKNOWN'
+      || !Number.isSafeInteger(victim) || victim < 1 || victim > 10
+      || row.victim_lookup_roster_key_u32_candidate !== victimKey
+      || ![victimKey, victimKey + 0x100].includes(row.victim_raw_param)
+      || (dieSource !== null
+        && (!Number.isSafeInteger(dieSource) || dieSource < 0
+          || dieSource > 0xffffffff))
+      || !Array.isArray(deathRefs) || ![3, 4].includes(deathRefs.length)
+      || !isDeepStrictEqual(primary, deathRefs[0])
+      || !isDeepStrictEqual(dieSourceRef, deathRefs[1])
+      || !Array.isArray(packets)
+      || !isCount(row.same_time_victim_key24_packet_candidate_count)
+      || row.same_time_victim_key24_packet_candidate_count !== packets.length
+      || !isCount(row.same_time_victim_key24_packet_before_primary_count)
+      || !isCount(row.same_time_victim_key24_packet_after_primary_count)
+      || !validUnitApplyDamageRosterRef(rosterRef, prepared.replaySha,
+        prepared.sourcePath, 0x0089, victimKey)
+      || !validHeroDeathDamageLookupDeathRef(primary, prepared,
+        'candidate_primary', 0x0259, 5, row.replay_time_ms, null)
+      || primary.raw_param !== row.victim_raw_param
+      || !validHeroDeathDamageLookupDeathRef(dieSourceRef, prepared,
+        'candidate_paired', 0x0438, null, row.replay_time_ms,
+        primary.chunk_index)
+      || dieSourceRef.raw_param !== row.victim_raw_param
+      || !validHeroDeathDamageLookupDeathRef(deathRefs[2], prepared,
+        'corroborating_core_co_timed', 0x031b, null,
+        row.replay_time_ms, primary.chunk_index)
+      || (deathRefs.length === 4
+        && !validHeroDeathDamageLookupDeathRef(deathRefs[3], prepared,
+          'optional_corroborating_co_timed', 0x03d4, [3, 7],
+          row.replay_time_ms, primary.chunk_index))) {
+    invalid('exact death anchor, canonical roster or candidate boundaries differ');
+  }
+  const deathPositions = new Set();
+  for (const ref of deathRefs) {
+    if (ref.chunk_id !== primary.chunk_id
+        || ref.chunk_file_offset !== primary.chunk_file_offset) {
+      invalid('death route references do not share one game chunk');
+    }
+    const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+    if (deathPositions.has(position) || state.deathRoutePositions.has(position)) {
+      invalid('duplicate death route packet reference');
+    }
+    deathPositions.add(position);
+    state.deathRoutePositions.add(position);
+  }
+  const primaryPosition = `${primary.chunk_index}/${primary.decompressed_block_offset}`;
+  if (state.primaryPositions.has(primaryPosition)
+      || primary.chunk_index < state.previousPrimaryChunkIndex
+      || (primary.chunk_index === state.previousPrimaryChunkIndex
+        && primary.decompressed_block_offset
+          <= state.previousPrimaryBlockOffset)) {
+    invalid('death anchors are duplicated or outside Replay walk order');
+  }
+  state.primaryPositions.add(primaryPosition);
+  state.previousPrimaryChunkIndex = primary.chunk_index;
+  state.previousPrimaryBlockOffset = primary.decompressed_block_offset;
+  const rosterFrame = `${rosterRef.chunk_index}/${rosterRef.chunk_id}/`
+    + `${rosterRef.chunk_file_offset}/${rosterRef.replay_time_ms}`;
+  if (state.rosterFrame !== null && state.rosterFrame !== rosterFrame) {
+    invalid('HeroStats packet is outside one canonical roster keyframe');
+  }
+  state.rosterFrame = rosterFrame;
+  const priorRosterRef = state.rosterRefs.get(victimKey);
+  if (priorRosterRef && !isDeepStrictEqual(priorRosterRef, rosterRef)) {
+    invalid('one canonical victim key has conflicting HeroStats refs');
+  }
+  const rosterPosition = `${rosterRef.chunk_index}/${rosterRef.decompressed_block_offset}`;
+  const priorRosterKey = state.rosterPositions.get(rosterPosition);
+  if (priorRosterKey !== undefined && priorRosterKey !== victimKey) {
+    invalid('different canonical victim keys share one HeroStats packet position');
+  }
+  state.rosterRefs.set(victimKey, rosterRef);
+  state.rosterPositions.set(rosterPosition, victimKey);
+  let previousDamageBlockOffset = -1;
+  let before = 0;
+  let after = 0;
+  let dieSourceMatches = 0;
+  const damageRefs = [];
+  for (const packet of packets) {
+    const damageRef = packet?.unit_apply_damage_raw_packet_ref;
+    const rawParam = packet?.raw_param;
+    const key24 = packet?.native_callback_lookup_key_u32_0x24_candidate;
+    const key2c = packet?.native_callback_lookup_key_u32_0x2c_candidate;
+    const rawParamRelation = rawParam === key24 ? 'EQUAL'
+      : rawParam - key24 === 0x100
+        ? 'RAW_PARAM_IS_LOOKUP_PLUS_0X100' : 'OTHER';
+    const isBefore = damageRef?.decompressed_block_offset
+      < primary.decompressed_block_offset;
+    const relative = isBefore ? 'BEFORE_PRIMARY' : 'AFTER_PRIMARY';
+    const dieSourceEqual = dieSource === null ? null : key2c === dieSource;
+    if (!packet || typeof packet !== 'object' || Array.isArray(packet)
+        || Object.keys(packet).length
+          !== HERO_DEATH_DAMAGE_LOOKUP_PACKET_FIELDS_821.size
+        || Object.keys(packet).some((field) =>
+          !HERO_DEATH_DAMAGE_LOOKUP_PACKET_FIELDS_821.has(field))
+        || !Number.isSafeInteger(rawParam) || rawParam <= 0
+        || rawParam > 0xffffffff
+        || key24 !== victimKey
+        || !Number.isSafeInteger(key2c) || key2c <= 0
+        || key2c > 0xffffffff
+        || decodeUnitApplyDamageLookupKeyFromRaw821(
+          packet.native_callback_lookup_key_0x24_encoded_bytes_hex, 0x24)
+          !== key24
+        || decodeUnitApplyDamageLookupKeyFromRaw821(
+          packet.native_callback_lookup_key_0x2c_encoded_bytes_hex, 0x2c)
+          !== key2c
+        || packet.native_callback_lookup_key_0x24_raw_param_relation
+          !== rawParamRelation
+        || packet.die_source_key2c_equal !== dieSourceEqual
+        || packet.relative_to_death_primary !== relative
+        || !validUnitApplyDamageRosterRef(damageRef, prepared.replaySha,
+          prepared.sourcePath, 0x005f, rawParam, row.replay_time_ms)
+        || damageRef.chunk_index !== primary.chunk_index
+        || damageRef.chunk_id !== primary.chunk_id
+        || damageRef.chunk_file_offset !== primary.chunk_file_offset
+        || damageRef.decompressed_block_offset
+          === primary.decompressed_block_offset
+        || damageRef.decompressed_block_offset <= previousDamageBlockOffset) {
+      invalid('nested native keys, packet order, raw bytes or same-time chunk differ');
+    }
+    const payload = Buffer.from(damageRef.raw_payload_hex, 'hex');
+    if (!isObservedUnitApplyDamageShape821(payload.length, payload[3] & 7,
+      payload[0] & 7, (payload[0] >>> 3) & 7)) {
+      invalid('nested 0x005f packet shape is outside exact 821 catalog');
+    }
+    const position = `${damageRef.chunk_index}/${damageRef.decompressed_block_offset}`;
+    if (deathPositions.has(position) || state.damagePositions.has(position)) {
+      invalid('nested damage reference duplicates a route or prior anchor packet');
+    }
+    state.damagePositions.add(position);
+    previousDamageBlockOffset = damageRef.decompressed_block_offset;
+    if (isBefore) before += 1;
+    else after += 1;
+    if (dieSourceEqual) dieSourceMatches += 1;
+    damageRefs.push(damageRef);
+  }
+  const status = dieSource === null ? 'DIE_SOURCE_UNAVAILABLE'
+    : dieSourceMatches > 0 ? 'HAS_SAME_TIME_MATCH' : 'NO_SAME_TIME_MATCH';
+  if (row.same_time_victim_key24_packet_before_primary_count !== before
+      || row.same_time_victim_key24_packet_after_primary_count !== after
+      || row.same_time_die_source_key2c_packet_candidate_count
+        !== (dieSource === null ? null : dieSourceMatches)
+      || row.die_source_key2c_match_status !== status
+      || !isDeepStrictEqual(row.raw_packet_refs,
+        [...deathRefs, rosterRef, ...damageRefs])) {
+    invalid('per-anchor packet counts, absence or ordered raw refs differ');
+  }
+  state.deathRoutePacketCount += deathRefs.length;
+  state.matchedPacketCount += packets.length;
+  state.withPacketCount += Number(packets.length > 0);
+  state.withoutPacketCount += Number(packets.length === 0);
+  state.multiplePacketAnchorCount += Number(packets.length > 1);
+  state.maxPacketCount = Math.max(state.maxPacketCount, packets.length);
+  state.dieSourceMatchPacketCount += dieSourceMatches;
+  state.withDieSourceMatchCount += Number(dieSource !== null
+    && dieSourceMatches > 0);
+  state.withoutDieSourceMatchCount += Number(dieSource !== null
+    && dieSourceMatches === 0);
+  state.dieSourceUnavailableCount += Number(dieSource === null);
+}
+
 function candidateChildEventId(row, eventKey, lineNumber) {
   const field = eventKey === 'champion_triple_quadra_multi_group_candidates'
     ? 'on_champion_triple_quadra_child_event_id'
@@ -6215,6 +6633,17 @@ async function streamEventQuery(prepared, options, emitLine) {
       SAME_ROSTER_KEY: 0, DIFFERENT_ROSTER_KEY: 0, KEY24_NOT_IN_ROSTER: 0,
     },
   };
+  const deathDamageLookupState = {
+    previousPrimaryChunkIndex: -1, previousPrimaryBlockOffset: -1,
+    primaryPositions: new Set(), deathRoutePositions: new Set(),
+    damagePositions: new Set(), rosterFrame: null,
+    rosterRefs: new Map(), rosterPositions: new Map(),
+    deathRoutePacketCount: 0, matchedPacketCount: 0,
+    withPacketCount: 0, withoutPacketCount: 0,
+    multiplePacketAnchorCount: 0, maxPacketCount: 0,
+    dieSourceMatchPacketCount: 0, withDieSourceMatchCount: 0,
+    withoutDieSourceMatchCount: 0, dieSourceUnavailableCount: 0,
+  };
   const minionBracketExpected = prepared.associationConfig?.minionBracket
     ? await loadMinionBracketExpectedRows(prepared) : null;
   const experienceIntervalExpected = prepared.associationConfig?.experienceInterval
@@ -6276,6 +6705,8 @@ async function streamEventQuery(prepared, options, emitLine) {
         lookupRosterPairState);
       unitApplyDamageLookup2cRosterKeyRow(row, prepared, lineNumber,
         lookup2cRosterPairState);
+      heroDeathDamageLookupKeyCooccurrenceRow(row, prepared, lineNumber,
+        deathDamageLookupState);
       if (prepared.eventKey === 'revive_ally_event_packet_candidates'
           && (row.event_type !== 'REVIVE_ALLY_EVENT_PACKET_CANDIDATE'
             || row.game_version !== prepared.replayVersion
@@ -6318,6 +6749,10 @@ async function streamEventQuery(prepared, options, emitLine) {
         }
       }
       const params = rawParam == null ? null
+        : prepared.eventKey
+            === 'hero_death_damage_lookup_key_cooccurrence_candidates'
+          ? row.same_time_victim_key24_packet_candidates.map(
+            (packet) => packet.raw_param)
         : ['unit_apply_damage_lookup_roster_key_candidates',
           'unit_apply_damage_lookup2c_roster_key_candidates']
           .includes(prepared.eventKey)
@@ -6592,6 +7027,39 @@ async function streamEventQuery(prepared, options, emitLine) {
         unique_damage_packet_count: lookup2cRosterPairState.damagePositions.size,
         observed_roster_key_count: lookup2cRosterPairState.rosterRefs.size,
         key24_roster_counts: lookup2cRosterPairState.key24RosterCounts });
+  }
+  if (prepared.eventKey
+      === 'hero_death_damage_lookup_key_cooccurrence_candidates') {
+    const result = prepared.capabilityResult;
+    if (deathDamageLookupState.primaryPositions.size !== scannedCount
+        || deathDamageLookupState.deathRoutePacketCount
+          !== result.verified_hero_death_route_packet_count
+        || deathDamageLookupState.matchedPacketCount
+          !== result.matched_victim_key24_packet_count
+        || deathDamageLookupState.withPacketCount
+          !== result.death_anchor_with_victim_key24_packet_count
+        || deathDamageLookupState.withoutPacketCount
+          !== result.death_anchor_without_victim_key24_packet_count
+        || deathDamageLookupState.multiplePacketAnchorCount
+          !== result.multiple_victim_key24_packet_anchor_count
+        || deathDamageLookupState.maxPacketCount
+          !== result.max_victim_key24_packet_count_per_anchor
+        || deathDamageLookupState.dieSourceMatchPacketCount
+          !== result.matched_die_source_key2c_packet_count
+        || deathDamageLookupState.withDieSourceMatchCount
+          !== result.death_anchor_with_die_source_key2c_match_count
+        || deathDamageLookupState.withoutDieSourceMatchCount
+          !== result.death_anchor_without_die_source_key2c_match_count
+        || deathDamageLookupState.dieSourceUnavailableCount
+          !== result.death_anchor_die_source_unavailable_count) {
+      throw new EventQueryError('EVENT_COUNT_MISMATCH',
+        'Hero death/damage lookup rows disagree with death anchors, source refs or packet multiplicity.',
+        { scanned_count: scannedCount,
+          matched_victim_key24_packet_count:
+            deathDamageLookupState.matchedPacketCount,
+          matched_die_source_key2c_packet_count:
+            deathDamageLookupState.dieSourceMatchPacketCount });
+    }
   }
   if (prepared.eventKey === 'inventory_keyframe_interval_difference_candidates') {
     const association = prepared.capabilityResult;

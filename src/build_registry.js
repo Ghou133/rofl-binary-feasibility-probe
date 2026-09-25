@@ -97,6 +97,8 @@ const unitApplyDamageLookupRosterKeyPair1619821 =
   require('./decoders/rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
 const unitApplyDamageLookup2cRosterKeyPair1619821 =
   require('./decoders/rofl_16_19_821_unit_apply_damage_lookup2c_roster_key_candidate');
+const heroDeathDamageLookupKeyCooccurrence1619821 =
+  require('./decoders/rofl_16_19_821_hero_death_damage_lookup_key_cooccurrence_candidate');
 const faceDirectionKeyframeRosterPair1619821 =
   require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
 const damageFloatCandidate1619821 =
@@ -605,6 +607,7 @@ const BUILD_PROFILES = deepFreeze({
       unit_apply_damage_roster_key_pair: 0x005f,
       unit_apply_damage_lookup_roster_key_pair: 0x005f,
       unit_apply_damage_lookup2c_roster_key_pair: 0x005f,
+      hero_death_damage_lookup_key_cooccurrence: 0x0259,
       face_direction_keyframe_roster_pair: 0x038e,
     },
     decoder_profile: {
@@ -729,6 +732,8 @@ const BUILD_PROFILES = deepFreeze({
         unitApplyDamageLookupRosterKeyPair1619821.UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE,
       unit_apply_damage_lookup2c_roster_key_pair:
         unitApplyDamageLookup2cRosterKeyPair1619821.UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE,
+      hero_death_damage_lookup_key_cooccurrence:
+        heroDeathDamageLookupKeyCooccurrence1619821.HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE,
       face_direction_keyframe_roster_pair:
         faceDirectionKeyframeRosterPair1619821.FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE,
     },
@@ -839,6 +844,8 @@ const BUILD_PROFILES = deepFreeze({
         unitApplyDamageLookupRosterKeyPair1619821.UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE.evidence_status,
       unit_apply_damage_lookup2c_roster_key_pair:
         unitApplyDamageLookup2cRosterKeyPair1619821.UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE.evidence_status,
+      hero_death_damage_lookup_key_cooccurrence:
+        heroDeathDamageLookupKeyCooccurrence1619821.HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE.evidence_status,
       face_direction_keyframe_roster_pair:
         faceDirectionKeyframeRosterPair1619821.FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE.evidence_status,
     },
@@ -911,6 +918,7 @@ const BUILD_PROFILES = deepFreeze({
       unit_apply_damage_roster_key_pair: 'full 0x005f raw-param equality with the exact 821 ten-member HeroStats roster key, retaining both packet refs; candidate participant label only, with +0x100 aliases and actor/source/target/effect unknown',
       unit_apply_damage_lookup_roster_key_pair: 'native +0x24 callback lookup key equality with the exact 821 ten-member HeroStats roster key, retaining raw key relation and both packet refs; candidate roster label only, with lookup success and actor/source/target/effect unknown',
       unit_apply_damage_lookup2c_roster_key_pair: 'native +0x2c callback lookup key equality with the exact 821 ten-member HeroStats roster key, retaining both packet refs; candidate roster label only, with lookup success and actor/source/target/effect unknown',
+      hero_death_damage_lookup_key_cooccurrence: 'same-chunk, same-ms death candidate and every native 0x005f packet whose +0x24 full key equals the victim roster key, retaining all packet refs and exact +0x2c comparison to decoded die-source; no fatal packet, actor, source, target or effect inference',
       face_direction_keyframe_roster_pair: 'same-keyframe 0x038e packet and canonical 0x0089 hero roster candidate matched by raw parameter; participant label belongs to the roster observation, with no proven packet actor or direction effect',
     },
     verified_capabilities: [],
@@ -966,6 +974,7 @@ const BUILD_PROFILES = deepFreeze({
       'unit_apply_damage_roster_key_pair',
       'unit_apply_damage_lookup_roster_key_pair',
       'unit_apply_damage_lookup2c_roster_key_pair',
+      'hero_death_damage_lookup_key_cooccurrence',
       'face_direction_keyframe_roster_pair',
     ],
     unsupported_capabilities: [],

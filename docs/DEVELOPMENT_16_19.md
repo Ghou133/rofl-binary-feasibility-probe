@@ -4,6 +4,33 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Death/damage native lookup-key co-occurrence candidate:** The independent
+  `hero_death_damage_lookup_key_cooccurrence` capability links each exact-821
+  `hero_death` candidate anchor to every `0x005f` native-witnessed packet in
+  the same chunk and millisecond whose `+0x24` full key equals the candidate
+  victim's canonical ten-person HeroStats roster key. It reports each packet's
+  separate `+0x2c` numeric equality with the death route's decoded die-source
+  ID, including nonroster keys and equality failures. The decoder freshly
+  verifies the death route, the complete damage/roster source set, the pinned
+  runtime image, original packet references, and Replay-tail counts. It emits
+  one row per death anchor, preserving zero or multiple candidate packets,
+  their order relative to the primary death route, and all original source
+  references. A fresh selected-only CLI batch on all 11 supplied KR Replays
+  returned `CANDIDATE` in 11/11 with zero framing errors: 655 death-anchor
+  rows, 628,909 native-witnessed damage packets, and 1,035 same-time victim
+  `+0x24` packets. There were 227 anchors with multiple such packets; 987 of
+  the 1,035 packets also had `+0x2c` equal to the die-source ID. At least one
+  such packet occurred at 633 anchors, while 22 had none. Of the 1,035
+  victim-key packets, 933 preceded the primary `0x0259` packet and 102
+  followed it within the same Replay millisecond. A saved `query-events`
+  run completed 11/11, checking all 655 rows despite `--limit 1`; a victim
+  filter selected 70 rows for participant 1 and a nested original damage
+  `raw_param` filter selected 34 rows for `0x400001ae`. Saved queries validate
+  artifacts, not original ROFL bytes. Neither a matching pair nor temporal
+  proximity selects a fatal packet or establishes an actor, source, target,
+  object-lookup success, or health effect. The preceding saved-data controls
+  and their 22 hero-source exceptions are recorded below as independent
+  research context; they did not physically reopen original ROFL bytes.
 - **UnitApplyDamage second native lookup-key roster pair:** The independent
   `unit_apply_damage_lookup2c_roster_key_pair` capability now uses the exact
   821 native `+0x2c` full key and the complete ten-key HeroStats roster. It

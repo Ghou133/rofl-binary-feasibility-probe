@@ -195,6 +195,10 @@ lookup success, actor, source, target, and effect remain unknown.
 unit_apply_damage_lookup2c_roster_key_pair matches the independent native +0x2c
 lookup key against that complete roster by full equality; lookup success, actor,
 source, target, and effect remain unknown.
+hero_death_damage_lookup_key_cooccurrence preserves all same-chunk, same-ms
+native 0x005f packets whose +0x24 key equals the death candidate victim roster
+key, and compares +0x2c to the decoded die-source key. It does not select a
+fatal packet or establish damage actor, source, target, or effect.
 face_direction_keyframe_roster_pair pairs canonical keyframe FaceDirection packets
 with same-keyframe HeroStats roster candidates; the roster label does not identify the packet actor.
 Inspect reads the container and packet framing without a runtime image.
@@ -944,8 +948,11 @@ function parseOne1619(replay, options, started) {
         'unit_apply_damage_roster_key_pair',
         'unit_apply_damage_lookup_roster_key_pair',
         'unit_apply_damage_lookup2c_roster_key_pair',
+        'hero_death_damage_lookup_key_cooccurrence',
       ].includes(name))) {
-    for (const source of ['unit_apply_damage_packet', 'hero_minions_killed_snapshot']) {
+    for (const source of ['unit_apply_damage_packet', 'hero_minions_killed_snapshot',
+      ...(options.events.includes('hero_death_damage_lookup_key_cooccurrence')
+        ? ['hero_death'] : [])]) {
       if (!selected821.includes(source)) selected821.push(source);
     }
   }
@@ -2208,6 +2215,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'unit_apply_damage_roster_key_pair'
             || capability === 'unit_apply_damage_lookup_roster_key_pair'
             || capability === 'unit_apply_damage_lookup2c_roster_key_pair'
+            || capability === 'hero_death_damage_lookup_key_cooccurrence'
             || capability === 'face_direction_keyframe_roster_pair'));
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
@@ -2220,6 +2228,19 @@ function capabilityQuery(replay, options = {}) {
                 error: death.error ?? death.missing_input ?? null },
               { field: 'TOTAL_TIME_SPENT_DEAD', status: deadTime.status,
                 error: deadTime.error ?? deadTime.missing_input ?? null },
+            ] };
+          })()
+        : profile.game_version === '16.19.821.7343'
+          && capability === 'hero_death_damage_lookup_key_cooccurrence'
+          ? (() => {
+            const death = assessHeroDeathTail821(replay);
+            const minions = assessHeroFloatSnapshotTail821(replay,
+              'hero_minions_killed_snapshot');
+            return { required_fields: [
+              { field: 'NUM_DEATHS', status: death.status,
+                error: death.error ?? death.missing_input ?? null },
+              { field: 'MINIONS_KILLED', status: minions.status,
+                error: minions.error ?? minions.missing_input ?? null },
             ] };
           })()
         : profile.game_version === '16.19.821.7343'
@@ -2363,11 +2384,13 @@ function capabilityQuery(replay, options = {}) {
             'unit_apply_damage_roster_key_pair',
             'unit_apply_damage_lookup_roster_key_pair',
             'unit_apply_damage_lookup2c_roster_key_pair'].includes(capability)
+            || capability === 'hero_death_damage_lookup_key_cooccurrence'
             ? [pythonUnicornDependency(options.python ?? options.pythonExecutable)] : []),
           ...(['face_direction_keyframe_roster_pair',
             'unit_apply_damage_roster_key_pair',
             'unit_apply_damage_lookup_roster_key_pair',
             'unit_apply_damage_lookup2c_roster_key_pair'].includes(capability)
+            || capability === 'hero_death_damage_lookup_key_cooccurrence'
             ? tailStatInput : [])]
           : [...dependencies, ...tailStatInput,
             ...(profile.game_version === '16.19.821.7343' && capability === 'hero_respawn'
@@ -2607,6 +2630,11 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'unit_apply_damage_lookup2c_roster_key_pair') {
         validationPending.push('v3 native-gated 0x005f callback +0x2c lookup key and complete ten-hero 0x0089 keyframe roster',
           'full lookup-key equality and both source references; no proven lookup success, actor, source, target, or applied-damage inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_death_damage_lookup_key_cooccurrence') {
+        validationPending.push('exact 821 death route, complete ten-hero roster and every native-gated v3 0x005f packet',
+          'same-chunk and same-ms +0x24 victim-key co-occurrence with all packets and +0x2c die-source comparisons; no fatal packet, actor, source, target or applied-damage inference');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'npc_buff_remove_packet') {
@@ -2899,6 +2927,8 @@ function capabilityQuery(replay, options = {}) {
               'unit_apply_damage_lookup_roster_key_candidates',
             unit_apply_damage_lookup2c_roster_key_pair:
               'unit_apply_damage_lookup2c_roster_key_candidates',
+            hero_death_damage_lookup_key_cooccurrence:
+              'hero_death_damage_lookup_key_cooccurrence_candidates',
             face_direction_keyframe_roster_pair:
               'face_direction_keyframe_roster_pair_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',

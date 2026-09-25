@@ -128,6 +128,8 @@ const { associateUnitApplyDamageLookupRosterKeys821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
 const { associateUnitApplyDamageLookup2cRosterKeys821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_lookup2c_roster_key_candidate');
+const { associateHeroDeathDamageLookupKeyCooccurrence821 } =
+  require('./decoders/rofl_16_19_821_hero_death_damage_lookup_key_cooccurrence_candidate');
 const { associateFaceDirectionKeyframeRosterPairs821 } =
   require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
 const { RUNTIME_IMAGE_SHA256: RUNTIME_IMAGE_SHA256_821 } =
@@ -2525,6 +2527,8 @@ function decode1619821(replay, profile, options = {}) {
       'unit_apply_damage_lookup_roster_key_candidates',
     unit_apply_damage_lookup2c_roster_key_pair:
       'unit_apply_damage_lookup2c_roster_key_candidates',
+    hero_death_damage_lookup_key_cooccurrence:
+      'hero_death_damage_lookup_key_cooccurrence_candidates',
     face_direction_keyframe_roster_pair: 'face_direction_keyframe_roster_pair_candidates',
   };
   const capabilityResults = {};
@@ -2586,10 +2590,14 @@ function decode1619821(replay, profile, options = {}) {
     'unit_apply_damage_lookup_roster_key_pair');
   const damageLookup2cPairSelected = capabilities.includes(
     'unit_apply_damage_lookup2c_roster_key_pair');
+  const deathDamageLookupSelected = capabilities.includes(
+    'hero_death_damage_lookup_key_cooccurrence');
   const supported = [...new Set([
     ...capabilities.filter((capability) => sharedScanCapabilities.has(capability)),
     ...(facePairSelected ? ['face_direction_packet', 'hero_minions_killed_snapshot'] : []),
+    ...(deathDamageLookupSelected ? ['hero_death'] : []),
     ...(damageKeyPairSelected || damageLookupPairSelected || damageLookup2cPairSelected
+      || deathDamageLookupSelected
       ? ['unit_apply_damage_packet', 'hero_minions_killed_snapshot'] : []),
   ])];
   let candidate821Scan = options.candidate821Scan ?? null;
@@ -2634,6 +2642,14 @@ function decode1619821(replay, profile, options = {}) {
             decodeCapability('unit_apply_damage_roster_key_pair'),
           validatedLookup24RosterPairOutcome:
             decodeCapability('unit_apply_damage_lookup_roster_key_pair'),
+        });
+      } else if (capability === 'hero_death_damage_lookup_key_cooccurrence') {
+        outcome = associateHeroDeathDamageLookupKeyCooccurrence821(replay, {
+          heroDeathOutcome: decodeCapability('hero_death'),
+          unitApplyDamagePacketOutcome: decodeCapability('unit_apply_damage_packet'),
+          minionsKilledSnapshotOutcome: decodeCapability('hero_minions_killed_snapshot'),
+          validatedRawRosterPairOutcome:
+            decodeCapability('unit_apply_damage_roster_key_pair'),
         });
       } else if (decoders[capability]) {
         outcome = decoders[capability](replay, candidate821Scan);
@@ -2690,6 +2706,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'unit_apply_damage_roster_key_pair'
         || capability === 'unit_apply_damage_lookup_roster_key_pair'
         || capability === 'unit_apply_damage_lookup2c_roster_key_pair'
+        || capability === 'hero_death_damage_lookup_key_cooccurrence'
         || capability === 'face_direction_keyframe_roster_pair') {
       result.runtime_image_status ??= options.runtimeImagePath
         ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
@@ -2709,10 +2726,12 @@ function decode1619821(replay, profile, options = {}) {
   const failed = results.filter((result) => result.status !== 'CANDIDATE');
   const uniqueDecodedInputCounts = new Map();
   if (facePairSelected || damageKeyPairSelected || damageLookupPairSelected
-      || damageLookup2cPairSelected) {
+      || damageLookup2cPairSelected || deathDamageLookupSelected) {
     for (const dependency of [
       ...(facePairSelected ? ['face_direction_packet'] : []),
+      ...(deathDamageLookupSelected ? ['hero_death'] : []),
       ...(damageKeyPairSelected || damageLookupPairSelected || damageLookup2cPairSelected
+        || deathDamageLookupSelected
         ? ['unit_apply_damage_packet'] : []),
       'hero_minions_killed_snapshot',
     ]) {
@@ -2728,7 +2747,8 @@ function decode1619821(replay, profile, options = {}) {
     if (capability === 'face_direction_keyframe_roster_pair'
         || capability === 'unit_apply_damage_roster_key_pair'
         || capability === 'unit_apply_damage_lookup_roster_key_pair'
-        || capability === 'unit_apply_damage_lookup2c_roster_key_pair') continue;
+        || capability === 'unit_apply_damage_lookup2c_roster_key_pair'
+        || capability === 'hero_death_damage_lookup_key_cooccurrence') continue;
     // The 0x040a route carries disjoint child packet shapes. The stealth
     // scan also natively checks six other length-17 child IDs as controls.
     const packetGroup = capability === 'params_heal_packet'
