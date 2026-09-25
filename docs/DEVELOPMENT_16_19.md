@@ -4,6 +4,12 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed query:** `query-events --event dampener_die_event_packet_candidates`
+  checks the exact build, pinned image, native child identity, counts, blob
+  hash and raw packet references before filtering unchanged rows by time or
+  recorded raw parameter. The real 11-Replay batch query emitted all 18
+  candidates from 10 Replays and reported the remaining Replay as
+  `PROFILE_UNAVAILABLE` (`PARTIAL` batch summary).
 - **Completed packet candidate:** Exact KR 821 `0x040a/116` child `0x0035`,
   named `OnDampenerDie` in the SHA-256-pinned runtime image, is selectable
   through CLI/API. The exact-image native census fully consumed all 831

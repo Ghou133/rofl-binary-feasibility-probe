@@ -41,6 +41,8 @@ const { TURRET_FIRST_BLOOD_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_turret_first_blood_event_packet_candidate');
 const { TURRET_DIE_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_turret_die_event_packet_candidate');
+const { DAMPENER_DIE_EVENT_PACKET_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_dampener_die_event_packet_candidate');
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
@@ -194,6 +196,14 @@ const EXACT_PACKET_EVENTS_821 = Object.freeze({
   champion_triple_quadra_event_packet_candidates:
     CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_821_PROFILE,
 });
+const EXACT_BLOB_PACKET_EVENTS_821 = Object.freeze({
+  dampener_die_event_packet_candidates: Object.freeze({
+    profile: DAMPENER_DIE_EVENT_PACKET_821_PROFILE,
+    eventType: 'DAMPENER_DIE_EVENT_PACKET_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_EXACT_RUNTIME_ON_DAMPENER_DIE_PACKET',
+    rawEventIdHex: '0x4906',
+  }),
+});
 const CHILD_EVENT_ID_FILTERS_821 = Object.freeze({
   stealth_event_packet_candidates: Object.freeze([0x0101, 0x0102]),
   champion_double_kill_event_packet_candidates: Object.freeze([0x000b]),
@@ -295,6 +305,40 @@ function prepareExactPacketEvent(semantic, analysis, eventKey, result, profile) 
       || result.target_packet_count !== result.event_count
       || !isCount(result.excluded_child_count)
       || result.input_count !== result.event_count + result.excluded_child_count
+      || analysis.event_counts?.[eventKey] !== result.event_count) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} identity or candidate counts differ from its exact-build profile.`,
+      { capability: profile.capability });
+  }
+}
+
+function prepareExactBlobPacketEvent(semantic, analysis, eventKey, result,
+  { profile, evidenceStatus }) {
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`,
+      { replay_version: semantic.replay_version,
+        required_replay_version: profile.replay_version });
+  }
+  if (result?.status !== 'CANDIDATE') return;
+  const imageSha = profile.evidence_runtime_image_sha256;
+  if (result.profile_id !== profile.id
+      || result.evidence_runtime_image_sha256 !== imageSha
+      || result.runtime_image_sha256 !== imageSha
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || result.evidence_status !== evidenceStatus
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || result.input_packet_scope !== 'child_0035_length_116'
+      || result.child_event_id !== profile.child_event_id
+      || !isCount(result.event_count) || result.event_count === 0
+      || result.input_count !== result.event_count
+      || !isCount(result.excluded_same_length_foreign_count)
+      || result.observed_same_length_packet_count
+        !== result.event_count + result.excluded_same_length_foreign_count
+      || !Array.isArray(result.excluded_same_length_foreign_packet_refs)
+      || result.excluded_same_length_foreign_packet_refs.length
+        !== result.excluded_same_length_foreign_count
       || analysis.event_counts?.[eventKey] !== result.event_count) {
     throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
       `${profile.capability} identity or candidate counts differ from its exact-build profile.`,
@@ -591,6 +635,7 @@ function prepareEventQuery(directory, eventKey) {
   }
   const associationConfig = ASSOCIATION_EVENTS_821[eventKey] ?? null;
   const exactPacketProfile = EXACT_PACKET_EVENTS_821[eventKey] ?? null;
+  const exactBlobPacketConfig = EXACT_BLOB_PACKET_EVENTS_821[eventKey] ?? null;
   const capability = eventKey.slice(0, -'_candidates'.length);
   const capabilityResult = associationConfig
     ? prepareAssociation(semantic, analysis, eventKey, associationConfig)
@@ -621,6 +666,10 @@ function prepareEventQuery(directory, eventKey) {
   if (exactPacketProfile) {
     prepareExactPacketEvent(semantic, analysis, eventKey, capabilityResult,
       exactPacketProfile);
+  }
+  if (exactBlobPacketConfig) {
+    prepareExactBlobPacketEvent(semantic, analysis, eventKey, capabilityResult,
+      exactBlobPacketConfig);
   }
   const capabilityStatus = capabilityResult?.status ?? null;
   if (capabilityStatus && !['CANDIDATE', 'PASS'].includes(capabilityStatus)) {
@@ -701,6 +750,7 @@ function prepareEventQuery(directory, eventKey) {
   return {
     artifactDirectory, inputPath, eventKey, eventStorage, capability, capabilityStatus,
     capabilityResult, declaredCount, replaySha, associationConfig, exactPacketProfile,
+    exactBlobPacketConfig,
     replayVersion: semantic.replay_version, semanticRunStatus: semantic.status,
     semanticApiStatus: semantic.api_status ?? null,
   };
@@ -1314,6 +1364,52 @@ function exactNamedKillPacketRow(row, prepared, lineNumber, seenPacketPositions)
   seenPacketPositions.add(position);
 }
 
+function exactBlobPacketRow(row, prepared, lineNumber, seenPacketPositions) {
+  const config = prepared.exactBlobPacketConfig;
+  if (!config) return;
+  const { profile, eventType, evidenceStatus, rawEventIdHex } = config;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid ${profile.capability} row at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const ref = row.raw_packet_ref;
+  if (row.event_type !== eventType
+      || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== evidenceStatus
+      || row.event_id !== profile.child_event_id
+      || row.event_name !== profile.child_event_name
+      || row.raw_event_id_hex !== rawEventIdHex
+      || typeof row.event_blob_hex !== 'string'
+      || !/^[0-9a-f]{216}$/.test(row.event_blob_hex)
+      || !REPLAY_SHA.test(row.event_blob_sha256)
+      || !ref || ref.replay_sha256 !== prepared.replaySha
+      || ref.replay_time_ms !== row.replay_time_ms
+      || ref.chunk_stream !== 'game_chunk'
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== profile.replay_block_packet_id
+      || ref.payload_length !== profile.payload_length
+      || !Number.isSafeInteger(ref.raw_param) || ref.raw_param <= 0
+      || ref.raw_param > 0xffffffff
+      || row.raw_param !== ref.raw_param
+      || !REPLAY_SHA.test(ref.raw_payload_sha256)) {
+    invalid('exact-build child, blob or raw packet identity differs');
+  }
+  if (crypto.createHash('sha256').update(Buffer.from(row.event_blob_hex, 'hex'))
+    .digest('hex') !== row.event_blob_sha256) invalid('native blob SHA-256 differs');
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (seenPacketPositions.has(position)) invalid('duplicate raw packet position');
+  seenPacketPositions.add(position);
+}
+
 function candidateChildEventId(row, eventKey, lineNumber) {
   const field = eventKey === 'champion_triple_quadra_multi_group_candidates'
     ? 'on_champion_triple_quadra_child_event_id'
@@ -1577,6 +1673,8 @@ async function streamEventQuery(prepared, options, emitLine) {
           { line_number: lineNumber });
       }
       exactNamedKillPacketRow(row, prepared, lineNumber,
+        associationPacketPositions);
+      exactBlobPacketRow(row, prepared, lineNumber,
         associationPacketPositions);
       if (prepared.eventKey === 'revive_ally_event_packet_candidates'
           && (row.event_type !== 'REVIVE_ALLY_EVENT_PACKET_CANDIDATE'

@@ -43,6 +43,8 @@ const { TURRET_FIRST_BLOOD_EVENT_PACKET_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_turret_first_blood_event_packet_candidate');
 const { TURRET_DIE_EVENT_PACKET_821_PROFILE } =
   require('../src/decoders/rofl_16_19_821_turret_die_event_packet_candidate');
+const { DAMPENER_DIE_EVENT_PACKET_821_PROFILE } =
+  require('../src/decoders/rofl_16_19_821_dampener_die_event_packet_candidate');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const SHA = 'a'.repeat(64);
@@ -71,6 +73,7 @@ const RESURRECT_PACKET_EVENT = 'resurrect_event_packet_candidates';
 const REVIVE_ALLY_PACKET_EVENT = 'revive_ally_event_packet_candidates';
 const TURRET_PLATE_PACKET_EVENT = 'turret_plate_event_packet_candidates';
 const TURRET_FIRST_BLOOD_DIE_PAIR_EVENT = 'turret_first_blood_die_pair_candidates';
+const DAMPENER_DIE_PACKET_EVENT = 'dampener_die_event_packet_candidates';
 const DIE_PAIR_EVENT = 'champion_die_hero_death_pair_candidates';
 const KILL_GROUP_EVENT = 'champion_kill_die_hero_death_pair_candidates';
 const MULTI_GROUP_EVENT = 'champion_multiple_kill_die_hero_death_pair_candidates';
@@ -508,6 +511,7 @@ function artifact(t, rows = [
     CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
     CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT,
     RESURRECT_PACKET_EVENT, REVIVE_ALLY_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
+    DAMPENER_DIE_PACKET_EVENT,
     DOUBLE_PACKET_EVENT, DOUBLE_MULTI_GROUP_EVENT, TRIPLE_QUADRA_PACKET_EVENT,
     TRIPLE_QUADRA_MULTI_GROUP_EVENT,
     HERO_DEATH_EVENT, HERO_ASSIST_EVENT, ...ASSOCIATION_EVENTS].includes(eventKey)
@@ -574,6 +578,50 @@ function reviveAllyArtifact(t, rows) {
       runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
       evidence_status: 'CANDIDATE_EXACT_RUNTIME_ON_REVIVE_ALLY_PACKET',
       input_packet_id: 0x040a, child_event_id: 0x002c,
+    });
+  });
+  return fixture;
+}
+
+function dampenerDieRow(time, rawParam, blockOffset = 32) {
+  const blob = Buffer.alloc(108, rawParam & 0xff);
+  return {
+    event_type: 'DAMPENER_DIE_EVENT_PACKET_CANDIDATE',
+    game_version: DAMPENER_DIE_EVENT_PACKET_821_PROFILE.replay_version,
+    patch: '16.19', build_profile: DAMPENER_DIE_EVENT_PACKET_821_PROFILE.id,
+    replay_sha256: SHA, replay_time_ms: time, raw_param: rawParam,
+    event_id: 0x0035, event_name: 'OnDampenerDie', raw_event_id_hex: '0x4906',
+    event_blob_hex: blob.toString('hex'),
+    event_blob_sha256: crypto.createHash('sha256').update(blob).digest('hex'),
+    confidence: 'CANDIDATE',
+    semantic_status: 'CANDIDATE_EXACT_RUNTIME_ON_DAMPENER_DIE_PACKET',
+    raw_packet_ref: {
+      source_path: 'synthetic.rofl', replay_sha256: SHA,
+      chunk_index: 1, chunk_id: 2, chunk_stream: 'game_chunk',
+      chunk_file_offset: 8, decompressed_block_offset: blockOffset,
+      decompressed_payload_offset: blockOffset + 6,
+      packet_id: 0x040a, replay_time_ms: time, payload_length: 116,
+      raw_param: rawParam, raw_payload_sha256: 'b'.repeat(64),
+    },
+  };
+}
+
+function dampenerDieArtifact(t, rows = [dampenerDieRow(100, 0x400000af)]) {
+  const fixture = artifact(t, rows, true, DAMPENER_DIE_PACKET_EVENT);
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    Object.assign(semantic.capability_results.dampener_die_event_packet, {
+      profile_id: DAMPENER_DIE_EVENT_PACKET_821_PROFILE.id,
+      evidence_runtime_image_sha256:
+        DAMPENER_DIE_EVENT_PACKET_821_PROFILE.evidence_runtime_image_sha256,
+      runtime_image_sha256:
+        DAMPENER_DIE_EVENT_PACKET_821_PROFILE.evidence_runtime_image_sha256,
+      runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+      evidence_status: 'CANDIDATE_EXACT_RUNTIME_ON_DAMPENER_DIE_PACKET',
+      input_packet_id: 0x040a, input_packet_scope: 'child_0035_length_116',
+      child_event_id: 0x0035, input_count: rows.length, event_count: rows.length,
+      observed_same_length_packet_count: rows.length,
+      excluded_same_length_foreign_count: 0,
+      excluded_same_length_foreign_packet_refs: [],
     });
   });
   return fixture;
@@ -2745,6 +2793,98 @@ test('query-events keeps missing OnReviveAlly u32 unavailable and rejects identi
     assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
     assert.equal(fs.existsSync(failedOutput), false);
   }
+});
+
+test('query-events preserves exact 821 OnDampenerDie rows under time and raw-param filters', (t) => {
+  const fixture = dampenerDieArtifact(t, [
+    dampenerDieRow(100, 0x400000af, 32),
+    dampenerDieRow(200, 0x400000b0, 64),
+  ]);
+  const selected = run(fixture.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT,
+    '--from-ms', '200', '--to-ms', '200', '--raw-param', '0x400000b0');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[1]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.capability_status, 'CANDIDATE');
+  assert.equal(summary.declared_event_count, 2);
+  assert.equal(summary.scanned_count, 2);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.raw_param_unavailable_count, 0);
+  assert.equal(summary.rows_unmodified, true);
+
+  const all = run(fixture.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT);
+  assert.equal(all.status, 0, all.stderr);
+  assert.equal(all.stdout, `${fixture.lines.join('\n')}\n`);
+});
+
+test('query-events gates OnDampenerDie on exact build, image, status and counts', (t) => {
+  const wrongBuild = dampenerDieArtifact(t);
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    rewriteJson(path.join(wrongBuild.replayDirectory, name), (document) => {
+      document.replay_version = VERSION;
+    });
+  }
+  const old = run(wrongBuild.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT);
+  assert.equal(old.status, 2);
+  assert.equal(JSON.parse(old.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+
+  const unavailable = dampenerDieArtifact(t);
+  rewriteJson(path.join(unavailable.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.dampener_die_event_packet.status = 'MISSING_INPUT';
+    semantic.capability_results.dampener_die_event_packet.event_count = null;
+  });
+  const absent = run(unavailable.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT);
+  assert.equal(absent.status, 2);
+  assert.equal(JSON.parse(absent.stderr).code, 'CAPABILITY_UNAVAILABLE');
+
+  for (const corrupt of [
+    (result) => { result.profile_id = 'foreign-profile'; },
+    (result) => { result.runtime_image_sha256 = 'f'.repeat(64); },
+    (result) => { result.runtime_image_used = false; },
+    (result) => { result.child_event_id = 0x003b; },
+    (result) => { result.input_packet_scope = 'child_003b_length_116'; },
+    (result) => { result.input_count = 2; },
+    (result) => { result.excluded_same_length_foreign_count = 1; },
+  ]) {
+    const fixture = dampenerDieArtifact(t);
+    rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+      corrupt(semantic.capability_results.dampener_die_event_packet);
+    });
+    const rejected = run(fixture.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT);
+    assert.equal(rejected.status, 2);
+    assert.equal(JSON.parse(rejected.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+  }
+});
+
+test('query-events rejects malformed OnDampenerDie blobs and raw references', (t) => {
+  for (const corrupt of [
+    (row) => { row.event_id = 0x003b; },
+    (row) => { row.event_name = 'OnTurretDie'; },
+    (row) => { row.raw_event_id_hex = '0x4966'; },
+    (row) => { row.event_blob_hex = '00'; },
+    (row) => { row.event_blob_sha256 = 'f'.repeat(64); },
+    (row) => { row.raw_packet_ref.payload_length = 104; },
+    (row) => { row.raw_packet_ref.raw_param += 1; },
+    (row) => { row.raw_packet_ref.raw_payload_sha256 = 'invalid'; },
+  ]) {
+    const rows = [dampenerDieRow(100, 0x400000af, 32),
+      dampenerDieRow(200, 0x400000b0, 64)];
+    corrupt(rows[1]);
+    const fixture = dampenerDieArtifact(t, rows);
+    const output = path.join(fixture.root, 'invalid-dampener.jsonl');
+    const rejected = run(fixture.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT,
+      '--output', output);
+    assert.equal(rejected.status, 2);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
+  const duplicate = dampenerDieArtifact(t, [
+    dampenerDieRow(100, 0x400000af, 32),
+    dampenerDieRow(200, 0x400000b0, 32),
+  ]);
+  const rejected = run(duplicate.replayDirectory, '--event', DAMPENER_DIE_PACKET_EVENT);
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
 });
 
 test('query-events filters anonymous turret plate child field without using outer raw param', (t) => {
