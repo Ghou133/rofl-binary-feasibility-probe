@@ -4,6 +4,41 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Saved v3 native lookup-key query:** `query-events` now filters the
+  separate exact `+0x24` and `+0x2c` u32 keys, individually or conjunctively,
+  without assigning either a combat role. It requires the exact-821 v3
+  artifact and checks every saved packet's native witness metadata, raw bytes,
+  key transforms, source reference and ordered input digest, even after the
+  output limit. On the 11-Replay v3 batch, each of four saved queries checked
+  all 628,909 rows: key `0x400000ae` selected 9,481 at `+0x24`, 16,253 at
+  `+0x2c`, and zero where both fields equaled that key. A two-key query
+  (`+0x24 = 0x400000ae`, `+0x2c = 0x400000b3`) selected 2,147. These counts describe
+  independent fields, not a source or target assignment.
+- **Second native lookup key research controls:** The 11 exact-build saved
+  damage artifacts have complete ten-key HeroStats rosters and full native
+  consumption. `+0x2c` matched a canonical roster key in 173,125/628,909
+  packets; `+0x24` matched in 62,860. Both matched in 34,712, only `+0x2c`
+  in 138,413, only `+0x24` in 28,148, and neither in 427,636. Of the
+  both-matched packets, only 15 had the same key in both fields. A preceding
+  ten-key control matched `+0x2c` in 1,957 packets; the corresponding
+  `+0x100` alias matched zero. There were 9,802 replay times with multiple
+  distinct roster-matched `+0x2c` keys, so a timestamp is not a unique
+  pairing. This is a research observation, not a default roster association
+  or an actor, source, target, killer, or damage inference. The saved audit
+  checked artifact SHA identities and roster completeness; a future decoder
+  must still physically verify original packet references.
+- **Death-time lookup-key control:** All 655 candidate death times in the 11
+  Replays had at least one same-time damage packet whose `+0x24` key equaled
+  the candidate victim roster key; 227 times had multiple such packets. Of
+  653 deaths with a candidate killer, 631 had a same-packet `+0x2c` key equal
+  to that killer's roster key. At the 22 exceptions, the same-time victim-key
+  packets all had nonroster `+0x2c` keys; 12 of those anchors had a hero-key
+  pair only at an earlier nonidentical time within one second. Two deaths
+  without a killer participant had a same-time `+0x2c` key equal to the
+  decoded nonhero die-source key. Participant-ID +1 controls produced only
+  24/655 victim-key matches and 2/653 joint key matches. This establishes a
+  bounded co-occurrence candidate for later source-referenced work, not a
+  unique fatal packet or confirmed combat role/effect.
 - **UnitApplyDamage native lookup keys v3:** Exact-image native audit
   explicitly observed writes to object `+0x24` and `+0x2c` in all
   628,909/628,909 `0x005f` packets. The callback decodes these as two
