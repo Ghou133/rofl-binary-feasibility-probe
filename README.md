@@ -66,6 +66,7 @@
 | `16.19.821.7343 --events revive_ally_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x002c` 子包，保留 OnReviveAlly 镜像名表标签、匿名原生子包 `+0x04` 整数及原始包来源 | 有目标包时写入 `revive_ally_event_packet_candidates`，状态为 `CANDIDATE`；无目标包时报告 `PROFILE_UNAVAILABLE`；同长度异类子事件保留为排除证据，不推断实际复活、对象角色或状态变化 |
 | `16.19.821.7343 --events turret_plate_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0107` 子包，保留 OnTurretPlateDestroyed 镜像名表标签、匿名原生子包 `+0x04` 整数和原始包来源 | 仅写入 `turret_plate_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断镀层破坏、建筑、参与者或状态变化 |
 | `16.19.821.7343 --events objective_bounty_claimed_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0113` 子包，保留 OnObjectiveBountyClaimed 镜像名表标签、匿名八字节子包及 `blob_u32_0x04`、原始包来源 | 有目标包时写入 `objective_bounty_claimed_packet_candidates`，状态为 `CANDIDATE`；无目标包时报告 `PROFILE_UNAVAILABLE` 并保留同长度异类包引用；不推断实际悬赏发放、对象、行动者、队伍或状态变化 |
+| `16.19.821.7343 --events objective_bounty_claimed_packet,turret_plate_event_packet,turret_die_event_packet --runtime-image PATH` | 在三个独立候选包源均可用时，验证同回放、chunk、毫秒的 `plate < die < claim` 顺序与三个匿名原生整数相等，并保留三个原始包引用 | 另写入 `objective_bounty_turret_pair_candidates` 和关联汇总；未匹配 claim 留在原包流并计入拒绝原因，不推断悬赏发放、建筑或参与者身份 |
 | `16.19.821.7343 --events dampener_die_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x0035` 子包，保留 OnDampenerDie 镜像名表标签、匿名 108 字节原生子包及原始包来源 | 有目标包时写入 `dampener_die_event_packet_candidates`，状态为 `CANDIDATE`；无目标包时报告 `PROFILE_UNAVAILABLE`；同长度异类子事件作为排除证据，不推断建筑实际毁坏、建筑身份、参与者或状态变化 |
 | `16.19.821.7343 --events turret_die_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x003b` 子包，保留 OnTurretDie 镜像名表标签、匿名 108 字节原生子包内容及 SHA-256、原始包来源 | 仅写入 `turret_die_event_packet_candidates`，状态为 `CANDIDATE`；同长度异类子事件作为排除证据，不推断实际防御塔死亡、建筑身份、参与者或状态变化 |
 | `16.19.821.7343 --events turret_first_blood_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x003d` 子包，保留 OnTurretFirstBlood 镜像名表标签、匿名 108 字节原生子包内容及 SHA-256、原始包来源 | 仅写入 `turret_first_blood_event_packet_candidates`，状态为 `CANDIDATE`；同长度异类子事件作为排除证据，不推断实际首座防御塔死亡、建筑身份、参与者或状态变化 |
@@ -246,6 +247,10 @@ node src/cli.js batch "D:\Replays\16.19.821.7343" `
   --events objective_bounty_claimed_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-objective-bounty-claim-packets"
+node src/cli.js batch "D:\Replays\16.19.821.7343" `
+  --events objective_bounty_claimed_packet,turret_plate_event_packet,turret_die_event_packet `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-objective-bounty-turret-pairs"
 node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events dampener_die_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
@@ -341,6 +346,13 @@ OnShutdown 只是镜像中的事件标签，未确认游戏内 shutdown 效果�
 `turret_plate_event_packet` 只报告 `0x0107` 子包的匿名当包字段和来源。
 11 份 KR 821 回放中观察到 657 个目标子包；同为 17 字节的其他子事件 4964 个作为排除对照，
 不进入该候选流。镜像中的事件名不足以确认游戏内镀层效果或对象角色。
+
+同时选择 `objective_bounty_claimed_packet,turret_plate_event_packet,turret_die_event_packet`
+可得到独立的三包关联候选。11 份 KR 821 回放有 11 条 claim 包、10 条唯一的
+同 chunk/毫秒且原生匿名整数相等的 `plate < die < claim` 关联；剩余一条 claim
+保留在包流中，并以 `NO_SAME_KEY_PLATE_OR_DIE` 记录为未匹配。四份无 claim 的回放
+报告 `PROFILE_UNAVAILABLE`，关联为 `MISSING_INPUT`；批处理因此为 `PARTIAL`。
+这不确认悬赏支付、炮塔破坏、对象、行动者、队伍或游戏状态。
 
 `dampener_die_event_packet` 只报告 `0x0035` 子包的匿名 108 字节内容及来源。
 精确镜像原生解码在 11 份 KR 821 回放的 831 个同为 116 字节的包中识别出 18 个目标，
@@ -653,6 +665,10 @@ node src/cli.js query-events "work\16-19-821-dampener-die-event-packets" `
   --event dampener_die_event_packet_candidates --raw-param 0x4000018f
 node src/cli.js query-events "work\16-19-821-hq-kill-event-packets" `
   --event hq_kill_event_packet_candidates --child-event-id 0x0046 --limit 20
+node src/cli.js query-events "work\16-19-821-objective-bounty-claim-packets" `
+  --event objective_bounty_claimed_packet_candidates --child-event-id 0x0113
+node src/cli.js query-events "work\16-19-821-objective-bounty-turret-pairs" `
+  --event objective_bounty_turret_pair_candidates --opaque-u32 0x4000008c
 ```
 
 炮塔候选配对可按回放毫秒或任一原始包的 `--raw-param` 查询；查询保留原 JSONL 行，
@@ -660,6 +676,7 @@ node src/cli.js query-events "work\16-19-821-hq-kill-event-packets" `
 `dampener_die_event_packet_candidates` 也可按时间或原始参数查询；批量结果会单独列出
 `PROFILE_UNAVAILABLE` 的回放，不能把它当作零命中。
 `hq_kill_event_packet_candidates` 还可按时间、原始参数或精确子事件 ID `0x0046` 查询，输出保持原 JSONL 行。查询校验完整 `16.19.821.7343`、已保存的镜像哈希/候选元数据、`0x4918`、匿名子包哈希和原始包引用；批量查询另校验 manifest 文件哈希。这里校验的是保存产物及来源引用，**不会重新打开原始 ROFL 逐字节核对**。`OnHQKill` 只是精确镜像的标签；不据此断言主基地实际毁坏、胜者、行动者或状态变化。缺镜像或无目标包的场次仍标为不可用。
+`objective_bounty_claimed_packet_candidates` 可按匿名 `blob_u32_0x04`、时间、原始参数或子事件 ID `0x0113` 查询；三包关联可按相等的匿名整数、时间或三包任一原始参数查询。保存产物查询核对精确 build、镜像、来源能力、计数和逐行引用，输出原 JSONL 行；不在查询时重新解码回放。未匹配 claim 不会误报成三包关联，缺少目标子事件的回放仍列为不可用。
 
 按 821 单次助攻候选的参与者列表查询，可输入单场或 `batch` 输出目录：
 
@@ -733,7 +750,7 @@ node src/cli.js query-events "work\16-19-821-heal-report\replays\KR_example" `
   --event params_heal_packet_candidates --opaque-u32 0x400000b3 --limit 20
 ```
 
-`--opaque-u32` 同时支持 `shielding_params_packet_pair_candidates`、`stealth_event_packet_candidates`、`npc_buff_add_packet_candidates`、`npc_buff_remove_packet_candidates`、`champion_die_event_packet_candidates`、`champion_kill_event_packet_candidates`、`champion_multiple_kill_event_packet_candidates`、`on_shutdown_event_packet_candidates`、`resurrect_event_packet_candidates`、`revive_ally_event_packet_candidates` 和 `turret_plate_event_packet_candidates`，匹配各记录中已解码的匿名标量 u32 字段；BuffAdd2/BuffRemove2 只匹配 `opaque_u32_0x10`。不查询多杀子包的 `+0x10` 列表，也不使用外层 `raw_param` 代替字段或赋予治疗、护盾、Buff、隐身、死亡、击杀、复活参与者或建筑角色。十进制、十六进制和 `0` 均可精确查询；汇总保留字段不可用数与已检查后的零命中。
+`--opaque-u32` 同时支持 `shielding_params_packet_pair_candidates`、`stealth_event_packet_candidates`、`npc_buff_add_packet_candidates`、`npc_buff_remove_packet_candidates`、`champion_die_event_packet_candidates`、`champion_kill_event_packet_candidates`、`champion_multiple_kill_event_packet_candidates`、`on_shutdown_event_packet_candidates`、`resurrect_event_packet_candidates`、`revive_ally_event_packet_candidates`、`turret_plate_event_packet_candidates`、`objective_bounty_claimed_packet_candidates` 和 `objective_bounty_turret_pair_candidates`，匹配各记录中已解码的匿名标量 u32 字段；BuffAdd2/BuffRemove2 只匹配 `opaque_u32_0x10`。不查询多杀子包的 `+0x10` 列表，也不使用外层 `raw_param` 代替字段或赋予治疗、护盾、Buff、隐身、死亡、击杀、复活参与者或建筑角色。十进制、十六进制和 `0` 均可精确查询；汇总保留字段不可用数与已检查后的零命中。
 `npc_buff_update_num_counter_packet_candidates` 也接受该筛选，匹配匿名
 `opaque_u32_0x14` 或 `opaque_u32_0x1c`，输出行保留两个字段以供区分。
 

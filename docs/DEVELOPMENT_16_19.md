@@ -4,6 +4,33 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed exact-821 OnObjectiveBountyClaimed packet candidate and query:**
+  Selected `objective_bounty_claimed_packet` uses the pinned local mapped
+  821 image to fully deserialize game-stream `0x040a` child `0x0113`, retaining
+  its image name, anonymous eight-byte child blob, `blob_u32_0x04`, original
+  packet reference, and same-length foreign-child exclusions. The supplied
+  11 KR Replays produced 11 target rows in seven Replays and 5,610 excluded
+  child references; four target-free Replays report `PROFILE_UNAVAILABLE`.
+  Saved `query-events` reads all 11 original rows and lists those four
+  sources as unavailable (`PARTIAL`), with time, raw-param, child-ID and
+  anonymous-u32 filters. The exact image and observed packet do not prove
+  a bounty payment, actor, team, object, or state change.
+- **Completed conditional plate/die/claim packet association:** Selecting
+  `objective_bounty_claimed_packet,turret_plate_event_packet,turret_die_event_packet`
+  also emits `objective_bounty_turret_pair_candidates` when all three
+  exact-image routes are available. Same Replay/chunk/millisecond, strict
+  `plate < die < claim` order and equality of three anonymous native u32
+  words are required; full original packet references are physically checked.
+  The 11-Replay CLI batch yielded 10 triples and one unmatched claim
+  (`NO_SAME_KEY_PLATE_OR_DIE`), preserving that claim in its packet stream.
+  Four claim-free Replays retain `MISSING_INPUT` for the association and make
+  the batch `PARTIAL`. Saved-artifact query checked 10 triple rows, with seven
+  queryable and four unavailable Replays; searching the unmatched claim word
+  returned zero triples. This is a packet relation, not a gameplay effect.
+  Ignored evidence is under
+  `artifacts/16_19_development/objective_bounty_scout_20260925/`,
+  `artifacts/16_19_development/objective_bounty_claimed_cli_batch_11_821/`,
+  and `artifacts/16_19_development/objective_bounty_turret_pair_cli_batch_11_821/`.
 - **Completed saved decode-root query:** `query-events` now accepts a valid
   single- or multi-Replay `decode` output root as well as `batch`, retaining
   manifest, Replay identity, directory and requested-event hash checks.
