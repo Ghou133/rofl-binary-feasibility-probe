@@ -375,6 +375,18 @@ Current progress (older notes below retain their original research context):
   `UNKNOWN`; no CastSpellAns actor field was added. Exact-image assembly,
   scripts, Replay controls, and the negative boundary are retained under
   ignored `artifacts/16_19_development/kr_821_cast_identity_probe/`.
+- **821 CastSpellAns callback field boundary:** The exact-image callback
+  transforms packet `+0x14c` into the existing opaque i32 and passes it to a
+  conditional receiver-state comparison at RVA `0x32db20`. Exact-image Unicorn
+  positive and negative controls verified its compare/write behavior. The
+  callback also converts nested `+0xe0` and `+0x140` into a temporary object;
+  this does not identify their gameplay meanings. Current source hashes and
+  63,496 existing CLI rows were rechecked across all 11 KR Replays. The i32
+  is nonzero in 435 rows, all keyframe; it is zero in all 62,968 game rows.
+  The i32 and nested float are not a one-to-one presence pair. The captured
+  image lacks the receiver heap, so per-packet gate outcomes, actor, spell and
+  action remain `UNKNOWN`. Scripts, callback bytes and controls are retained
+  under ignored `artifacts/16_19_development/castspellans_followup_821/`.
 - **821 observed-return candidate:** `--events hero_respawn` pairs each matched
   death core with a subsequent same-participant `0x0048` and preceding co-timed
   `0x018d`, requiring the ten per-participant sums of elapsed milliseconds,
