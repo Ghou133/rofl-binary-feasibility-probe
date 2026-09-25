@@ -83,6 +83,14 @@ Current progress (older notes below retain their original research context):
   receiver or raw anchor can resolve the remaining anonymous roles.
   Unavailable virtual callback receivers still block owner/target/effect
   promotion for several existing event candidates.
+- **Next route lead:** Exact 821 `0x038e` FaceDirection has 262,393 packets
+  across the 11 KR Replays (13/17-byte payloads). The pinned image registers
+  its constructor and deserializer; one real packet of each length passed
+  native return and full-consumption checks, while truncation and appended
+  controls did not pass both checks. Its callback compares an anonymous
+  12-byte object region against a live receiver absent from the capture.
+  No coordinates, path, actor, or direction effect is established, and no
+  821 candidate output is implemented for this route yet.
 
 - **Completed candidate marker:** Exact KR 821 CLI/API now selects native
   `0x040a` child `0x000b`, named `OnChampionDoubleKill` in the pinned image.
