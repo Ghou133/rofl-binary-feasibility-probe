@@ -20,6 +20,15 @@ Current progress (older notes below retain their original research context):
   RemoveBuffModifier `0x0026` are registered, but strict scans found zero
   target packets in all 11 supplied KR 821 Replays (18,235,209 framed blocks,
   zero framing errors). Real native packet validation lacks inputs for them.
+- **Completed candidate:** Exact KR 821 `0x025d` SetSpellLevel is selectable
+  through CLI/API with two callback-transformed anonymous `u32` fields, raw
+  object bytes, and Replay packet provenance. All 342/342 game-stream packets
+  across 11 supplied Replays passed exact-image native return and full
+  consumption; real CLI batch wrote 342 JSONL rows, 11/11 `CANDIDATE`, matched
+  image, and zero framing errors. The observed wire lengths are 1/2/3 bytes;
+  truncated, appended, and foreign-route controls did not satisfy the full
+  target gate. No spell identity, actual level, owner, or effect is inferred.
+  Ignored output is in `artifacts/16_19_development/set_spell_level_cli_batch_11/`.
 - **Completed candidate:** Exact KR 821 `0x00fd` SetSpellTimerFromBuff is
   selectable through CLI/API with six anonymous callback fields, raw object
   bytes, and Replay packet provenance. All 5,481/5,481 target packets across

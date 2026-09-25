@@ -195,6 +195,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'npc_buff_update_count_packet',
       'npc_buff_replace_packet',
       'set_spell_timer_from_buff_packet',
+      'set_spell_level_packet',
       'direct_input_movement_turn_packet', 'set_movement_driver_packet']);
   const queried = Object.fromEntries(query.capabilities.map((row) => [row.capability, row]));
   assert.equal(queried.hero_death.runtime_image_requirement, 'NOT_REQUIRED');
