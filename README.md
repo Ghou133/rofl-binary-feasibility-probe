@@ -174,6 +174,10 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-death-pairs"
 node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
+  --events hero_death,champion_die_event_packet,champion_kill_event_packet `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-champion-packet-groups"
+node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events champion_kill_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-champion-kill-reports"
@@ -190,6 +194,15 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 且外层参数低字节相等；任一行冲突时整份回放不输出关联候选。
 11 份 KR 821 回放有 655/655 个候选配对，完整外层参数仅 333/655 相等。
 这仍不是已确认的死亡或对象、击杀者身份。
+
+同时选择上述三类能力后，`champion_kill_die_hero_death_pair_candidates.jsonl`
+记录 OnChampionKill 子包与前述两条路由的候选包组；汇总写入
+`semantic_run.json` 的 `candidate_associations.champion_kill_die_hero_death_pair`。
+11 份 KR 821 回放中 581/581 个 Kill 子包形成唯一包组，另有 74 条 Die/Hero
+配对没有同刻 Kill 子包。每组要求 Kill 外层参数等于 Die 子包 `+0x04` 与
+Hero_Die 来源候选值，Kill 子包 `+0x04` 在清除 `0x100` 位后等于 Hero_Die
+受害者原始参数；包序、完整 build 和原始来源均须通过校验。该对应关系只表示
+包级候选，不确认实际击杀、受害者或击杀者。
 
 821 的候选死亡记录保留原始包来源及未配对路由的负例计数。该 build 的运行时镜像已从真实回放进程捕获；当前死亡包的计时浮点和 Hero_Die 来源 ID 均有独立候选解码，单次助攻候选在 `hero_assist` 入口。可追加 `hero_assist,hero_respawn,hero_death_timer,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_assists_snapshot,hero_missions_minions_killed_snapshot,hero_ward_stats_snapshot,hero_missions_cannon_minions_killed_snapshot,hero_experience_snapshot,hero_vision_score_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_damage_totals_snapshot,hero_damage_taken_from_champions_snapshot,hero_damage_self_mitigated_snapshot,hero_structure_objective_damage_snapshot,hero_longest_living_time_snapshot,hero_total_time_spent_dead_snapshot,hero_total_heal_snapshot,hero_total_units_healed_snapshot,hero_epic_monster_damage_snapshot,hero_crowd_control_time_snapshot,hero_level_state` 到 `--events`；计数、浮点、计时和等级使用已固定的精确镜像变换，CLI 运行时无需再次提供镜像。库存 `hero_inventory_packet`、广播包 `hero_inventory_broadcast_packet`、单包 `hero_inventory_set_item_packet`、治疗上报包 `params_heal_packet`、护盾配对包 `shielding_params_packet_pair`、隐身名表子包 `stealth_event_packet`、CastSpellAns 包 `cast_spell_ans_packet`、DirectInput turn 包 `direct_input_movement_turn_packet`、SetMovementDriver 包 `set_movement_driver_packet`、OnChampionDie 子包 `champion_die_event_packet` 和 OnChampionKill 子包 `champion_kill_event_packet` 需要 `--runtime-image` 指向同一完整 build 的镜像。各能力独立报告状态；载荷形状超出已验证范围、解码值违反参与者结算上界等情况仍会保留其他已通过能力的候选输出，并明确标出失败项。11 份现有 KR 回放中的等级 20 和高击杀/助攻编码均已被相应变换覆盖。计时值不用于预测返回时点。
 

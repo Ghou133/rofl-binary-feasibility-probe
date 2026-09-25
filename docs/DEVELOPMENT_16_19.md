@@ -4,6 +4,23 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** The selected KR 821 `hero_death,champion_die_event_packet,
+  champion_kill_event_packet` route now exposes a second candidate packet
+  association. All 581 OnChampionKill children in 11 Replays have a unique
+  same-Replay/chunk/ms OnChampionDie and Hero_Die group with packet order
+  Die child, Kill child, Hero_Die primary; 74 Die/Hero groups have no Kill
+  child. Kill outer `raw_param` equals Die child `+0x04` and the Hero_Die
+  source candidate in 581/581. Kill child `+0x04` equals the Hero_Die victim
+  raw parameter after clearing bit `0x100` in 581/581 (551/581 exact).
+  Shifted-time controls gave no exact matches; rotated intact field pairs
+  reached at most ten dual matches versus 34–86 per observed Replay. The
+  association preserves all packet refs and fails locally on ambiguity or
+  conflict, without asserting actual kill, actor, or victim semantics.
+  The final three-capability CLI batch wrote 581 candidate JSONL rows and
+  reported 11/11 `CANDIDATE`; without the image, the downstream group is
+  `MISSING_INPUT` and no group JSONL is written. Ignored evidence is under
+  `artifacts/16_19_development/champion_kill_death_link_821/` and
+  `artifacts/16_19_development/champion_kill_die_hero_cli_batch_821/`.
 - **Completed:** Selecting KR 821 `hero_death,champion_die_event_packet`
   together now emits `champion_die_hero_death_pair_candidates.jsonl` through
   the shared CLI/API. The exact-build association requires a unique same
