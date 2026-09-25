@@ -634,14 +634,22 @@ function prepareBatchEventQuery(directory, eventKey) {
       unavailable = { code: error.code, message: error.message,
         ...error.details };
     }
-    // Even unavailable entries must be bound to the manifest's exact Replay.
-    const semantic = readArtifactJson(replayDirectory, 'semantic_run.json');
-    const analysis = readArtifactJson(replayDirectory, 'replay_analysis.json');
-    if (semantic.replay_sha256 !== entry.sha256
-        || analysis.replay_sha256 !== entry.sha256
-        || semantic.replay_version !== entry.version
-        || analysis.replay_version !== entry.version
-        || semantic.container_status !== 'PASS') {
+    // prepareEventQuery already checked both metadata files for available
+    // entries. Unavailable entries still need their metadata read and bound.
+    let identityMatches;
+    if (prepared) {
+      identityMatches = prepared.replaySha === entry.sha256
+        && prepared.replayVersion === entry.version;
+    } else {
+      const semantic = readArtifactJson(replayDirectory, 'semantic_run.json');
+      const analysis = readArtifactJson(replayDirectory, 'replay_analysis.json');
+      identityMatches = semantic.replay_sha256 === entry.sha256
+        && analysis.replay_sha256 === entry.sha256
+        && semantic.replay_version === entry.version
+        && analysis.replay_version === entry.version
+        && semantic.container_status === 'PASS';
+    }
+    if (!identityMatches) {
       throw new EventQueryError('ARTIFACT_IDENTITY_MISMATCH',
         `Manifest and Replay metadata disagree at entry ${index}.`,
         { artifact_directory: relative });

@@ -585,6 +585,42 @@ test('query-events refuses changed batch rows and omitted manifest Replay entrie
   assert.equal(JSON.parse(query.stderr).code, 'INVALID_BATCH_METADATA');
 });
 
+test('query-events keeps batch Replay identity and metadata hash gates', (t) => {
+  for (const [field, value] of [
+    ['sha256', 'c'.repeat(64)],
+    ['version', '16.19.821.9999'],
+  ]) {
+    const batch = batchArtifact(t);
+    rewriteJson(batch.manifestPath, (manifest) => {
+      manifest.replay_inputs[0][field] = value;
+    });
+    const mismatch = run(batch.root, '--event', EVENT);
+    assert.equal(mismatch.status, 2);
+    assert.equal(JSON.parse(mismatch.stderr).code, 'ARTIFACT_IDENTITY_MISMATCH');
+  }
+
+  const unavailable = batchArtifact(t);
+  rewriteJson(path.join(unavailable.secondDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results[CAPABILITY] = {
+      status: 'PROFILE_UNAVAILABLE', event_count: null,
+    };
+  });
+  refreshBatchHashes(unavailable.manifestPath);
+  rewriteJson(unavailable.manifestPath, (manifest) => {
+    manifest.replay_inputs[1].version = '16.19.821.9999';
+  });
+  const unavailableMismatch = run(unavailable.root, '--event', EVENT);
+  assert.equal(unavailableMismatch.status, 2);
+  assert.equal(JSON.parse(unavailableMismatch.stderr).code, 'ARTIFACT_IDENTITY_MISMATCH');
+
+  const changedMetadata = batchArtifact(t);
+  rewriteJson(path.join(changedMetadata.first.replayDirectory, 'replay_analysis.json'),
+    (analysis) => { analysis.note = 'changed after manifest'; });
+  const hashMismatch = run(changedMetadata.root, '--event', EVENT);
+  assert.equal(hashMismatch.status, 2);
+  assert.equal(JSON.parse(hashMismatch.stderr).code, 'ARTIFACT_HASH_MISMATCH');
+});
+
 test('query-events filters exact 821 pair and group association rows without modifying JSONL', (t) => {
   for (const eventKey of ASSOCIATION_EVENTS) {
     const fixture = associationArtifact(t, eventKey);
