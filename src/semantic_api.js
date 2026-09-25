@@ -155,6 +155,8 @@ const { associateWardInventoryKeyframePairCandidates821 } =
   require('./decoders/rofl_16_19_821_ward_inventory_keyframe_pair_candidate');
 const { deriveInventoryKeyframeIntervalDifferenceCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
+const { associateInventoryGameBroadcastKeyframeBracketCandidates821 } =
+  require('./decoders/rofl_16_19_821_inventory_game_broadcast_keyframe_bracket_candidate');
 const { associateIncrementMinionKeyframeBracketCandidates821 } =
   require('./decoders/rofl_16_19_821_increment_minion_keyframe_bracket_candidate');
 const { analyzeMovementParticipantAssociations821 } =
@@ -2982,19 +2984,39 @@ function decode1619821(replay, profile, options = {}) {
     }
   }
   if (capabilities.includes('hero_inventory_broadcast_packet')) {
+    let inventoryIntervalOutcome;
     try {
-      const association = deriveInventoryKeyframeIntervalDifferenceCandidates821(replay, {
+      inventoryIntervalOutcome = deriveInventoryKeyframeIntervalDifferenceCandidates821(replay, {
         inventoryBroadcastOutcome: outcomes.hero_inventory_broadcast_packet,
       });
-      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
-        const { events: intervalEvents, ...summary } = association;
+      if (inventoryIntervalOutcome.status === 'CANDIDATE'
+          && Array.isArray(inventoryIntervalOutcome.events)) {
+        const { events: intervalEvents, ...summary } = inventoryIntervalOutcome;
         candidateAssociations.inventory_keyframe_interval_difference = summary;
         events.inventory_keyframe_interval_difference_candidates = intervalEvents;
       } else {
-        candidateAssociations.inventory_keyframe_interval_difference = association;
+        candidateAssociations.inventory_keyframe_interval_difference = inventoryIntervalOutcome;
       }
     } catch (error) {
-      candidateAssociations.inventory_keyframe_interval_difference = {
+      inventoryIntervalOutcome = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+      candidateAssociations.inventory_keyframe_interval_difference = inventoryIntervalOutcome;
+    }
+    try {
+      const association = associateInventoryGameBroadcastKeyframeBracketCandidates821(replay, {
+        inventoryBroadcastOutcome: outcomes.hero_inventory_broadcast_packet,
+        inventoryIntervalOutcome,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: bracketEvents, ...summary } = association;
+        candidateAssociations.inventory_game_broadcast_keyframe_bracket = summary;
+        events.inventory_game_broadcast_keyframe_bracket_candidates = bracketEvents;
+      } else {
+        candidateAssociations.inventory_game_broadcast_keyframe_bracket = association;
+      }
+    } catch (error) {
+      candidateAssociations.inventory_game_broadcast_keyframe_bracket = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }
