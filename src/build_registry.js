@@ -55,6 +55,8 @@ const dampenerDieEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_dampener_die_event_packet_candidate');
 const turretFirstBloodEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_turret_first_blood_event_packet_candidate');
+const hqKillEventPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_hq_kill_event_packet_candidate');
 const turretPlateEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_turret_plate_event_packet_candidate');
 const castSpellAnsCandidate1619821 =
@@ -568,6 +570,7 @@ const BUILD_PROFILES = deepFreeze({
       turret_die_event_packet: 0x040a,
       dampener_die_event_packet: 0x040a,
       turret_first_blood_event_packet: 0x040a,
+      hq_kill_event_packet: 0x040a,
       turret_plate_event_packet: 0x040a,
       cast_spell_ans_packet: 0x01da,
       npc_buff_remove_packet: 0x047c,
@@ -663,6 +666,8 @@ const BUILD_PROFILES = deepFreeze({
         dampenerDieEventPacketCandidate1619821.DAMPENER_DIE_EVENT_PACKET_821_PROFILE,
       turret_first_blood_event_packet:
         turretFirstBloodEventPacketCandidate1619821.TURRET_FIRST_BLOOD_EVENT_PACKET_821_PROFILE,
+      hq_kill_event_packet:
+        hqKillEventPacketCandidate1619821.HQ_KILL_EVENT_PACKET_821_PROFILE,
       turret_plate_event_packet:
         turretPlateEventPacketCandidate1619821.TURRET_PLATE_EVENT_PACKET_821_PROFILE,
       cast_spell_ans_packet:
@@ -760,6 +765,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_NATIVE_ON_DAMPENER_DIE_NAMED_PACKET_BLOB',
       turret_first_blood_event_packet:
         'CANDIDATE_821_NATIVE_ON_TURRET_FIRST_BLOOD_NAMED_PACKET_BLOB',
+      hq_kill_event_packet:
+        'CANDIDATE_821_NATIVE_ON_HQ_KILL_NAMED_PACKET_BLOB',
       turret_plate_event_packet:
         'CANDIDATE_821_NATIVE_ON_TURRET_PLATE_NAMED_PACKET_FIELD',
       cast_spell_ans_packet: 'CANDIDATE_821_NATIVE_CAST_SPELL_ANS_OPAQUE_PACKET_FIELDS',
@@ -834,6 +841,7 @@ const BUILD_PROFILES = deepFreeze({
       turret_die_event_packet: 'exact 821 native 0x040a OnEvent child 0x003b full consumption and OnTurretDie image name table; native child blob remains anonymous; no actual turret death, structure, actor, or state transition inference',
       dampener_die_event_packet: 'exact 821 native 0x040a OnEvent child 0x0035 full consumption and OnDampenerDie image name table; native child blob remains anonymous; no actual dampener death, structure, actor, or state transition inference',
       turret_first_blood_event_packet: 'exact 821 native 0x040a OnEvent child 0x003d full consumption and OnTurretFirstBlood image name table; native child blob remains anonymous; no actual first turret death, structure, actor, or state transition inference',
+      hq_kill_event_packet: 'exact 821 native 0x040a OnEvent child 0x0046 full consumption and OnHQKill image name table; native child blob remains anonymous; no HQ destruction, winner, actor, or state transition inference',
       turret_plate_event_packet: 'exact 821 native 0x040a OnEvent child 0x0107 and OnTurretPlateDestroyed name table; native child +0x04 u32 remains anonymous; no callback-field, structure, or game-state transition inference',
       cast_spell_ans_packet: 'exact 821 native 0x01da packet constructor/deserializer, callback transforms for opaque object offsets 0x148/0x14c, nested protected float at +0xe0 and byte at +0x140; no successful-cast, owner, target, spell, slot or field-meaning inference',
       npc_buff_remove_packet: 'exact 821 native 0x047c BuffRemove2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14/0x18; no owner, buff identity, target or lifecycle inference',
@@ -883,6 +891,7 @@ const BUILD_PROFILES = deepFreeze({
       'turret_die_event_packet',
       'dampener_die_event_packet',
       'turret_first_blood_event_packet',
+      'hq_kill_event_packet',
       'turret_plate_event_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
       'npc_buff_update_num_counter_packet',

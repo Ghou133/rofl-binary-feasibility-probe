@@ -68,6 +68,7 @@
 | `16.19.821.7343 --events dampener_die_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x0035` 子包，保留 OnDampenerDie 镜像名表标签、匿名 108 字节原生子包及原始包来源 | 有目标包时写入 `dampener_die_event_packet_candidates`，状态为 `CANDIDATE`；无目标包时报告 `PROFILE_UNAVAILABLE`；同长度异类子事件作为排除证据，不推断建筑实际毁坏、建筑身份、参与者或状态变化 |
 | `16.19.821.7343 --events turret_die_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x003b` 子包，保留 OnTurretDie 镜像名表标签、匿名 108 字节原生子包内容及 SHA-256、原始包来源 | 仅写入 `turret_die_event_packet_candidates`，状态为 `CANDIDATE`；同长度异类子事件作为排除证据，不推断实际防御塔死亡、建筑身份、参与者或状态变化 |
 | `16.19.821.7343 --events turret_first_blood_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x003d` 子包，保留 OnTurretFirstBlood 镜像名表标签、匿名 108 字节原生子包内容及 SHA-256、原始包来源 | 仅写入 `turret_first_blood_event_packet_candidates`，状态为 `CANDIDATE`；同长度异类子事件作为排除证据，不推断实际首座防御塔死亡、建筑身份、参与者或状态变化 |
+| `16.19.821.7343 --events hq_kill_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x0046` 子包，保留 OnHQKill 镜像名表标签、匿名 108 字节原生子包内容及 SHA-256、原始包来源 | 仅写入 `hq_kill_event_packet_candidates`，状态为 `CANDIDATE`；同长度异类子事件作为排除证据，不推断实际主基地毁坏、胜者、行动者或状态变化 |
 | `16.19.821.7343 --events turret_die_event_packet,turret_first_blood_event_packet --runtime-image PATH` | 两类子包分别通过精确镜像校验后，检查 `0x003d` 是否在同一 chunk、同一毫秒中位于唯一较早的 `0x003b` 之后，中间没有其他 `0x040a` OnEvent 包；重新核对回放原始包来源 | 成功时另写入 `turret_first_blood_die_pair_candidates` 和 `candidate_associations.turret_first_blood_die_pair`，均为包级 `CANDIDATE`；不推断实际首座防御塔死亡、建筑或参与者身份 |
 | `16.19.821.7343 --events cast_spell_ans_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x01da` CastSpellAns 包，输出原始包来源、两个回调变换后的不透明字段，以及嵌套对象 `+0xe0` 的受保护浮点与 `+0x140` 的受保护字节候选值及其原始字节 | 仅写入 `cast_spell_ans_packet_candidates`；不声称一次成功施法，也不推断技能、槽位、施法者、目标或这两个字段的游戏含义；镜像按完整 SHA-256 校验 |
 | `16.19.821.7343 --events direct_input_movement_turn_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x00ba` DirectInputMovementDriverServerTurnData 包，输出三个回调变换后的匿名 f32 字段与原始包来源 | 仅写入 `direct_input_movement_turn_packet_candidates`，状态为 `CANDIDATE`；不将字段标为世界坐标、英雄路径或参与者位置；仅接受已观察到的 13 字节 `0x85` 形状 |
@@ -252,6 +253,10 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events turret_first_blood_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-turret-first-blood-event-packets"
+node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
+  --events hq_kill_event_packet `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-hq-kill-event-packets"
 node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events turret_die_event_packet,turret_first_blood_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `

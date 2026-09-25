@@ -35,6 +35,7 @@ const CAPABILITIES = new Set([
   'turret_die_event_packet',
   'dampener_die_event_packet',
   'turret_first_blood_event_packet',
+  'hq_kill_event_packet',
   'turret_plate_event_packet',
   'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
   'npc_buff_update_num_counter_packet', 'npc_buff_update_count_packet',
@@ -71,6 +72,7 @@ const MAX_REVIVE_ALLY_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_DIE_EVENT_PACKET_ROWS = 2_000;
 const MAX_DAMPENER_DIE_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_FIRST_BLOOD_EVENT_PACKET_ROWS = 2_000;
+const MAX_HQ_KILL_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_PLATE_EVENT_PACKET_ROWS = 10_000;
 const MAX_DIRECT_INPUT_TURN_PACKET_ROWS = 20_000;
 const MAX_SET_MOVEMENT_DRIVER_PACKET_ROWS = 20_000;
@@ -132,6 +134,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     turret_die_event_packet: [],
     dampener_die_event_packet: [],
     turret_first_blood_event_packet: [],
+    hq_kill_event_packet: [],
     turret_plate_event_packet: [],
     cast_spell_ans_packet: [],
     npc_buff_remove_packet: [],
@@ -222,6 +225,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let turretDieEventPacketCount = 0;
   let dampenerDieEventPacketCount = 0;
   let turretFirstBloodEventPacketCount = 0;
+  let hqKillEventPacketCount = 0;
   let turretPlateEventPacketCount = 0;
   let directInputTurnPacketCount = 0;
   let setMovementDriverPacketCount = 0;
@@ -246,6 +250,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsTurretDieEvent = selected.has('turret_die_event_packet');
   const selectsDampenerDieEvent = selected.has('dampener_die_event_packet');
   const selectsTurretFirstBloodEvent = selected.has('turret_first_blood_event_packet');
+  const selectsHqKillEvent = selected.has('hq_kill_event_packet');
   const selectsTurretPlateEvent = selected.has('turret_plate_event_packet');
   const selectsInventoryPacket = selected.has('hero_inventory_packet');
   const selectsInventoryBroadcast = selected.has('hero_inventory_broadcast_packet');
@@ -382,6 +387,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
         if (rows.turret_first_blood_event_packet.length
             < MAX_TURRET_FIRST_BLOOD_EVENT_PACKET_ROWS) {
           rows.turret_first_blood_event_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsHqKillEvent
+          && block.packet_id === 0x040a && block.payload_length === 116) {
+        hqKillEventPacketCount += 1;
+        if (rows.hq_kill_event_packet.length < MAX_HQ_KILL_EVENT_PACKET_ROWS) {
+          rows.hq_kill_event_packet.push(copyRow(block, chunk));
         }
       }
       if (selectsTurretPlateEvent
@@ -528,6 +540,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         turretDieEventPacketCount,
         dampenerDieEventPacketCount,
         turretFirstBloodEventPacketCount,
+        hqKillEventPacketCount,
         turretPlateEventPacketCount,
         directInputTurnPacketCount,
         setMovementDriverPacketCount,
@@ -689,6 +702,13 @@ function rowsFor821Capability(replay, token, capability) {
       && bound.turretFirstBloodEventPacketCount > MAX_TURRET_FIRST_BLOOD_EVENT_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.turretFirstBloodEventPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'hq_kill_event_packet'
+      && bound.hqKillEventPacketCount > MAX_HQ_KILL_EVENT_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.hqKillEventPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }

@@ -160,6 +160,7 @@ turret_die_event_packet emits a separate packet-local OnTurretDie candidate.
 dampener_die_event_packet emits a separate packet-local OnDampenerDie candidate.
 turret_first_blood_event_packet emits a separate packet-local OnTurretFirstBlood candidate.
 Selecting both also emits a candidate OnTurretDie/OnTurretFirstBlood packet-order pair.
+hq_kill_event_packet emits a separate packet-local OnHQKill candidate.
 turret_plate_event_packet emits a separate packet-local OnTurretPlateDestroyed candidate.
 npc_buff_update_num_counter_packet emits an exact-821 packet-local opaque candidate.
 npc_buff_update_count_packet emits an exact-821 packet-local opaque candidate.
@@ -821,6 +822,7 @@ function parseOne1619(replay, options, started) {
       'turret_die_event_packet',
       'dampener_die_event_packet',
       'turret_first_blood_event_packet',
+      'hq_kill_event_packet',
       'turret_plate_event_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
       'npc_buff_update_num_counter_packet',
@@ -2052,6 +2054,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'turret_die_event_packet'
             || capability === 'dampener_die_event_packet'
             || capability === 'turret_first_blood_event_packet'
+            || capability === 'hq_kill_event_packet'
             || capability === 'turret_plate_event_packet'
             || capability === 'cast_spell_ans_packet'))
         || capability === 'npc_buff_remove_packet'
@@ -2408,6 +2411,11 @@ function capabilityQuery(replay, options = {}) {
           'OnTurretFirstBlood image label and anonymous child blob; no actual first turret death, structure, actor, or lifecycle inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'hq_kill_event_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x0046 packet consumption',
+          'OnHQKill image label and anonymous child blob; no HQ destruction, winner, actor, or state transition inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'turret_plate_event_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x0107 packet consumption',
           'OnTurretPlateDestroyed image label and anonymous +0x04 u32; no callback-field, structure, or lifecycle inference');
@@ -2680,6 +2688,7 @@ function capabilityQuery(replay, options = {}) {
             turret_die_event_packet: 'turret_die_event_packet_candidates',
             dampener_die_event_packet: 'dampener_die_event_packet_candidates',
             turret_first_blood_event_packet: 'turret_first_blood_event_packet_candidates',
+            hq_kill_event_packet: 'hq_kill_event_packet_candidates',
             turret_plate_event_packet: 'turret_plate_event_packet_candidates',
             cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
             npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
