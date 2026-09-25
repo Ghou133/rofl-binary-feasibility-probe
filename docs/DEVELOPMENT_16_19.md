@@ -4,6 +4,23 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Research boundary:** In the pinned 821 image, BuffUpdateCount `+0x14` and
+  BuffReplace `+0x18` feed a runtime object-table lookup; their decoded byte
+  fields, and BuffUpdateNumCounter `+0x18`, index a BuffManager vector. This
+  establishes packet-processing use, not the looked-up object's identity.
+  Of 151,495 UpdateCount rows, 114,340 lookup values match one of the ten
+  independent HeroStats hero raw parameters per Replay, but a `value+1`
+  control still matches 105,760. Replace matches 23,189/23,351 versus 20,914
+  for the same control. The module-only capture lacks the Replay-time manager
+  heap, vector, object table, virtual receiver, and labeled identity anchor;
+  no Buff/owner/target role is promoted. UpdateNumCounter `+0x14` is
+  overwritten on receiver entry, so its Add-pair equality cannot establish a
+  consumed Buff identity.
+- **Excluded from current KR work:** Exact-image AddBuffModifier `0x02c0` and
+  RemoveBuffModifier `0x0026` are registered, but strict scans found zero
+  target packets in all 11 supplied KR 821 Replays (18,235,209 framed blocks,
+  zero framing errors). Real native packet validation lacks inputs for them.
+
 - **Completed candidate:** Exact KR 821 `0x0194` BuffUpdateNumCounter and
   `0x02d9` BuffUpdateCount are selectable CLI/API packet candidates with
   pinned-image native full consumption, anonymous callback fields, raw bytes,
