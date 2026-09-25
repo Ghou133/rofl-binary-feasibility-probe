@@ -351,5 +351,6 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
 
 module.exports = {
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
+  decodeNestedBits,
   decodeCastSpellAnsPacketCandidates821,
 };

@@ -173,8 +173,12 @@ set_spell_level_packet emits an exact-821 packet-local opaque candidate.
 increment_minion_kills_packet emits an exact-821 packet-local lookup-key candidate.
 Selecting it with hero_minions_killed_snapshot also emits packet-to-keyframe bracket candidates;
 the endpoint difference does not establish a per-packet CS effect or last hit.
+Selecting hero_level_state with hero_experience_snapshot emits level-packet/EXP-keyframe
+time brackets; their sampled endpoint differences do not establish XP gain or thresholds.
 face_direction_packet emits exact-821 packet-local direction-vector candidates;
 its raw param does not identify an actor, and the packet does not establish position or path.
+circular_movement_restriction_packet emits exact-821 packet-local anonymous fields;
+it does not establish an actor, world position, hero path, or effective restriction.
 face_direction_keyframe_roster_pair pairs canonical keyframe FaceDirection packets
 with same-keyframe HeroStats roster candidates; the roster label does not identify the packet actor.
 Inspect reads the container and packet framing without a runtime image.
@@ -211,6 +215,8 @@ Options:
   --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
   --opaque-pair <u32:u8>      Exact anonymous 821 Buff Add/Remove/Update pair
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
+  --cast-nested-bits <0..255|0xhex>  Exact decoded 821 CastSpellAns nested callback bits
+  --level-after <1..20>        Exact-821 level packet within adjacent EXP keyframes
   --child-event-id <uint32|0xhex>  Exact 821 stealth, named multikill, HQ or objective-bounty child ID
   --latest-per-participant    Last matching observed row per participant and Replay
                                 For interval differences: last matching observed difference.
@@ -268,6 +274,8 @@ function parseArgs(argv) {
     opaqueU32: null,
     opaquePair: null,
     opaqueI32: null,
+    castNestedBits: null,
+    levelAfter: null,
     childEventId: null,
     latestPerParticipant: false,
     endpointReversedPair: false,
@@ -385,6 +393,8 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'opaque-u32') options.opaqueU32 = queryUint32(value, key);
       else if (command === 'query-events' && key === 'opaque-pair') options.opaquePair = queryOpaquePair(value);
       else if (command === 'query-events' && key === 'opaque-i32') options.opaqueI32 = queryInt32(value, key);
+      else if (command === 'query-events' && key === 'cast-nested-bits') options.castNestedBits = queryByte(value, key);
+      else if (command === 'query-events' && key === 'level-after') options.levelAfter = queryInteger(value, key);
       else if (command === 'query-events' && key === 'child-event-id') options.childEventId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'limit') options.limit = queryInteger(value, key);
       else if (command === 'ward-events' && key === 'format') options.format = String(value).toLowerCase();
@@ -512,6 +522,15 @@ function parseArgs(argv) {
     if (options.opaqueI32 !== null && options.event !== 'cast_spell_ans_packet_candidates') {
       throw new Error('--opaque-i32 requires an 821 cast_spell_ans_packet_candidates event');
     }
+    if (options.castNestedBits !== null
+        && options.event !== 'cast_spell_ans_packet_candidates') {
+      throw new Error('--cast-nested-bits requires an 821 cast_spell_ans_packet_candidates event');
+    }
+    if (options.levelAfter !== null
+        && (options.event !== 'level_experience_keyframe_bracket_candidates'
+          || options.levelAfter > 20)) {
+      throw new Error('--level-after requires level_experience_keyframe_bracket_candidates and 1..20');
+    }
     if (options.childEventId !== null) {
       const ids = options.event === 'stealth_event_packet_candidates'
         ? [0x0101, 0x0102]
@@ -571,6 +590,12 @@ function queryInt32(value, label) {
 
 function queryRawParam(value) {
   return queryUint32(value, 'raw-param');
+}
+
+function queryByte(value, label) {
+  const number = queryUint32(value, label);
+  if (number > 0xff) throw new Error(`--${label} must be in 0..255`);
+  return number;
 }
 
 function queryUint32(value, label) {
@@ -848,6 +873,7 @@ function parseOne1619(replay, options, started) {
       'set_movement_driver_packet',
       'increment_minion_kills_packet',
       'face_direction_packet',
+      'circular_movement_restriction_packet',
     ].includes(name)))] : [];
   if (options.semantic !== false && Array.isArray(options.events)
       && options.events.includes('face_direction_keyframe_roster_pair')) {
@@ -2089,6 +2115,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'set_movement_driver_packet'
             || capability === 'increment_minion_kills_packet'
             || capability === 'face_direction_packet'
+            || capability === 'circular_movement_restriction_packet'
             || capability === 'face_direction_keyframe_roster_pair'));
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
@@ -2446,6 +2473,11 @@ function capabilityQuery(replay, options = {}) {
           'callback-transformed opaque fields and raw packet provenance; no successful-cast or spell identity inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'circular_movement_restriction_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native-observed 0x0464 packet shapes',
+          'anonymous scalar and vector packet fields; no actor, world position, path, or effective restriction inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'npc_buff_remove_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x047c full packet consumption',
           'callback-transformed opaque fields and raw packet provenance; no buff identity or lifecycle inference');
@@ -2727,6 +2759,8 @@ function capabilityQuery(replay, options = {}) {
             set_movement_driver_packet: 'set_movement_driver_packet_candidates',
             increment_minion_kills_packet: 'increment_minion_kills_packet_candidates',
             face_direction_packet: 'face_direction_packet_candidates',
+            circular_movement_restriction_packet:
+              'circular_movement_restriction_packet_candidates',
             face_direction_keyframe_roster_pair:
               'face_direction_keyframe_roster_pair_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
@@ -2894,6 +2928,8 @@ async function runQueryEventsCommand(parsed) {
       opaqueU32: options.opaqueU32,
       opaquePair: options.opaquePair,
       opaqueI32: options.opaqueI32,
+      castNestedBits: options.castNestedBits,
+      levelAfter: options.levelAfter,
       childEventId: options.childEventId,
       latestPerParticipant: options.latestPerParticipant,
       endpointReversedPair: options.endpointReversedPair,

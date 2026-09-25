@@ -45,6 +45,10 @@ const { INVENTORY_KEYFRAME_INTERVAL_DIFFERENCE_821_PROFILE } =
   require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
 const { EXPERIENCE_KEYFRAME_INTERVAL_DIFFERENCE_821_PROFILE } =
   require('./decoders/rofl_16_19_821_experience_keyframe_interval_difference_candidate');
+const { LEVEL_EXPERIENCE_KEYFRAME_BRACKET_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_level_experience_keyframe_bracket_candidate');
+const { HERO_LEVEL_CANDIDATE_PROFILE_821, decodeLevelCode } =
+  require('./decoders/rofl_16_19_821_level_candidate');
 const { INVENTORY_GAME_BROADCAST_KEYFRAME_BRACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_inventory_game_broadcast_keyframe_bracket_candidate');
 const { INCREMENT_MINION_KEYFRAME_BRACKET_821_PROFILE } =
@@ -62,6 +66,9 @@ const { HERO_INVENTORY_BROADCAST_PACKET_CANDIDATE_PROFILE_821 } =
   require('./decoders/rofl_16_19_821_inventory_broadcast_packet_candidate');
 const { LOOKUP_TABLE_SHA256, decodeRuntimeCountByte } =
   require('./decoders/rofl_16_19_821_runtime_bytes');
+const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
+  decodeNestedBits } =
+  require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
 const { TURRET_FIRST_BLOOD_DIE_PAIR_821_PROFILE } =
@@ -248,6 +255,12 @@ const OPAQUE_PAIR_FIELDS_821 = Object.freeze({
     Object.freeze(['opaque_u32_0x14', 'opaque_u8_0x18']),
 });
 const ASSOCIATION_EVENTS_821 = Object.freeze({
+  level_experience_keyframe_bracket_candidates: Object.freeze({
+    profile: LEVEL_EXPERIENCE_KEYFRAME_BRACKET_821_PROFILE,
+    eventType: 'LEVEL_EXPERIENCE_KEYFRAME_BRACKET_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_821_LEVEL_PACKET_WITHIN_EXPERIENCE_KEYFRAME_ENDPOINTS',
+    levelExperienceBracket: true,
+  }),
   experience_keyframe_interval_difference_candidates: Object.freeze({
     profile: EXPERIENCE_KEYFRAME_INTERVAL_DIFFERENCE_821_PROFILE,
     eventType: 'EXPERIENCE_KEYFRAME_INTERVAL_DIFFERENCE_CANDIDATE',
@@ -1432,7 +1445,120 @@ function prepareExperienceIntervalAssociation(semantic, analysis, eventKey,
   return association;
 }
 
+function prepareLevelExperienceBracketAssociation(semantic, analysis, eventKey,
+  { profile, evidenceStatus }) {
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`);
+  }
+  const association = semantic.candidate_associations?.[profile.capability];
+  if (association?.status !== 'CANDIDATE') {
+    throw new EventQueryError('ASSOCIATION_UNAVAILABLE',
+      `${profile.capability} is not an executed candidate association.`,
+      { capability: profile.capability,
+        association_status: association?.status ?? null,
+        error: association?.error ?? null });
+  }
+  const level = semantic.capability_results?.hero_level_state;
+  const experience = semantic.capability_results?.hero_experience_snapshot;
+  const sourceProfiles = [HERO_LEVEL_CANDIDATE_PROFILE_821,
+    FLOAT_STATS_821_PROFILES.hero_experience_snapshot];
+  for (const [index, capability] of profile.depends_on.entries()) {
+    if (!semantic.requested_capabilities?.includes(capability)) {
+      throw new EventQueryError('CAPABILITY_NOT_REQUESTED',
+        `${capability} was not requested for ${profile.capability}.`);
+    }
+    const result = index === 0 ? level : experience;
+    if (result?.status !== 'CANDIDATE') {
+      throw new EventQueryError('CAPABILITY_UNAVAILABLE',
+        `${capability} is unavailable for ${profile.capability}.`,
+        { capability, capability_status: result?.status ?? null });
+    }
+    if (result.profile_id !== sourceProfiles[index].id
+        || result.evidence_runtime_image_sha256
+          !== profile.evidence_runtime_image_sha256
+        || result.input_packet_id !== sourceProfiles[index].replay_block_packet_id
+        || result.input_count !== result.event_count
+        || analysis.event_counts?.[`${capability}_candidates`] !== result.event_count) {
+      throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+        `${capability} source identity or counts differ from ${profile.capability}.`);
+    }
+  }
+  if (level.evidence_status !== 'CANDIDATE_821_RUNTIME_LEVEL_BYTE_AND_REPLAY_TAIL'
+      || level.runtime_image_used !== false
+      || !['STATIC_821_RUNTIME_TRANSFORM_EMBEDDED', 'PROVIDED_NOT_USED']
+        .includes(level.runtime_image_status)
+      || experience.evidence_status
+        !== 'CANDIDATE_821_RUNTIME_BYTE_KEYFRAME_F32_AND_REPLAY_TAIL'
+      || experience.lookup_table_sha256 !== profile.lookup_table_sha256
+      || experience.runtime_image_used !== false
+      || !['STATIC_821_RUNTIME_TRANSFORM_EMBEDDED', 'PROVIDED_NOT_USED']
+        .includes(experience.runtime_image_status)
+      || experience.observed_participant_count !== 10
+      || experience.descent_count !== 0
+      || experience.keyframe_count !== association.keyframe_count
+      || association.profile_id !== profile.id
+      || association.replay_sha256 !== semantic.replay_sha256
+      || association.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || association.lookup_table_sha256 !== profile.lookup_table_sha256
+      || association.evidence_status !== evidenceStatus
+      || !isDeepStrictEqual(association.depends_on, [...profile.depends_on])
+      || !isDeepStrictEqual(association.known_limits, [...profile.known_limits])
+      || !isCount(association.level_packet_count)
+      || association.level_packet_count !== level.event_count
+      || !isCount(association.experience_snapshot_count)
+      || association.experience_snapshot_count !== experience.event_count
+      || !isCount(association.keyframe_count) || association.keyframe_count < 1
+      || association.experience_snapshot_count !== association.keyframe_count * 10
+      || !isCount(association.event_count)
+      || !isCount(association.higher_level_observation_count)
+      || !isCount(association.excluded_level_one_count)
+      || !isCount(association.excluded_repeated_level_count)
+      || association.higher_level_observation_count
+        + association.excluded_level_one_count
+        + association.excluded_repeated_level_count !== association.level_packet_count
+      || !isCount(association.outside_first_keyframe_count)
+      || !isCount(association.outside_last_keyframe_count)
+      || !isCount(association.exact_keyframe_boundary_count)
+      || association.event_count + association.outside_first_keyframe_count
+        + association.outside_last_keyframe_count
+        + association.exact_keyframe_boundary_count
+        !== association.higher_level_observation_count
+      || !isCount(association.observed_level_sequence_gap_count)
+      || !isCount(association.positive_endpoint_count)
+      || !isCount(association.unchanged_endpoint_count)
+      || association.positive_endpoint_count + association.unchanged_endpoint_count
+        !== association.event_count
+      || !isCount(association.multi_level_interval_count)
+      || !isCount(association.involved_interval_count)
+      || !isCount(association.positive_involved_interval_count)
+      || !isCount(association.unchanged_involved_interval_count)
+      || association.positive_involved_interval_count
+        + association.unchanged_involved_interval_count
+        !== association.involved_interval_count
+      || association.involved_interval_count > association.event_count
+      || !isCount(association.max_level_packets_per_interval)
+      || association.multi_level_interval_count > association.event_count
+      || association.max_level_packets_per_interval > association.event_count
+      || association.verified_level_raw_packet_count !== association.level_packet_count
+      || association.verified_experience_raw_packet_count
+        !== association.experience_snapshot_count
+      || analysis.event_counts?.[eventKey] !== association.event_count
+      || (analysis.semantic?.candidate_associations?.[profile.capability] != null
+        && !isDeepStrictEqual(
+          analysis.semantic.candidate_associations[profile.capability], association))) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      `${profile.capability} identity, source counts or endpoint counts differ.`);
+  }
+  return association;
+}
+
 function prepareAssociation(semantic, analysis, eventKey, associationConfig) {
+  if (associationConfig.levelExperienceBracket) {
+    return prepareLevelExperienceBracketAssociation(semantic, analysis, eventKey,
+      associationConfig);
+  }
   if (associationConfig.experienceInterval) {
     return prepareExperienceIntervalAssociation(semantic, analysis, eventKey,
       associationConfig);
@@ -1812,6 +1938,13 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   const experienceIntervalSource = associationConfig?.experienceInterval
     ? prepareEventQueryFromDocuments(artifactDirectory,
       'hero_experience_snapshot_candidates', semantic, analysis) : null;
+  const levelExperienceBracketSources = associationConfig?.levelExperienceBracket
+    ? {
+      level: prepareEventQueryFromDocuments(artifactDirectory,
+        'hero_level_state_candidates', semantic, analysis),
+      experience: prepareEventQueryFromDocuments(artifactDirectory,
+        'hero_experience_snapshot_candidates', semantic, analysis),
+    } : null;
   const objectiveBountyTurretPairSources = associationConfig?.objectiveBountyTurretPair
     ? Object.fromEntries(OBJECTIVE_BOUNTY_TURRET_PAIR_SOURCE_EVENTS_821.map(
       ({ eventKey: sourceEventKey }) => [sourceEventKey,
@@ -1821,6 +1954,7 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
     artifactDirectory, inputPath, eventKey, eventStorage, capability, capabilityStatus,
     capabilityResult, declaredCount, replaySha, associationConfig, exactPacketProfile,
     exactBlobPacketConfig, bracketSources, experienceIntervalSource,
+    levelExperienceBracketSources,
     objectiveBountyTurretPairSources,
     sourcePath: analysis.source_path,
     episodeAssistNativeStatus: associationConfig?.episode
@@ -1961,6 +2095,11 @@ function prepareBatchEventQuery(directory, eventKey) {
       if (prepared.experienceIntervalSource) {
         const source = prepared.experienceIntervalSource;
         checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
+      }
+      if (prepared.levelExperienceBracketSources) {
+        for (const source of Object.values(prepared.levelExperienceBracketSources)) {
+          checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
+        }
       }
       if (prepared.objectiveBountyTurretPairSources) {
         for (const source of Object.values(prepared.objectiveBountyTurretPairSources)) {
@@ -2184,6 +2323,86 @@ function castSpellAnsOpaqueI32(row, lineNumber) {
       `Invalid ${field} at JSONL line ${lineNumber}.`, { line_number: lineNumber });
   }
   return { value, available: true };
+}
+
+function prepareCastSpellAnsNestedBits(prepared) {
+  const profile = CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821;
+  if (prepared.eventKey !== 'cast_spell_ans_packet_candidates'
+      || prepared.replayVersion !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--cast-nested-bits requires an exact 16.19.821.7343 CastSpellAns packet candidate event.');
+  }
+  const result = prepared.capabilityResult;
+  if (result?.profile_id === profile.id.replace(/-v4$/, '-v3')) {
+    throw new EventQueryError('CAST_NESTED_BITS_UNAVAILABLE',
+      'This CastSpellAns artifact predates the nested callback bit field.',
+      { cast_nested_bits_checked_count: 0,
+        cast_nested_bits_unavailable_count: prepared.declaredCount,
+        capability_status: prepared.capabilityStatus });
+  }
+  if (prepared.capabilityStatus !== 'CANDIDATE'
+      || result?.profile_id !== profile.id
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.evidence_callback_table_sha256
+        !== profile.evidence_callback_table_sha256
+      || result.evidence_nested_float_inverse_sha256
+        !== profile.evidence_nested_float_inverse_sha256
+      || result.evidence_nested_byte_inverse_sha256
+        !== profile.evidence_nested_byte_inverse_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || result.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS'
+      || result.input_count !== result.event_count) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'CastSpellAns nested callback bit metadata differs from its exact-build profile.');
+  }
+}
+
+function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid CastSpellAns nested callback bits at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const profile = CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821;
+  const ref = row.raw_packet_ref;
+  if (row.event_type !== 'NPC_CAST_SPELL_ANS_PACKET_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS'
+      || !Number.isSafeInteger(row.raw_param) || row.raw_param <= 0
+      || row.raw_param > 0xffffffff || !ref
+      || ref.source_path !== (prepared.sourcePath ?? null)
+      || ref.replay_sha256 !== prepared.replaySha
+      || ref.chunk_stream !== 'game_chunk' && ref.chunk_stream !== 'keyframe'
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== profile.replay_block_packet_id
+      || ref.replay_time_ms !== row.replay_time_ms
+      || !Number.isSafeInteger(ref.payload_length) || ref.payload_length < 97
+      || ref.payload_length > 189 || ref.raw_param !== row.raw_param
+      || !REPLAY_SHA.test(ref.raw_payload_sha256 ?? '')) {
+    invalid('candidate profile or raw packet reference differs');
+  }
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (packetPositions.has(position)) invalid('raw packet reference occurs twice');
+  packetPositions.add(position);
+  const raw = row.raw_nested_bits_0x24_hex;
+  const value = row.opaque_nested_bits_0x24;
+  if (typeof raw !== 'string' || !/^[0-9a-f]{2}$/.test(raw)
+      || !Number.isSafeInteger(value) || value < 0 || value > 0xff
+      || value !== decodeNestedBits(raw)) {
+    invalid('raw byte and decoded value differ from the pinned 821 transform');
+  }
+  return value;
 }
 
 function turretPairRow(row, prepared, lineNumber, seenKeys, seenPacketPositions) {
@@ -3107,13 +3326,14 @@ function minionBracketRef(ref, prepared, packetId, stream, payloadLength) {
     && REPLAY_SHA.test(ref.raw_payload_sha256);
 }
 
-async function readMinionBracketSource(prepared) {
+async function readMinionBracketSource(prepared,
+  maxRows = MAX_MINION_BRACKET_SOURCE_ROWS_821) {
   const rows = [];
   const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
   try {
     for await (const line of lines) {
-      if (rows.length >= MAX_MINION_BRACKET_SOURCE_ROWS_821) {
+      if (rows.length >= maxRows) {
         throw new EventQueryError('EVENT_COUNT_MISMATCH',
           `${prepared.eventKey} exceeds the exact-build source row bound.`);
       }
@@ -3317,6 +3537,312 @@ async function loadExperienceIntervalExpectedRows(prepared) {
   return expected;
 }
 
+async function loadLevelExperienceBracketExpectedRows(prepared) {
+  const association = prepared.capabilityResult;
+  const { level: levelSource, experience: experienceSource } =
+    prepared.levelExperienceBracketSources;
+  const levelProfile = HERO_LEVEL_CANDIDATE_PROFILE_821;
+  const experienceProfile = FLOAT_STATS_821_PROFILES.hero_experience_snapshot;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid level/experience bracket source: ${reason}.`);
+  };
+  if (levelSource.replaySha !== prepared.replaySha
+      || experienceSource.replaySha !== prepared.replaySha
+      || levelSource.replayVersion !== prepared.replayVersion
+      || experienceSource.replayVersion !== prepared.replayVersion
+      || levelSource.declaredCount !== association.level_packet_count
+      || experienceSource.declaredCount !== association.experience_snapshot_count) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      'Level/experience source artifacts differ from bracket metadata.');
+  }
+  const [levelRows, experienceRows] = await Promise.all([
+    readMinionBracketSource(levelSource, MAX_EXPERIENCE_INTERVAL_SOURCE_ROWS_821),
+    readMinionBracketSource(experienceSource, MAX_EXPERIENCE_INTERVAL_SOURCE_ROWS_821),
+  ]);
+  const levelPositions = new Set();
+  const levels = [];
+  const lastLevel = new Map();
+  let levelOneCount = 0;
+  let repeatedCount = 0;
+  for (const [index, row] of levelRows.entries()) {
+    const ref = row.raw_packet_ref;
+    const raw = ref?.raw_payload_hex;
+    const rawParam = row.hero_raw_param;
+    const participant = (rawParam & 0xff) - 0xad;
+    const observedRawParam = (rawParam >= 0x400000ae && rawParam <= 0x400000b7)
+      || (rawParam >= 0x400001ae && rawParam <= 0x400001b7);
+    const payload = typeof raw === 'string' && /^[0-9a-f]{2}(?:[0-9a-f]{2})?$/.test(raw)
+      ? Buffer.from(raw, 'hex') : null;
+    const decoded = payload && decodeLevelCode(payload);
+    const previous = lastLevel.get(participant) ?? null;
+    const repeated = previous !== null && row.level_after_candidate === previous;
+    const kind = repeated ? 'REPEATED_LEVEL_OBSERVATION'
+      : row.level_after_candidate === 1 ? 'LEVEL_ONE_OBSERVATION'
+        : 'HIGHER_LEVEL_OBSERVATION';
+    if (row.event_type !== 'HERO_LEVEL_STATE_CANDIDATE'
+        || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+        || row.build_profile !== levelProfile.id
+        || row.replay_sha256 !== prepared.replaySha
+        || row.confidence !== 'CANDIDATE'
+        || row.semantic_status !== levelSource.capabilityResult.evidence_status
+        || !isDeepStrictEqual(row.field_confidence, {
+          replay_time_ms: 'VERIFIED_DIRECT', hero_raw_param: 'VERIFIED_DIRECT',
+          participant_id_candidate: 'CANDIDATE_REPLAY_TAIL_ALIGNMENT',
+          level_after_candidate: 'CANDIDATE_EXACT_821_RUNTIME_BYTE_AND_REPLAY_TAIL',
+        })
+        || !ref || ref.source_path !== (prepared.sourcePath ?? null)
+        || ref.replay_sha256 !== prepared.replaySha
+        || ref.chunk_stream !== 'game_chunk'
+        || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+        || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+        || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+        || !Number.isSafeInteger(ref.decompressed_block_offset)
+        || ref.decompressed_block_offset < 0
+        || !Number.isSafeInteger(ref.decompressed_payload_offset)
+        || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+        || ref.packet_id !== levelProfile.replay_block_packet_id
+        || !payload || ref.payload_length !== payload.length
+        || ref.replay_time_ms !== row.replay_time_ms
+        || ref.raw_param !== rawParam || !observedRawParam
+        || row.participant_id_candidate !== participant
+        || !decoded || decoded.level !== row.level_after_candidate
+        || row.raw_payload_code_hex
+          !== `0x${decoded.code.toString(16).padStart(2, '0')}`
+        || ref.raw_payload_sha256 !== crypto.createHash('sha256')
+          .update(payload).digest('hex')
+        || row.observation_kind !== kind
+        || !isDeepStrictEqual(row.known_limits, [...levelProfile.known_limits])) {
+      invalid(`level source row ${index + 1} identity, transform or raw ref differs`);
+    }
+    const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+    if (levelPositions.has(position)) invalid(`duplicate level ref ${position}`);
+    levelPositions.add(position);
+    if (previous !== null && row.level_after_candidate < previous) {
+      invalid(`decreasing level source row ${index + 1}`);
+    }
+    if (row.level_after_candidate === 1) levelOneCount += 1;
+    else if (repeated) repeatedCount += 1;
+    lastLevel.set(participant, row.level_after_candidate);
+    levels.push({ row, priorLevel: previous });
+  }
+  if (levelOneCount !== association.excluded_level_one_count
+      || repeatedCount !== association.excluded_repeated_level_count
+      || levelPositions.size !== association.verified_level_raw_packet_count) {
+    invalid('level source exclusion or unique packet counts differ');
+  }
+
+  const frames = new Map();
+  const experiencePositions = new Set();
+  for (const [index, row] of experienceRows.entries()) {
+    const ref = row.raw_packet_ref;
+    const rawParam = row.hero_raw_param;
+    const participant = rawParam - 0x400000ae + 1;
+    const rawHex = row.raw_payload_field_bytes_hex;
+    const value = row.experience_raw_f32_candidate;
+    if (row.event_type !== 'HERO_EXPERIENCE_SNAPSHOT_CANDIDATE'
+        || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+        || row.build_profile !== experienceProfile.id
+        || row.replay_sha256 !== prepared.replaySha
+        || row.confidence !== 'CANDIDATE'
+        || row.semantic_status !== experienceSource.capabilityResult.evidence_status
+        || row.observation_kind !== 'KEYFRAME_SNAPSHOT'
+        || row.decreased_since_previous_snapshot !== false
+        || !isDeepStrictEqual(row.field_confidence, {
+          replay_time_ms: 'VERIFIED_DIRECT', hero_raw_param: 'VERIFIED_DIRECT',
+          participant_id_candidate: 'CANDIDATE_KR_821_RAW_PARAM_TAIL_ALIGNMENT',
+          raw_payload_field_bytes_hex: 'VERIFIED_DIRECT',
+          experience_raw_f32_candidate:
+            experienceSource.capabilityResult.evidence_status,
+          experience_floor_candidate:
+            experienceSource.capabilityResult.evidence_status,
+          decreased_since_previous_snapshot:
+            experienceSource.capabilityResult.evidence_status,
+        })
+        || !minionBracketRef(ref, prepared, 0x0089, 'keyframe', 1263)
+        || row.replay_time_ms !== ref.replay_time_ms
+        || rawParam !== ref.raw_param
+        || row.participant_id_candidate !== participant
+        || !Number.isFinite(value) || value < 0
+        || !Number.isSafeInteger(Math.floor(value))
+        || row.experience_floor_candidate !== Math.floor(value)
+        || typeof rawHex !== 'string' || !/^[0-9a-f]{8}$/.test(rawHex)
+        || !isDeepStrictEqual(row.known_limits, [...experienceProfile.known_limits])) {
+      invalid(`experience source row ${index + 1} identity, value or raw ref differs`);
+    }
+    const decoded = Buffer.from(rawHex, 'hex').reverse()
+      .map(decodeRuntimeCountByte).readFloatLE(0);
+    if (decoded !== value) invalid(`experience source row ${index + 1} transform differs`);
+    const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+    if (experiencePositions.has(position)) invalid(`duplicate experience ref ${position}`);
+    experiencePositions.add(position);
+    const frame = frames.get(ref.chunk_index) ?? {
+      time: row.replay_time_ms, participants: new Map(),
+    };
+    if (frame.time !== row.replay_time_ms || frame.participants.has(participant)) {
+      invalid(`experience source row ${index + 1} has an ambiguous keyframe`);
+    }
+    frame.participants.set(participant, row);
+    frames.set(ref.chunk_index, frame);
+  }
+  if (frames.size !== association.keyframe_count
+      || experiencePositions.size !== association.verified_experience_raw_packet_count
+      || [...frames.values()].some((frame) => frame.participants.size !== 10)) {
+    invalid('experience source lacks complete keyframe rosters');
+  }
+  const ordered = [...frames.entries()].sort(([a], [b]) => a - b);
+  if (ordered.some(([, frame], index) => index > 0
+      && frame.time <= ordered[index - 1][1].time)) {
+    invalid('experience keyframe times are not strictly increasing');
+  }
+  for (let index = 0; index < ordered.length; index += 1) {
+    for (let participant = 1; participant <= 10; participant += 1) {
+      const value = ordered[index][1].participants.get(participant)
+        .experience_raw_f32_candidate;
+      if ((index === 0 && value !== 0)
+          || (index > 0 && value < ordered[index - 1][1].participants
+            .get(participant).experience_raw_f32_candidate)) {
+        invalid('experience endpoints differ from first-zero monotone observations');
+      }
+    }
+  }
+
+  let beforeFirst = 0;
+  let afterLast = 0;
+  let onBoundary = 0;
+  let sequenceGaps = 0;
+  let positive = 0;
+  let unchanged = 0;
+  const positiveIntervals = new Set();
+  const unchangedIntervals = new Set();
+  const intervalCounts = new Map();
+  const expected = [];
+  for (const { row: level, priorLevel } of levels) {
+    if (level.level_after_candidate === 1
+        || level.observation_kind === 'REPEATED_LEVEL_OBSERVATION') continue;
+    const gap = priorLevel !== null
+      && level.level_after_candidate > priorLevel + 1;
+    if (gap) sequenceGaps += 1;
+    const time = level.replay_time_ms;
+    if (time < ordered[0][1].time) { beforeFirst += 1; continue; }
+    if (time > ordered[ordered.length - 1][1].time) { afterLast += 1; continue; }
+    let endpoints = null;
+    for (let index = 1; index < ordered.length; index += 1) {
+      const previous = ordered[index - 1];
+      const current = ordered[index];
+      if (time === previous[1].time || time === current[1].time) {
+        onBoundary += 1;
+        break;
+      }
+      if (previous[1].time < time && time < current[1].time) {
+        endpoints = { previous, current };
+        break;
+      }
+    }
+    if (!endpoints) {
+      if (ordered.some(([, frame]) => frame.time === time)) continue;
+      invalid('higher level packet has no adjacent keyframe bracket');
+    }
+    const { previous, current } = endpoints;
+    const participant = level.participant_id_candidate;
+    const left = previous[1].participants.get(participant);
+    const right = current[1].participants.get(participant);
+    const delta = right.experience_raw_f32_candidate
+      - left.experience_raw_f32_candidate;
+    if (delta < 0) invalid('bracketed experience endpoint decreased');
+    const key = `${participant}/${previous[0]}/${current[0]}`;
+    if (delta > 0) {
+      positive += 1;
+      positiveIntervals.add(key);
+    } else {
+      unchanged += 1;
+      unchangedIntervals.add(key);
+    }
+    intervalCounts.set(key, (intervalCounts.get(key) ?? 0) + 1);
+    const levelRef = level.raw_packet_ref;
+    const previousRef = left.raw_packet_ref;
+    const currentRef = right.raw_packet_ref;
+    expected.push({
+      event_type: prepared.associationConfig.eventType,
+      game_version: prepared.replayVersion, patch: '16.19',
+      build_profile: prepared.associationConfig.profile.id,
+      replay_sha256: prepared.replaySha, replay_time_ms: time,
+      hero_raw_param: level.hero_raw_param,
+      participant_id_candidate: participant,
+      level_after_candidate: level.level_after_candidate,
+      level_observation_kind: level.observation_kind,
+      prior_observed_level_candidate: priorLevel,
+      observed_level_sequence_gap: gap,
+      raw_level_payload_code_hex: level.raw_payload_code_hex,
+      previous_observation_time_ms: previous[1].time,
+      current_observation_time_ms: current[1].time,
+      observation_interval_ms: current[1].time - previous[1].time,
+      previous_keyframe_chunk_index: previous[0],
+      current_keyframe_chunk_index: current[0],
+      experience_hero_raw_param: left.hero_raw_param,
+      previous_experience_raw_f32_candidate: left.experience_raw_f32_candidate,
+      current_experience_raw_f32_candidate: right.experience_raw_f32_candidate,
+      previous_experience_floor_candidate: left.experience_floor_candidate,
+      current_experience_floor_candidate: right.experience_floor_candidate,
+      previous_experience_raw_payload_field_bytes_hex:
+        left.raw_payload_field_bytes_hex,
+      current_experience_raw_payload_field_bytes_hex:
+        right.raw_payload_field_bytes_hex,
+      experience_endpoint_delta_f32_candidate: delta,
+      experience_endpoint_delta_floor_candidate:
+        right.experience_floor_candidate - left.experience_floor_candidate,
+      level_packet_count_in_same_interval: null,
+      observation_kind: 'LEVEL_PACKET_WITHIN_ADJACENT_EXPERIENCE_KEYFRAMES',
+      observation_scope: 'TEMPORAL_AND_CANDIDATE_PARTICIPANT_ONLY',
+      confidence: 'CANDIDATE', semantic_status: association.evidence_status,
+      field_confidence: {
+        replay_time_ms: 'VERIFIED_DIRECT',
+        previous_observation_time_ms: 'VERIFIED_DIRECT',
+        current_observation_time_ms: 'VERIFIED_DIRECT',
+        participant_id_candidate: 'CANDIDATE_KR_821_RAW_PARAM_TAIL_ALIGNMENT',
+        level_after_candidate: levelSource.capabilityResult.evidence_status,
+        raw_level_payload_code_hex: 'VERIFIED_DIRECT',
+        previous_experience_raw_payload_field_bytes_hex: 'VERIFIED_DIRECT',
+        current_experience_raw_payload_field_bytes_hex: 'VERIFIED_DIRECT',
+        previous_experience_raw_f32_candidate:
+          experienceSource.capabilityResult.evidence_status,
+        current_experience_raw_f32_candidate:
+          experienceSource.capabilityResult.evidence_status,
+        experience_endpoint_delta_f32_candidate:
+          ASSOCIATION_EVENTS_821.experience_keyframe_interval_difference_candidates
+            .evidenceStatus,
+        level_packet_count_in_same_interval: association.evidence_status,
+      },
+      raw_packet_ref: levelRef, level_raw_packet_ref: levelRef,
+      previous_experience_raw_packet_ref: previousRef,
+      current_experience_raw_packet_ref: currentRef,
+      raw_packet_refs: [previousRef, levelRef, currentRef],
+      known_limits: [...prepared.associationConfig.profile.known_limits],
+    });
+  }
+  for (const row of expected) {
+    const key = `${row.participant_id_candidate}/${row.previous_keyframe_chunk_index}/${row.current_keyframe_chunk_index}`;
+    row.level_packet_count_in_same_interval = intervalCounts.get(key);
+  }
+  if (expected.length !== association.event_count
+      || beforeFirst !== association.outside_first_keyframe_count
+      || afterLast !== association.outside_last_keyframe_count
+      || onBoundary !== association.exact_keyframe_boundary_count
+      || sequenceGaps !== association.observed_level_sequence_gap_count
+      || positive !== association.positive_endpoint_count
+      || unchanged !== association.unchanged_endpoint_count
+      || intervalCounts.size !== association.involved_interval_count
+      || positiveIntervals.size !== association.positive_involved_interval_count
+      || unchangedIntervals.size !== association.unchanged_involved_interval_count
+      || [...intervalCounts.values()].filter((count) => count > 1).length
+        !== association.multi_level_interval_count
+      || Math.max(0, ...intervalCounts.values())
+        !== association.max_level_packets_per_interval) {
+    invalid('bracket rows, exclusions or endpoint counts differ from source observations');
+  }
+  return expected;
+}
+
 async function loadMinionBracketExpectedRows(prepared) {
   const association = prepared.capabilityResult;
   const packetPrepared = prepared.bracketSources.packet;
@@ -3472,9 +3998,18 @@ async function loadMinionBracketExpectedRows(prepared) {
 
 function associationRow(row, prepared, lineNumber, seenKeys, seenPacketPositions,
   episodePhysicalRefs, wardPairFrames, inventoryIntervalState,
-  minionBracketExpected, experienceIntervalExpected) {
+  minionBracketExpected, experienceIntervalExpected,
+  levelExperienceBracketExpected) {
   const { associationConfig, capabilityResult, replaySha, replayVersion } = prepared;
   if (!associationConfig) return;
+  if (associationConfig.levelExperienceBracket) {
+    if (!isDeepStrictEqual(row, levelExperienceBracketExpected[lineNumber - 1])) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        `Invalid level/experience keyframe bracket row at JSONL line ${lineNumber}.`,
+        { line_number: lineNumber });
+    }
+    return;
+  }
   if (associationConfig.experienceInterval) {
     const fields = Object.keys(row);
     if (fields.length !== EXPERIENCE_INTERVAL_ROW_FIELDS_821.size
@@ -4103,6 +4638,7 @@ function validateFilters(options) {
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
+    castNestedBits = null, levelAfter = null,
     childEventId = null, limit = null, latestPerParticipant = false,
     endpointReversedPair: endpointReversedPairFilter = false,
     comparisonToEndpoints = null } = options;
@@ -4129,6 +4665,8 @@ function validateFilters(options) {
     ['slot', slot, 0, 9],
     ['opaqueU32', opaqueU32, 0, 0xffffffff],
     ['opaqueI32', opaqueI32, -0x80000000, 0x7fffffff],
+    ['castNestedBits', castNestedBits, 0, 0xff],
+    ['levelAfter', levelAfter, 1, 20],
     ['childEventId', childEventId, 0, 0xffffffff],
     ['limit', limit, 1, Number.MAX_SAFE_INTEGER],
   ]) {
@@ -4153,6 +4691,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
+    castNestedBits = null, levelAfter = null,
     childEventId = null, limit = null, latestPerParticipant = false,
     endpointReversedPair: endpointReversedPairFilter = false,
     comparisonToEndpoints = null } = options;
@@ -4247,6 +4786,13 @@ async function streamEventQuery(prepared, options, emitLine) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--opaque-i32 requires a 16.19.821.7343 CastSpellAns packet candidate event.');
   }
+  if (castNestedBits != null) prepareCastSpellAnsNestedBits(prepared);
+  if (levelAfter != null && (prepared.eventKey
+      !== 'level_experience_keyframe_bracket_candidates'
+      || prepared.replayVersion !== '16.19.821.7343')) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--level-after requires exact 16.19.821.7343 level/experience bracket candidates.');
+  }
   const allowedChildIds = CHILD_EVENT_ID_FILTERS_821[prepared.eventKey] ?? null;
   if (childEventId != null && (!allowedChildIds
       || prepared.replayVersion !== '16.19.821.7343')) {
@@ -4279,6 +4825,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   let opaquePairAvailableCount = 0;
   let opaqueI32UnavailableCount = 0;
   let opaqueI32AvailableCount = 0;
+  let castNestedBitsCheckedCount = 0;
+  const castNestedBitsPacketPositions = new Set();
   let childEventIdUnavailableCount = 0;
   let childEventIdAvailableCount = 0;
   let tripleGroupCount = 0;
@@ -4303,6 +4851,9 @@ async function streamEventQuery(prepared, options, emitLine) {
     ? await loadMinionBracketExpectedRows(prepared) : null;
   const experienceIntervalExpected = prepared.associationConfig?.experienceInterval
     ? await loadExperienceIntervalExpectedRows(prepared) : null;
+  const levelExperienceBracketExpected =
+    prepared.associationConfig?.levelExperienceBracket
+      ? await loadLevelExperienceBracketExpectedRows(prepared) : null;
   const objectiveBountyTurretPairSourceRows =
     prepared.associationConfig?.objectiveBountyTurretPair
       ? await loadObjectiveBountyTurretPairSourceRows(prepared) : null;
@@ -4367,7 +4918,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       }
       associationRow(row, prepared, lineNumber, associationKeys,
         associationPacketPositions, episodePhysicalRefs, wardPairFrames,
-        inventoryIntervalState, minionBracketExpected, experienceIntervalExpected);
+        inventoryIntervalState, minionBracketExpected, experienceIntervalExpected,
+        levelExperienceBracketExpected);
       if (objectiveBountyTurretPairSourceRows) {
         objectiveBountyTurretPairSourceRefs(row,
           objectiveBountyTurretPairSourceRows, lineNumber);
@@ -4425,6 +4977,10 @@ async function streamEventQuery(prepared, options, emitLine) {
         : opaquePairValue(row, lineNumber, opaquePairFields);
       const opaqueI32Field = opaqueI32 == null ? null
         : castSpellAnsOpaqueI32(row, lineNumber);
+      const nestedBits = castNestedBits == null ? null
+        : castSpellAnsNestedBits(row, prepared, lineNumber,
+          castNestedBitsPacketPositions);
+      if (castNestedBits != null) castNestedBitsCheckedCount += 1;
       const childId = childEventId == null ? null
         : candidateChildEventId(row, prepared.eventKey, lineNumber);
       const assistingParticipants = assistingParticipant == null ? null
@@ -4495,6 +5051,8 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (opaquePair != null && (!pairValue.available
             || pairValue.u32 !== opaquePair.u32 || pairValue.u8 !== opaquePair.u8))
           || (opaqueI32 != null && opaqueI32Field.value !== opaqueI32)
+          || (castNestedBits != null && nestedBits !== castNestedBits)
+          || (levelAfter != null && row.level_after_candidate !== levelAfter)
           || (childEventId != null && childId.value !== childEventId)) continue;
       matchedCount += 1;
       if (latestPerParticipant) {
@@ -4705,6 +5263,14 @@ async function streamEventQuery(prepared, options, emitLine) {
     ...(opaqueU32 == null ? {} : { opaque_u32_unavailable_count: opaqueU32UnavailableCount }),
     ...(opaquePair == null ? {} : { opaque_pair_unavailable_count: opaquePairUnavailableCount }),
     ...(opaqueI32 == null ? {} : { opaque_i32_unavailable_count: opaqueI32UnavailableCount }),
+    ...(castNestedBits == null ? {} : {
+      cast_nested_bits_checked_count: castNestedBitsCheckedCount,
+      cast_nested_bits_unavailable_count: 0,
+    }),
+    ...(levelAfter == null ? {} : {
+      level_after_checked_count: scannedCount,
+      level_after_unavailable_count: 0,
+    }),
     ...(childEventId == null ? {} : { child_event_id_unavailable_count: childEventIdUnavailableCount }),
     filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit,
       ...(latestPerParticipant ? { latest_per_participant: true } : {}),
@@ -4722,6 +5288,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       ...(opaqueU32 == null ? {} : { opaque_u32: opaqueU32 }),
       ...(opaquePair == null ? {} : { opaque_pair: opaquePair }),
       ...(opaqueI32 == null ? {} : { opaque_i32: opaqueI32 }),
+      ...(castNestedBits == null ? {} : { cast_nested_bits: castNestedBits }),
+      ...(levelAfter == null ? {} : { level_after: levelAfter }),
       ...(childEventId == null ? {} : { child_event_id: childEventId }) },
     rows_unmodified: true,
   };
@@ -4759,6 +5327,9 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   let emittedCount = 0;
   let selectedCount = 0;
   let latestParticipantUnavailableCount = 0;
+  let castNestedBitsCheckedCount = 0;
+  let castNestedBitsUnavailableCount = 0;
+  let levelAfterCheckedCount = 0;
   let endpointReversedPairInspectedCount = 0;
   let completedCount = 0;
   let filters = null;
@@ -4790,16 +5361,26 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
             'RAW_PARAM_UNAVAILABLE',
             'ITEM_ID_UNAVAILABLE', 'SLOT_UNAVAILABLE', 'OPAQUE_U32_UNAVAILABLE',
             'OPAQUE_PAIR_UNAVAILABLE',
-            'OPAQUE_I32_UNAVAILABLE', 'CHILD_EVENT_ID_UNAVAILABLE'].includes(error.code)) {
+            'OPAQUE_I32_UNAVAILABLE', 'CAST_NESTED_BITS_UNAVAILABLE',
+            'CHILD_EVENT_ID_UNAVAILABLE'].includes(error.code)) {
         throw error;
       }
       replayResults.push({ ...identity, query_status: 'UNAVAILABLE',
         code: error.code, message: error.message, ...error.details });
+      if (error.code === 'CAST_NESTED_BITS_UNAVAILABLE') {
+        castNestedBitsUnavailableCount += error.details.cast_nested_bits_unavailable_count;
+      }
       continue;
     }
     completedCount += 1;
     filters ??= { ...summary.filters, limit: options.limit ?? null };
     scannedCount += summary.scanned_count;
+    if (options.castNestedBits != null) {
+      castNestedBitsCheckedCount += summary.cast_nested_bits_checked_count;
+    }
+    if (options.levelAfter != null) {
+      levelAfterCheckedCount += summary.level_after_checked_count;
+    }
     matchedCount += summary.matched_count;
     if (options.latestPerParticipant) {
       selectedCount += summary.selected_count;
@@ -4813,6 +5394,14 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       declared_event_count: summary.declared_event_count,
       scanned_count: summary.scanned_count,
       matched_count: summary.matched_count,
+      ...(options.castNestedBits == null ? {} : {
+        cast_nested_bits_checked_count: summary.cast_nested_bits_checked_count,
+        cast_nested_bits_unavailable_count: 0,
+      }),
+      ...(options.levelAfter == null ? {} : {
+        level_after_checked_count: summary.level_after_checked_count,
+        level_after_unavailable_count: 0,
+      }),
       ...(options.latestPerParticipant ? {
         selected_count: summary.selected_count,
         latest_participant_unavailable_count: summary.latest_participant_unavailable_count,
@@ -4835,6 +5424,18 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     replay_count: prepared.replays.length, completed_replay_count: completedCount,
     unavailable_replay_count: prepared.replays.length - completedCount,
     scanned_count: scannedCount, matched_count: matchedCount,
+    ...(options.castNestedBits == null ? {} : {
+      cast_nested_bits_checked_count: castNestedBitsCheckedCount,
+      cast_nested_bits_unavailable_count: castNestedBitsUnavailableCount,
+      cast_nested_bits_unavailable_replay_count:
+        replayResults.filter((replay) =>
+          replay.code === 'CAST_NESTED_BITS_UNAVAILABLE').length,
+    }),
+    ...(options.levelAfter == null ? {} : {
+      level_after_checked_count: levelAfterCheckedCount,
+      level_after_unavailable_replay_count:
+        prepared.replays.length - completedCount,
+    }),
     ...(options.latestPerParticipant ? {
       selected_count: selectedCount,
       latest_participant_unavailable_count: latestParticipantUnavailableCount,

@@ -116,6 +116,8 @@ const { decodeIncrementMinionKillsPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_increment_minion_kills_packet_candidate');
 const { decodeFaceDirectionPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_face_direction_packet_candidate');
+const { decodeCircularMovementRestrictionPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_circular_movement_restriction_packet_candidate');
 const { associateFaceDirectionKeyframeRosterPairs821 } =
   require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
 const { RUNTIME_IMAGE_SHA256: RUNTIME_IMAGE_SHA256_821 } =
@@ -163,6 +165,8 @@ const { deriveInventoryKeyframeIntervalDifferenceCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
 const { deriveExperienceKeyframeIntervalDifferenceCandidates821 } =
   require('./decoders/rofl_16_19_821_experience_keyframe_interval_difference_candidate');
+const { associateLevelExperienceKeyframeBracketCandidates821 } =
+  require('./decoders/rofl_16_19_821_level_experience_keyframe_bracket_candidate');
 const { associateInventoryGameBroadcastKeyframeBracketCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_game_broadcast_keyframe_bracket_candidate');
 const { associateIncrementMinionKeyframeBracketCandidates821 } =
@@ -2418,6 +2422,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    circular_movement_restriction_packet: (input, collected) =>
+      decodeCircularMovementRestrictionPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -2484,6 +2494,8 @@ function decode1619821(replay, profile, options = {}) {
     set_movement_driver_packet: 'set_movement_driver_packet_candidates',
     increment_minion_kills_packet: 'increment_minion_kills_packet_candidates',
     face_direction_packet: 'face_direction_packet_candidates',
+    circular_movement_restriction_packet:
+      'circular_movement_restriction_packet_candidates',
     face_direction_keyframe_roster_pair: 'face_direction_keyframe_roster_pair_candidates',
   };
   const capabilityResults = {};
@@ -2535,6 +2547,7 @@ function decode1619821(replay, profile, options = {}) {
     'set_movement_driver_packet',
     'increment_minion_kills_packet',
     'face_direction_packet',
+    'circular_movement_restriction_packet',
   ]);
   const pairSelected = capabilities.includes('face_direction_keyframe_roster_pair');
   const supported = [...new Set([
@@ -2612,6 +2625,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'set_movement_driver_packet'
         || capability === 'increment_minion_kills_packet'
         || capability === 'face_direction_packet'
+        || capability === 'circular_movement_restriction_packet'
         || capability === 'face_direction_keyframe_roster_pair') {
       result.runtime_image_status ??= options.runtimeImagePath
         ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
@@ -3091,6 +3105,26 @@ function decode1619821(replay, profile, options = {}) {
       }
     } catch (error) {
       candidateAssociations.experience_keyframe_interval_difference = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_level_state')
+      && capabilities.includes('hero_experience_snapshot')) {
+    try {
+      const association = associateLevelExperienceKeyframeBracketCandidates821(replay, {
+        levelOutcome: outcomes.hero_level_state,
+        experienceSnapshotOutcome: outcomes.hero_experience_snapshot,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: bracketEvents, ...summary } = association;
+        candidateAssociations.level_experience_keyframe_bracket = summary;
+        events.level_experience_keyframe_bracket_candidates = bracketEvents;
+      } else {
+        candidateAssociations.level_experience_keyframe_bracket = association;
+      }
+    } catch (error) {
+      candidateAssociations.level_experience_keyframe_bracket = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }
