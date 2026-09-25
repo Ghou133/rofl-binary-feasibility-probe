@@ -139,6 +139,8 @@ const { associateChampionTripleQuadraMultiGroupCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_triple_quadra_multi_group_candidate');
 const { associateOnShutdownDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_on_shutdown_die_hero_death_pair_candidate');
+const { associateTurretFirstBloodDieCandidates821 } =
+  require('./decoders/rofl_16_19_821_turret_first_blood_die_pair_candidate');
 const { analyzeMovementParticipantAssociations821 } =
   require('./decoders/rofl_16_19_821_movement_participant_association_candidate');
 const {
@@ -2837,6 +2839,26 @@ function decode1619821(replay, profile, options = {}) {
       }
     } catch (error) {
       candidateAssociations.on_shutdown_die_hero_death_pair = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('turret_die_event_packet')
+      && capabilities.includes('turret_first_blood_event_packet')) {
+    try {
+      const association = associateTurretFirstBloodDieCandidates821(replay, {
+        turretDieEventPacketOutcome: outcomes.turret_die_event_packet,
+        turretFirstBloodEventPacketOutcome: outcomes.turret_first_blood_event_packet,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: pairEvents, ...summary } = association;
+        candidateAssociations.turret_first_blood_die_pair = summary;
+        events.turret_first_blood_die_pair_candidates = pairEvents;
+      } else {
+        candidateAssociations.turret_first_blood_die_pair = association;
+      }
+    } catch (error) {
+      candidateAssociations.turret_first_blood_die_pair = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }

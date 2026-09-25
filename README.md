@@ -61,6 +61,7 @@
 | `16.19.821.7343 --events turret_plate_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0107` 子包，保留 OnTurretPlateDestroyed 镜像名表标签、匿名原生子包 `+0x04` 整数和原始包来源 | 仅写入 `turret_plate_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断镀层破坏、建筑、参与者或状态变化 |
 | `16.19.821.7343 --events turret_die_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x003b` 子包，保留 OnTurretDie 镜像名表标签、匿名 108 字节原生子包内容及 SHA-256、原始包来源 | 仅写入 `turret_die_event_packet_candidates`，状态为 `CANDIDATE`；同长度异类子事件作为排除证据，不推断实际防御塔死亡、建筑身份、参与者或状态变化 |
 | `16.19.821.7343 --events turret_first_blood_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x003d` 子包，保留 OnTurretFirstBlood 镜像名表标签、匿名 108 字节原生子包内容及 SHA-256、原始包来源 | 仅写入 `turret_first_blood_event_packet_candidates`，状态为 `CANDIDATE`；同长度异类子事件作为排除证据，不推断实际首座防御塔死亡、建筑身份、参与者或状态变化 |
+| `16.19.821.7343 --events turret_die_event_packet,turret_first_blood_event_packet --runtime-image PATH` | 两类子包分别通过精确镜像校验后，检查 `0x003d` 是否在同一 chunk、同一毫秒中位于唯一较早的 `0x003b` 之后，中间没有其他 `0x040a` OnEvent 包；重新核对回放原始包来源 | 成功时另写入 `turret_first_blood_die_pair_candidates` 和 `candidate_associations.turret_first_blood_die_pair`，均为包级 `CANDIDATE`；不推断实际首座防御塔死亡、建筑或参与者身份 |
 | `16.19.821.7343 --events cast_spell_ans_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x01da` CastSpellAns 包，输出原始包来源、两个回调变换后的不透明字段，以及嵌套对象 `+0xe0` 的受保护浮点与 `+0x140` 的受保护字节候选值及其原始字节 | 仅写入 `cast_spell_ans_packet_candidates`；不声称一次成功施法，也不推断技能、槽位、施法者、目标或这两个字段的游戏含义；镜像按完整 SHA-256 校验 |
 | `16.19.821.7343 --events direct_input_movement_turn_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x00ba` DirectInputMovementDriverServerTurnData 包，输出三个回调变换后的匿名 f32 字段与原始包来源 | 仅写入 `direct_input_movement_turn_packet_candidates`，状态为 `CANDIDATE`；不将字段标为世界坐标、英雄路径或参与者位置；仅接受已观察到的 13 字节 `0x85` 形状 |
 | `16.19.821.7343 --events set_movement_driver_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x0335` SetMovementDriver 包，输出回调变换后的匿名分发字节和原始包来源 | 仅写入 `set_movement_driver_packet_candidates`，状态为 `CANDIDATE`；不声称驱动状态已改变，也不推断位置、路径或参与者；仅接受两种已观察到的包形状 |
@@ -238,6 +239,10 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events turret_first_blood_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-turret-first-blood-event-packets"
+node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
+  --events turret_die_event_packet,turret_first_blood_event_packet `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-turret-first-blood-die-pairs"
 ```
 
 同时选择 `hero_death,champion_die_event_packet` 后，成功的逐包关联写入
@@ -324,7 +329,17 @@ OnShutdown 只是镜像中的事件标签，未确认游戏内 shutdown 效果�
 11 份 KR 821 回放各有一个目标包，共 11 个通过精确镜像原生完整消费和子事件身份校验；
 同为 116 字节的 820 个异类子事件按已观察的原始形状排除，保留来源以供核查。
 这 11 份回放共扫描 18,235,209 个 block，未发现 framing 错误。OnTurretFirstBlood 是镜像名表标签，
-不确认实际首座防御塔死亡、建筑身份、参与者或状态变化；当前输出不关联 OnTurretDie 包。
+不确认实际首座防御塔死亡、建筑身份、参与者或状态变化。单独选择此能力时不输出关联。
+
+同时选择 `turret_die_event_packet,turret_first_blood_event_packet` 后，另写入
+`turret_first_blood_die_pair_candidates.jsonl`；汇总和拒绝原因位于
+`semantic_run.json` 的 `candidate_associations.turret_first_blood_die_pair`。
+关联要求两项独立候选均通过同一精确 build 镜像校验，原始包来源与回放一致，
+且 `0x003d` 与唯一较早的 `0x003b` 位于同一 chunk、同一毫秒，中间没有其他
+`0x040a` OnEvent 包。11 份 KR 821 回放中的 11 个首塔标签包各形成一个候选配对；
+136 个 OnTurretDie 标签包中有 125 个未配对。原始外层参数和匿名子包 `+0x04`
+并非相等条件。任一配对缺失、重复或来源冲突时，整份回放不输出关联行。
+这只证明受限的包级顺序关系，不确认实际首塔死亡、建筑、参与者或状态效果。
 
 `hero_assist` 不提供镜像时保留已有的回放形状、配对、死亡核心和结算尾部候选校验，
 并标记 `native_child_identity_status=NOT_CHECKED`。提供完整 821 镜像时，

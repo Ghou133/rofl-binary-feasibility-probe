@@ -4,6 +4,19 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed candidate association:** Selecting both exact KR 821
+  `turret_die_event_packet,turret_first_blood_event_packet` capabilities also
+  emits `turret_first_blood_die_pair_candidates` and
+  `candidate_associations.turret_first_blood_die_pair`. In the 11 supplied
+  Replays, each of 11 native `OnTurretFirstBlood` child packets uniquely
+  follows one of 136 native `OnTurretDie` child packets in the same chunk and
+  millisecond, with no intervening `0x040a` OnEvent packet; 125 Die packets
+  remain unpaired. The association rechecks exact-image outcomes and raw
+  Replay packet references, and fails the whole Replay association on
+  ambiguous or conflicting pairs. Raw outer parameters and anonymous child
+  `+0x04` values are not equality gates. This is packet order evidence only,
+  not an actual first turret death, structure or actor identity, or game
+  state transition.
 - **Completed packet candidate:** Exact KR 821 `0x040a/116` child `0x003d`,
   named `OnTurretFirstBlood` in the pinned runtime image, is selectable through
   CLI/API with the exact image SHA-256 gate. All 11 supplied Replays returned
@@ -13,8 +26,9 @@ Current progress (older notes below retain their original research context):
   references. The batch scanned 18,235,209 blocks with zero framing errors.
   Rows preserve the anonymous 108-byte child blob, its SHA-256, and packet
   provenance. The image label does not establish an actual first turret death,
-  structure or actor identity, or state transition. No association with
-  `OnTurretDie` is output. Ignored real CLI output is under
+  structure or actor identity, or state transition. Selecting this packet
+  capability alone does not output a Die association. Ignored real CLI output
+  is under
   `artifacts/16_19_development/turret_first_blood_cli_batch_11/`.
 - **Completed query:** `query-events --opaque-u32 VALUE` for
   `revive_ally_event_packet_candidates` filters the exact 821 anonymous native child `+0x04`
