@@ -42,6 +42,7 @@ const CHAMPION_KILL_EVENT = 'champion_kill_event_packet_candidates';
 const CHAMPION_MULTIPLE_KILL_EVENT = 'champion_multiple_kill_event_packet_candidates';
 const SHUTDOWN_PACKET_EVENT = 'on_shutdown_event_packet_candidates';
 const RESURRECT_PACKET_EVENT = 'resurrect_event_packet_candidates';
+const TURRET_PLATE_PACKET_EVENT = 'turret_plate_event_packet_candidates';
 const DIE_PAIR_EVENT = 'champion_die_hero_death_pair_candidates';
 const KILL_GROUP_EVENT = 'champion_kill_die_hero_death_pair_candidates';
 const MULTI_GROUP_EVENT = 'champion_multiple_kill_die_hero_death_pair_candidates';
@@ -213,7 +214,8 @@ function artifact(t, rows = [
     HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT, CAST_SPELL_ANS_EVENT,
     CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
     CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT,
-    RESURRECT_PACKET_EVENT, ...ASSOCIATION_EVENTS].includes(eventKey)
+    RESURRECT_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
+    ...ASSOCIATION_EVENTS].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -1131,6 +1133,28 @@ test('query-events filters anonymous OnResurrect child fields without using oute
   assert.equal(rawOnly.status, 0, rawOnly.stderr);
   assert.equal(rawOnly.stdout, '');
   assert.equal(JSON.parse(rawOnly.stderr).matched_count, 0);
+});
+
+test('query-events filters anonymous turret plate child field without using outer raw param', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000b0,
+      event_schema_u32_0x00: 469, event_u32_0x04: 0x400000a8 },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000b1,
+      event_schema_u32_0x00: 469, event_u32_0x04: 0x400000a9 },
+  ];
+  const fixture = artifact(t, rows, true, TURRET_PLATE_PACKET_EVENT);
+  const selected = run(fixture.replayDirectory, '--event', TURRET_PLATE_PACKET_EVENT,
+    '--opaque-u32', '0x400000a8');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+  assert.equal(JSON.parse(selected.stderr).capability_status, 'CANDIDATE');
+  for (const value of ['0x400000b0', '469']) {
+    const noMatch = run(fixture.replayDirectory, '--event', TURRET_PLATE_PACKET_EVENT,
+      '--opaque-u32', value);
+    assert.equal(noMatch.status, 0, noMatch.stderr);
+    assert.equal(noMatch.stdout, '');
+    assert.equal(JSON.parse(noMatch.stderr).matched_count, 0);
+  }
 });
 
 test('query-events filters only OnChampionMultipleKill decoded scalar u32 fields', (t) => {

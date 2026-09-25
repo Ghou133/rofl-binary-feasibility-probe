@@ -55,6 +55,7 @@
 | `16.19.821.7343 --events champion_multiple_kill_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0009` 子包，保留 OnChampionMultipleKill 镜像名表标签、作为对象查找键的 `+0x04`、控制 `+0x10` 键数组遍历的 `+0x0c`、原样传入后续虚调用的 `+0x08` 和原始包来源 | 仅写入 `champion_multiple_kill_event_packet_candidates`，状态为 `CANDIDATE`；不把包标记或整数解释为实际多杀、等级、击杀者、受害者或状态变化 |
 | `16.19.821.7343 --events on_shutdown_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x00e8` 子包，保留 OnShutdown 镜像名表标签、匿名 `+0x04/+0x58/+0x5c` 整数和原始包来源 | 仅写入 `on_shutdown_event_packet_candidates`，状态为 `CANDIDATE`；不推断实际 shutdown 效果、对象角色或状态变化 |
 | `16.19.821.7343 --events resurrect_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x002d` 子包，保留 OnResurrect 镜像名表标签、匿名原生子包 `+0x04/+0x08` 整数和原始包来源 | 有此包形状的回放写入 `resurrect_event_packet_candidates`，状态为 `CANDIDATE`；无此形状的回放报告 `PROFILE_UNAVAILABLE`；不推断实际复活、对象角色或状态变化 |
+| `16.19.821.7343 --events turret_plate_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0107` 子包，保留 OnTurretPlateDestroyed 镜像名表标签、匿名原生子包 `+0x04` 整数和原始包来源 | 仅写入 `turret_plate_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断镀层破坏、建筑、参与者或状态变化 |
 | `16.19.821.7343 --events cast_spell_ans_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x01da` CastSpellAns 包，输出原始包来源、两个回调变换后的不透明字段，以及嵌套对象 `+0xe0` 的受保护浮点与 `+0x140` 的受保护字节候选值及其原始字节 | 仅写入 `cast_spell_ans_packet_candidates`；不声称一次成功施法，也不推断技能、槽位、施法者、目标或这两个字段的游戏含义；镜像按完整 SHA-256 校验 |
 | `16.19.821.7343 --events direct_input_movement_turn_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x00ba` DirectInputMovementDriverServerTurnData 包，输出三个回调变换后的匿名 f32 字段与原始包来源 | 仅写入 `direct_input_movement_turn_packet_candidates`，状态为 `CANDIDATE`；不将字段标为世界坐标、英雄路径或参与者位置；仅接受已观察到的 13 字节 `0x85` 形状 |
 | `16.19.821.7343 --events set_movement_driver_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x0335` SetMovementDriver 包，输出回调变换后的匿名分发字节和原始包来源 | 仅写入 `set_movement_driver_packet_candidates`，状态为 `CANDIDATE`；不声称驱动状态已改变，也不推断位置、路径或参与者；仅接受两种已观察到的包形状 |
@@ -199,6 +200,10 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events resurrect_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-on-resurrect-packets"
+node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
+  --events turret_plate_event_packet `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-turret-plate-event-packets"
 ```
 
 同时选择 `hero_death,champion_die_event_packet` 后，成功的逐包关联写入
@@ -240,11 +245,16 @@ OnShutdown 只是镜像中的事件标签，未确认游戏内 shutdown 效果�
 11 份 KR 821 回放中 7 份有 29 个原生完整消费的 `0x002d` 子包，另 4 份未见该形状，
 按回放分别报告 `CANDIDATE` 与 `PROFILE_UNAVAILABLE`。包标签与字段不足以确认复活行为。
 
+`turret_plate_event_packet` 只报告 `0x0107` 子包的匿名当包字段和来源。
+11 份 KR 821 回放中观察到 657 个目标子包；同为 17 字节的其他子事件 4964 个作为排除对照，
+不进入该候选流。镜像中的事件名不足以确认游戏内镀层效果或对象角色。
+
 821 的候选死亡记录保留原始包来源及未配对路由的负例计数。该 build 的运行时镜像已从真实回放进程捕获；当前死亡包的计时浮点和 Hero_Die 来源 ID 均有独立候选解码，单次助攻候选在 `hero_assist` 入口。可追加 `hero_assist,hero_respawn,hero_death_timer,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_assists_snapshot,hero_missions_minions_killed_snapshot,hero_ward_stats_snapshot,hero_missions_cannon_minions_killed_snapshot,hero_experience_snapshot,hero_vision_score_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_damage_totals_snapshot,hero_damage_taken_from_champions_snapshot,hero_damage_self_mitigated_snapshot,hero_structure_objective_damage_snapshot,hero_longest_living_time_snapshot,hero_total_time_spent_dead_snapshot,hero_total_heal_snapshot,hero_total_units_healed_snapshot,hero_epic_monster_damage_snapshot,hero_crowd_control_time_snapshot,hero_level_state` 到 `--events`；计数、浮点、计时和等级使用已固定的精确镜像变换，CLI 运行时无需再次提供镜像。库存 `hero_inventory_packet`、广播包 `hero_inventory_broadcast_packet`、单包 `hero_inventory_set_item_packet`、治疗上报包 `params_heal_packet`、护盾配对包 `shielding_params_packet_pair`、隐身名表子包 `stealth_event_packet`、CastSpellAns 包 `cast_spell_ans_packet`、DirectInput turn 包 `direct_input_movement_turn_packet`、SetMovementDriver 包 `set_movement_driver_packet`、OnChampionDie 子包 `champion_die_event_packet` 和 OnChampionKill 子包 `champion_kill_event_packet` 需要 `--runtime-image` 指向同一完整 build 的镜像。各能力独立报告状态；载荷形状超出已验证范围、解码值违反参与者结算上界等情况仍会保留其他已通过能力的候选输出，并明确标出失败项。11 份现有 KR 回放中的等级 20 和高击杀/助攻编码均已被相应变换覆盖。计时值不用于预测返回时点。
 
-OnShutdown 子包 `on_shutdown_event_packet` 和 OnResurrect 子包
-`resurrect_event_packet` 也需要 `--runtime-image` 指向同一完整 build 的镜像。
-这两项仅报告包候选，不能由镜像中的事件名称推断游戏效果。
+OnShutdown 子包 `on_shutdown_event_packet`、OnResurrect 子包
+`resurrect_event_packet` 和 OnTurretPlateDestroyed 子包 `turret_plate_event_packet`
+也需要 `--runtime-image` 指向同一完整 build 的镜像。
+这些能力仅报告包候选，不能由镜像中的事件名称推断游戏效果。
 
 对 HN 路由的同一完整 build，可单独选择计时候选，或用
 `--events hero_death,hero_death_timer` 一起运行。计时输出包含原始包引用、
@@ -323,7 +333,7 @@ node src/cli.js query-events "work\16-19-821-heal-report\replays\KR_example" `
   --event params_heal_packet_candidates --opaque-u32 0x400000b3 --limit 20
 ```
 
-`--opaque-u32` 同时支持 `shielding_params_packet_pair_candidates`、`stealth_event_packet_candidates`、`champion_die_event_packet_candidates`、`champion_kill_event_packet_candidates`、`champion_multiple_kill_event_packet_candidates`、`on_shutdown_event_packet_candidates` 和 `resurrect_event_packet_candidates`，匹配各记录中已解码的匿名标量 u32 字段；不查询多杀子包的 `+0x10` 列表，也不使用外层 `raw_param` 代替字段或赋予治疗、护盾、隐身、死亡、击杀、复活参与者角色。十进制、十六进制和 `0` 均可精确查询；汇总保留字段不可用数与已检查后的零命中。
+`--opaque-u32` 同时支持 `shielding_params_packet_pair_candidates`、`stealth_event_packet_candidates`、`champion_die_event_packet_candidates`、`champion_kill_event_packet_candidates`、`champion_multiple_kill_event_packet_candidates`、`on_shutdown_event_packet_candidates`、`resurrect_event_packet_candidates` 和 `turret_plate_event_packet_candidates`，匹配各记录中已解码的匿名标量 u32 字段；不查询多杀子包的 `+0x10` 列表，也不使用外层 `raw_param` 代替字段或赋予治疗、护盾、隐身、死亡、击杀、复活参与者或建筑角色。十进制、十六进制和 `0` 均可精确查询；汇总保留字段不可用数与已检查后的零命中。
 
 对 821 CastSpellAns 候选包中已解码的不透明有符号整数精确查询：
 

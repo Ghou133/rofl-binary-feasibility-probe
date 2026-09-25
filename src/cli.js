@@ -143,6 +143,7 @@ For 821, hero_death with champion_die_event_packet emits a candidate packet pair
 adding champion_kill_event_packet, champion_multiple_kill_event_packet, or
 on_shutdown_event_packet emits the corresponding candidate three-route packet group.
 resurrect_event_packet emits a separate packet-local OnResurrect candidate.
+turret_plate_event_packet emits a separate packet-local OnTurretPlateDestroyed candidate.
 Inspect reads the container and packet framing without a runtime image.
 Capabilities reads the container/build registry without packet framing or semantic decode.
 
@@ -383,6 +384,7 @@ function parseArgs(argv) {
       'champion_multiple_kill_event_packet_candidates',
       'on_shutdown_event_packet_candidates',
       'resurrect_event_packet_candidates',
+      'turret_plate_event_packet_candidates',
       'champion_die_hero_death_pair_candidates',
       'champion_kill_die_hero_death_pair_candidates',
       'champion_multiple_kill_die_hero_death_pair_candidates',
@@ -681,6 +683,7 @@ function parseOne1619(replay, options, started) {
       'champion_multiple_kill_event_packet',
       'on_shutdown_event_packet',
       'resurrect_event_packet',
+      'turret_plate_event_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',
@@ -1884,6 +1887,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'champion_multiple_kill_event_packet'
             || capability === 'on_shutdown_event_packet'
             || capability === 'resurrect_event_packet'
+            || capability === 'turret_plate_event_packet'
             || capability === 'cast_spell_ans_packet'))
         || capability === 'npc_buff_remove_packet'
         || capability === 'npc_buff_add_packet'
@@ -2191,6 +2195,11 @@ function capabilityQuery(replay, options = {}) {
           'OnResurrect image label and anonymous u32 fields; no resurrection, actor, or lifecycle inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'turret_plate_event_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x0107 packet consumption',
+          'OnTurretPlateDestroyed image label and anonymous +0x04 u32; no callback-field, structure, or lifecycle inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'cast_spell_ans_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x01da full packet consumption',
           'callback-transformed opaque fields and raw packet provenance; no successful-cast or spell identity inference');
@@ -2412,6 +2421,7 @@ function capabilityQuery(replay, options = {}) {
             champion_multiple_kill_event_packet: 'champion_multiple_kill_event_packet_candidates',
             on_shutdown_event_packet: 'on_shutdown_event_packet_candidates',
             resurrect_event_packet: 'resurrect_event_packet_candidates',
+            turret_plate_event_packet: 'turret_plate_event_packet_candidates',
             cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
             npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
             npc_buff_add_packet: 'npc_buff_add_packet_candidates',

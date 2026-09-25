@@ -131,6 +131,25 @@ Current progress (older notes below retain their original research context):
   established. Ignored evidence is under
   `artifacts/16_19_development/on_event_next_followup_821/` and
   `artifacts/16_19_development/on_resurrect_cli_batch_821/`.
+- **Completed:** KR 821 `turret_plate_event_packet` is a selected exact-image
+  CLI/API packet candidate for OnEvent child `0x0107`. The image name table
+  labels it OnTurretPlateDestroyed. Native parent decoding fully consumed
+  5,621 observed 17-byte game packets in 11 KR Replays: 657 targets and
+  4,964 same-length foreign children. The 11-Replay CLI batch emitted 657
+  candidate JSONL rows, excluded the controls, and reported zero framing
+  errors. `query-events --opaque-u32` matched the anonymous native child
+  `+0x04` field while retaining the distinct outer `raw_param`. No
+  child-specific callback, object role, plate destruction, or state change
+  is confirmed. Ignored evidence is under
+  `artifacts/16_19_development/on_turret_plate_followup_821/` and
+  `artifacts/16_19_development/on_turret_plate_cli_batch_821/`.
+- **Investigated:** Exact 821 child `0x000b` is named OnChampionDoubleKill
+  by the image table; 63 target packets and 591 same-length controls were
+  natively fully consumed. Its callback obtains a value through a virtual
+  accessor on an unavailable live object, so no direct child field or
+  gameplay effect is established. Packet marker only; no field decoder was
+  added. Ignored evidence is under
+  `artifacts/16_19_development/on_event_000b_followup_821/`.
 - **Completed:** KR 821 `champion_kill_event_packet` is an unpublished
   selected CLI/API candidate for exact-image OnEvent child `0x0007`. The
   exact name table labels it OnChampionKill, and the registered callback

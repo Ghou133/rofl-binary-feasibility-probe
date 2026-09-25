@@ -43,6 +43,8 @@ const onShutdownEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
 const resurrectEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_resurrect_event_packet_candidate');
+const turretPlateEventPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_turret_plate_event_packet_candidate');
 const castSpellAnsCandidate1619821 =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const buffRemovePacketCandidate1619821 =
@@ -532,6 +534,7 @@ const BUILD_PROFILES = deepFreeze({
       champion_multiple_kill_event_packet: 0x040a,
       on_shutdown_event_packet: 0x040a,
       resurrect_event_packet: 0x040a,
+      turret_plate_event_packet: 0x040a,
       cast_spell_ans_packet: 0x01da,
       npc_buff_remove_packet: 0x047c,
       npc_buff_add_packet: 0x00ae,
@@ -606,6 +609,8 @@ const BUILD_PROFILES = deepFreeze({
         onShutdownEventPacketCandidate1619821.ON_SHUTDOWN_EVENT_PACKET_821_PROFILE,
       resurrect_event_packet:
         resurrectEventPacketCandidate1619821.RESURRECT_EVENT_PACKET_821_PROFILE,
+      turret_plate_event_packet:
+        turretPlateEventPacketCandidate1619821.TURRET_PLATE_EVENT_PACKET_821_PROFILE,
       cast_spell_ans_packet:
         castSpellAnsCandidate1619821.CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
       npc_buff_remove_packet:
@@ -673,6 +678,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_NATIVE_ON_SHUTDOWN_NAMED_PACKET_FIELDS',
       resurrect_event_packet:
         'CANDIDATE_821_NATIVE_ON_RESURRECT_NAMED_PACKET_FIELDS',
+      turret_plate_event_packet:
+        'CANDIDATE_821_NATIVE_ON_TURRET_PLATE_NAMED_PACKET_FIELD',
       cast_spell_ans_packet: 'CANDIDATE_821_NATIVE_CAST_SPELL_ANS_OPAQUE_PACKET_FIELDS',
       npc_buff_remove_packet: 'CANDIDATE_821_NATIVE_BUFF_REMOVE2_OPAQUE_PACKET_FIELDS',
       npc_buff_add_packet: 'CANDIDATE_821_NATIVE_BUFF_ADD2_OPAQUE_PACKET_FIELDS',
@@ -723,6 +730,7 @@ const BUILD_PROFILES = deepFreeze({
       champion_multiple_kill_event_packet: 'exact 821 native 0x040a OnEvent child 0x0009 ParamsKillingSpree registration and OnChampionMultipleKill name table; callback reads anonymous child +0x04/+0x08/+0x0c u32; no effective multikill, actor, or state transition inference',
       on_shutdown_event_packet: 'exact 821 native 0x040a OnEvent child 0x00e8 registration and OnShutdown name table; callback reads anonymous child +0x04/+0x58/+0x5c u32; no gameplay shutdown effect, actor, or state transition inference',
       resurrect_event_packet: 'exact 821 native 0x040a OnEvent child 0x002d registration and OnResurrect name table; native child +0x04/+0x08 u32 remain anonymous; no resurrection, actor, or state transition inference',
+      turret_plate_event_packet: 'exact 821 native 0x040a OnEvent child 0x0107 and OnTurretPlateDestroyed name table; native child +0x04 u32 remains anonymous; no callback-field, structure, or game-state transition inference',
       cast_spell_ans_packet: 'exact 821 native 0x01da packet constructor/deserializer, callback transforms for opaque object offsets 0x148/0x14c, nested protected float at +0xe0 and byte at +0x140; no successful-cast, owner, target, spell, slot or field-meaning inference',
       npc_buff_remove_packet: 'exact 821 native 0x047c BuffRemove2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14/0x18; no owner, buff identity, target or lifecycle inference',
       npc_buff_add_packet: 'exact 821 native 0x00ae BuffAdd2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14; no owner, buff identity, target or lifecycle inference',
@@ -757,6 +765,7 @@ const BUILD_PROFILES = deepFreeze({
       'champion_multiple_kill_event_packet',
       'on_shutdown_event_packet',
       'resurrect_event_packet',
+      'turret_plate_event_packet',
       'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',

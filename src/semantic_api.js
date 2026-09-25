@@ -64,6 +64,8 @@ const { decodeOnShutdownEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
 const { decodeResurrectEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_resurrect_event_packet_candidate');
+const { decodeTurretPlateEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_turret_plate_event_packet_candidate');
 const { decodeCastSpellAnsPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const { decodeNpcBuffRemovePacketCandidates821 } =
@@ -2184,6 +2186,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    turret_plate_event_packet: (input, collected) =>
+      decodeTurretPlateEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     cast_spell_ans_packet: (input, collected) =>
       decodeCastSpellAnsPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2259,6 +2267,7 @@ function decode1619821(replay, profile, options = {}) {
     champion_multiple_kill_event_packet: 'champion_multiple_kill_event_packet_candidates',
     on_shutdown_event_packet: 'on_shutdown_event_packet_candidates',
     resurrect_event_packet: 'resurrect_event_packet_candidates',
+    turret_plate_event_packet: 'turret_plate_event_packet_candidates',
     cast_spell_ans_packet: 'cast_spell_ans_packet_candidates',
     npc_buff_remove_packet: 'npc_buff_remove_packet_candidates',
     npc_buff_add_packet: 'npc_buff_add_packet_candidates',
@@ -2293,6 +2302,7 @@ function decode1619821(replay, profile, options = {}) {
     'champion_multiple_kill_event_packet',
     'on_shutdown_event_packet',
     'resurrect_event_packet',
+    'turret_plate_event_packet',
     'cast_spell_ans_packet',
     'npc_buff_remove_packet',
     'npc_buff_add_packet',
@@ -2338,6 +2348,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'champion_multiple_kill_event_packet'
         || capability === 'on_shutdown_event_packet'
         || capability === 'resurrect_event_packet'
+        || capability === 'turret_plate_event_packet'
         || capability === 'cast_spell_ans_packet'
         || capability === 'npc_buff_remove_packet' || capability === 'npc_buff_add_packet'
         || capability === 'direct_input_movement_turn_packet'
@@ -2378,7 +2389,9 @@ function decode1619821(replay, profile, options = {}) {
                 : capability === 'on_shutdown_event_packet'
                   ? '0x040a/child_00e8'
                   : capability === 'resurrect_event_packet'
-                    ? '0x040a/child_002d' : result.input_packet_id;
+                    ? '0x040a/child_002d'
+                    : capability === 'turret_plate_event_packet'
+                      ? '0x040a/child_0107' : result.input_packet_id;
     const decodedCount = capability === 'stealth_event_packet'
       ? result.target_packet_count
       : capability === 'champion_die_event_packet'
@@ -2390,7 +2403,9 @@ function decode1619821(replay, profile, options = {}) {
             : capability === 'on_shutdown_event_packet'
               ? result.event_count
               : capability === 'resurrect_event_packet'
-                ? result.event_count : result.input_count;
+                ? result.event_count
+                : capability === 'turret_plate_event_packet'
+                  ? result.event_count : result.input_count;
     uniqueDecodedInputCounts.set(packetGroup,
       Math.max(uniqueDecodedInputCounts.get(packetGroup) ?? 0, decodedCount));
   }
