@@ -2626,6 +2626,7 @@ function decode1619821(replay, profile, options = {}) {
         outcome = associateUnitApplyDamageRosterKeys821(replay, {
           unitApplyDamagePacketOutcome: decodeCapability('unit_apply_damage_packet'),
           minionsKilledSnapshotOutcome: decodeCapability('hero_minions_killed_snapshot'),
+          precollected: candidate821Scan,
         });
       } else if (capability === 'unit_apply_damage_lookup_roster_key_pair') {
         outcome = associateUnitApplyDamageLookupRosterKeys821(replay, {
@@ -2633,6 +2634,7 @@ function decode1619821(replay, profile, options = {}) {
           minionsKilledSnapshotOutcome: decodeCapability('hero_minions_killed_snapshot'),
           validatedRawRosterPairOutcome:
             decodeCapability('unit_apply_damage_roster_key_pair'),
+          precollected: candidate821Scan,
         });
       } else if (capability === 'unit_apply_damage_lookup2c_roster_key_pair') {
         outcome = associateUnitApplyDamageLookup2cRosterKeys821(replay, {
@@ -2642,6 +2644,7 @@ function decode1619821(replay, profile, options = {}) {
             decodeCapability('unit_apply_damage_roster_key_pair'),
           validatedLookup24RosterPairOutcome:
             decodeCapability('unit_apply_damage_lookup_roster_key_pair'),
+          precollected: candidate821Scan,
         });
       } else if (capability === 'hero_death_damage_lookup_key_cooccurrence') {
         outcome = associateHeroDeathDamageLookupKeyCooccurrence821(replay, {

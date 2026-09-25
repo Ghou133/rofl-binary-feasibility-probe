@@ -166,7 +166,7 @@ function checkedPairMetadata(replay, damage, snapshot, pair) {
 
 function associateUnitApplyDamageLookupRosterKeys821(replay, {
   unitApplyDamagePacketOutcome, minionsKilledSnapshotOutcome,
-  validatedRawRosterPairOutcome,
+  validatedRawRosterPairOutcome, precollected = null,
 } = {}) {
   const profile = unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V3_ID
     ? UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821
@@ -246,6 +246,7 @@ function associateUnitApplyDamageLookupRosterKeys821(replay, {
   const pair = associateUnitApplyDamageRosterKeys821(replay, {
     unitApplyDamagePacketOutcome: damage,
     minionsKilledSnapshotOutcome: snapshot,
+    precollected,
   });
   if (pair?.status !== 'CANDIDATE') {
     const status = pair?.status ?? 'INCONSISTENT';

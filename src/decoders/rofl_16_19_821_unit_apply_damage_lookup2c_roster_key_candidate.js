@@ -70,6 +70,7 @@ function sha(value) {
 function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
   unitApplyDamagePacketOutcome, minionsKilledSnapshotOutcome,
   validatedRawRosterPairOutcome, validatedLookup24RosterPairOutcome,
+  precollected = null,
 } = {}) {
   const profile = unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V3_ID
     ? UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821
@@ -135,6 +136,7 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
   const rawPair = associateUnitApplyDamageRosterKeys821(replay, {
     unitApplyDamagePacketOutcome: damage,
     minionsKilledSnapshotOutcome: snapshot,
+    precollected,
   });
   if (rawPair.status !== 'CANDIDATE') {
     return fail(rawPair.status, 'source-bound raw-key roster pair is unavailable', {
@@ -155,6 +157,7 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
     unitApplyDamagePacketOutcome: damage,
     minionsKilledSnapshotOutcome: snapshot,
     validatedRawRosterPairOutcome: rawPair,
+    precollected,
   });
   if (key24Pair.status !== 'CANDIDATE') {
     return fail(key24Pair.status, 'native lookup keys or canonical roster are unavailable', {

@@ -7,6 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const { parseReplayFile, walkBlocks } = require('../src/rofl');
+const { collect821Routes } = require('../src/decoders/rofl_16_19_821_scan');
 const { replayFromChunks } = require('./helpers/synthetic_replay');
 const { PROFILES } = require('../src/decoders/rofl_16_19_821_float_stats_candidate');
 const {
@@ -256,6 +257,39 @@ test('821 UnitApplyDamage roster association uses the full key and excludes alia
     'actor_id', 'effective_health_loss']) {
     assert.equal(forbidden in event, false);
   }
+});
+
+test('821 shared route proof matches strict walk and rejects foreign or changed sources', () => {
+  const values = fixture({ damageProfile: 'v4' });
+  const baseline = associate(values.replay, values);
+  assert.equal(baseline.status, 'CANDIDATE');
+  const token = collect821Routes(values.replay,
+    ['unit_apply_damage_packet', 'hero_minions_killed_snapshot']);
+  assert.deepEqual(associate(values.replay, { ...values, precollected: token }),
+    baseline);
+
+  const partialToken = collect821Routes(values.replay,
+    ['hero_minions_killed_snapshot']);
+  assert.deepEqual(associate(values.replay,
+    { ...values, precollected: partialToken }), baseline);
+
+  const altered = structuredClone(values.unitApplyDamagePacketOutcome);
+  altered.events[0].raw_packet_ref.raw_payload_hex =
+    `00${altered.events[0].raw_packet_ref.raw_payload_hex.slice(2)}`;
+  assert.notEqual(associate(values.replay, {
+    ...values, unitApplyDamagePacketOutcome: altered,
+    precollected: token,
+  }).status, 'CANDIDATE');
+  assert.notEqual(associate(values.replay,
+    { ...values, precollected: {} }).status, 'CANDIDATE');
+  const foreignToken = collect821Routes(fixture({ damageProfile: 'v4' }).replay,
+    ['unit_apply_damage_packet', 'hero_minions_killed_snapshot']);
+  assert.notEqual(associate(values.replay,
+    { ...values, precollected: foreignToken }).status, 'CANDIDATE');
+
+  values.replay.buffer[values.replay.buffer.length - 1] ^= 1;
+  assert.notEqual(associate(values.replay,
+    { ...values, precollected: token }).status, 'CANDIDATE');
 });
 
 test('821 UnitApplyDamage roster association accepts native v3 and validates lookup fields', () => {

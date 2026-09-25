@@ -4,6 +4,16 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Damage association source scan reuse:** In a selected exact-821 API/CLI
+  run, the four damage/roster/death associations now use the same private,
+  Replay-bound strict route scan to verify their complete `0x005f` and
+  `0x0089` source rows. Standalone association calls still walk the Replay;
+  foreign or changed scan tokens fail. On one supplied KR Replay, all four
+  association results and JSONL outputs matched the preceding batch exactly
+  (5,254 / 6,888 / 19,142 / 71 rows). Direct three-association work took
+  2,280 ms with repeated walks versus 1,882 ms with the shared token; the
+  API already collects the token, whose standalone creation took 154 ms in
+  that measurement. This changes validation work, not candidate semantics.
 - **UnitApplyDamage anonymous callback u32 v4:** The exact-821 native
   deserializer writes an anonymous u32 to callback object offset `+0x10`.
   The first header selector determines whether its four payload bytes pass

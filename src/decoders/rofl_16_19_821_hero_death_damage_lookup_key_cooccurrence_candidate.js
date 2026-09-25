@@ -179,6 +179,7 @@ function associateHeroDeathDamageLookupKeyCooccurrence821(replay, {
   const rawPair = associateUnitApplyDamageRosterKeys821(replay, {
     unitApplyDamagePacketOutcome: damage,
     minionsKilledSnapshotOutcome: snapshot,
+    precollected,
   });
   if (rawPair.status !== 'CANDIDATE') {
     return fail(rawPair.status, 'physically source-bound damage/roster pair is unavailable', {

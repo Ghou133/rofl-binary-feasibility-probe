@@ -6,6 +6,7 @@
 const crypto = require('node:crypto');
 const { walkBlocks } = require('../rofl');
 const { replaySourceError } = require('./replay_source_integrity');
+const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
 const { PROFILES } = require('./rofl_16_19_821_float_stats_candidate');
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
@@ -228,7 +229,7 @@ function validDamageRow(replay, row, damageProfileId) {
 
 class SourceMismatch extends Error {}
 
-function verifyPhysicalRefs(replay, damageRows, snapshotRows) {
+function verifyPhysicalRefs(replay, damageRows, snapshotRows, precollected = null) {
   const expected = new Map();
   const nativeInput = crypto.createHash('sha256');
   const nativeHeader = Buffer.alloc(8);
@@ -243,7 +244,7 @@ function verifyPhysicalRefs(replay, damageRows, snapshotRows) {
     }
   }
   try {
-    const walked = walkBlocks(replay, (block, chunk) => {
+    const visit = (block, chunk) => {
       const required = block.packet_id === 0x005f
         || (chunk.stream === 'keyframe' && block.packet_id === 0x0089);
       if (!required) return;
@@ -277,8 +278,37 @@ function verifyPhysicalRefs(replay, damageRows, snapshotRows) {
         nativeInput.update(block.payload);
       }
       expected.delete(at);
-    }, { strict: true });
-    if (walked.errors.length) return { error: 'Replay framing errors', scan_error: true };
+    };
+    let sourceRows = null;
+    if (precollected !== null) {
+      sourceRows = ['unit_apply_damage_packet',
+        'hero_minions_killed_snapshot'].map((capability) =>
+        rowsFor821Capability(replay, precollected, capability));
+      if (sourceRows.some((selected) => !Array.isArray(selected.rows))) {
+        const unavailable = sourceRows.find((selected) =>
+          !Array.isArray(selected.rows));
+        if (unavailable.error?.includes('was not selected by this 821 route scan')) {
+          // A legitimate route token may have been collected for another
+          // association (for example, death only). Retain the independent
+          // physical walk in that case.
+          sourceRows = null;
+        } else {
+          return { error: unavailable.error || '821 route scan is incomplete',
+            scan_error: true };
+        }
+      }
+    }
+    if (sourceRows === null) {
+      const walked = walkBlocks(replay, visit, { strict: true });
+      if (walked.errors.length) return { error: 'Replay framing errors', scan_error: true };
+    } else {
+      // The exact-build scan has already walked every framed block strictly.
+      // Its private source binding prevents a caller from inventing a token;
+      // compare every retained route packet to the supplied source rows below.
+      for (const selected of sourceRows) {
+        for (const { block, chunk } of selected.rows) visit(block, chunk);
+      }
+    }
   } catch (error) {
     return { error: error.message, scan_error: !(error instanceof SourceMismatch) };
   }
@@ -294,6 +324,7 @@ function verifyPhysicalRefs(replay, damageRows, snapshotRows) {
 
 function associateUnitApplyDamageRosterKeys821(replay, {
   unitApplyDamagePacketOutcome, minionsKilledSnapshotOutcome,
+  precollected = null,
 } = {}) {
   const profile = (unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V2_ID
       || unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V3_ID)
@@ -523,7 +554,8 @@ function associateUnitApplyDamageRosterKeys821(replay, {
     u32SourceCounts[source] !== damage.native_callback_u32_0x10_source_counts[source])) {
     return fail('INCONSISTENT', 'UnitApplyDamage callback +0x10 source counts differ');
   }
-  const physical = verifyPhysicalRefs(replay, damage.events, snapshot.events);
+  const physical = verifyPhysicalRefs(replay, damage.events, snapshot.events,
+    precollected);
   if (physical.error) {
     return fail(physical.scan_error ? 'DECODE_FAILED' : 'INCONSISTENT', physical.error);
   }
