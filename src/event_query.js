@@ -6360,6 +6360,12 @@ function killerParticipantCandidate(row, prepared, lineNumber, config) {
   return { value: killer, available: killer !== null };
 }
 
+const DIE_SOURCE_KEY2C_MATCH_FILTERS_821 = Object.freeze({
+  has: 'HAS_SAME_TIME_MATCH',
+  none: 'NO_SAME_TIME_MATCH',
+  unavailable: 'DIE_SOURCE_UNAVAILABLE',
+});
+
 function validateFilters(options) {
   const { fromMs = null, toMs = null, participant = null,
     killerParticipant = null, assistingParticipant = null, rawParam = null,
@@ -6367,6 +6373,7 @@ function validateFilters(options) {
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, damageCallbackF32Available = false,
     damageLookupKey24 = null, damageLookupKey2c = null,
+    dieSourceKey2cMatch = null,
     packetRecordCount = null, showHealthZeroFlag = null, levelAfter = null,
     childEventId = null, limit = null, latestPerParticipant = false,
     endpointReversedPair: endpointReversedPairFilter = false,
@@ -6385,6 +6392,13 @@ function validateFilters(options) {
       && !INVENTORY_GAME_COMPARISON_LABELS_821.includes(comparisonToEndpoints)) {
     throw new EventQueryError('INVALID_FILTER',
       'Invalid comparisonToEndpoints query filter.');
+  }
+  if (dieSourceKey2cMatch != null
+      && (typeof dieSourceKey2cMatch !== 'string'
+        || !Object.hasOwn(DIE_SOURCE_KEY2C_MATCH_FILTERS_821,
+          dieSourceKey2cMatch))) {
+    throw new EventQueryError('INVALID_FILTER',
+      'Invalid dieSourceKey2cMatch query filter.');
   }
   for (const [name, value, minimum, maximum] of [
     ['fromMs', fromMs, 0, Number.MAX_SAFE_INTEGER],
@@ -6430,6 +6444,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, damageCallbackF32Available = false,
     damageLookupKey24 = null, damageLookupKey2c = null,
+    dieSourceKey2cMatch = null,
     packetRecordCount = null, showHealthZeroFlag = null, levelAfter = null,
     childEventId = null, limit = null, latestPerParticipant = false,
     endpointReversedPair: endpointReversedPairFilter = false,
@@ -6447,6 +6462,14 @@ async function streamEventQuery(prepared, options, emitLine) {
         || prepared.capabilityStatus !== 'CANDIDATE')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--comparison-to-endpoints requires exact 16.19.821.7343 inventory game Broadcast keyframe bracket candidates.');
+  }
+  if (dieSourceKey2cMatch != null
+      && (prepared.eventKey
+        !== 'hero_death_damage_lookup_key_cooccurrence_candidates'
+        || prepared.replayVersion !== '16.19.821.7343'
+        || prepared.capabilityStatus !== 'CANDIDATE')) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--die-source-key2c-match requires exact 16.19.821.7343 hero death/damage lookup cooccurrence candidates.');
   }
   if (latestPerParticipant
       && (prepared.replayVersion !== '16.19.821.7343'
@@ -6888,6 +6911,9 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (damageLookupKey2c != null
             && row.native_callback_lookup_key_u32_0x2c_candidate
               !== damageLookupKey2c)
+          || (dieSourceKey2cMatch != null
+            && row.die_source_key2c_match_status
+              !== DIE_SOURCE_KEY2C_MATCH_FILTERS_821[dieSourceKey2cMatch])
           || (packetRecordCount != null && circularRecordCount !== packetRecordCount)
           || (showHealthZeroFlag != null && showHealthFlag !== showHealthZeroFlag)
           || (levelAfter != null && row.level_after_candidate !== levelAfter)
@@ -7260,6 +7286,8 @@ async function streamEventQuery(prepared, options, emitLine) {
         : { damage_lookup_key24: damageLookupKey24 }),
       ...(damageLookupKey2c == null ? {}
         : { damage_lookup_key2c: damageLookupKey2c }),
+      ...(dieSourceKey2cMatch == null ? {}
+        : { die_source_key2c_match: dieSourceKey2cMatch }),
       ...(packetRecordCount == null ? {} : { packet_record_count: packetRecordCount }),
       ...(showHealthZeroFlag == null ? {} : {
         show_health_zero_flag: showHealthZeroFlag,
@@ -7282,6 +7310,14 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         || prepared.replays.some((replay) => replay.replayVersion !== '16.19.821.7343'))) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--comparison-to-endpoints requires exact 16.19.821.7343 inventory game Broadcast keyframe bracket candidates.');
+  }
+  if (options.dieSourceKey2cMatch != null
+      && (prepared.eventKey
+        !== 'hero_death_damage_lookup_key_cooccurrence_candidates'
+        || prepared.replays.some((replay) =>
+          replay.replayVersion !== '16.19.821.7343'))) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--die-source-key2c-match requires exact 16.19.821.7343 hero death/damage lookup cooccurrence candidates.');
   }
   if (options.endpointReversedPair
       || prepared.eventKey === 'inventory_game_broadcast_keyframe_bracket_candidates') {

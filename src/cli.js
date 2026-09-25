@@ -242,6 +242,8 @@ Options:
   --damage-lookup-key24 <uint32|0xhex>  Exact 821 UnitApplyDamage v3 native +0x24 lookup key
   --damage-lookup-key2c <uint32|0xhex>  Exact 821 UnitApplyDamage v3 native +0x2c lookup key
                                 These anonymous object keys do not establish actor or damage roles.
+  --die-source-key2c-match <has|none|unavailable>  Exact 821 death/damage
+                                cooccurrence status for the candidate source key
   --show-health-zero-flag <0|1>  Exact 821 ShowHealthBar callback zero-flag candidate
                                 Checks saved witness metadata and raw bytes; does not infer display effect.
   --packet-record-count <0|1>  Exact 821 circular movement restriction packet record count
@@ -307,6 +309,7 @@ function parseArgs(argv) {
     damageCallbackF32Available: false,
     damageLookupKey24: null,
     damageLookupKey2c: null,
+    dieSourceKey2cMatch: null,
     showHealthZeroFlag: null,
     packetRecordCount: null,
     levelAfter: null,
@@ -434,6 +437,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'cast-nested-bits') options.castNestedBits = queryByte(value, key);
       else if (command === 'query-events' && key === 'damage-lookup-key24') options.damageLookupKey24 = queryUint32(value, key);
       else if (command === 'query-events' && key === 'damage-lookup-key2c') options.damageLookupKey2c = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'die-source-key2c-match') options.dieSourceKey2cMatch = value;
       else if (command === 'query-events' && key === 'show-health-zero-flag') options.showHealthZeroFlag = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'packet-record-count') options.packetRecordCount = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'level-after') options.levelAfter = queryInteger(value, key);
@@ -488,6 +492,14 @@ function parseArgs(argv) {
           || !['hero_assist_candidates', 'hero_death_episode_candidates']
             .includes(options.event))) {
       throw new Error('--assisting-participant requires hero_assist_candidates or hero_death_episode_candidates and 1..10');
+    }
+    if (options.dieSourceKey2cMatch !== null
+        && !['has', 'none', 'unavailable'].includes(options.dieSourceKey2cMatch)) {
+      throw new Error('--die-source-key2c-match requires has, none or unavailable');
+    }
+    if (options.dieSourceKey2cMatch !== null
+        && options.event !== 'hero_death_damage_lookup_key_cooccurrence_candidates') {
+      throw new Error('--die-source-key2c-match requires hero_death_damage_lookup_key_cooccurrence_candidates');
     }
     if (options.fromMs !== null && options.toMs !== null && options.fromMs > options.toMs) {
       throw new Error('--from-ms must not exceed --to-ms');
@@ -3100,6 +3112,7 @@ async function runQueryEventsCommand(parsed) {
       damageCallbackF32Available: options.damageCallbackF32Available,
       damageLookupKey24: options.damageLookupKey24,
       damageLookupKey2c: options.damageLookupKey2c,
+      dieSourceKey2cMatch: options.dieSourceKey2cMatch,
       showHealthZeroFlag: options.showHealthZeroFlag,
       packetRecordCount: options.packetRecordCount,
       levelAfter: options.levelAfter,

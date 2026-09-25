@@ -857,6 +857,8 @@ API 可调用 `decodeSemanticReplay(parseReplayFile(replayPath), { capabilities:
 
 保存结果可按候选受害者或嵌套伤害包的**原始参数**查询；`--raw-param` 不筛选死亡路由原始参数或解码查找键。查询先完整核对所有保存行和来源引用，再应用 `--limit`，不重新打开原始 ROFL：
 
+`--die-source-key2c-match has|none|unavailable` 可筛选死亡来源 ID 与同刻候选包 `+0x2c` 键的验证状态；`none` 保留零包与不相等的锚点，状态不表示致死关系。
+
 ```powershell
 node src/cli.js query-events "work\16-19-821-death-damage-lookup" `
   --event hero_death_damage_lookup_key_cooccurrence_candidates `

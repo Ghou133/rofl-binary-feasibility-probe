@@ -364,6 +364,54 @@ test('saved death/damage lookup query keeps zero and multiple anchors with exact
   assert.equal(time.stdout, `${lines[2]}\n`);
 });
 
+test('saved death/damage lookup query filters all three validated +0x2c match statuses', (t) => {
+  const { directory, lines } = fixture(t);
+  for (const [value, index] of [
+    ['has', 0], ['none', 1], ['unavailable', 2],
+  ]) {
+    const selected = query(directory, '--die-source-key2c-match', value,
+      '--limit', '1');
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, `${lines[index]}\n`);
+    const summary = JSON.parse(selected.stderr);
+    assert.equal(summary.scanned_count, 3);
+    assert.equal(summary.matched_count, 1);
+    assert.equal(summary.emitted_count, 1);
+    assert.equal(summary.filters.die_source_key2c_match, value);
+    assert.equal(summary.rows_unmodified, true);
+  }
+  const combined = query(directory, '--die-source-key2c-match', 'has',
+    '--participant', '2');
+  assert.equal(combined.status, 0, combined.stderr);
+  assert.equal(combined.stdout, '');
+  assert.equal(JSON.parse(combined.stderr).matched_count, 0);
+});
+
+test('death/damage +0x2c match filter rejects invalid value or event', (t) => {
+  const { directory } = fixture(t);
+  const invalid = query(directory, '--die-source-key2c-match', 'HAS');
+  assert.equal(invalid.status, 1);
+  assert.match(invalid.stderr, /requires has, none or unavailable/);
+  const wrongEvent = spawnSync(process.execPath,
+    [CLI, 'query-events', directory, '--event', 'hero_death_candidates',
+      '--die-source-key2c-match', 'none'], { encoding: 'utf8' });
+  assert.equal(wrongEvent.status, 1);
+  assert.match(wrongEvent.stderr,
+    /requires hero_death_damage_lookup_key_cooccurrence_candidates/);
+});
+
+test('death/damage +0x2c match query validates nonmatching rows after limit', (t) => {
+  const rows = defaultRows();
+  rows[2].lookup_resolution_status = 'RESOLVED';
+  const { root, directory } = fixture(t, rows);
+  const output = path.join(root, 'selected.jsonl');
+  const rejected = query(directory, '--die-source-key2c-match', 'none',
+    '--limit', '1', '--output', output);
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
+});
+
 test('saved death/damage lookup metadata rejects build, image and count changes', (t) => {
   const changes = [
     (result) => { result.profile_id = 'foreign'; },
@@ -468,6 +516,11 @@ test('batch death/damage query validates later Replay after global output limit'
   assert.equal(selected.status, 0, selected.stderr);
   assert.equal(selected.stdout, `${first.lines[0]}\n`);
   assert.equal(JSON.parse(selected.stderr).scanned_count, 3);
+  const noMatch = query(root, '--die-source-key2c-match', 'none',
+    '--limit', '1');
+  assert.equal(noMatch.status, 0, noMatch.stderr);
+  assert.equal(noMatch.stdout, `${second.lines[1]}\n`);
+  assert.equal(JSON.parse(noMatch.stderr).scanned_count, 3);
   const corrupted = JSON.parse(second.lines[1]);
   corrupted.lookup_resolution_status = 'RESOLVED';
   fs.writeFileSync(path.join(second.directory, `${EVENT}.jsonl`),
