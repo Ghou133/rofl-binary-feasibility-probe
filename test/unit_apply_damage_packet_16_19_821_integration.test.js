@@ -37,12 +37,19 @@ test('821 UnitApplyDamage candidate reaches API and CLI without losing raw rows'
   assert.equal(result.event_count, 64824);
   assert.equal(result.callback_f32_available_count, 684);
   assert.equal(result.callback_f32_unavailable_count, result.event_count - 684);
+  assert.equal(result.native_callback_f32_available_count, result.event_count);
+  assert.deepEqual(result.native_callback_f32_source_counts, {
+    RAW_READER: 64471, CONSTANT_0: 10, CONSTANT_1: 293, CONSTANT_2: 50,
+  });
   assert.ok(decoded.events[EVENTS].every((row) =>
     row.event_type === 'UNIT_APPLY_DAMAGE_PACKET_CANDIDATE'
       && row.game_version === BUILD
       && row.confidence === 'CANDIDATE'
       && row.semantic_effect_status === 'UNKNOWN'
       && row.raw_packet_ref.packet_id === 0x005f
+      && Number.isFinite(row.native_callback_f32_0x20_candidate)
+      && ['RAW_READER', 'CONSTANT_0', 'CONSTANT_1', 'CONSTANT_2']
+        .includes(row.native_callback_f32_0x20_source)
       && (row.callback_f32_0x20_status === 'NATIVE_MATCHED_SHAPE'
         || row.callback_f32_0x20_status === 'UNAVAILABLE_SHAPE')));
 

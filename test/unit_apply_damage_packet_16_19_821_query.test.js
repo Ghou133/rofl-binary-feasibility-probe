@@ -10,6 +10,7 @@ const test = require('node:test');
 
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: profile,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821: v1ProfileId,
   decodeUnitApplyDamageCallbackF32FromRaw821,
   isObservedShape,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
@@ -21,6 +22,11 @@ const SHA = 'a'.repeat(64);
 const SOURCE_PATH = 'synthetic.rofl';
 const FLOAT_PACKET = '71875e460b083dbaef3ba6ec39b975';
 const OTHER_PACKET = '54814747c6c4d9a90b6ef07c44e2ecaf5b75';
+const CONSTANT_PACKETS = [
+  ['5b814d4650a07e33c07422', 'CONSTANT_0', 0],
+  ['6a87dd49ea0d8c9d0b3891ecac75', 'CONSTANT_1', 1],
+  ['7901ad410aca18ce0b5eec3f5275', 'CONSTANT_2', 2],
+];
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -58,7 +64,7 @@ function row(index, payloadHex = FLOAT_PACKET) {
   return {
     event_type: 'UNIT_APPLY_DAMAGE_PACKET_CANDIDATE',
     game_version: profile.replay_version, patch: '16.19',
-    build_profile: profile.id, replay_sha256: SHA,
+    build_profile: v1ProfileId, replay_sha256: SHA,
     replay_time_ms: time, raw_param: rawParam,
     packet_name_candidate: profile.packet_name,
     header_selector_bits_24_26: selector24,
@@ -85,6 +91,21 @@ function row(index, payloadHex = FLOAT_PACKET) {
   };
 }
 
+function v2Row(index, payloadHex = FLOAT_PACKET) {
+  const entry = row(index, payloadHex);
+  const constant = CONSTANT_PACKETS.find(([hex]) => hex === payloadHex);
+  const offset = constant ? null : payloadHex === OTHER_PACKET ? 9 : 5;
+  const rawBytes = offset === null ? null
+    : Buffer.from(payloadHex, 'hex').subarray(offset, offset + 4).toString('hex');
+  entry.build_profile = profile.id;
+  entry.native_callback_f32_0x20_candidate = constant
+    ? constant[2] : decodeUnitApplyDamageCallbackF32FromRaw821(rawBytes);
+  entry.native_callback_f32_0x20_source = constant ? constant[1] : 'RAW_READER';
+  entry.native_callback_f32_0x20_raw_offset = offset;
+  entry.native_callback_f32_0x20_raw_bytes_hex = rawBytes;
+  return entry;
+}
+
 function writeReplay(root, name, rows, {
   replayVersion = profile.replay_version, capabilityStatus = 'CANDIDATE',
 } = {}) {
@@ -99,7 +120,7 @@ function writeReplay(root, name, rows, {
     entry.header_selector_bits_3_5,
   ].join(':')));
   const result = {
-    profile_id: profile.id,
+    profile_id: rows[0]?.build_profile ?? v1ProfileId,
     input_packet_id: profile.replay_block_packet_id,
     evidence_status: profile.evidence_status,
     evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
@@ -112,6 +133,19 @@ function writeReplay(root, name, rows, {
     observed_shape_family_count: shapes.size,
     callback_f32_available_count: available,
     callback_f32_unavailable_count: rows.length - available,
+    ...(rows[0]?.build_profile === profile.id ? {
+      native_callback_f32_available_count: rows.length,
+      native_callback_f32_source_counts: {
+        RAW_READER: rows.filter((entry) =>
+          entry.native_callback_f32_0x20_source === 'RAW_READER').length,
+        CONSTANT_0: rows.filter((entry) =>
+          entry.native_callback_f32_0x20_source === 'CONSTANT_0').length,
+        CONSTANT_1: rows.filter((entry) =>
+          entry.native_callback_f32_0x20_source === 'CONSTANT_1').length,
+        CONSTANT_2: rows.filter((entry) =>
+          entry.native_callback_f32_0x20_source === 'CONSTANT_2').length,
+      },
+    } : {}),
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
     runtime_image_sha256: profile.evidence_runtime_image_sha256,
   };
@@ -160,6 +194,26 @@ test('query-events selects only native-matched anonymous float rows and preserve
     '--raw-param', '0x40004009');
   assert.equal(narrowed.status, 0, narrowed.stderr);
   assert.equal(narrowed.stdout, `${lines[2]}\n`);
+});
+
+test('query-events checks v2 native float provenance while preserving the legacy filter', (t) => {
+  const rows = [v2Row(0), v2Row(1, OTHER_PACKET),
+    ...CONSTANT_PACKETS.map(([payload], index) => v2Row(index + 2, payload))];
+  const { directory, lines } = fixture(t, rows);
+  const selected = command(directory, '--damage-callback-f32-available', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${lines[0]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 5);
+  assert.equal(summary.damage_callback_f32_available_count, 1);
+  assert.equal(summary.damage_callback_f32_unavailable_count, 4);
+  const changed = rows.map((entry) => structuredClone(entry));
+  changed[1].native_callback_f32_0x20_raw_offset = 8;
+  const damaged = fixture(t, changed);
+  const rejected = command(damaged.directory,
+    '--damage-callback-f32-available', '--limit', '1');
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
 });
 
 test('query-events distinguishes zero available floats from unavailable shapes and capability', (t) => {
