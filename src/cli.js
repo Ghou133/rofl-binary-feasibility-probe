@@ -396,6 +396,7 @@ function parseArgs(argv) {
       'npc_buff_update_count_packet_candidates',
       'npc_buff_replace_packet_candidates',
       'set_spell_timer_from_buff_packet_candidates',
+      'set_spell_level_packet_candidates',
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
       'champion_multiple_kill_event_packet_candidates',

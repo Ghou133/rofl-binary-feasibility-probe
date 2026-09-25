@@ -359,6 +359,9 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 实际 CLI 批处理得到 342/342 个候选包，11 份均为 `CANDIDATE`、
 精确镜像 `MATCHED_USED`、零 framing 错误。包名及回调读取路径不足以确认
 法术身份、等级变化、归属或游戏内效果。
+`query-events --event set_spell_level_packet_candidates --opaque-u32 VALUE`
+可按匿名 `opaque_u32_0x10` 或 `opaque_u32_0x14` 精确筛选，输出仍保留完整候选行。
+外层 `raw_param` 不参与匹配；字段缺失与已检查的零命中分别报告。
 
 821 的 `hero_inventory_packet`、`hero_deaths_snapshot` 与至少一种移动包路由一起选择时，
 `semantic_run.json` 和 API 的 `candidate_associations.movement_full_param_participant_candidate`
