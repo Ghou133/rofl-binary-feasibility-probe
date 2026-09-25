@@ -823,18 +823,25 @@ function prepareObjectiveBountyTurretPairAssociation(semantic, analysis, eventKe
           association: profile.capability });
     }
     const [dependencyProfile, expectedCount] = dependencies[dependency];
+    const diePacket = dependency === 'turret_die_event_packet';
     if (result.profile_id !== dependencyProfile.id
         || result.evidence_runtime_image_sha256 !== imageSha
         || result.runtime_image_sha256 !== imageSha
         || result.runtime_image_status !== 'MATCHED_USED'
         || result.runtime_image_used !== true
+        || result.evidence_status !== (diePacket
+          ? 'CANDIDATE_EXACT_RUNTIME_ON_TURRET_DIE_PACKET'
+          : 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD')
         || result.input_packet_id !== 0x040a
         || result.child_event_id !== dependencyProfile.child_event_id
         || result.event_count !== expectedCount
-        || (dependency === 'turret_die_event_packet'
+        || (diePacket
           ? result.input_count !== result.event_count
           : result.target_packet_count !== result.event_count
-            || result.input_count < result.event_count)
+            || !isCount(result.same_length_control_count)
+            || result.input_count
+              !== result.event_count + result.same_length_control_count)
+        || !isDeepStrictEqual(result.known_limits, [...dependencyProfile.known_limits])
         || analysis.event_counts?.[`${dependency}_candidates`] !== expectedCount) {
       throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
         `${dependency} identity or count disagrees with ${profile.capability}.`);

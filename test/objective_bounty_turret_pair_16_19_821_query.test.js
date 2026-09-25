@@ -85,11 +85,18 @@ function fixture(t, rows = [triple()]) {
     event_count: eventCount,
     input_count: eventCount,
     target_packet_count: eventCount,
+    same_length_control_count: 0,
+    evidence_status: profile === DIE
+      ? 'CANDIDATE_EXACT_RUNTIME_ON_TURRET_DIE_PACKET'
+      : 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD',
+    known_limits: [...profile.known_limits],
   });
   const claim = dependency(CLAIM, rows.length);
   claim.input_count += 1;
+  claim.same_length_control_count = 1;
   const plate = dependency(PLATE, rows.length);
   plate.input_count += 1;
+  plate.same_length_control_count = 1;
   const die = dependency(DIE, rows.length);
   const association = {
     status: 'CANDIDATE', profile_id: PROFILE.id,
