@@ -31,6 +31,7 @@
 | `16.19.821.7343 --events hero_missions_cannon_minions_killed_snapshot` | 同一关键帧字节 450 经精确 821 变换得到 `Missions_CannonMinionsKilled` 累计候选值；11 份回放共 3,270 个快照 | 仅写入 `hero_missions_cannon_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；不标为普通补刀或逐次炮车击杀；保留结算差值，字段语义仍为候选 |
 | `16.19.821.7343 --events hero_minions_killed_snapshot` | 精确 821 原生 `0x0089` 向量偏移 `0x3c` 的 `f32LE` 候选累计标准补刀数；11 份回放共 3,270 个快照，末帧 73/110 人与 `MINIONS_KILLED` 结算相等 | 仅写入 `hero_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；与偏移 `0x378` 的 `Missions_MinionsKilled` 区分，保留尾部差值，不推导逐次补刀或目标 |
 | `16.19.821.7343 --events increment_minion_kills_packet --runtime-image PATH` | 精确 821 镜像原生完整消费游戏流 `0x03a7` IncrementMinionKills 三字节包，解出回调对象查找键，并与回放原始参数逐包核对；现有 11 份回放共 279 包 | 仅写入 `increment_minion_kills_packet_candidates`，状态为 `CANDIDATE`；对象查找和条件写入是否实际发生仍是 `UNKNOWN`，不输出逐次补刀、补刀增量或参与者身份 |
+| `16.19.821.7343 --events increment_minion_kills_packet,hero_minions_killed_snapshot --runtime-image PATH` 的关联输出 | 用同一候选原始键将 `0x03a7` 包与相邻 `0x0089` 标准补刀计数快照配对；11 份回放有 278 个严格区间包、1 个关键帧时刻包单列 | 另写入 `increment_minion_keyframe_bracket_candidates`；保留包与两端快照引用和端点差值，不把端点差值归因于单个包，不确认实际补刀或参与者身份 |
 | `16.19.821.7343 --events hero_jungle_minions_killed_snapshot` | 精确 821 原生 `0x0089` 向量偏移 `0x40/0x44/0x48` 的三项野怪计数候选浮点快照；11 份回放共 3,270 条 | 仅写入 `hero_jungle_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；保留原始小数、取整值及三项结算尾差，不推断逐次击杀、野怪类型或位置 |
 | `16.19.821.7343 --events hero_experience_snapshot` | `0x0089` 关键帧反向字节向量的 `0x28` 浮点候选经验值；11 份回放共 3,270 个快照 | 仅写入 `hero_experience_snapshot_candidates`；保留与 `EXP` 结算的尾部差值，不推导升级阈值或经验来源 |
 | `16.19.821.7343 --events hero_vision_score_snapshot` | 同一向量 `0x1b0` 浮点候选视野分；11 份回放的 110 人均从零开始并不超过各自结算值 | 仅写入 `hero_vision_score_snapshot_candidates`；不推导守卫、探测或视野行为 |
@@ -475,6 +476,22 @@ node src/cli.js query-events "work\16-19-821-increment-minion-kills" `
 ```
 
 查询会校验精确 build、镜像与回调变换身份、逐行包引用和 `UNKNOWN` 状态，然后原样输出 JSONL。该路由未建立参与者身份；`--participant` 不会将原始参数解释为参与者，`--latest-per-participant` 不适用。
+
+同时选择补刀计数包和标准 `MINIONS_KILLED` 关键帧快照时，还会生成逐包的**候选关键帧区间关联**：
+
+```powershell
+node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
+  --events increment_minion_kills_packet,hero_minions_killed_snapshot `
+  --runtime-image "D:\PrivateInputs\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-minion-brackets"
+
+node src/cli.js query-events "work\16-19-821-minion-brackets" `
+  --event increment_minion_keyframe_bracket_candidates `
+  --participant 4 --raw-param 0x400000b1 --limit 20
+```
+
+关联记录保留包与前后快照的原始引用、同一候选原始键及两端计数。它只说明包落在该候选参与者两次观察之间；端点差值不归因于这个包，也不确认补刀、条件计数写入或实际参与者身份。
+保存产物查询会校验精确 build、镜像、两路来源 JSONL、完整关键帧名单和每条关联；未夹在区间内的包保留在关联元数据中，不混入查询结果。
 
 对 HN 路由的同一完整 build，可单独选择计时候选，或用
 `--events hero_death,hero_death_timer` 一起运行。计时输出包含原始包引用、

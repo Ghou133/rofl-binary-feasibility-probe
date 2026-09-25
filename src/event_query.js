@@ -43,6 +43,10 @@ const { WARD_INVENTORY_KEYFRAME_PAIR_821_PROFILE } =
   require('./decoders/rofl_16_19_821_ward_inventory_keyframe_pair_candidate');
 const { INVENTORY_KEYFRAME_INTERVAL_DIFFERENCE_821_PROFILE } =
   require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
+const { INCREMENT_MINION_KEYFRAME_BRACKET_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_increment_minion_keyframe_bracket_candidate');
+const { PROFILES: FLOAT_STATS_821_PROFILES } =
+  require('./decoders/rofl_16_19_821_float_stats_candidate');
 const { HERO_WARD_STATS_SNAPSHOT_821_CANDIDATE_PROFILE } =
   require('./decoders/rofl_16_19_821_aux_counts_candidate');
 const { HERO_INVENTORY_BROADCAST_PACKET_CANDIDATE_PROFILE_821 } =
@@ -66,6 +70,7 @@ const { INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821,
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
+const MAX_MINION_BRACKET_SOURCE_ROWS_821 = 10_000;
 const INVENTORY_INTERVAL_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'previous_observation_time_ms', 'current_observation_time_ms',
@@ -82,6 +87,19 @@ const INCREMENT_MINION_KILLS_ROW_FIELDS_821 = new Set([
   'native_object_lookup_key_bytes_hex', 'callback_lookup_key_candidate',
   'callback_lookup_key_matches_raw_param', 'conditional_counter_write_status',
   'semantic_cs_effect_status', 'confidence', 'semantic_status', 'raw_packet_ref',
+]);
+const MINION_BRACKET_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param', 'callback_lookup_key_candidate',
+  'participant_id_candidate', 'previous_observation_time_ms',
+  'current_observation_time_ms', 'observation_interval_ms',
+  'packet_offset_from_previous_ms', 'packet_offset_to_current_ms',
+  'previous_snapshot_minions_killed_candidate',
+  'current_snapshot_minions_killed_candidate', 'observed_endpoint_delta_candidate',
+  'observation_kind', 'live_lookup_status', 'semantic_cs_effect_status',
+  'confidence', 'semantic_status', 'field_confidence', 'raw_packet_ref',
+  'increment_minion_kills_raw_packet_ref', 'previous_snapshot_raw_packet_ref',
+  'current_snapshot_raw_packet_ref', 'raw_packet_refs',
 ]);
 const SUBJECT_PARTICIPANT_FIELDS = [
   'participant_id_candidate', 'participant_id',
@@ -164,6 +182,12 @@ const OPAQUE_PAIR_FIELDS_821 = Object.freeze({
     Object.freeze(['opaque_u32_0x14', 'opaque_u8_0x18']),
 });
 const ASSOCIATION_EVENTS_821 = Object.freeze({
+  increment_minion_keyframe_bracket_candidates: Object.freeze({
+    profile: INCREMENT_MINION_KEYFRAME_BRACKET_821_PROFILE,
+    eventType: 'INCREMENT_MINION_KEYFRAME_BRACKET_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_821_PACKET_KEY_AND_ADJACENT_MINIONS_KEYFRAME_BRACKET',
+    minionBracket: true,
+  }),
   inventory_keyframe_interval_difference_candidates: Object.freeze({
     profile: INVENTORY_KEYFRAME_INTERVAL_DIFFERENCE_821_PROFILE,
     eventType: 'INVENTORY_KEYFRAME_INTERVAL_DIFFERENCE_CANDIDATE',
@@ -825,7 +849,118 @@ function prepareWardInventoryKeyframePairAssociation(semantic, analysis, eventKe
   return association;
 }
 
+function prepareMinionBracketAssociation(semantic, analysis, eventKey,
+  { profile, evidenceStatus }) {
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`);
+  }
+  const association = semantic.candidate_associations?.[profile.capability];
+  if (association?.status !== 'CANDIDATE') {
+    throw new EventQueryError('ASSOCIATION_UNAVAILABLE',
+      `${profile.capability} is not an executed candidate association.`,
+      { capability: profile.capability, association_status: association?.status ?? null,
+        error: association?.error ?? null, semantic_run_status: semantic.status });
+  }
+  const packet = semantic.capability_results?.increment_minion_kills_packet;
+  const snapshot = semantic.capability_results?.hero_minions_killed_snapshot;
+  for (const dependency of profile.depends_on) {
+    if (!Array.isArray(semantic.requested_capabilities)
+        || !semantic.requested_capabilities.includes(dependency)) {
+      throw new EventQueryError('CAPABILITY_NOT_REQUESTED',
+        `${dependency} was not requested in this Replay artifact.`,
+        { capability: dependency, association: profile.capability });
+    }
+    const result = semantic.capability_results?.[dependency];
+    if (result?.status !== 'CANDIDATE') {
+      throw new EventQueryError('CAPABILITY_UNAVAILABLE',
+        `${dependency} is unavailable for ${profile.capability}.`,
+        { capability: dependency, capability_status: result?.status ?? null,
+          association: profile.capability, missing_input: result?.missing_input ?? null,
+          error: result?.error ?? null });
+    }
+  }
+  const snapshotProfile = FLOAT_STATS_821_PROFILES.hero_minions_killed_snapshot;
+  const imageSha = profile.evidence_runtime_image_sha256;
+  if (association.profile_id !== profile.id
+      || association.evidence_runtime_image_sha256 !== imageSha
+      || association.evidence_status !== evidenceStatus
+      || association.replay_sha256 !== semantic.replay_sha256
+      || !isDeepStrictEqual(association.depends_on, [...profile.depends_on])
+      || !isDeepStrictEqual(association.known_limits, [...profile.known_limits])
+      || !isCount(association.packet_count) || association.packet_count === 0
+      || association.packet_count > MAX_MINION_BRACKET_SOURCE_ROWS_821
+      || !isCount(association.snapshot_count)
+      || association.snapshot_count > MAX_MINION_BRACKET_SOURCE_ROWS_821
+      || !isCount(association.keyframe_count) || association.keyframe_count === 0
+      || association.keyframe_count > MAX_MINION_BRACKET_SOURCE_ROWS_821
+      || association.snapshot_count !== association.keyframe_count * 10
+      || association.observed_interval_count
+        !== Math.max(0, association.keyframe_count - 1) * 10
+      || !isCount(association.event_count)
+      || association.event_count > MAX_MINION_BRACKET_SOURCE_ROWS_821
+      || association.bracketed_packet_count !== association.event_count
+      || !isCount(association.distinct_bracket_count)
+      || association.distinct_bracket_count > MAX_MINION_BRACKET_SOURCE_ROWS_821
+      || association.distinct_bracket_count > association.event_count
+      || !isCount(association.unbracketed_packet_count)
+      || association.unbracketed_packet_count > MAX_MINION_BRACKET_SOURCE_ROWS_821
+      || !Array.isArray(association.unbracketed_packets)
+      || association.unbracketed_packets.length !== association.unbracketed_packet_count
+      || association.packet_count
+        !== association.event_count + association.unbracketed_packet_count
+      || association.verified_raw_packet_count
+        !== association.packet_count + association.snapshot_count
+      || analysis.event_counts?.[eventKey] !== association.event_count
+      || (analysis.semantic?.candidate_associations?.[profile.capability] != null
+        && !isDeepStrictEqual(
+          analysis.semantic.candidate_associations[profile.capability], association))
+      || packet.profile_id !== INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821.id
+      || packet.evidence_runtime_image_sha256 !== imageSha
+      || packet.evidence_callback_transform_sha256
+        !== INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821
+          .evidence_callback_transform_sha256
+      || packet.runtime_image_sha256 !== imageSha
+      || packet.runtime_image_status !== 'MATCHED_USED'
+      || packet.runtime_image_used !== true
+      || packet.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_CALLBACK_LOOKUP_KEY'
+      || packet.input_packet_id !== 0x03a7
+      || packet.input_count !== association.packet_count
+      || packet.event_count !== association.packet_count
+      || analysis.event_counts?.increment_minion_kills_packet_candidates
+        !== association.packet_count
+      || snapshot.profile_id !== snapshotProfile.id
+      || snapshot.evidence_runtime_image_sha256 !== imageSha
+      || snapshot.evidence_status
+        !== 'CANDIDATE_821_RUNTIME_BYTE_KEYFRAME_F32_AND_REPLAY_TAIL'
+      || snapshot.lookup_table_sha256 !== LOOKUP_TABLE_SHA256
+      || snapshot.input_packet_id !== 0x0089
+      || snapshot.input_count !== association.snapshot_count
+      || snapshot.event_count !== association.snapshot_count
+      || snapshot.keyframe_count !== association.keyframe_count
+      || snapshot.observed_participant_count !== 10
+      || !isCount(snapshot.descent_count)
+      || snapshot.runtime_image_used !== false
+      || !['STATIC_821_RUNTIME_TRANSFORM_EMBEDDED', 'PROVIDED_NOT_USED']
+        .includes(snapshot.runtime_image_status)
+      || analysis.event_counts?.hero_minions_killed_snapshot_candidates
+        !== association.snapshot_count
+      || !isDeepStrictEqual(
+        analysis.semantic?.capability_results?.increment_minion_kills_packet, packet)
+      || !isDeepStrictEqual(
+        analysis.semantic?.capability_results?.hero_minions_killed_snapshot, snapshot)) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      `${profile.capability} identity, dependencies or counts differ from exact build.`,
+      { capability: profile.capability });
+  }
+  return association;
+}
+
 function prepareAssociation(semantic, analysis, eventKey, associationConfig) {
+  if (associationConfig.minionBracket) {
+    return prepareMinionBracketAssociation(semantic, analysis, eventKey,
+      associationConfig);
+  }
   if (associationConfig.inventoryInterval) {
     return prepareInventoryKeyframeIntervalDifferenceAssociation(semantic, analysis,
       eventKey, associationConfig);
@@ -1162,10 +1297,16 @@ function prepareEventQuery(directory, eventKey) {
     throw new EventQueryError('UNSAFE_ARTIFACT', `${fileName} must be a regular file.`,
       { filename: inputPath });
   }
+  const bracketSources = associationConfig?.minionBracket ? {
+    packet: prepareEventQuery(artifactDirectory,
+      'increment_minion_kills_packet_candidates'),
+    snapshot: prepareEventQuery(artifactDirectory,
+      'hero_minions_killed_snapshot_candidates'),
+  } : null;
   return {
     artifactDirectory, inputPath, eventKey, eventStorage, capability, capabilityStatus,
     capabilityResult, declaredCount, replaySha, associationConfig, exactPacketProfile,
-    exactBlobPacketConfig,
+    exactBlobPacketConfig, bracketSources,
     sourcePath: analysis.source_path,
     episodeAssistNativeStatus: associationConfig?.episode
       ? semantic.capability_results?.hero_assist?.native_child_identity_status : null,
@@ -1277,7 +1418,14 @@ function prepareBatchEventQuery(directory, eventKey) {
       path.join(replayDirectory, 'semantic_run.json'));
     checkHash(`${relative}/replay_analysis.json`,
       path.join(replayDirectory, 'replay_analysis.json'));
-    if (prepared) checkHash(`${relative}/${eventKey}.jsonl`, prepared.inputPath);
+    if (prepared) {
+      checkHash(`${relative}/${eventKey}.jsonl`, prepared.inputPath);
+      if (prepared.bracketSources) {
+        for (const source of Object.values(prepared.bracketSources)) {
+          checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
+        }
+      }
+    }
     return { relative, replayDirectory, replaySha: entry.sha256,
       replayVersion: entry.version, prepared, unavailable };
   });
@@ -1925,10 +2073,229 @@ function wardInventoryKeyframePairRow(row, prepared, lineNumber, seenKeys,
   }
 }
 
+function minionBracketRef(ref, prepared, packetId, stream, payloadLength) {
+  return !!ref && typeof ref === 'object' && !Array.isArray(ref)
+    && ref.source_path === (prepared.sourcePath ?? null)
+    && ref.replay_sha256 === prepared.replaySha
+    && Number.isSafeInteger(ref.chunk_index) && ref.chunk_index >= 0
+    && Number.isSafeInteger(ref.chunk_id) && ref.chunk_id >= 0
+    && ref.chunk_stream === stream
+    && Number.isSafeInteger(ref.chunk_file_offset) && ref.chunk_file_offset >= 0
+    && Number.isSafeInteger(ref.decompressed_block_offset)
+    && ref.decompressed_block_offset >= 0
+    && Number.isSafeInteger(ref.decompressed_payload_offset)
+    && ref.decompressed_payload_offset > ref.decompressed_block_offset
+    && ref.packet_id === packetId
+    && Number.isSafeInteger(ref.replay_time_ms) && ref.replay_time_ms >= 0
+    && ref.payload_length === payloadLength
+    && Number.isSafeInteger(ref.raw_param)
+    && ref.raw_param >= 0x400000ae && ref.raw_param <= 0x400000b7
+    && REPLAY_SHA.test(ref.raw_payload_sha256);
+}
+
+async function readMinionBracketSource(prepared) {
+  const rows = [];
+  const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
+  const lines = readline.createInterface({ input, crlfDelay: Infinity });
+  try {
+    for await (const line of lines) {
+      if (rows.length >= MAX_MINION_BRACKET_SOURCE_ROWS_821) {
+        throw new EventQueryError('EVENT_COUNT_MISMATCH',
+          `${prepared.eventKey} exceeds the exact-build source row bound.`);
+      }
+      let row;
+      try {
+        row = JSON.parse(line);
+      } catch (error) {
+        throw new EventQueryError('INVALID_EVENT_ROW',
+          `Invalid ${prepared.eventKey} JSONL at line ${rows.length + 1}: ${error.message}.`);
+      }
+      if (!row || typeof row !== 'object' || Array.isArray(row)) {
+        throw new EventQueryError('INVALID_EVENT_ROW',
+          `Invalid ${prepared.eventKey} JSONL object at line ${rows.length + 1}.`);
+      }
+      rows.push(row);
+    }
+  } finally {
+    lines.close();
+    input.destroy();
+  }
+  if (rows.length !== prepared.declaredCount) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      `${prepared.eventKey} source JSONL row count differs from metadata.`);
+  }
+  return rows;
+}
+
+async function loadMinionBracketExpectedRows(prepared) {
+  const association = prepared.capabilityResult;
+  const packetPrepared = prepared.bracketSources.packet;
+  const snapshotPrepared = prepared.bracketSources.snapshot;
+  const [packets, snapshots] = await Promise.all([
+    readMinionBracketSource(packetPrepared),
+    readMinionBracketSource(snapshotPrepared),
+  ]);
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid increment_minion_keyframe_bracket source: ${reason}.`);
+  };
+  const positions = new Set();
+  const frames = new Map();
+  const packetPositions = new Set();
+  if (packets.length !== association.packet_count
+      || snapshots.length !== association.snapshot_count) {
+    invalid('source row counts differ from association metadata');
+  }
+  for (const [index, row] of snapshots.entries()) {
+    const ref = row.raw_packet_ref;
+    const participant = row.hero_raw_param - 0x400000ae + 1;
+    if (row.event_type !== 'HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE'
+        || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+        || row.build_profile !== FLOAT_STATS_821_PROFILES.hero_minions_killed_snapshot.id
+        || row.replay_sha256 !== prepared.replaySha
+        || row.confidence !== 'CANDIDATE'
+        || row.semantic_status
+          !== 'CANDIDATE_821_RUNTIME_BYTE_KEYFRAME_F32_AND_REPLAY_TAIL'
+        || row.observation_kind !== 'KEYFRAME_SNAPSHOT'
+        || !minionBracketRef(ref, prepared, 0x0089, 'keyframe', 1263)
+        || row.hero_raw_param !== ref.raw_param
+        || row.participant_id_candidate !== participant
+        || row.replay_time_ms !== ref.replay_time_ms
+        || !Number.isSafeInteger(row.minions_killed_raw_f32_candidate)
+        || row.minions_killed_raw_f32_candidate < 0
+        || row.minions_killed_floor_candidate
+          !== row.minions_killed_raw_f32_candidate
+        || !/^[0-9a-f]{8}$/.test(row.raw_payload_field_bytes_hex)) {
+      invalid(`snapshot ${index + 1} has different identity, participant, or value`);
+    }
+    const encoded = Buffer.from(row.raw_payload_field_bytes_hex, 'hex').reverse();
+    const decoded = Buffer.from(encoded.map(decodeRuntimeCountByte));
+    if (decoded.readFloatLE(0) !== row.minions_killed_raw_f32_candidate) {
+      invalid(`snapshot ${index + 1} does not decode to its candidate count`);
+    }
+    const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+    if (positions.has(position)) invalid(`duplicate source packet reference ${position}`);
+    positions.add(position);
+    const frame = frames.get(ref.chunk_index) ?? {
+      chunk_index: ref.chunk_index, time_ms: ref.replay_time_ms,
+      participants: new Map(),
+    };
+    if (frame.time_ms !== ref.replay_time_ms
+        || frame.participants.has(participant)) {
+      invalid(`snapshot ${index + 1} has ambiguous keyframe roster`);
+    }
+    frame.participants.set(participant, row);
+    frames.set(ref.chunk_index, frame);
+  }
+  if (frames.size !== association.keyframe_count
+      || [...frames.values()].some((frame) => frame.participants.size !== 10)) {
+    invalid('keyframe roster is incomplete');
+  }
+  const orderedFrames = [...frames.values()].sort((a, b) => a.chunk_index - b.chunk_index);
+  if (orderedFrames.some((frame, index) => index > 0
+      && frame.time_ms <= orderedFrames[index - 1].time_ms)) {
+    invalid('keyframe times are not strictly increasing');
+  }
+  const expected = [];
+  const unbracketed = [];
+  const distinctBrackets = new Set();
+  for (const [index, row] of packets.entries()) {
+    incrementMinionKillsPacketRow(row, packetPrepared, index + 1, packetPositions);
+    if (row.replay_sha256 !== prepared.replaySha) {
+      invalid(`packet ${index + 1} has a foreign Replay identity`);
+    }
+    const ref = row.raw_packet_ref;
+    if (!minionBracketRef(ref, prepared, 0x03a7, 'game_chunk', 3)) {
+      invalid(`packet ${index + 1} has an invalid raw reference`);
+    }
+    const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+    if (positions.has(position)) invalid(`duplicate source packet reference ${position}`);
+    positions.add(position);
+    const time = row.replay_time_ms;
+    const currentIndex = orderedFrames.findIndex((frame) => frame.time_ms >= time);
+    const reason = currentIndex === -1 ? 'AFTER_LAST_SNAPSHOT'
+      : orderedFrames[currentIndex].time_ms === time ? 'ON_KEYFRAME_BOUNDARY'
+        : currentIndex === 0 ? 'BEFORE_FIRST_SNAPSHOT' : null;
+    if (reason) {
+      unbracketed.push({ replay_time_ms: time, raw_param: row.raw_param,
+        reason, raw_packet_ref: ref });
+      continue;
+    }
+    const previous = orderedFrames[currentIndex - 1];
+    const current = orderedFrames[currentIndex];
+    if (!(previous.time_ms < time && time < current.time_ms)) {
+      invalid(`packet ${index + 1} has an invalid strict bracket`);
+    }
+    const participant = row.raw_param - 0x400000ae + 1;
+    const beforeRow = previous.participants.get(participant);
+    const afterRow = current.participants.get(participant);
+    const before = beforeRow.minions_killed_raw_f32_candidate;
+    const after = afterRow.minions_killed_raw_f32_candidate;
+    const previousRef = beforeRow.raw_packet_ref;
+    const currentRef = afterRow.raw_packet_ref;
+    distinctBrackets.add(`${previous.chunk_index}/${current.chunk_index}/${participant}`);
+    expected.push({
+      event_type: 'INCREMENT_MINION_KEYFRAME_BRACKET_CANDIDATE',
+      game_version: prepared.replayVersion, patch: '16.19',
+      build_profile: INCREMENT_MINION_KEYFRAME_BRACKET_821_PROFILE.id,
+      replay_sha256: prepared.replaySha,
+      replay_time_ms: time, raw_param: row.raw_param,
+      callback_lookup_key_candidate: row.callback_lookup_key_candidate,
+      participant_id_candidate: participant,
+      previous_observation_time_ms: previous.time_ms,
+      current_observation_time_ms: current.time_ms,
+      observation_interval_ms: current.time_ms - previous.time_ms,
+      packet_offset_from_previous_ms: time - previous.time_ms,
+      packet_offset_to_current_ms: current.time_ms - time,
+      previous_snapshot_minions_killed_candidate: before,
+      current_snapshot_minions_killed_candidate: after,
+      observed_endpoint_delta_candidate: after - before,
+      observation_kind: 'SAME_KEY_STRICT_ADJACENT_KEYFRAME_BRACKET',
+      live_lookup_status: 'UNKNOWN', semantic_cs_effect_status: 'UNKNOWN',
+      confidence: 'CANDIDATE', semantic_status: association.evidence_status,
+      field_confidence: {
+        replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
+        callback_lookup_key_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_TRANSFORM',
+        participant_id_candidate: 'CANDIDATE_KR_821_RAW_PARAM_TAIL_ALIGNMENT',
+        previous_snapshot_minions_killed_candidate:
+          'CANDIDATE_821_RUNTIME_BYTE_KEYFRAME_F32_AND_REPLAY_TAIL',
+        current_snapshot_minions_killed_candidate:
+          'CANDIDATE_821_RUNTIME_BYTE_KEYFRAME_F32_AND_REPLAY_TAIL',
+        observed_endpoint_delta_candidate: 'DERIVED_FROM_CANDIDATE_ENDPOINTS',
+      },
+      raw_packet_ref: ref,
+      increment_minion_kills_raw_packet_ref: ref,
+      previous_snapshot_raw_packet_ref: previousRef,
+      current_snapshot_raw_packet_ref: currentRef,
+      raw_packet_refs: [ref, previousRef, currentRef],
+    });
+  }
+  if (!isDeepStrictEqual(unbracketed, association.unbracketed_packets)
+      || expected.length !== association.event_count
+      || distinctBrackets.size !== association.distinct_bracket_count
+      || positions.size !== association.verified_raw_packet_count) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      'IncrementMinionKills source rows disagree with bracket or exclusion counts.');
+  }
+  return expected;
+}
+
 function associationRow(row, prepared, lineNumber, seenKeys, seenPacketPositions,
-  episodePhysicalRefs, wardPairFrames, inventoryIntervalState) {
+  episodePhysicalRefs, wardPairFrames, inventoryIntervalState,
+  minionBracketExpected) {
   const { associationConfig, capabilityResult, replaySha, replayVersion } = prepared;
   if (!associationConfig) return;
+  if (associationConfig.minionBracket) {
+    const fields = Object.keys(row);
+    if (fields.length !== MINION_BRACKET_ROW_FIELDS_821.size
+        || fields.some((field) => !MINION_BRACKET_ROW_FIELDS_821.has(field))
+        || !isDeepStrictEqual(row, minionBracketExpected[lineNumber - 1])) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        `Invalid increment_minion_keyframe_bracket row at JSONL line ${lineNumber}.`,
+        { line_number: lineNumber });
+    }
+    return;
+  }
   if (associationConfig.inventoryInterval) {
     inventoryKeyframeIntervalDifferenceRow(row, prepared, lineNumber,
       inventoryIntervalState);
@@ -2536,6 +2903,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   const wardPairFrames = new Map();
   const inventoryIntervalState = { pairs: new Map(), frameTimes: new Map(),
     endpoints: new Map(), changedSlotCount: 0 };
+  const minionBracketExpected = prepared.associationConfig?.minionBracket
+    ? await loadMinionBracketExpectedRows(prepared) : null;
   const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
   try {
@@ -2591,7 +2960,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       }
       associationRow(row, prepared, lineNumber, associationKeys,
         associationPacketPositions, episodePhysicalRefs, wardPairFrames,
-        inventoryIntervalState);
+        inventoryIntervalState, minionBracketExpected);
       if (prepared.eventKey === 'hero_death_episode_candidates') {
         if (row.return_observation_status === 'OBSERVED_RETURN') observedReturnCount += 1;
         else terminalUnobservedCount += 1;

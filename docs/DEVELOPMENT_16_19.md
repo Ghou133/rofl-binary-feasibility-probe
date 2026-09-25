@@ -4,6 +4,28 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed candidate bracket query:** Saved
+  `increment_minion_keyframe_bracket_candidates` supports candidate
+  participant, raw-parameter and time filters after exact-build/image,
+  dependency, full keyframe roster, source JSONL and row checks. All 11 saved
+  Replays were `COMPLETE`, scanning 278 strict bracket rows. Participant 4 / raw
+  parameter `0x400000b1` matched 119 original JSONL lines; the output SHA-256
+  matched an independent source-line filter:
+  `da52d239f95c7d304b329c9bb6f25481eca9733b063219bfd72676726fcbeb2e`.
+  The one boundary packet remains in unbracketed metadata.
+- **Completed candidate packet/keyframe bracket output:** Selecting both
+  exact-821 `increment_minion_kills_packet` and
+  `hero_minions_killed_snapshot` now emits
+  `increment_minion_keyframe_bracket_candidates`. A fresh 11-Replay CLI batch
+  returned 11/11 `CANDIDATE`, zero framing errors, 279 route packets, 3,270
+  standard minions keyframe snapshots over 327 complete frames, 278 strict
+  same-key packet brackets in 148 distinct participant intervals, and one
+  `ON_KEYFRAME_BOUNDARY` packet at 360,065 ms in `KR_8393456728` retained
+  separately. All 3,549 source packet references were physically checked.
+  The 278 strict rows have positive sampled endpoint differences, but the
+  difference is not assigned to any individual packet; the conditional live
+  object lookup/write and effective CS remain `UNKNOWN`. Ignored output is
+  under `artifacts/16_19_development/increment_minion_keyframe_bracket_batch_11_821/`.
 - **Completed candidate query:** Saved exact-821
   `inventory_keyframe_interval_difference_candidates` can be filtered by
   candidate participant, current endpoint time, raw parameter, differing
