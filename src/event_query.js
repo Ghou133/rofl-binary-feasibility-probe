@@ -3,6 +3,21 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const readline = require('node:readline');
+const { isDeepStrictEqual } = require('node:util');
+const { CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_champion_die_hero_death_pair_candidate');
+const { CHAMPION_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_champion_kill_die_hero_death_pair_candidate');
+const { CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_champion_multiple_kill_die_hero_death_pair_candidate');
+const { CHAMPION_DIE_EVENT_PACKET_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_champion_die_event_packet_candidate');
+const { CHAMPION_KILL_EVENT_PACKET_CANDIDATE_PROFILE_821 } =
+  require('./decoders/rofl_16_19_821_champion_kill_event_packet_candidate');
+const { CHAMPION_MULTIPLE_KILL_EVENT_PACKET_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_champion_multiple_kill_event_packet_candidate');
+const { HERO_DEATH_CANDIDATE_PROFILE_821 } =
+  require('./decoders/rofl_16_19_821_7343');
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
@@ -27,6 +42,58 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
   champion_multiple_kill_event_packet_candidates: Object.freeze([
     'event_u32_0x04', 'event_u32_0x08', 'event_u32_0x0c',
   ]),
+  champion_die_hero_death_pair_candidates: Object.freeze([
+    'on_champion_die_event_u32_0x04',
+  ]),
+  champion_kill_die_hero_death_pair_candidates: Object.freeze([
+    'on_champion_kill_event_u32_0x04', 'on_champion_die_event_u32_0x04',
+  ]),
+  champion_multiple_kill_die_hero_death_pair_candidates: Object.freeze([
+    'on_champion_multiple_kill_event_u32_0x04', 'on_champion_die_event_u32_0x04',
+  ]),
+});
+const ASSOCIATION_EVENTS_821 = Object.freeze({
+  champion_die_hero_death_pair_candidates: Object.freeze({
+    profile: CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE,
+    eventType: 'CHAMPION_DIE_HERO_DEATH_PACKET_PAIR_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_821_ON_CHAMPION_DIE_HERO_DIE_PACKET_PAIR',
+    dependencyProfiles: Object.freeze({
+      champion_die_event_packet: CHAMPION_DIE_EVENT_PACKET_821_PROFILE,
+      hero_death: HERO_DEATH_CANDIDATE_PROFILE_821,
+    }),
+  }),
+  champion_kill_die_hero_death_pair_candidates: Object.freeze({
+    profile: CHAMPION_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE,
+    eventType: 'CHAMPION_KILL_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_821_ON_CHAMPION_KILL_DIE_HERO_DIE_PACKET_GROUP',
+    groupDependency: 'champion_kill_event_packet',
+    groupCountField: 'on_champion_kill_count',
+    groupRawParamField: 'on_champion_kill_raw_param',
+    groupChildField: 'on_champion_kill_event_u32_0x04',
+    groupRefField: 'on_champion_kill_raw_packet_ref',
+    unmatchedField: 'unmatched_on_champion_kill_count',
+    dependencyProfiles: Object.freeze({
+      champion_kill_event_packet: CHAMPION_KILL_EVENT_PACKET_CANDIDATE_PROFILE_821,
+      champion_die_event_packet: CHAMPION_DIE_EVENT_PACKET_821_PROFILE,
+      hero_death: HERO_DEATH_CANDIDATE_PROFILE_821,
+    }),
+  }),
+  champion_multiple_kill_die_hero_death_pair_candidates: Object.freeze({
+    profile: CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE,
+    eventType: 'CHAMPION_MULTIPLE_KILL_DIE_HERO_DEATH_PACKET_GROUP_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_821_ON_CHAMPION_MULTIPLE_KILL_DIE_HERO_DIE_PACKET_GROUP',
+    groupDependency: 'champion_multiple_kill_event_packet',
+    groupCountField: 'on_champion_multiple_kill_count',
+    groupRawParamField: 'on_champion_multiple_kill_raw_param',
+    groupChildField: 'on_champion_multiple_kill_event_u32_0x04',
+    groupRefField: 'on_champion_multiple_kill_raw_packet_ref',
+    unmatchedField: 'unmatched_on_champion_multiple_kill_count',
+    dependencyProfiles: Object.freeze({
+      champion_multiple_kill_event_packet: CHAMPION_MULTIPLE_KILL_EVENT_PACKET_821_PROFILE,
+      champion_die_event_packet: CHAMPION_DIE_EVENT_PACKET_821_PROFILE,
+      hero_death: HERO_DEATH_CANDIDATE_PROFILE_821,
+    }),
+  }),
 });
 
 class EventQueryError extends Error {
@@ -66,6 +133,100 @@ function readArtifactJson(directory, basename) {
   }
 }
 
+function isCount(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function prepareAssociation(semantic, analysis, eventKey, associationConfig) {
+  const { profile, evidenceStatus, dependencyProfiles } = associationConfig;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`,
+      { replay_version: semantic.replay_version, required_replay_version: profile.replay_version });
+  }
+  const association = semantic.candidate_associations?.[profile.capability];
+  if (association?.status !== 'CANDIDATE') {
+    throw new EventQueryError('ASSOCIATION_UNAVAILABLE',
+      `${profile.capability} is not an executed candidate association.`,
+      { capability: profile.capability, association_status: association?.status ?? null,
+        error: association?.error ?? null, semantic_run_status: semantic.status });
+  }
+  if (association.profile_id !== profile.id
+      || association.evidence_runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || association.evidence_status !== evidenceStatus
+      || association.replay_sha256 !== semantic.replay_sha256
+      || !isDeepStrictEqual(association.depends_on, [...profile.depends_on])
+      || !isCount(association.event_count) || association.event_count === 0
+      || association.pair_count !== association.event_count
+      || (analysis.semantic?.candidate_associations?.[profile.capability] != null
+        && !isDeepStrictEqual(analysis.semantic.candidate_associations[profile.capability],
+          association))) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      `${profile.capability} identity or candidate counts differ from its exact-build profile.`,
+      { capability: profile.capability });
+  }
+  for (const dependency of profile.depends_on) {
+    if (!Array.isArray(semantic.requested_capabilities)
+        || !semantic.requested_capabilities.includes(dependency)) {
+      throw new EventQueryError('CAPABILITY_NOT_REQUESTED',
+        `${dependency} was not requested in this Replay artifact.`,
+        { capability: dependency, association: profile.capability });
+    }
+    const result = semantic.capability_results?.[dependency];
+    if (result?.status !== 'CANDIDATE') {
+      throw new EventQueryError('CAPABILITY_UNAVAILABLE',
+        `${dependency} is unavailable for ${profile.capability}.`,
+        { capability: dependency, capability_status: result?.status ?? null,
+          association: profile.capability, missing_input: result?.missing_input ?? null,
+          error: result?.error ?? null });
+    }
+    const associationCount = dependency === 'hero_death'
+      ? association.hero_death_count
+      : dependency === 'champion_die_event_packet'
+        ? association.on_champion_die_count
+        : association[associationConfig.groupCountField];
+    if (result.profile_id !== dependencyProfiles[dependency].id
+        || result.evidence_runtime_image_sha256
+          !== profile.evidence_runtime_image_sha256
+        || (dependency !== 'hero_death'
+          && (result.runtime_image_status !== 'MATCHED_USED'
+            || result.runtime_image_used !== true
+            || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256))
+        || !isCount(result.event_count)
+        || result.event_count !== associationCount
+        || analysis.event_counts?.[`${dependency}_candidates`] !== result.event_count) {
+      throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+        `${dependency} identity or count disagrees with ${profile.capability}.`,
+        { capability: dependency, association: profile.capability });
+    }
+  }
+  if (association.on_champion_die_count !== association.hero_death_count
+      || (profile.capability === 'champion_die_hero_death_pair'
+        && association.event_count !== association.on_champion_die_count)
+      || (associationConfig.groupDependency
+        && (association.event_count !== association[associationConfig.groupCountField]
+          || association[associationConfig.unmatchedField] !== 0
+          || association.unpaired_on_champion_die_count
+            !== association.on_champion_die_count - association.event_count
+          || association.unpaired_hero_death_count
+            !== association.hero_death_count - association.event_count
+          || semantic.candidate_associations?.champion_die_hero_death_pair?.status
+            !== 'CANDIDATE'
+          || semantic.candidate_associations?.champion_die_hero_death_pair?.profile_id
+            !== CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE.id
+          || semantic.candidate_associations?.champion_die_hero_death_pair?.replay_sha256
+            !== semantic.replay_sha256
+          || semantic.candidate_associations?.champion_die_hero_death_pair?.event_count
+            !== association.on_champion_die_count
+          || analysis.event_counts?.champion_die_hero_death_pair_candidates
+            !== association.on_champion_die_count))) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      `${profile.capability} dependency counts disagree with its pair count.`,
+      { capability: profile.capability });
+  }
+  return association;
+}
+
 function prepareEventQuery(directory, eventKey) {
   if (typeof eventKey !== 'string' || !EVENT_KEY.test(eventKey)) {
     throw new EventQueryError('INVALID_EVENT_KEY',
@@ -89,8 +250,11 @@ function prepareEventQuery(directory, eventKey) {
         analysis_replay_sha256: analysis.replay_sha256,
         container_status: semantic.container_status });
   }
+  const associationConfig = ASSOCIATION_EVENTS_821[eventKey] ?? null;
   const capability = eventKey.slice(0, -'_candidates'.length);
-  const capabilityResult = semantic.capability_results?.[capability];
+  const capabilityResult = associationConfig
+    ? prepareAssociation(semantic, analysis, eventKey, associationConfig)
+    : semantic.capability_results?.[capability];
   const capabilityStatus = capabilityResult?.status ?? null;
   if (capabilityStatus && !['CANDIDATE', 'PASS'].includes(capabilityStatus)) {
     throw new EventQueryError('CAPABILITY_UNAVAILABLE',
@@ -100,8 +264,9 @@ function prepareEventQuery(directory, eventKey) {
         error: capabilityResult?.error ?? null,
         semantic_run_status: semantic.status });
   }
-  if (!capabilityResult || !Array.isArray(semantic.requested_capabilities)
-      || !semantic.requested_capabilities.includes(capability)) {
+  if (!capabilityResult || (!associationConfig
+      && (!Array.isArray(semantic.requested_capabilities)
+        || !semantic.requested_capabilities.includes(capability)))) {
     throw new EventQueryError('CAPABILITY_NOT_REQUESTED',
       `${capability} was not requested in this Replay artifact.`, { capability });
   }
@@ -168,7 +333,7 @@ function prepareEventQuery(directory, eventKey) {
   }
   return {
     artifactDirectory, inputPath, eventKey, eventStorage, capability, capabilityStatus,
-    capabilityResult, declaredCount, replaySha,
+    capabilityResult, declaredCount, replaySha, associationConfig,
     replayVersion: semantic.replay_version, semanticRunStatus: semantic.status,
     semanticApiStatus: semantic.api_status ?? null,
   };
@@ -293,6 +458,87 @@ function opaqueU32Values(row, lineNumber, fields) {
   return { values, unavailable, available: values.length > 0 };
 }
 
+function associationRow(row, prepared, lineNumber, seenKeys, seenPacketPositions) {
+  const { associationConfig, capabilityResult, replaySha, replayVersion } = prepared;
+  if (!associationConfig) return;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid ${associationConfig.profile.capability} row at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  if (row.event_type !== associationConfig.eventType
+      || row.game_version !== replayVersion || row.patch !== '16.19'
+      || row.build_profile !== associationConfig.profile.id
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== capabilityResult.evidence_status) {
+    invalid('candidate profile identity differs');
+  }
+  const grouped = Boolean(associationConfig.groupDependency);
+  const dieRef = row.on_champion_die_raw_packet_ref;
+  const groupRef = grouped ? row[associationConfig.groupRefField] : null;
+  const heroRefs = row.hero_death_raw_packet_refs;
+  const allRefs = row.raw_packet_refs;
+  if (!dieRef || !Array.isArray(heroRefs) || ![3, 4].includes(heroRefs.length)
+      || !Array.isArray(allRefs) || allRefs.length !== heroRefs.length + (grouped ? 2 : 1)
+      || !isDeepStrictEqual(row.raw_packet_ref, grouped ? groupRef : dieRef)) {
+    invalid('named raw packet references are missing or inconsistent');
+  }
+  const namedRefs = [dieRef, ...(grouped ? [groupRef] : []), ...heroRefs];
+  const expectedRefs = grouped
+    ? [...namedRefs].sort((a, b) => a.decompressed_block_offset - b.decompressed_block_offset)
+    : namedRefs;
+  if (!isDeepStrictEqual(allRefs, expectedRefs)) {
+    invalid('raw packet references differ from named references');
+  }
+  const chunkIndex = dieRef.chunk_index;
+  const packetPositions = new Set();
+  for (const ref of namedRefs) {
+    if (!ref || ref.replay_sha256 !== replaySha
+        || ref.replay_time_ms !== row.replay_time_ms
+        || ref.chunk_stream !== 'game_chunk'
+        || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+        || ref.chunk_index !== chunkIndex
+        || !Number.isSafeInteger(ref.decompressed_block_offset)
+        || ref.decompressed_block_offset < 0
+        || !Number.isSafeInteger(ref.raw_param) || ref.raw_param < 0
+        || ref.raw_param > 0xffffffff
+        || !REPLAY_SHA.test(ref.raw_payload_sha256)) {
+      invalid('raw packet reference identity is incomplete or foreign');
+    }
+    const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+    if (packetPositions.has(position) || seenPacketPositions.has(position)) {
+      invalid('duplicate raw packet position');
+    }
+    packetPositions.add(position);
+    seenPacketPositions.add(position);
+  }
+  const key = `${chunkIndex}/${row.replay_time_ms}`;
+  if (seenKeys.has(key)) invalid('duplicate same-chunk, same-ms candidate');
+  seenKeys.add(key);
+  if (!Number.isSafeInteger(row.on_champion_die_raw_param)
+      || row.on_champion_die_raw_param !== dieRef.raw_param
+      || !Number.isSafeInteger(row.hero_death_victim_raw_param)
+      || row.hero_death_victim_raw_param !== heroRefs[0].raw_param
+      || row.hero_death_victim_raw_param !== heroRefs[1].raw_param
+      || !Number.isSafeInteger(row.hero_death_die_source_network_id_candidate)
+      || row.hero_death_die_source_network_id_candidate < 0
+      || row.hero_death_die_source_network_id_candidate > 0xffffffff
+      || !Number.isSafeInteger(row.on_champion_die_event_u32_0x04)
+      || row.on_champion_die_event_u32_0x04 < 0
+      || row.on_champion_die_event_u32_0x04 > 0xffffffff) {
+    invalid('named packet parameters disagree with their references');
+  }
+  if (grouped) {
+    const groupParam = row[associationConfig.groupRawParamField];
+    const groupChild = row[associationConfig.groupChildField];
+    if (!Number.isSafeInteger(groupParam) || groupParam !== groupRef.raw_param
+        || !Number.isSafeInteger(groupChild) || groupChild < 0
+        || groupChild > 0xffffffff) {
+      invalid('group child parameter disagrees with packet references');
+    }
+  }
+}
+
 function stealthChildEventId(row, lineNumber) {
   const value = row.child_event_id;
   if (value == null) return { value: null, available: false };
@@ -347,7 +593,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   if (opaqueU32 != null && (!opaqueU32Fields
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
-      '--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, OnChampionKill, or OnChampionMultipleKill packet candidate event.');
+      '--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, OnChampionKill, OnChampionMultipleKill, or supported packet association candidate event.');
   }
   if (childEventId != null && (prepared.eventKey !== 'stealth_event_packet_candidates'
       || prepared.replayVersion !== '16.19.821.7343')) {
@@ -365,6 +611,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   let opaqueU32AvailableCount = 0;
   let childEventIdUnavailableCount = 0;
   let childEventIdAvailableCount = 0;
+  const associationKeys = new Set();
+  const associationPacketPositions = new Set();
   const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
   try {
@@ -393,6 +641,8 @@ async function streamEventQuery(prepared, options, emitLine) {
           `Event JSONL line ${lineNumber} has a different Replay SHA-256.`,
           { line_number: lineNumber });
       }
+      associationRow(row, prepared, lineNumber, associationKeys,
+        associationPacketPositions);
       const params = rawParam == null ? null : rawPacketParams(row, lineNumber);
       const items = itemId == null ? null
         : prepared.eventKey === 'hero_inventory_set_item_packet_candidates'

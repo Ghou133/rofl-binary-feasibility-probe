@@ -91,6 +91,8 @@ const { associateChampionDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_die_hero_death_pair_candidate');
 const { associateChampionKillDieHeroDeathCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_kill_die_hero_death_pair_candidate');
+const { associateChampionMultipleKillDieHeroDeathCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_multiple_kill_die_hero_death_pair_candidate');
 const {
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   decodeHeroStatsSnapshotCandidateSet,
@@ -2426,6 +2428,28 @@ function decode1619821(replay, profile, options = {}) {
       }
     } catch (error) {
       candidateAssociations.champion_kill_die_hero_death_pair = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_death')
+      && capabilities.includes('champion_die_event_packet')
+      && capabilities.includes('champion_multiple_kill_event_packet')) {
+    try {
+      const association = associateChampionMultipleKillDieHeroDeathCandidates821(replay, {
+        championMultipleKillEventPacketOutcome: outcomes.champion_multiple_kill_event_packet,
+        championDieEventPacketOutcome: outcomes.champion_die_event_packet,
+        heroDeathOutcome: outcomes.hero_death,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: groupEvents, ...summary } = association;
+        candidateAssociations.champion_multiple_kill_die_hero_death_pair = summary;
+        events.champion_multiple_kill_die_hero_death_pair_candidates = groupEvents;
+      } else {
+        candidateAssociations.champion_multiple_kill_die_hero_death_pair = association;
+      }
+    } catch (error) {
+      candidateAssociations.champion_multiple_kill_die_hero_death_pair = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }

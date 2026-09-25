@@ -4,6 +4,36 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** `query-events` now reads the three exact-821 derived packet
+  group JSONLs using their `candidate_associations` summaries and selected
+  upstream capability results. It checks profile/build, Replay identity,
+  dependency statuses and counts, row/ref integrity, and refuses missing or
+  inconsistent associations. Time, any recorded raw parameter, and directly
+  decoded child `+0x04` u32 filters return unmodified candidate rows. Real
+  queries succeeded for all three groups in both an ordinary KR Replay and
+  a Replay containing an optional death-route omission. These checks do
+  not promote the underlying candidate fields to confirmed semantics.
+- **Completed:** KR 821 `hero_death,champion_die_event_packet,
+  champion_multiple_kill_event_packet` now emits a third selected CLI/API
+  candidate packet group. All 653 OnChampionMultipleKill children in 11 KR
+  Replays uniquely share Replay SHA/chunk/ms with an OnChampionDie/Hero_Die
+  pair; two Die/Hero pairs have no MultipleKill child. Multi outer
+  `raw_param` equals Die child `+0x04` and the Hero_Die source candidate in
+  653/653; Multi child `+0x04` equals the Hero_Die victim raw parameter
+  after clearing bit `0x100` in 653/653 (620 exact). Packet order is
+  Die child, Multi child, Hero_Die primary. Shifted-time controls matched
+  none; rotated intact fields reached at most seven dual matches versus
+  41–93 true rows per Replay. The final four-capability CLI batch wrote
+  655 Die/Hero pairs, 581 Kill groups, and 653 Multi groups with zero
+  framing or association failures. Without the image, each derived group
+  reports `MISSING_INPUT` and writes no group JSONL. Static exact-image
+  tracing confirms Multi child `+0x04` is an object lookup key and `+0x0c`
+  bounds the `+0x10` u32 lookup-key list; `+0x08` is passed unchanged to a
+  virtual call. No callback lookup result, actual multikill, numeric streak,
+  actor, or victim is confirmed. Ignored evidence is under
+  `artifacts/16_19_development/multiplekill_death_link_821/`,
+  `artifacts/16_19_development/multiplekill_native_fields_821/`, and
+  `artifacts/16_19_development/onchampion_three_groups_cli_batch_821/`.
 - **Completed:** The selected KR 821 `hero_death,champion_die_event_packet,
   champion_kill_event_packet` route now exposes a second candidate packet
   association. All 581 OnChampionKill children in 11 Replays have a unique

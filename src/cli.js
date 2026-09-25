@@ -139,6 +139,9 @@ Runtime: Node >=22.15.0 with native Zstd.
 Legacy semantic CLI scope: exact 16.15.801.3452. The separate 16.16 public API
 is not dispatched by this CLI; see docs/PUBLIC_DEVELOPMENT.md.
 16.19 decode and batch use the exact-build semantic API when --events is selected.
+For 821, hero_death with champion_die_event_packet emits a candidate packet pair;
+adding champion_kill_event_packet or champion_multiple_kill_event_packet emits
+the corresponding candidate three-route packet group.
 Inspect reads the container and packet framing without a runtime image.
 Capabilities reads the container/build registry without packet framing or semantic decode.
 
@@ -164,7 +167,7 @@ Options:
   --participant <1..10>        Candidate subject participant; unknown rows do not match
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
   --item-id <uint32|0xhex>     Exact decoded 821 inventory packet record item ID
-  --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet u32 field
+  --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
   --child-event-id <uint32|0xhex>  Exact 821 stealth child ID (0x0101 or 0x0102)
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
   --output <path|->            Write unmodified JSONL rows (default: stdout)
@@ -364,8 +367,11 @@ function parseArgs(argv) {
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
       'champion_multiple_kill_event_packet_candidates',
+      'champion_die_hero_death_pair_candidates',
+      'champion_kill_die_hero_death_pair_candidates',
+      'champion_multiple_kill_die_hero_death_pair_candidates',
     ].includes(options.event)) {
-      throw new Error('--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, OnChampionKill, or OnChampionMultipleKill packet event');
+      throw new Error('--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, OnChampionKill, OnChampionMultipleKill, or candidate packet-group event');
     }
     if (options.childEventId !== null) {
       if (options.event !== 'stealth_event_packet_candidates') {
