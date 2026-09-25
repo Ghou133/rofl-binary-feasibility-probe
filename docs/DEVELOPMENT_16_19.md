@@ -4,6 +4,20 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed candidate interval output:** Selecting exact-821
+  `hero_inventory_broadcast_packet` now also emits
+  `inventory_keyframe_interval_difference_candidates` for slots whose values
+  differ at two adjacent complete keyframe endpoints for the same candidate
+  participant. A fresh selected 11-Replay CLI batch returned 11/11
+  `CANDIDATE`, zero framing errors, 327 complete keyframes, 3,160 participant
+  intervals: 1,759 with differing endpoints, 1,401 with identical endpoints,
+  and 3,949 differing slot positions. All 3,331 source Broadcast references
+  were physically checked against Replay packet bytes; 61 partial game-stream
+  packets were excluded from the complete keyframe sequence. The independent
+  saved-artifact scan matched the interval counts. Endpoint difference does
+  not identify change time, transaction, swap, or state between observations;
+  identical endpoints do not exclude intervening changes. Ignored output is
+  under `artifacts/16_19_development/inventory_keyframe_interval_batch_11_821/`.
 - **Completed query:** Saved `increment_minion_kills_packet_candidates` now
   receives exact-build profile/image/transform, original packet reference,
   payload/key, and `UNKNOWN` effect-field checks before time/raw-param

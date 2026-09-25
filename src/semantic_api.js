@@ -149,6 +149,8 @@ const { associateHeroDeathEpisodeCandidates821 } =
   require('./decoders/rofl_16_19_821_hero_death_episode_candidate');
 const { associateWardInventoryKeyframePairCandidates821 } =
   require('./decoders/rofl_16_19_821_ward_inventory_keyframe_pair_candidate');
+const { deriveInventoryKeyframeIntervalDifferenceCandidates821 } =
+  require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
 const { analyzeMovementParticipantAssociations821 } =
   require('./decoders/rofl_16_19_821_movement_participant_association_candidate');
 const {
@@ -2936,9 +2938,30 @@ function decode1619821(replay, profile, options = {}) {
       };
     }
   }
+  if (capabilities.includes('hero_inventory_broadcast_packet')) {
+    try {
+      const association = deriveInventoryKeyframeIntervalDifferenceCandidates821(replay, {
+        inventoryBroadcastOutcome: outcomes.hero_inventory_broadcast_packet,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: intervalEvents, ...summary } = association;
+        candidateAssociations.inventory_keyframe_interval_difference = summary;
+        events.inventory_keyframe_interval_difference_candidates = intervalEvents;
+      } else {
+        candidateAssociations.inventory_keyframe_interval_difference = association;
+      }
+    } catch (error) {
+      candidateAssociations.inventory_keyframe_interval_difference = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  const associationDecodeFailed = Object.values(candidateAssociations)
+    .some((association) => ['DECODE_FAILED', 'INCONSISTENT'].includes(association?.status));
   return {
     status: results.length === 0 ? 'PROFILE_RESOLVED'
-      : failed.length > 0 ? (usable.length > 0 ? 'PARTIAL' : failed[0].status)
+      : failed.length > 0 || associationDecodeFailed
+        ? (usable.length > 0 ? 'PARTIAL' : failed[0].status)
         : 'EXPERIMENTAL_CANDIDATE',
     game_version: profile.game_version,
     profile,

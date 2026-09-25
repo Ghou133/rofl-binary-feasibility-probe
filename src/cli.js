@@ -145,6 +145,8 @@ adding champion_kill_event_packet, champion_multiple_kill_event_packet, or
 on_shutdown_event_packet emits the corresponding candidate three-route packet group.
 hero_assist,hero_death_timer,hero_respawn together emit candidate death episodes.
 hero_ward_stats_snapshot,hero_inventory_broadcast_packet together emit same-keyframe candidate observations.
+hero_inventory_broadcast_packet also emits adjacent keyframe slot-difference candidates;
+these are observed packet differences, not purchases, sales, swaps, or persistent inventory state.
 champion_double_kill_event_packet emits a separate packet-local named child marker.
 champion_triple_quadra_event_packet emits exact-image 0x000c/0x000d packet markers.
 resurrect_event_packet emits a separate packet-local OnResurrect candidate.
@@ -874,6 +876,15 @@ function parseOne1619(replay, options, started) {
         };
       }
       const capabilitySummary = summarizeCapabilityResults(requested, decoded);
+      const associationDecodeFailed = Object.values(decoded.candidate_associations ?? {})
+        .some((association) => ['DECODE_FAILED', 'INCONSISTENT'].includes(association?.status));
+      const semanticStatus = associationDecodeFailed
+          && ['PASS', 'CANDIDATE'].includes(capabilitySummary.status)
+        ? 'PARTIAL' : capabilitySummary.status;
+      const semanticNote = decoded.note ?? (associationDecodeFailed
+        ? 'A candidate association failed; inspect candidate_associations for its error.'
+        : semanticStatus === 'CANDIDATE'
+          ? 'Experimental candidate output; it is not a confirmed semantic event.' : null);
       const runtimeStatuses = Object.values(capabilitySummary.capabilityResults)
         .map((row) => row.runtime_image_status);
       const runtimeImageUsed = typeof decoded.runtime_image_used === 'boolean'
@@ -883,14 +894,13 @@ function parseOne1619(replay, options, started) {
         ].includes(status)) ? false : null;
       analysis.decoder = {
         profile: decoded.profile ?? null,
-        status: capabilitySummary.status,
-        note: decoded.note ?? (capabilitySummary.status === 'CANDIDATE'
-          ? 'Experimental candidate output; it is not a confirmed semantic event.' : null),
+        status: semanticStatus,
+        note: semanticNote,
       };
       analysis.semantic = {
-        status: capabilitySummary.status,
+        status: semanticStatus,
         api_status: decoded.status ?? null,
-        note: decoded.note ?? null,
+        note: decoded.note ?? (associationDecodeFailed ? semanticNote : null),
         requested_capabilities: requested,
         capability_results: capabilitySummary.capabilityResults,
         ...(decoded.candidate_associations
