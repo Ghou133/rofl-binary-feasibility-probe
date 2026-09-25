@@ -4,6 +4,17 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed candidate association:** Jointly selecting exact KR 821
+  `hero_ward_stats_snapshot,hero_inventory_broadcast_packet` with the pinned
+  image adds `ward_inventory_keyframe_pair_candidates` and an association
+  summary. A fresh 11-Replay CLI batch returned 11/11 `CANDIDATE`, zero
+  framing errors, 3,270 unique same-keyframe pairs, 61 excluded game-stream
+  Broadcast rows, and 6,601 physically checked source packet references.
+  Missing image leaves the independent ward stream available and the pair
+  `MISSING_INPUT`. This is synchronized candidate observation only; no ward
+  placement, coordinate, item transaction, or persistent inventory follows.
+  Ignored output is under
+  `artifacts/16_19_development/ward_inventory_keyframe_joint_batch_11/`.
 - **Completed efficiency increment:** The exact-821 death-episode association
   reuses the source-bound route scan's retained packet copies to verify all
   original references; standalone calls still reframe Replay chunks. A warmed

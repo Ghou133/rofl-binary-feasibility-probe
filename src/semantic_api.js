@@ -145,6 +145,8 @@ const { associateTurretFirstBloodDieCandidates821 } =
   require('./decoders/rofl_16_19_821_turret_first_blood_die_pair_candidate');
 const { associateHeroDeathEpisodeCandidates821 } =
   require('./decoders/rofl_16_19_821_hero_death_episode_candidate');
+const { associateWardInventoryKeyframePairCandidates821 } =
+  require('./decoders/rofl_16_19_821_ward_inventory_keyframe_pair_candidate');
 const { analyzeMovementParticipantAssociations821 } =
   require('./decoders/rofl_16_19_821_movement_participant_association_candidate');
 const {
@@ -2899,6 +2901,26 @@ function decode1619821(replay, profile, options = {}) {
       }
     } catch (error) {
       candidateAssociations.hero_death_episode = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_ward_stats_snapshot')
+      && capabilities.includes('hero_inventory_broadcast_packet')) {
+    try {
+      const association = associateWardInventoryKeyframePairCandidates821(replay, {
+        wardStatsOutcome: outcomes.hero_ward_stats_snapshot,
+        inventoryBroadcastOutcome: outcomes.hero_inventory_broadcast_packet,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: pairEvents, ...summary } = association;
+        candidateAssociations.ward_inventory_keyframe_pair = summary;
+        events.ward_inventory_keyframe_pair_candidates = pairEvents;
+      } else {
+        candidateAssociations.ward_inventory_keyframe_pair = association;
+      }
+    } catch (error) {
+      candidateAssociations.ward_inventory_keyframe_pair = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }

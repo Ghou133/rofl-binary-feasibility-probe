@@ -27,6 +27,7 @@
 | `16.19.821.7343 --events hero_kill_stats_snapshot` | 精确 821 原生 `0x0089` 向量偏移 `0x58..0x6c` 的六项累计击杀统计候选；11 份回放共 3,270 条快照 | 仅写入 `hero_kill_stats_snapshot_candidates`，状态为 `CANDIDATE`；保留逐字段结算尾差，不推断逐次击杀；四杀仅一名玩家有正值，证据稀疏 |
 | `16.19.821.7343 --events hero_missions_minions_killed_snapshot` | KR `0x0089` 关键帧按精确 821 镜像的字节变换解出字节 374/373 的低位和高位候选计数；字节 372/371 解出为零 | 仅写入 `hero_missions_minions_killed_snapshot_candidates`；与结算数值字段 `Missions_MinionsKilled` 对照，不将其标为标准 `MINIONS_KILLED`；保留尾部差值，不推导逐次补刀或完整 HeroStats 载荷 |
 | `16.19.821.7343 --events hero_ward_stats_snapshot` | KR `0x0089` 关键帧字节 834/838/842 经精确 821 计数字节变换得到探测守卫、拆眼和插眼累计候选值；11 份回放共 3,270 个快照 | 仅写入 `hero_ward_stats_snapshot_candidates`，状态为 `CANDIDATE`；三项结算尾部差值保留，不推导守卫事件或位置；字段语义仍为候选 |
+| `16.19.821.7343 --events hero_ward_stats_snapshot,hero_inventory_broadcast_packet --runtime-image PATH` | 按同一关键帧、时间和规范英雄原始参数，将 `0x0089` 眼位累计候选与 `0x0357` 广播包内物品候选一一关联 | 另写入 `ward_inventory_keyframe_pair_candidates`；仅是同帧观察，不推导插眼、物品交易或包间持续状态；游戏流广播单独保留并排除关联 |
 | `16.19.821.7343 --events hero_missions_cannon_minions_killed_snapshot` | 同一关键帧字节 450 经精确 821 变换得到 `Missions_CannonMinionsKilled` 累计候选值；11 份回放共 3,270 个快照 | 仅写入 `hero_missions_cannon_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；不标为普通补刀或逐次炮车击杀；保留结算差值，字段语义仍为候选 |
 | `16.19.821.7343 --events hero_minions_killed_snapshot` | 精确 821 原生 `0x0089` 向量偏移 `0x3c` 的 `f32LE` 候选累计标准补刀数；11 份回放共 3,270 个快照，末帧 73/110 人与 `MINIONS_KILLED` 结算相等 | 仅写入 `hero_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；与偏移 `0x378` 的 `Missions_MinionsKilled` 区分，保留尾部差值，不推导逐次补刀或目标 |
 | `16.19.821.7343 --events hero_jungle_minions_killed_snapshot` | 精确 821 原生 `0x0089` 向量偏移 `0x40/0x44/0x48` 的三项野怪计数候选浮点快照；11 份回放共 3,270 条 | 仅写入 `hero_jungle_minions_killed_snapshot_candidates`，状态为 `CANDIDATE`；保留原始小数、取整值及三项结算尾差，不推断逐次击杀、野怪类型或位置 |
@@ -485,6 +486,17 @@ node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
 ```
 
 每场的 `hero_death_episode_candidates.jsonl` 按原始 `0x0259` 包连接候选受害者、来源、助攻列表和计时值；`return_observation_status` 区分已观察到的 `0x0048` 返回与回放结束前未观察到返回。`semantic_run.json` 的 `candidate_associations.hero_death_episode` 记录关联状态。三项来源中任一不可用时，关联不可用，已成功的来源事件仍保留。计时值不用于推算返回时点。
+
+对精确 821 的 KR 回放，同时观察关键帧眼位累计候选和物品广播包：
+
+```powershell
+node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
+  --events hero_ward_stats_snapshot,hero_inventory_broadcast_packet `
+  --runtime-image "D:\PrivateInputs\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-ward-inventory"
+```
+
+逐场的 `ward_inventory_keyframe_pair_candidates.jsonl` 保留两种来源包引用、眼位累计候选和同关键帧物品包候选。`semantic_run.json` 中的 `candidate_associations.ward_inventory_keyframe_pair` 记录配对与排除的游戏流广播数。缺少镜像时，眼位统计候选仍可输出，关联明确标为缺少输入。
 
 只读取已观察到的 HN HeroStats keyframe 候选快照：
 
