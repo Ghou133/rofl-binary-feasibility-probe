@@ -156,11 +156,28 @@ test('821 OnChampionMultipleKill rejects synthetic foreign child ID atomically',
 
 test('821 OnChampionMultipleKill binds blob hash, scalar offsets and opaque list', (t) => {
   const image = fakeImage(t);
-  const replay = replayWithChunks([{ packets: [packet()] }]);
-  t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
-    const result = nativeResult(JSON.parse(options.input));
-    result.results[0].event_u32_0x04 += 1;
-    return { status: 0, stderr: '', stdout: JSON.stringify(result) };
-  });
-  assert.equal(decode(replay, { runtimeImagePath: image }).status, 'DECODE_FAILED');
+  const replay = replayWithChunks([{ packets: [packet(), packet()] }]);
+  const mutations = [
+    (result) => { result.results[0].event_blob_sha256 = '0'.repeat(64); },
+    (result) => {
+      const blob = Buffer.from(result.results[0].event_blob_hex, 'hex');
+      blob.writeUInt32LE(470, 0);
+      result.results[0].event_blob_hex = blob.toString('hex');
+      result.results[0].event_blob_sha256 = crypto.createHash('sha256')
+        .update(blob).digest('hex');
+    },
+    (result) => { result.results[0].event_u32_0x04 += 1; },
+    (result) => { result.results[1].event_u32_list_0x10[0] += 1; },
+  ];
+  for (const mutate of mutations) {
+    const invoke = t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+      const result = nativeResult(JSON.parse(options.input));
+      mutate(result);
+      return { status: 0, stderr: '', stdout: JSON.stringify(result) };
+    });
+    const failed = decode(replay, { runtimeImagePath: image });
+    assert.equal(failed.status, 'DECODE_FAILED');
+    assert.equal(failed.events, null);
+    invoke.mock.restore();
+  }
 });
