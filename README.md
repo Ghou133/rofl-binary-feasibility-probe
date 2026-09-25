@@ -784,6 +784,16 @@ node src/cli.js query-events "work\16-19-821-cast\replays\KR_example" `
 
 嵌套对象 `+0x24` 的不透明回调字节可以用 `--cast-nested-bits 8` 或 `--cast-nested-bits 0x8` 精确筛选（范围 0..255）。保存结果查询会先核对精确 821 profile、镜像及回调摘要、原始包引用与字节变换；旧版 v3 CastSpellAns 产物报告该字段不可用，已检查但未匹配则返回零命中。字段数值不指代技能、槽位、角色或施法结果。
 
+对 821 移动限制包的保存结果，可用 `--packet-record-count 1` 找出单记录包，或用 `0` 查看空记录包：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-circular" `
+  --event circular_movement_restriction_packet_candidates `
+  --packet-record-count 1 --limit 20
+```
+
+查询核对每行的原始包哈希、来源引用、精确镜像变换和匿名字段，再原样输出。11 份回放的保存结果中，单记录 129 行、零记录 68,113 行；`packet_record_count_checked_count` 与不可用数会分开报告。单记录的三个浮点值不是已确认的英雄位置或路径。
+
 三个 KR 821 候选包组 JSONL 也能使用 `query-events`，按时间、原始参数或
 各组子包直接解码的 `+0x04` 匿名整数筛选。例如：
 

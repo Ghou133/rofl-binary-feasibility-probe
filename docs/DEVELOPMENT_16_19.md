@@ -32,6 +32,20 @@ Current progress (older notes below retain their original research context):
   It preserves raw packet refs and anonymous scalar/vector values. Neither
   route name nor these values prove an actor, world position, hero path,
   receiver, or effective movement restriction.
+  Follow-up negative control: 110/129 record-bearing packets are time-zero
+  keyframes with five canonical raw keys sharing each of two vectors per
+  Replay. Of the 19 later packets, 18 have no DirectInput `0x00ba` row with
+  the same full raw parameter; the sole match is over 510 seconds apart.
+  The `0x00ba` callback also gates its write on an unobserved live receiver
+  mode. No actor or path relation is promoted from these packet fields.
+  A future actor/path claim needs a same-build receiver dispatch trace,
+  independent receiver-to-roster identity and coordinate observation, plus
+  rotated-key controls; named path-adjacent registrations alone supply no
+  such evidence in these Replays.
+  Saved `query-events --packet-record-count 1` verifies the pinned table,
+  every raw payload/reference and the derived anonymous fields before
+  selecting rows. The 11-Replay batch checked 68,242 rows: 129 had one
+  record and 68,113 had zero, with no unavailable Replays.
 - **Saved CastSpellAns nested-byte query:** `query-events --cast-nested-bits`
   checks the exact-821 profile, callback transform and original packet refs
   before filtering saved `cast_spell_ans_packet_candidates` rows. The

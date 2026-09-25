@@ -69,6 +69,9 @@ const { LOOKUP_TABLE_SHA256, decodeRuntimeCountByte } =
 const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
   decodeNestedBits } =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
+const { CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE_PROFILE_821,
+  decodeCircularMovementRestrictionPayload821 } =
+  require('./decoders/rofl_16_19_821_circular_movement_restriction_packet_candidate');
 const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
 const { TURRET_FIRST_BLOOD_DIE_PAIR_821_PROFILE } =
@@ -94,6 +97,15 @@ const { INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821,
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
+const CIRCULAR_MOVEMENT_RESTRICTION_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param', 'raw_payload_hex', 'raw_selector_byte',
+  'packet_shape_candidate', 'packet_record_count_candidate',
+  'raw_protected_scalar_bytes_hex', 'raw_protected_vector_bytes_hex',
+  'callback_scalar_bytes_hex', 'callback_vector_bytes_hex',
+  'anonymous_scalar_f32_candidate', 'anonymous_vector_xyz_f32_candidate',
+  'semantic_effect_status', 'confidence', 'semantic_status', 'raw_packet_ref',
+]);
 const MAX_MINION_BRACKET_SOURCE_ROWS_821 = 10_000;
 const MAX_EXPERIENCE_INTERVAL_SOURCE_ROWS_821 = 100_000;
 const EXPERIENCE_INTERVAL_ROW_FIELDS_821 = new Set([
@@ -2405,6 +2417,107 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
   return value;
 }
 
+function prepareCircularMovementRestrictionRecordCount(prepared) {
+  const profile = CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE_PROFILE_821;
+  if (prepared.eventKey !== 'circular_movement_restriction_packet_candidates'
+      || prepared.replayVersion !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--packet-record-count requires an exact 16.19.821.7343 circular movement restriction packet candidate event.');
+  }
+  const result = prepared.capabilityResult;
+  const counts = result?.observed_shape_counts;
+  if (prepared.capabilityStatus !== 'CANDIDATE'
+      || result?.profile_id !== profile.id
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || result.evidence_status !== profile.evidence_status
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.evidence_byte_table_sha256
+        !== profile.evidence_byte_table_sha256
+      || result.evidence_scalar_transform_sha256
+        !== profile.evidence_scalar_transform_sha256
+      || result.evidence_vector_transform_sha256
+        !== profile.evidence_vector_transform_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || !isCount(result.input_count) || result.input_count === 0
+      || result.event_count !== result.input_count
+      || result.event_count !== prepared.declaredCount
+      || !counts || Object.keys(counts).length !== 2
+      || !isCount(counts.empty1) || !isCount(counts.record24)
+      || counts.empty1 + counts.record24 !== result.event_count) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'Circular movement restriction packet metadata differs from its exact-build profile.');
+  }
+}
+
+function circularMovementRestrictionRecordCount(row, prepared, lineNumber,
+  packetPositions) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid circular movement restriction packet at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const profile = CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE_PROFILE_821;
+  const fields = Object.keys(row);
+  const ref = row.raw_packet_ref;
+  if (fields.length !== CIRCULAR_MOVEMENT_RESTRICTION_ROW_FIELDS_821.size
+      || fields.some((field) => !CIRCULAR_MOVEMENT_RESTRICTION_ROW_FIELDS_821.has(field))
+      || row.event_type !== 'CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== profile.evidence_status
+      || row.semantic_effect_status !== 'UNKNOWN'
+      || !Number.isSafeInteger(row.raw_param) || row.raw_param < 0
+      || row.raw_param > 0xffffffff
+      || typeof row.raw_payload_hex !== 'string'
+      || !/^(?:[0-9a-f]{2})+$/.test(row.raw_payload_hex)
+      || !ref || typeof ref !== 'object' || Array.isArray(ref)
+      || ref.source_path !== prepared.sourcePath
+      || ref.replay_sha256 !== prepared.replaySha
+      || !['game_chunk', 'keyframe'].includes(ref.chunk_stream)
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== profile.replay_block_packet_id
+      || ref.replay_time_ms !== row.replay_time_ms
+      || ref.payload_length !== row.raw_payload_hex.length / 2
+      || ref.raw_param !== row.raw_param
+      || !REPLAY_SHA.test(ref.raw_payload_sha256 ?? '')) {
+    invalid('profile, source packet reference, or raw payload differs');
+  }
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (packetPositions.has(position)) invalid('duplicate raw packet position');
+  packetPositions.add(position);
+  const payload = Buffer.from(row.raw_payload_hex, 'hex');
+  const payloadHash = crypto.createHash('sha256').update(payload).digest('hex');
+  if (ref.raw_payload_sha256 !== payloadHash) invalid('raw packet payload hash differs');
+  const inspected = decodeCircularMovementRestrictionPayload821(row.raw_payload_hex);
+  if (!inspected
+      || row.raw_selector_byte !== payload[0]
+      || row.packet_shape_candidate !== inspected.packet_shape_candidate
+      || row.packet_record_count_candidate !== inspected.packet_record_count_candidate
+      || row.raw_protected_scalar_bytes_hex
+        !== inspected.raw_protected_scalar_bytes_hex
+      || row.raw_protected_vector_bytes_hex
+        !== inspected.raw_protected_vector_bytes_hex
+      || row.callback_scalar_bytes_hex !== inspected.callback_scalar_bytes_hex
+      || row.callback_vector_bytes_hex !== inspected.callback_vector_bytes_hex
+      || row.anonymous_scalar_f32_candidate
+        !== inspected.anonymous_scalar_f32_candidate
+      || !isDeepStrictEqual(row.anonymous_vector_xyz_f32_candidate,
+        inspected.anonymous_vector_xyz_f32_candidate)) {
+    invalid('native-observed shape, record count, or exact callback byte transform differs');
+  }
+  return inspected.packet_record_count_candidate;
+}
+
 function turretPairRow(row, prepared, lineNumber, seenKeys, seenPacketPositions) {
   const { associationConfig, capabilityResult, replaySha, replayVersion } = prepared;
   const invalid = (reason) => {
@@ -4638,7 +4751,7 @@ function validateFilters(options) {
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
-    castNestedBits = null, levelAfter = null,
+    castNestedBits = null, packetRecordCount = null, levelAfter = null,
     childEventId = null, limit = null, latestPerParticipant = false,
     endpointReversedPair: endpointReversedPairFilter = false,
     comparisonToEndpoints = null } = options;
@@ -4666,6 +4779,7 @@ function validateFilters(options) {
     ['opaqueU32', opaqueU32, 0, 0xffffffff],
     ['opaqueI32', opaqueI32, -0x80000000, 0x7fffffff],
     ['castNestedBits', castNestedBits, 0, 0xff],
+    ['packetRecordCount', packetRecordCount, 0, 1],
     ['levelAfter', levelAfter, 1, 20],
     ['childEventId', childEventId, 0, 0xffffffff],
     ['limit', limit, 1, Number.MAX_SAFE_INTEGER],
@@ -4691,7 +4805,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
-    castNestedBits = null, levelAfter = null,
+    castNestedBits = null, packetRecordCount = null, levelAfter = null,
     childEventId = null, limit = null, latestPerParticipant = false,
     endpointReversedPair: endpointReversedPairFilter = false,
     comparisonToEndpoints = null } = options;
@@ -4787,6 +4901,9 @@ async function streamEventQuery(prepared, options, emitLine) {
       '--opaque-i32 requires a 16.19.821.7343 CastSpellAns packet candidate event.');
   }
   if (castNestedBits != null) prepareCastSpellAnsNestedBits(prepared);
+  if (packetRecordCount != null) {
+    prepareCircularMovementRestrictionRecordCount(prepared);
+  }
   if (levelAfter != null && (prepared.eventKey
       !== 'level_experience_keyframe_bracket_candidates'
       || prepared.replayVersion !== '16.19.821.7343')) {
@@ -4827,6 +4944,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   let opaqueI32AvailableCount = 0;
   let castNestedBitsCheckedCount = 0;
   const castNestedBitsPacketPositions = new Set();
+  const circularPacketPositions = new Set();
+  const circularShapeCounts = { empty1: 0, record24: 0 };
   let childEventIdUnavailableCount = 0;
   let childEventIdAvailableCount = 0;
   let tripleGroupCount = 0;
@@ -4981,6 +5100,12 @@ async function streamEventQuery(prepared, options, emitLine) {
         : castSpellAnsNestedBits(row, prepared, lineNumber,
           castNestedBitsPacketPositions);
       if (castNestedBits != null) castNestedBitsCheckedCount += 1;
+      const circularRecordCount = packetRecordCount == null ? null
+        : circularMovementRestrictionRecordCount(row, prepared, lineNumber,
+          circularPacketPositions);
+      if (packetRecordCount != null) {
+        circularShapeCounts[circularRecordCount === 0 ? 'empty1' : 'record24'] += 1;
+      }
       const childId = childEventId == null ? null
         : candidateChildEventId(row, prepared.eventKey, lineNumber);
       const assistingParticipants = assistingParticipant == null ? null
@@ -5052,6 +5177,7 @@ async function streamEventQuery(prepared, options, emitLine) {
             || pairValue.u32 !== opaquePair.u32 || pairValue.u8 !== opaquePair.u8))
           || (opaqueI32 != null && opaqueI32Field.value !== opaqueI32)
           || (castNestedBits != null && nestedBits !== castNestedBits)
+          || (packetRecordCount != null && circularRecordCount !== packetRecordCount)
           || (levelAfter != null && row.level_after_candidate !== levelAfter)
           || (childEventId != null && childId.value !== childEventId)) continue;
       matchedCount += 1;
@@ -5080,6 +5206,13 @@ async function streamEventQuery(prepared, options, emitLine) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
       'JSONL row count disagrees with event_counts and the capability result.',
       { scanned_count: scannedCount, declared_event_count: prepared.declaredCount });
+  }
+  if (packetRecordCount != null
+      && !isDeepStrictEqual(circularShapeCounts,
+        prepared.capabilityResult.observed_shape_counts)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Circular movement restriction row shapes differ from capability metadata.',
+      { observed_shape_counts: circularShapeCounts });
   }
   if (prepared.eventKey === 'hero_death_episode_candidates'
       && (observedReturnCount !== prepared.capabilityResult.observed_return_count
@@ -5267,6 +5400,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       cast_nested_bits_checked_count: castNestedBitsCheckedCount,
       cast_nested_bits_unavailable_count: 0,
     }),
+    ...(packetRecordCount == null ? {} : {
+      packet_record_count_checked_count: scannedCount,
+      packet_record_count_unavailable_count: 0,
+    }),
     ...(levelAfter == null ? {} : {
       level_after_checked_count: scannedCount,
       level_after_unavailable_count: 0,
@@ -5289,6 +5426,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       ...(opaquePair == null ? {} : { opaque_pair: opaquePair }),
       ...(opaqueI32 == null ? {} : { opaque_i32: opaqueI32 }),
       ...(castNestedBits == null ? {} : { cast_nested_bits: castNestedBits }),
+      ...(packetRecordCount == null ? {} : { packet_record_count: packetRecordCount }),
       ...(levelAfter == null ? {} : { level_after: levelAfter }),
       ...(childEventId == null ? {} : { child_event_id: childEventId }) },
     rows_unmodified: true,
@@ -5329,6 +5467,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   let latestParticipantUnavailableCount = 0;
   let castNestedBitsCheckedCount = 0;
   let castNestedBitsUnavailableCount = 0;
+  let packetRecordCountCheckedCount = 0;
   let levelAfterCheckedCount = 0;
   let endpointReversedPairInspectedCount = 0;
   let completedCount = 0;
@@ -5378,6 +5517,9 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     if (options.castNestedBits != null) {
       castNestedBitsCheckedCount += summary.cast_nested_bits_checked_count;
     }
+    if (options.packetRecordCount != null) {
+      packetRecordCountCheckedCount += summary.packet_record_count_checked_count;
+    }
     if (options.levelAfter != null) {
       levelAfterCheckedCount += summary.level_after_checked_count;
     }
@@ -5397,6 +5539,11 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       ...(options.castNestedBits == null ? {} : {
         cast_nested_bits_checked_count: summary.cast_nested_bits_checked_count,
         cast_nested_bits_unavailable_count: 0,
+      }),
+      ...(options.packetRecordCount == null ? {} : {
+        packet_record_count_checked_count:
+          summary.packet_record_count_checked_count,
+        packet_record_count_unavailable_count: 0,
       }),
       ...(options.levelAfter == null ? {} : {
         level_after_checked_count: summary.level_after_checked_count,
@@ -5430,6 +5577,11 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       cast_nested_bits_unavailable_replay_count:
         replayResults.filter((replay) =>
           replay.code === 'CAST_NESTED_BITS_UNAVAILABLE').length,
+    }),
+    ...(options.packetRecordCount == null ? {} : {
+      packet_record_count_checked_count: packetRecordCountCheckedCount,
+      packet_record_count_unavailable_replay_count:
+        prepared.replays.length - completedCount,
     }),
     ...(options.levelAfter == null ? {} : {
       level_after_checked_count: levelAfterCheckedCount,

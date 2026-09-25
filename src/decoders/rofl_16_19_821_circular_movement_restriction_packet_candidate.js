@@ -19,6 +19,11 @@ const SCALAR_TRANSFORM_SHA256 = '1c03503a6e01dd840b12db1aadb27271dcc9a1e3c34a6d6
 const VECTOR_TRANSFORM_SHA256 = 'b60f1c5d50083d4b884184becb607e97fb2f34751d41b66a55e7b78b2738e745';
 const EVIDENCE_STATUS = 'CANDIDATE_EXACT_821_CIRCULAR_MOVEMENT_RESTRICTION_PACKET_FIELDS';
 const MAX_TOTAL_PACKETS = 12_000;
+// A 256-byte exact-image table is embedded for offline verification of saved
+// JSONL rows. Live decoding still requires the whole mapped image and checks
+// its SHA-256 before accepting a packet candidate.
+const PINNED_BYTE_TABLE_HEX =
+  'd75682dc83028f2935042171799e927fcb976a5105c76fe640637e345b4707785a96b8b92c995e6ed1754161245f4aaa4bcf0ed4865dba1d3f2bdf62f0330055cafc19acf3662369bceb46f89c50874d6d108e88be1bb5da4e1a13cc2209ada49d30a6e57dfac91712c2fde1bbe70b98bfbd1137c07cf795b6dd49f4812a9f1cfb8d9a727b577a43b3a953e459202fa8f67436a085f1a7147031840cb2a5dbe816ae3d25b1cd9b0367155cea1f39a1440a8b76de606593f264d5c1c84c064fb7edfee0f9a2184891ce1e3cb46c425494e328e90127ec0d45ff26efe28aabd9f508c4af32c56b80c6c358eea33e2d0f893ab0d2d33873d8d08c7790523bd62e68';
 
 // Every 24-byte 0x0464 packet in the eleven KR Replays has one of these
 // eight native-consumed record headers. Other headers must be researched
@@ -80,6 +85,19 @@ function scalarTransformByte(value, table) {
 function vectorTransformByte(value, table) {
   const shuffled = swapAdjacentBits(value);
   return table[((ror8(shuffled, 3) ^ 0xd2) + 0x24) & 0xff];
+}
+
+const PINNED_BYTE_TABLE = Buffer.from(PINNED_BYTE_TABLE_HEX, 'hex');
+if (PINNED_BYTE_TABLE.length !== 256 || sha256(PINNED_BYTE_TABLE) !== BYTE_TABLE_SHA256) {
+  throw new Error('pinned exact-821 circular packet byte table differs');
+}
+const PINNED_SCALAR_TRANSFORM = Buffer.from(Array.from({ length: 256 }, (_, value) =>
+  scalarTransformByte(value, PINNED_BYTE_TABLE)));
+const PINNED_VECTOR_TRANSFORM = Buffer.from(Array.from({ length: 256 }, (_, value) =>
+  vectorTransformByte(value, PINNED_BYTE_TABLE)));
+if (sha256(PINNED_SCALAR_TRANSFORM) !== SCALAR_TRANSFORM_SHA256
+    || sha256(PINNED_VECTOR_TRANSFORM) !== VECTOR_TRANSFORM_SHA256) {
+  throw new Error('pinned exact-821 circular packet callback transforms differ');
 }
 
 function packetRef(replay, block, chunk) {
@@ -145,6 +163,50 @@ function nativeRecordVectorBytes(payload) {
     Buffer.from(payload.subarray(20, 24)).reverse(),
     Buffer.from(payload.subarray(16, 20)).reverse(),
   ]);
+}
+
+function decodeCircularMovementRestrictionPayload821(rawPayloadHex, {
+  scalarTransform = PINNED_SCALAR_TRANSFORM,
+  vectorTransform = PINNED_VECTOR_TRANSFORM,
+} = {}) {
+  if (typeof rawPayloadHex !== 'string' || !/^(?:[0-9a-f]{2})+$/.test(rawPayloadHex)) {
+    return null;
+  }
+  const payload = Buffer.from(rawPayloadHex, 'hex');
+  if (payload.length === 1 && payload[0] === 0x36) {
+    return {
+      packet_shape_candidate: 'empty1', packet_record_count_candidate: 0,
+      raw_protected_scalar_bytes_hex: null, raw_protected_vector_bytes_hex: null,
+      callback_scalar_bytes_hex: null, callback_vector_bytes_hex: null,
+      anonymous_scalar_f32_candidate: null, anonymous_vector_xyz_f32_candidate: null,
+    };
+  }
+  if (payload.length !== 24
+      || !OBSERVED_RECORD_PREFIXES.has(payload.subarray(0, 8).toString('hex'))
+      || !Buffer.isBuffer(scalarTransform) || scalarTransform.length !== 256
+      || !Buffer.isBuffer(vectorTransform) || vectorTransform.length !== 256) {
+    return null;
+  }
+  const rawScalarBytes = Buffer.from(payload.subarray(8, 12));
+  const rawVectorBytes = nativeRecordVectorBytes(payload);
+  const callbackScalarBytes = Buffer.from(rawScalarBytes.map((byte) => scalarTransform[byte]));
+  const callbackVectorBytes = Buffer.from(rawVectorBytes.map((byte) => vectorTransform[byte]));
+  const scalar = callbackScalarBytes.readFloatLE(0);
+  const vector = {
+    x: callbackVectorBytes.readFloatLE(0),
+    y: callbackVectorBytes.readFloatLE(4),
+    z: callbackVectorBytes.readFloatLE(8),
+  };
+  if (![scalar, vector.x, vector.y, vector.z].every(Number.isFinite)) return null;
+  return {
+    packet_shape_candidate: 'record24', packet_record_count_candidate: 1,
+    raw_protected_scalar_bytes_hex: rawScalarBytes.toString('hex'),
+    raw_protected_vector_bytes_hex: rawVectorBytes.toString('hex'),
+    callback_scalar_bytes_hex: callbackScalarBytes.toString('hex'),
+    callback_vector_bytes_hex: callbackVectorBytes.toString('hex'),
+    anonymous_scalar_f32_candidate: scalar,
+    anonymous_vector_xyz_f32_candidate: vector,
+  };
 }
 
 function decodeCircularMovementRestrictionPacketCandidates821(replay, {
@@ -264,31 +326,15 @@ function decodeCircularMovementRestrictionPacketCandidates821(replay, {
   const events = [];
   for (const { block, chunk } of rows) {
     const payload = block.payload;
-    const shape = shapeOf(block, chunk);
     const ref = packetRef(replay, block, chunk);
-    let rawScalarBytes = null;
-    let rawVectorBytes = null;
-    let callbackScalarBytes = null;
-    let callbackVectorBytes = null;
-    let scalar = null;
-    let vector = null;
-    if (shape === 'record24') {
-      rawScalarBytes = Buffer.from(payload.subarray(8, 12));
-      rawVectorBytes = nativeRecordVectorBytes(payload);
-      callbackScalarBytes = Buffer.from(rawScalarBytes.map((byte) => scalarTransform[byte]));
-      callbackVectorBytes = Buffer.from(rawVectorBytes.map((byte) => vectorTransform[byte]));
-      scalar = callbackScalarBytes.readFloatLE(0);
-      const x = callbackVectorBytes.readFloatLE(0);
-      const y = callbackVectorBytes.readFloatLE(4);
-      const z = callbackVectorBytes.readFloatLE(8);
-      if (![scalar, x, y, z].every(Number.isFinite)) {
-        return failed('DECODE_FAILED', '0x0464 packet has nonfinite anonymous callback fields', {
-          runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
-          runtime_image_sha256: IMAGE_SHA256, observed_shape_counts: shapeCounts,
-          first_failed_packet_ref: ref,
-        });
-      }
-      vector = { x, y, z };
+    const decodedPayload = decodeCircularMovementRestrictionPayload821(
+      payload.toString('hex'), { scalarTransform, vectorTransform });
+    if (!decodedPayload) {
+      return failed('DECODE_FAILED', '0x0464 packet has nonfinite anonymous callback fields', {
+        runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+        runtime_image_sha256: IMAGE_SHA256, observed_shape_counts: shapeCounts,
+        first_failed_packet_ref: ref,
+      });
     }
     events.push({
       event_type: 'CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE',
@@ -300,14 +346,7 @@ function decodeCircularMovementRestrictionPacketCandidates821(replay, {
       raw_param: block.param >>> 0,
       raw_payload_hex: payload.toString('hex'),
       raw_selector_byte: payload[0],
-      packet_shape_candidate: shape,
-      packet_record_count_candidate: shape === 'record24' ? 1 : 0,
-      raw_protected_scalar_bytes_hex: rawScalarBytes?.toString('hex') ?? null,
-      raw_protected_vector_bytes_hex: rawVectorBytes?.toString('hex') ?? null,
-      callback_scalar_bytes_hex: callbackScalarBytes?.toString('hex') ?? null,
-      callback_vector_bytes_hex: callbackVectorBytes?.toString('hex') ?? null,
-      anonymous_scalar_f32_candidate: scalar,
-      anonymous_vector_xyz_f32_candidate: vector,
+      ...decodedPayload,
       semantic_effect_status: 'UNKNOWN',
       confidence: 'CANDIDATE',
       semantic_status: EVIDENCE_STATUS,
@@ -332,5 +371,6 @@ function decodeCircularMovementRestrictionPacketCandidates821(replay, {
 
 module.exports = {
   CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE_PROFILE_821,
+  decodeCircularMovementRestrictionPayload821,
   decodeCircularMovementRestrictionPacketCandidates821,
 };

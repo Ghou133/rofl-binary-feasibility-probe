@@ -216,6 +216,7 @@ Options:
   --opaque-pair <u32:u8>      Exact anonymous 821 Buff Add/Remove/Update pair
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
   --cast-nested-bits <0..255|0xhex>  Exact decoded 821 CastSpellAns nested callback bits
+  --packet-record-count <0|1>  Exact 821 circular movement restriction packet record count
   --level-after <1..20>        Exact-821 level packet within adjacent EXP keyframes
   --child-event-id <uint32|0xhex>  Exact 821 stealth, named multikill, HQ or objective-bounty child ID
   --latest-per-participant    Last matching observed row per participant and Replay
@@ -275,6 +276,7 @@ function parseArgs(argv) {
     opaquePair: null,
     opaqueI32: null,
     castNestedBits: null,
+    packetRecordCount: null,
     levelAfter: null,
     childEventId: null,
     latestPerParticipant: false,
@@ -394,6 +396,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'opaque-pair') options.opaquePair = queryOpaquePair(value);
       else if (command === 'query-events' && key === 'opaque-i32') options.opaqueI32 = queryInt32(value, key);
       else if (command === 'query-events' && key === 'cast-nested-bits') options.castNestedBits = queryByte(value, key);
+      else if (command === 'query-events' && key === 'packet-record-count') options.packetRecordCount = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'level-after') options.levelAfter = queryInteger(value, key);
       else if (command === 'query-events' && key === 'child-event-id') options.childEventId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'limit') options.limit = queryInteger(value, key);
@@ -525,6 +528,11 @@ function parseArgs(argv) {
     if (options.castNestedBits !== null
         && options.event !== 'cast_spell_ans_packet_candidates') {
       throw new Error('--cast-nested-bits requires an 821 cast_spell_ans_packet_candidates event');
+    }
+    if (options.packetRecordCount !== null
+        && (options.event !== 'circular_movement_restriction_packet_candidates'
+          || options.packetRecordCount > 1)) {
+      throw new Error('--packet-record-count requires circular_movement_restriction_packet_candidates and 0..1');
     }
     if (options.levelAfter !== null
         && (options.event !== 'level_experience_keyframe_bracket_candidates'
@@ -2929,6 +2937,7 @@ async function runQueryEventsCommand(parsed) {
       opaquePair: options.opaquePair,
       opaqueI32: options.opaqueI32,
       castNestedBits: options.castNestedBits,
+      packetRecordCount: options.packetRecordCount,
       levelAfter: options.levelAfter,
       childEventId: options.childEventId,
       latestPerParticipant: options.latestPerParticipant,
