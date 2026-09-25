@@ -186,6 +186,19 @@ const CHILD_EVENT_ID_FILTERS_821 = Object.freeze({
   champion_triple_quadra_event_packet_candidates: Object.freeze([0x000c, 0x000d]),
   champion_triple_quadra_multi_group_candidates: Object.freeze([0x000c, 0x000d]),
 });
+const KILLER_PARTICIPANT_EVENTS_821 = Object.freeze({
+  hero_death_candidates: Object.freeze({
+    profile: HERO_DEATH_CANDIDATE_PROFILE_821,
+    evidenceStatus: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_FINGERPRINT',
+    eventType: 'death', victimField: 'victim_participant_id',
+  }),
+  hero_assist_candidates: Object.freeze({
+    profile: HERO_ASSIST_CANDIDATE_PROFILE_821,
+    evidenceStatus: 'CANDIDATE_821_CO_TIMED_ASSIST_PAIR_TAIL_ALIGNMENT',
+    eventType: 'HERO_ASSIST_ATTRIBUTION_CANDIDATE',
+    victimField: 'victim_participant_id_candidate',
+  }),
+});
 
 class EventQueryError extends Error {
   constructor(code, message, details = {}) {
@@ -1179,15 +1192,53 @@ function assistingParticipantsCandidate(row, prepared, lineNumber) {
   return { values: participants, available: true };
 }
 
+function killerParticipantCandidate(row, prepared, lineNumber, config) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid ${prepared.capability} killer candidate at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  if (row.event_type !== config.eventType
+      || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+      || row.build_profile !== config.profile.id
+      || row.confidence !== 'CANDIDATE') {
+    invalid('exact-build candidate identity differs');
+  }
+  const victim = row[config.victimField];
+  if (!Number.isSafeInteger(victim) || victim < 1 || victim > 10) {
+    invalid('victim participant is invalid');
+  }
+  if (!Object.hasOwn(row, 'killer_participant_id_candidate')) {
+    return { value: null, available: false };
+  }
+  const killer = row.killer_participant_id_candidate;
+  if (killer !== null && (!Number.isSafeInteger(killer)
+      || killer < 1 || killer > 10 || killer === victim)) {
+    invalid('killer participant must be 1..10 and differ from victim');
+  }
+  const assist = prepared.eventKey === 'hero_assist_candidates';
+  const expectedFieldStatus = killer === null
+    ? 'UNAVAILABLE' : 'CANDIDATE_821_SOURCE_ID_KILL_TAIL_ALIGNMENT';
+  if (row.field_confidence?.killer_participant_id_candidate !== expectedFieldStatus
+      || row.semantic_status !== (assist && killer === null
+        ? 'UNAVAILABLE_NONHERO_SOURCE' : config.evidenceStatus)
+      || (assist && row.assist_observation_status !== (killer === null
+        ? 'UNAVAILABLE_NONHERO_SOURCE' : config.evidenceStatus))) {
+    invalid('killer candidate status conflicts with its value');
+  }
+  return { value: killer, available: killer !== null };
+}
+
 function validateFilters(options) {
   const { fromMs = null, toMs = null, participant = null,
-    assistingParticipant = null, rawParam = null,
+    killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, slot = null, opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     childEventId = null, limit = null } = options;
   for (const [name, value, minimum, maximum] of [
     ['fromMs', fromMs, 0, Number.MAX_SAFE_INTEGER],
     ['toMs', toMs, 0, Number.MAX_SAFE_INTEGER],
     ['participant', participant, 1, 10],
+    ['killerParticipant', killerParticipant, 1, 10],
     ['assistingParticipant', assistingParticipant, 1, 10],
     ['rawParam', rawParam, 0, 0xffffffff],
     ['itemId', itemId, 0, 0xffffffff],
@@ -1215,7 +1266,7 @@ function validateFilters(options) {
 async function streamEventQuery(prepared, options, emitLine) {
   validateFilters(options);
   const { fromMs = null, toMs = null, participant = null,
-    assistingParticipant = null, rawParam = null,
+    killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, slot = null, opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     childEventId = null, limit = null } = options;
   const inventoryPacketEvent = [
@@ -1223,6 +1274,20 @@ async function streamEventQuery(prepared, options, emitLine) {
     'hero_inventory_broadcast_packet_candidates',
     'hero_inventory_set_item_packet_candidates',
   ].includes(prepared.eventKey);
+  const killerConfig = KILLER_PARTICIPANT_EVENTS_821[prepared.eventKey] ?? null;
+  if (killerParticipant != null) {
+    if (!killerConfig || prepared.replayVersion !== killerConfig.profile.replay_version) {
+      throw new EventQueryError('UNSUPPORTED_FILTER',
+        '--killer-participant requires exact 16.19.821.7343 hero_death or hero_assist candidates.');
+    }
+    if (prepared.capabilityStatus !== 'CANDIDATE'
+        || prepared.capabilityResult.profile_id !== killerConfig.profile.id
+        || prepared.capabilityResult.evidence_status !== killerConfig.evidenceStatus) {
+      throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+        `${prepared.capability} killer candidate identity differs from its exact-build profile.`,
+        { capability: prepared.capability });
+    }
+  }
   if (assistingParticipant != null) {
     if (prepared.eventKey !== 'hero_assist_candidates'
         || prepared.replayVersion !== HERO_ASSIST_CANDIDATE_PROFILE_821.replay_version) {
@@ -1274,6 +1339,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   let matchedCount = 0;
   let emittedCount = 0;
   let participantUnavailableCount = 0;
+  let killerParticipantUnavailableCount = 0;
+  let killerParticipantAvailableCount = 0;
   let assistingParticipantUnavailableCount = 0;
   let assistingParticipantAvailableCount = 0;
   let rawParamUnavailableCount = 0;
@@ -1352,7 +1419,15 @@ async function streamEventQuery(prepared, options, emitLine) {
         : candidateChildEventId(row, prepared.eventKey, lineNumber);
       const assistingParticipants = assistingParticipant == null ? null
         : assistingParticipantsCandidate(row, prepared, lineNumber);
+      const killerCandidate = killerParticipant == null ? null
+        : killerParticipantCandidate(row, prepared, lineNumber, killerConfig);
       if (participant != null && subject.value == null) participantUnavailableCount += 1;
+      if (killerParticipant != null && !killerCandidate.available) {
+        killerParticipantUnavailableCount += 1;
+      }
+      if (killerParticipant != null && killerCandidate.available) {
+        killerParticipantAvailableCount += 1;
+      }
       if (assistingParticipant != null && !assistingParticipants.available) {
         assistingParticipantUnavailableCount += 1;
       }
@@ -1375,6 +1450,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       if ((fromMs != null && replayTime < fromMs)
           || (toMs != null && replayTime > toMs)
           || (participant != null && subject.value !== participant)
+          || (killerParticipant != null && killerCandidate.value !== killerParticipant)
           || (assistingParticipant != null
             && !assistingParticipants.values.includes(assistingParticipant))
           || (rawParam != null && !params.includes(rawParam))
@@ -1419,6 +1495,14 @@ async function streamEventQuery(prepared, options, emitLine) {
     throw new EventQueryError('PARTICIPANT_UNAVAILABLE',
       'This event stream has no resolved subject participant for filtering.',
       { scanned_count: scannedCount, participant_unavailable_count: participantUnavailableCount,
+        capability_status: prepared.capabilityStatus });
+  }
+  if (killerParticipant != null && scannedCount > 0
+      && killerParticipantAvailableCount === 0) {
+    throw new EventQueryError('KILLER_PARTICIPANT_UNAVAILABLE',
+      'This event stream has no available killer participant candidate for filtering.',
+      { scanned_count: scannedCount,
+        killer_participant_unavailable_count: killerParticipantUnavailableCount,
         capability_status: prepared.capabilityStatus });
   }
   if (assistingParticipant != null && scannedCount > 0
@@ -1494,6 +1578,8 @@ async function streamEventQuery(prepared, options, emitLine) {
     matched_count: matchedCount,
     emitted_count: emittedCount,
     participant_unavailable_count: participantUnavailableCount,
+    ...(killerParticipant == null ? {}
+      : { killer_participant_unavailable_count: killerParticipantUnavailableCount }),
     ...(assistingParticipant == null ? {}
       : { assisting_participant_unavailable_count: assistingParticipantUnavailableCount }),
     ...(rawParam == null ? {} : { raw_param_unavailable_count: rawParamUnavailableCount }),
@@ -1504,6 +1590,8 @@ async function streamEventQuery(prepared, options, emitLine) {
     ...(opaqueI32 == null ? {} : { opaque_i32_unavailable_count: opaqueI32UnavailableCount }),
     ...(childEventId == null ? {} : { child_event_id_unavailable_count: childEventIdUnavailableCount }),
     filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit,
+      ...(killerParticipant == null ? {}
+        : { killer_participant_id: killerParticipant }),
       ...(assistingParticipant == null ? {}
         : { assisting_participant_id: assistingParticipant }),
       ...(rawParam == null ? {} : { raw_param: rawParam }),
@@ -1547,7 +1635,8 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         });
     } catch (error) {
       if (!(error instanceof EventQueryError)
-          || !['PARTICIPANT_UNAVAILABLE', 'ASSISTING_PARTICIPANT_UNAVAILABLE',
+          || !['PARTICIPANT_UNAVAILABLE', 'KILLER_PARTICIPANT_UNAVAILABLE',
+            'ASSISTING_PARTICIPANT_UNAVAILABLE',
             'RAW_PARAM_UNAVAILABLE',
             'ITEM_ID_UNAVAILABLE', 'SLOT_UNAVAILABLE', 'OPAQUE_U32_UNAVAILABLE',
             'OPAQUE_PAIR_UNAVAILABLE',

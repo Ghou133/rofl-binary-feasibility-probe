@@ -4,6 +4,12 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed:** `query-events --killer-participant 1..10` filters exact 821
+  death and assist candidate rows by the independently decoded killer
+  participant candidate. A real KR Replay had 71 death rows, three matches
+  for participant 6, and preserved the original JSONL line. Another Replay
+  had one unavailable nonhero source among 41 rows. Missing or nonhero IDs
+  stay unavailable, while a checked zero match remains complete.
 - **Completed:** `query-events --assisting-participant 1..10` filters exact
   821 `hero_assist_candidates` without altering JSONL rows. A real 11-Replay
   batch scanned 655 death rows and found 85 participant-2 matches; all 11

@@ -69,7 +69,9 @@ const DOUBLE_MULTI_GROUP_EVENT = 'champion_double_kill_multi_group_candidates';
 const TRIPLE_QUADRA_PACKET_EVENT = 'champion_triple_quadra_event_packet_candidates';
 const TRIPLE_QUADRA_MULTI_GROUP_EVENT = 'champion_triple_quadra_multi_group_candidates';
 const SHUTDOWN_GROUP_EVENT = 'on_shutdown_die_hero_death_pair_candidates';
+const HERO_DEATH_EVENT = 'hero_death_candidates';
 const HERO_ASSIST_EVENT = 'hero_assist_candidates';
+const HERO_DEATH_EVIDENCE = 'CANDIDATE_821_REPLAY_TAIL_ROUTE_FINGERPRINT';
 const HERO_ASSIST_EVIDENCE = 'CANDIDATE_821_CO_TIMED_ASSIST_PAIR_TAIL_ALIGNMENT';
 const ASSOCIATION_EVENTS = [DIE_PAIR_EVENT, KILL_GROUP_EVENT, MULTI_GROUP_EVENT,
   SHUTDOWN_GROUP_EVENT];
@@ -431,7 +433,7 @@ function artifact(t, rows = [
     RESURRECT_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
     DOUBLE_PACKET_EVENT, DOUBLE_MULTI_GROUP_EVENT, TRIPLE_QUADRA_PACKET_EVENT,
     TRIPLE_QUADRA_MULTI_GROUP_EVENT,
-    HERO_ASSIST_EVENT, ...ASSOCIATION_EVENTS].includes(eventKey)
+    HERO_DEATH_EVENT, HERO_ASSIST_EVENT, ...ASSOCIATION_EVENTS].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -482,7 +484,31 @@ function assistRow(time, victim, killer, assistants) {
     assist_observation_status: available ? HERO_ASSIST_EVIDENCE : 'UNAVAILABLE_NONHERO_SOURCE',
     semantic_status: available ? HERO_ASSIST_EVIDENCE : 'UNAVAILABLE_NONHERO_SOURCE',
     confidence: 'CANDIDATE',
+    field_confidence: { killer_participant_id_candidate: killer === null
+      ? 'UNAVAILABLE' : 'CANDIDATE_821_SOURCE_ID_KILL_TAIL_ALIGNMENT' },
   };
+}
+
+function deathRow(time, victim, killer) {
+  return {
+    event_type: 'death', game_version: HERO_DEATH_CANDIDATE_PROFILE_821.replay_version,
+    patch: '16.19', build_profile: HERO_DEATH_CANDIDATE_PROFILE_821.id,
+    replay_sha256: SHA, replay_time_ms: time, timestamp_ms: time,
+    victim_participant_id: victim, target_participant_id: victim,
+    killer_participant_id_candidate: killer,
+    confidence: 'CANDIDATE', semantic_status: HERO_DEATH_EVIDENCE,
+    field_confidence: { killer_participant_id_candidate: killer === null
+      ? 'UNAVAILABLE' : 'CANDIDATE_821_SOURCE_ID_KILL_TAIL_ALIGNMENT' },
+  };
+}
+
+function deathArtifact(t, rows) {
+  const fixture = artifact(t, rows, true, HERO_DEATH_EVENT);
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.hero_death.profile_id = HERO_DEATH_CANDIDATE_PROFILE_821.id;
+    semantic.capability_results.hero_death.evidence_status = HERO_DEATH_EVIDENCE;
+  });
+  return fixture;
 }
 
 function assistArtifact(t, rows) {
@@ -1210,6 +1236,180 @@ test('query-events marks an all-null assist candidate Replay unavailable within 
   refreshBatchHashes(manifestPath, HERO_ASSIST_EVENT);
   const unavailable = run(first.root, '--event', HERO_ASSIST_EVENT,
     '--assisting-participant', '2');
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'BATCH_EVENT_UNAVAILABLE');
+});
+
+test('query-events filters exact 821 death killer candidates and keeps original rows', (t) => {
+  const fixture = deathArtifact(t, [
+    deathRow(100, 1, 6), deathRow(200, 2, null), deathRow(300, 3, 7),
+  ]);
+  const selected = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant=6', '--participant=1', '--limit=1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 3);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.killer_participant_unavailable_count, 1);
+  assert.equal(summary.filters.killer_participant_id, 6);
+  assert.equal(summary.filters.participant_id, 1);
+  assert.equal(summary.rows_unmodified, true);
+
+  const zero = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '10');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, '');
+  assert.equal(JSON.parse(zero.stderr).matched_count, 0);
+  assert.equal(JSON.parse(zero.stderr).killer_participant_unavailable_count, 1);
+});
+
+test('query-events combines exact 821 assist killer and assisting candidates', (t) => {
+  const fixture = assistArtifact(t, [
+    assistRow(100, 1, 6, [2, 3]),
+    assistRow(200, 2, 6, []),
+    assistRow(300, 3, null, null),
+    assistRow(400, 4, 7, [2]),
+  ]);
+  const selected = run(fixture.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--killer-participant', '6', '--assisting-participant', '2');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 4);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.killer_participant_unavailable_count, 1);
+  assert.equal(summary.assisting_participant_unavailable_count, 1);
+  assert.equal(summary.filters.killer_participant_id, 6);
+  assert.equal(summary.filters.assisting_participant_id, 2);
+});
+
+test('query-events treats missing or null killer candidates as unavailable', (t) => {
+  const missing = deathRow(100, 1, 6);
+  delete missing.killer_participant_id_candidate;
+  const fixture = deathArtifact(t, [missing, deathRow(200, 2, null)]);
+  const output = path.join(fixture.root, 'killer-unavailable.jsonl');
+  const unavailable = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '6', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'KILLER_PARTICIPANT_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const zeroFixture = deathArtifact(t, [deathRow(100, 1, 6)]);
+  const zero = run(zeroFixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '7');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(JSON.parse(zero.stderr).matched_count, 0);
+  assert.equal(JSON.parse(zero.stderr).killer_participant_unavailable_count, 0);
+
+  const emptyFixture = deathArtifact(t, []);
+  const empty = run(emptyFixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '7');
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.equal(JSON.parse(empty.stderr).scanned_count, 0);
+});
+
+test('query-events rejects malformed present killer candidates and exact-build mismatches', (t) => {
+  const fixture = deathArtifact(t, [deathRow(100, 1, 6)]);
+  const eventPath = path.join(fixture.replayDirectory, `${HERO_DEATH_EVENT}.jsonl`);
+  const output = path.join(fixture.root, 'killer-bad.jsonl');
+  for (const invalidKiller of [0, 11, '6', true, [], {}, 1, 2.5]) {
+    fs.writeFileSync(eventPath, `${JSON.stringify({
+      ...deathRow(100, 1, 6), killer_participant_id_candidate: invalidKiller,
+    })}\n`);
+    const invalid = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+      '--killer-participant', '6', '--output', output);
+    assert.equal(invalid.status, 2, JSON.stringify(invalidKiller));
+    assert.equal(JSON.parse(invalid.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
+  fs.writeFileSync(eventPath, `${JSON.stringify({
+    ...deathRow(100, 1, 6), field_confidence: {
+      killer_participant_id_candidate: 'UNAVAILABLE',
+    },
+  })}\n`);
+  const conflicting = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '6');
+  assert.equal(conflicting.status, 2);
+  assert.equal(JSON.parse(conflicting.stderr).code, 'INVALID_EVENT_ROW');
+  fs.writeFileSync(eventPath, `${fixture.lines[0]}\n`);
+
+  const invalidParticipant = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '11');
+  assert.equal(invalidParticipant.status, 1);
+  const otherEvent = artifact(t);
+  assert.equal(run(otherEvent.replayDirectory, '--event', EVENT,
+    '--killer-participant', '6').status, 1);
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.hero_death.profile_id = 'foreign-profile';
+  });
+  const wrongProfile = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '6');
+  assert.equal(wrongProfile.status, 2);
+  assert.equal(JSON.parse(wrongProfile.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+  rewriteJson(path.join(fixture.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results.hero_death.profile_id = HERO_DEATH_CANDIDATE_PROFILE_821.id;
+    semantic.replay_version = VERSION;
+  });
+  rewriteJson(path.join(fixture.replayDirectory, 'replay_analysis.json'), (analysis) => {
+    analysis.replay_version = VERSION;
+  });
+  const wrongBuild = run(fixture.replayDirectory, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '6');
+  assert.equal(wrongBuild.status, 2);
+  assert.equal(JSON.parse(wrongBuild.stderr).code, 'UNSUPPORTED_FILTER');
+
+  const assist = assistArtifact(t, [assistRow(100, 1, 6, [2])]);
+  fs.writeFileSync(path.join(assist.replayDirectory, `${HERO_ASSIST_EVENT}.jsonl`),
+    `${JSON.stringify({ ...assistRow(100, 1, 6, [2]),
+      killer_participant_id_candidate: 0 })}\n`);
+  const invalidAssist = run(assist.replayDirectory, '--event', HERO_ASSIST_EVENT,
+    '--killer-participant', '6');
+  assert.equal(invalidAssist.status, 2);
+  assert.equal(JSON.parse(invalidAssist.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('query-events marks an all-unavailable killer Replay partial within a batch', (t) => {
+  const first = deathArtifact(t, [deathRow(100, 1, 6)]);
+  const secondDirectory = path.join(first.root, 'replays', 'unavailable');
+  fs.cpSync(first.replayDirectory, secondDirectory, { recursive: true });
+  const secondSha = 'b'.repeat(64);
+  rewriteJson(path.join(secondDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.replay_sha256 = secondSha;
+  });
+  rewriteJson(path.join(secondDirectory, 'replay_analysis.json'), (analysis) => {
+    analysis.replay_sha256 = secondSha;
+  });
+  fs.writeFileSync(path.join(secondDirectory, `${HERO_DEATH_EVENT}.jsonl`),
+    `${JSON.stringify({ ...deathRow(200, 2, null), replay_sha256: secondSha })}\n`);
+  const manifestPath = path.join(first.root, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify({
+    command_args: ['batch', 'synthetic-input'],
+    replay_inputs: [
+      { sha256: SHA, version: HERO_DEATH_CANDIDATE_PROFILE_821.replay_version,
+        artifact_directory: 'replays/synthetic' },
+      { sha256: secondSha, version: HERO_DEATH_CANDIDATE_PROFILE_821.replay_version,
+        artifact_directory: 'replays/unavailable' },
+    ],
+  }));
+  refreshBatchHashes(manifestPath, HERO_DEATH_EVENT);
+  const partial = run(first.root, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '6');
+  assert.equal(partial.status, 0, partial.stderr);
+  assert.equal(partial.stdout, `${first.lines[0]}\n`);
+  const summary = JSON.parse(partial.stderr);
+  assert.equal(summary.query_status, 'PARTIAL');
+  assert.equal(summary.unavailable_replay_count, 1);
+  assert.equal(summary.replay_results[1].code, 'KILLER_PARTICIPANT_UNAVAILABLE');
+
+  const missing = deathRow(100, 1, 6);
+  delete missing.killer_participant_id_candidate;
+  fs.writeFileSync(path.join(first.replayDirectory, `${HERO_DEATH_EVENT}.jsonl`),
+    `${JSON.stringify(missing)}\n`);
+  refreshBatchHashes(manifestPath, HERO_DEATH_EVENT);
+  const unavailable = run(first.root, '--event', HERO_DEATH_EVENT,
+    '--killer-participant', '6');
   assert.equal(unavailable.status, 2);
   assert.equal(JSON.parse(unavailable.stderr).code, 'BATCH_EVENT_UNAVAILABLE');
 });

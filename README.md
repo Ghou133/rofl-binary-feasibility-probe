@@ -471,6 +471,16 @@ node src/cli.js query-events "work\16-19-821-assists" `
 `assisting_participant_unavailable_count`，已核对的空列表是可用的零助攻候选。
 筛选不会把候选助攻提升为已确认的游戏事件。
 
+`--killer-participant 1..10` 可查询同一完整 build 的 `hero_death_candidates`
+或 `hero_assist_candidates` 中的候选击杀者，也可与 `--participant`（受害者）及
+助攻列表筛选同时使用。非英雄来源的空击杀者计入
+`killer_participant_unavailable_count`；已核对且没有匹配行时正常返回零命中。
+
+```powershell
+node src/cli.js query-events "work\16-19-821-deaths" `
+  --event hero_death_candidates --killer-participant 6 --limit 20
+```
+
 对已解码的 821 库存包按物品 ID 查询单包记录：
 
 ```powershell
