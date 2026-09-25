@@ -4,6 +4,15 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed 821 inventory endpoint reversal query:**
+  `query-events --event inventory_keyframe_interval_difference_candidates
+  --endpoint-reversed-pair` checks both saved complete 10-slot Broadcast
+  keyframe endpoints and their raw packet references, then selects rows with
+  exactly two changed slots and two distinct nonzero item keys reversed and
+  unique in both endpoints. The real 11-Replay batch was `COMPLETE` for all
+  Replays, inspected 1,759 interval rows, and emitted 15 unmodified rows
+  (SHA-256 `beaeac6bef5ae26cf6e13ef80b2c6460fc595832bc63e3508b9298d815dc3b30`).
+  This is an endpoint pattern, not an observed swap action or change time.
 - **Completed previous-endpoint inventory query:** The exact-821
   `inventory_keyframe_interval_difference_candidates` query accepts
   `--previous-item-id` and matches it with optional current `--item-id` and
@@ -331,6 +340,17 @@ Current progress (older notes below retain their original research context):
   receiver or raw anchor can resolve the remaining anonymous roles.
   Unavailable virtual callback receivers still block owner/target/effect
   promotion for several existing event candidates.
+- **821 healing/shielding cross-route stop-loss:** In the 11 KR Replays,
+  `ParamsHeal` has 70,698 reported-amount candidates and
+  `ShieldingParams` has 2,778 packet pairs. The two anonymous Heal keys
+  differ in 612 packets. With key `+0x04`, 2,196 sampled participant
+  intervals have summed reports greater than the observed `TOTAL_HEAL`
+  endpoint difference; 370 individual reports exceed their interval
+  difference. Among positive self-mitigated intervals, 1,717 have no
+  matching ShieldingParams key, while 74 zero-difference intervals do.
+  These routes do not establish effective healing, shield absorption,
+  source, or target. Input hashes, exact counts, and method are retained
+  under ignored `artifacts/16_19_development/heal_shield_negative_scout_20260925/`.
 - **Completed 821 FaceDirection packet candidate:** The exact 821 `0x038e`
   route is selectable as `face_direction_packet` in the CLI/API. The pinned
   image and callback transform yield a packet-local unit-vector candidate;
