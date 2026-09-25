@@ -400,7 +400,7 @@ node src/cli.js query-events "work\16-19-821-heal-report\replays\KR_example" `
   --event params_heal_packet_candidates --opaque-u32 0x400000b3 --limit 20
 ```
 
-`--opaque-u32` 同时支持 `shielding_params_packet_pair_candidates`、`stealth_event_packet_candidates`、`champion_die_event_packet_candidates`、`champion_kill_event_packet_candidates`、`champion_multiple_kill_event_packet_candidates`、`on_shutdown_event_packet_candidates`、`resurrect_event_packet_candidates` 和 `turret_plate_event_packet_candidates`，匹配各记录中已解码的匿名标量 u32 字段；不查询多杀子包的 `+0x10` 列表，也不使用外层 `raw_param` 代替字段或赋予治疗、护盾、隐身、死亡、击杀、复活参与者或建筑角色。十进制、十六进制和 `0` 均可精确查询；汇总保留字段不可用数与已检查后的零命中。
+`--opaque-u32` 同时支持 `shielding_params_packet_pair_candidates`、`stealth_event_packet_candidates`、`npc_buff_add_packet_candidates`、`npc_buff_remove_packet_candidates`、`champion_die_event_packet_candidates`、`champion_kill_event_packet_candidates`、`champion_multiple_kill_event_packet_candidates`、`on_shutdown_event_packet_candidates`、`resurrect_event_packet_candidates` 和 `turret_plate_event_packet_candidates`，匹配各记录中已解码的匿名标量 u32 字段；BuffAdd2/BuffRemove2 只匹配 `opaque_u32_0x10`。不查询多杀子包的 `+0x10` 列表，也不使用外层 `raw_param` 代替字段或赋予治疗、护盾、Buff、隐身、死亡、击杀、复活参与者或建筑角色。十进制、十六进制和 `0` 均可精确查询；汇总保留字段不可用数与已检查后的零命中。
 
 对 821 CastSpellAns 候选包中已解码的不透明有符号整数精确查询：
 

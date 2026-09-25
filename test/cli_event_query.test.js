@@ -46,6 +46,8 @@ const HEAL_PACKET_EVENT = 'params_heal_packet_candidates';
 const SHIELD_PAIR_EVENT = 'shielding_params_packet_pair_candidates';
 const STEALTH_PACKET_EVENT = 'stealth_event_packet_candidates';
 const CAST_SPELL_ANS_EVENT = 'cast_spell_ans_packet_candidates';
+const BUFF_ADD_EVENT = 'npc_buff_add_packet_candidates';
+const BUFF_REMOVE_EVENT = 'npc_buff_remove_packet_candidates';
 const CHAMPION_DIE_EVENT = 'champion_die_event_packet_candidates';
 const CHAMPION_KILL_EVENT = 'champion_kill_event_packet_candidates';
 const CHAMPION_MULTIPLE_KILL_EVENT = 'champion_multiple_kill_event_packet_candidates';
@@ -411,6 +413,7 @@ function artifact(t, rows = [
   const capability = eventKey.slice(0, -'_candidates'.length);
   const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT,
     HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT, CAST_SPELL_ANS_EVENT,
+    BUFF_ADD_EVENT, BUFF_REMOVE_EVENT,
     CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
     CHAMPION_MULTIPLE_KILL_EVENT, SHUTDOWN_PACKET_EVENT,
     RESURRECT_PACKET_EVENT, TURRET_PLATE_PACKET_EVENT,
@@ -1323,6 +1326,34 @@ test('query-events filters either anonymous 821 heal or shield u32 without infer
   assert.equal(selectedShield.status, 0, selectedShield.stderr);
   assert.equal(selectedShield.stdout, `${shield.lines[0]}\n`);
   assert.equal(JSON.parse(selectedShield.stderr).filters.opaque_u32, 0x400000b5);
+});
+
+test('query-events filters packet-local 821 BuffAdd2 and BuffRemove2 opaque u32', (t) => {
+  for (const eventKey of [BUFF_ADD_EVENT, BUFF_REMOVE_EVENT]) {
+    const rows = [
+      { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae,
+        opaque_u32_0x10: 0 },
+      { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000af,
+        opaque_u32_0x10: 0x12345678 },
+      { replay_sha256: SHA, replay_time_ms: 30, raw_param: 0x400000b0 },
+    ];
+    const fixture = artifact(t, rows, true, eventKey);
+    const selected = run(fixture.replayDirectory, '--event', eventKey,
+      '--opaque-u32', '0x12345678');
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, `${fixture.lines[1]}\n`);
+    assert.equal(JSON.parse(selected.stderr).opaque_u32_unavailable_count, 1);
+    const zero = run(fixture.replayDirectory, '--event', eventKey,
+      '--opaque-u32', '0');
+    assert.equal(zero.status, 0, zero.stderr);
+    assert.equal(zero.stdout, `${fixture.lines[0]}\n`);
+    const corrupt = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+      opaque_u32_0x10: -1 }], true, eventKey);
+    const rejected = run(corrupt.replayDirectory, '--event', eventKey,
+      '--opaque-u32', '0');
+    assert.equal(rejected.status, 2);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+  }
 });
 
 test('query-events filters only decoded CastSpellAns signed i32, including both bounds and zero', (t) => {

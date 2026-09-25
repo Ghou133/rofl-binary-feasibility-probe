@@ -382,6 +382,8 @@ function parseArgs(argv) {
       'params_heal_packet_candidates',
       'shielding_params_packet_pair_candidates',
       'stealth_event_packet_candidates',
+      'npc_buff_add_packet_candidates',
+      'npc_buff_remove_packet_candidates',
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
       'champion_multiple_kill_event_packet_candidates',
