@@ -4,6 +4,17 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed query increment:** `query-events` reads saved exact-821
+  `ward_inventory_keyframe_pair_candidates` with participant, time, raw-param,
+  same-record item/slot and latest-observed filters. The saved association is
+  checked against both source capabilities and its two packet references;
+  missing image remains unavailable. A real 11-Replay query validated all
+  3,270 rows and returned `COMPLETE` for all 11. At 600,000 ms, 1,100 rows
+  matched and the last-observed query selected 110 original lines; their
+  sorted line-set SHA-256 matched an independent source JSONL scan. A
+  single-Replay participant/time/raw-param/item/slot filter returned one
+  byte-identical source line. This is a saved-artifact check, not a replay
+  byte re-decode at query time.
 - **Completed candidate association:** Jointly selecting exact KR 821
   `hero_ward_stats_snapshot,hero_inventory_broadcast_packet` with the pinned
   image adds `ward_inventory_keyframe_pair_candidates` and an association

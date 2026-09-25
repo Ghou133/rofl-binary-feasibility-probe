@@ -39,6 +39,14 @@ const { HERO_RESPAWN_CANDIDATE_PROFILE_821 } =
   require('./decoders/rofl_16_19_821_respawn_candidate');
 const { HERO_DEATH_EPISODE_821_PROFILE } =
   require('./decoders/rofl_16_19_821_hero_death_episode_candidate');
+const { WARD_INVENTORY_KEYFRAME_PAIR_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_ward_inventory_keyframe_pair_candidate');
+const { HERO_WARD_STATS_SNAPSHOT_821_CANDIDATE_PROFILE } =
+  require('./decoders/rofl_16_19_821_aux_counts_candidate');
+const { HERO_INVENTORY_BROADCAST_PACKET_CANDIDATE_PROFILE_821 } =
+  require('./decoders/rofl_16_19_821_inventory_broadcast_packet_candidate');
+const { LOOKUP_TABLE_SHA256, decodeRuntimeCountByte } =
+  require('./decoders/rofl_16_19_821_runtime_bytes');
 const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
 const { TURRET_FIRST_BLOOD_DIE_PAIR_821_PROFILE } =
@@ -68,6 +76,7 @@ const LATEST_PARTICIPANT_EVENTS_821 = new Set([
   'hero_damage_taken_from_champions_snapshot_candidates',
   'hero_damage_self_mitigated_snapshot_candidates',
   'hero_death_episode_candidates',
+  'ward_inventory_keyframe_pair_candidates',
 ]);
 const OPAQUE_U32_FIELDS_821 = Object.freeze({
   npc_buff_add_packet_candidates: Object.freeze(['opaque_u32_0x10']),
@@ -131,6 +140,12 @@ const OPAQUE_PAIR_FIELDS_821 = Object.freeze({
     Object.freeze(['opaque_u32_0x14', 'opaque_u8_0x18']),
 });
 const ASSOCIATION_EVENTS_821 = Object.freeze({
+  ward_inventory_keyframe_pair_candidates: Object.freeze({
+    profile: WARD_INVENTORY_KEYFRAME_PAIR_821_PROFILE,
+    eventType: 'WARD_INVENTORY_KEYFRAME_PAIR_CANDIDATE',
+    evidenceStatus: 'CANDIDATE_821_SAME_KEYFRAME_WARD_COUNT_INVENTORY_BROADCAST',
+    wardPair: true,
+  }),
   hero_death_episode_candidates: Object.freeze({
     profile: HERO_DEATH_EPISODE_821_PROFILE,
     eventType: 'HERO_DEATH_EPISODE_CANDIDATE',
@@ -558,7 +573,103 @@ function prepareHeroDeathEpisodeAssociation(semantic, analysis, eventKey,
   return association;
 }
 
+function prepareWardInventoryKeyframePairAssociation(semantic, analysis, eventKey,
+  { profile, evidenceStatus }) {
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`,
+      { replay_version: semantic.replay_version,
+        required_replay_version: profile.replay_version });
+  }
+  const association = semantic.candidate_associations?.[profile.capability];
+  if (association?.status !== 'CANDIDATE') {
+    throw new EventQueryError('ASSOCIATION_UNAVAILABLE',
+      `${profile.capability} is not an executed candidate association.`,
+      { capability: profile.capability, association_status: association?.status ?? null,
+        error: association?.error ?? null, semantic_run_status: semantic.status });
+  }
+  const imageSha = profile.evidence_runtime_image_sha256;
+  if (association.profile_id !== profile.id
+      || association.evidence_runtime_image_sha256 !== imageSha
+      || association.evidence_status !== evidenceStatus
+      || association.replay_sha256 !== semantic.replay_sha256
+      || !isDeepStrictEqual(association.depends_on, [...profile.depends_on])
+      || !isCount(association.event_count) || association.event_count === 0
+      || association.event_count % 10 !== 0
+      || association.ward_snapshot_count !== association.event_count
+      || association.broadcast_keyframe_count !== association.event_count
+      || !isCount(association.excluded_game_broadcast_count)
+      || association.verified_raw_packet_count
+        !== 2 * association.event_count + association.excluded_game_broadcast_count
+      || analysis.event_counts?.[eventKey] !== association.event_count
+      || (analysis.semantic?.candidate_associations?.[profile.capability] != null
+        && !isDeepStrictEqual(analysis.semantic.candidate_associations[profile.capability],
+          association))) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      `${profile.capability} identity or counts differ from its exact-build profile.`,
+      { capability: profile.capability });
+  }
+  for (const dependency of profile.depends_on) {
+    if (!Array.isArray(semantic.requested_capabilities)
+        || !semantic.requested_capabilities.includes(dependency)) {
+      throw new EventQueryError('CAPABILITY_NOT_REQUESTED',
+        `${dependency} was not requested in this Replay artifact.`,
+        { capability: dependency, association: profile.capability });
+    }
+    const result = semantic.capability_results?.[dependency];
+    if (result?.status !== 'CANDIDATE') {
+      throw new EventQueryError('CAPABILITY_UNAVAILABLE',
+        `${dependency} is unavailable for ${profile.capability}.`,
+        { capability: dependency, capability_status: result?.status ?? null,
+          association: profile.capability, missing_input: result?.missing_input ?? null,
+          error: result?.error ?? null });
+    }
+  }
+  const ward = semantic.capability_results.hero_ward_stats_snapshot;
+  const broadcast = semantic.capability_results.hero_inventory_broadcast_packet;
+  if (ward.profile_id !== HERO_WARD_STATS_SNAPSHOT_821_CANDIDATE_PROFILE.id
+      || ward.evidence_runtime_image_sha256 !== imageSha
+      || ward.evidence_status !== 'CANDIDATE_821_RUNTIME_KEYFRAME_BYTE_AND_REPLAY_TAIL'
+      || ward.lookup_table_sha256 !== LOOKUP_TABLE_SHA256
+      || ward.input_packet_id !== 0x0089
+      || ward.input_count !== association.event_count
+      || ward.event_count !== association.event_count
+      || ward.observed_participant_count !== 10
+      || ward.runtime_image_used !== false
+      || !['STATIC_821_RUNTIME_TRANSFORM_EMBEDDED', 'PROVIDED_NOT_USED']
+        .includes(ward.runtime_image_status)
+      || analysis.event_counts?.hero_ward_stats_snapshot_candidates
+        !== association.event_count
+      || broadcast.profile_id
+        !== HERO_INVENTORY_BROADCAST_PACKET_CANDIDATE_PROFILE_821.id
+      || broadcast.evidence_runtime_image_sha256 !== imageSha
+      || broadcast.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_BROADCAST_PACKET_FIELDS'
+      || broadcast.input_packet_id !== 0x0357
+      || broadcast.input_count !== broadcast.event_count
+      || broadcast.event_count
+        !== association.event_count + association.excluded_game_broadcast_count
+      || !isCount(broadcast.decoded_record_count)
+      || broadcast.decoded_record_count
+        < 10 * association.event_count + 6 * association.excluded_game_broadcast_count
+      || broadcast.decoded_record_count
+        > 10 * association.event_count + 9 * association.excluded_game_broadcast_count
+      || broadcast.runtime_image_used !== true
+      || broadcast.runtime_image_status !== 'MATCHED_USED'
+      || broadcast.runtime_image_sha256 !== imageSha
+      || analysis.event_counts?.hero_inventory_broadcast_packet_candidates
+        !== broadcast.event_count) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      `Dependency identity or counts disagree with ${profile.capability}.`,
+      { capability: profile.capability });
+  }
+  return association;
+}
+
 function prepareAssociation(semantic, analysis, eventKey, associationConfig) {
+  if (associationConfig.wardPair) {
+    return prepareWardInventoryKeyframePairAssociation(semantic, analysis, eventKey,
+      associationConfig);
+  }
   if (associationConfig.episode) {
     return prepareHeroDeathEpisodeAssociation(semantic, analysis, eventKey,
       associationConfig);
@@ -887,6 +998,7 @@ function prepareEventQuery(directory, eventKey) {
     artifactDirectory, inputPath, eventKey, eventStorage, capability, capabilityStatus,
     capabilityResult, declaredCount, replaySha, associationConfig, exactPacketProfile,
     exactBlobPacketConfig,
+    sourcePath: analysis.source_path,
     episodeAssistNativeStatus: associationConfig?.episode
       ? semantic.capability_results?.hero_assist?.native_child_identity_status : null,
     replayVersion: semantic.replay_version, semanticRunStatus: semantic.status,
@@ -1415,10 +1527,128 @@ function heroDeathEpisodeRow(row, prepared, lineNumber, seenPrimaryPositions,
   }
 }
 
+function wardInventoryKeyframePairRow(row, prepared, lineNumber, seenKeys,
+  seenPacketPositions, frames) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid ward_inventory_keyframe_pair row at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const wardRef = row.ward_stats_raw_packet_ref;
+  const broadcastRef = row.inventory_broadcast_raw_packet_ref;
+  const refs = row.raw_packet_refs;
+  const rawParam = row.hero_raw_param;
+  if (row.event_type !== 'WARD_INVENTORY_KEYFRAME_PAIR_CANDIDATE'
+      || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+      || row.build_profile !== WARD_INVENTORY_KEYFRAME_PAIR_821_PROFILE.id
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== prepared.capabilityResult.evidence_status
+      || row.observation_kind !== 'SAME_KEYFRAME_PACKET_PAIR'
+      || !Number.isSafeInteger(rawParam)
+      || rawParam < 0x400000ae || rawParam > 0x400000b7
+      || row.participant_id_candidate !== rawParam - 0x400000ae + 1
+      || !Array.isArray(refs) || refs.length !== 2
+      || !isDeepStrictEqual(row.raw_packet_ref, wardRef)
+      || !isDeepStrictEqual(refs, [broadcastRef, wardRef])) {
+    invalid('exact-build pair identity, participant or named references differ');
+  }
+  const validRef = (ref, packetId, minimumLength, maximumLength) =>
+    !!ref && typeof ref === 'object' && !Array.isArray(ref)
+    && ref.replay_sha256 === prepared.replaySha
+    && (ref.source_path === null
+      || (typeof ref.source_path === 'string' && ref.source_path.length > 0))
+    && (prepared.sourcePath === undefined || ref.source_path === prepared.sourcePath)
+    && ref.chunk_stream === 'keyframe'
+    && Number.isSafeInteger(ref.chunk_index) && ref.chunk_index >= 0
+    && Number.isSafeInteger(ref.chunk_id) && ref.chunk_id >= 0
+    && Number.isSafeInteger(ref.chunk_file_offset) && ref.chunk_file_offset >= 0
+    && Number.isSafeInteger(ref.decompressed_block_offset)
+    && ref.decompressed_block_offset >= 0
+    && Number.isSafeInteger(ref.decompressed_payload_offset)
+    && ref.decompressed_payload_offset > ref.decompressed_block_offset
+    && ref.packet_id === packetId && ref.replay_time_ms === row.replay_time_ms
+    && Number.isSafeInteger(ref.payload_length)
+    && ref.payload_length >= minimumLength && ref.payload_length <= maximumLength
+    && ref.raw_param === rawParam && REPLAY_SHA.test(ref.raw_payload_sha256);
+  if (!validRef(wardRef, 0x0089, 1263, 1263)
+      || !validRef(broadcastRef, 0x0357, 76, 166)
+      || wardRef.source_path !== broadcastRef.source_path
+      || wardRef.chunk_index !== broadcastRef.chunk_index
+      || wardRef.chunk_id !== broadcastRef.chunk_id
+      || wardRef.chunk_file_offset !== broadcastRef.chunk_file_offset
+      || broadcastRef.decompressed_block_offset
+        >= wardRef.decompressed_block_offset) {
+    invalid('keyframe packet identity, time or physical order differs');
+  }
+  for (const ref of refs) {
+    const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+    if (seenPacketPositions.has(position)) invalid('duplicate raw packet position');
+    seenPacketPositions.add(position);
+  }
+  const pairKey = `${wardRef.chunk_index}/${row.replay_time_ms}/${rawParam}`;
+  if (seenKeys.has(pairKey)) invalid('duplicate keyframe participant pair');
+  seenKeys.add(pairKey);
+  const frame = frames.get(wardRef.chunk_index)
+    ?? { time: row.replay_time_ms, participants: new Set() };
+  if (frame.time !== row.replay_time_ms
+      || frame.participants.has(row.participant_id_candidate)) {
+    invalid('keyframe roster has conflicting time or participant');
+  }
+  frame.participants.add(row.participant_id_candidate);
+  frames.set(wardRef.chunk_index, frame);
+  if (row.field_confidence?.replay_time_ms !== 'VERIFIED_DIRECT'
+      || row.field_confidence?.hero_raw_param !== 'VERIFIED_DIRECT'
+      || row.field_confidence?.participant_id_candidate
+        !== 'CANDIDATE_KR_821_RAW_PARAM_TAIL_ALIGNMENT'
+      || row.field_confidence?.inventory_records_candidate
+        !== 'CANDIDATE_EXACT_RUNTIME_BROADCAST_PACKET_FIELDS'
+      || row.field_confidence?.inventory_packet_slot_snapshot_candidate
+        !== 'CANDIDATE_EXACT_RUNTIME_CALLBACK_APPLICATION_AND_RECORD_FIELDS') {
+    invalid('candidate field evidence differs');
+  }
+  for (const { key } of HERO_WARD_STATS_SNAPSHOT_821_CANDIDATE_PROFILE.fields) {
+    const raw = row[`raw_${key}_byte`];
+    const value = row[`${key}_candidate`];
+    if (!Number.isSafeInteger(raw) || raw < 0 || raw > 255
+        || !Number.isSafeInteger(value) || value < 0 || value > 255
+        || decodeRuntimeCountByte(raw) !== value
+        || row.field_confidence?.[`${key}_candidate`]
+          !== 'CANDIDATE_821_RUNTIME_KEYFRAME_BYTE_AND_REPLAY_TAIL') {
+      invalid(`${key} candidate or raw byte differs`);
+    }
+  }
+  const records = row.inventory_records_candidate;
+  const snapshot = row.inventory_packet_slot_snapshot_candidate;
+  if (row.inventory_record_count !== 10
+      || !Array.isArray(records) || records.length !== 10
+      || !Array.isArray(snapshot) || snapshot.length !== 10) {
+    invalid('inventory keyframe records or snapshot are incomplete');
+  }
+  for (let index = 0; index < 10; index += 1) {
+    const record = records[index];
+    const slot = snapshot[index];
+    if (record?.record_index !== index || record.slot_candidate !== index
+        || !Number.isSafeInteger(record.item_id_candidate)
+        || record.item_id_candidate < 0 || record.item_id_candidate > 0xffffffff
+        || !/^[a-f0-9]{2}$/.test(record.emulated_object_slot_byte_hex)
+        || !/^[a-f0-9]{8}$/.test(record.emulated_object_item_id_bytes_hex)
+        || slot?.slot_candidate !== index
+        || slot.item_id_candidate !== record.item_id_candidate
+        || slot.value_basis !== 'DECODED_PACKET_RECORD') {
+      invalid(`inventory slot ${index} differs from its decoded record`);
+    }
+  }
+}
+
 function associationRow(row, prepared, lineNumber, seenKeys, seenPacketPositions,
-  episodePhysicalRefs) {
+  episodePhysicalRefs, wardPairFrames) {
   const { associationConfig, capabilityResult, replaySha, replayVersion } = prepared;
   if (!associationConfig) return;
+  if (associationConfig.wardPair) {
+    wardInventoryKeyframePairRow(row, prepared, lineNumber, seenKeys,
+      seenPacketPositions, wardPairFrames);
+    return;
+  }
   if (associationConfig.episode) {
     heroDeathEpisodeRow(row, prepared, lineNumber, seenKeys, episodePhysicalRefs);
     return;
@@ -1856,6 +2086,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     'hero_inventory_packet_candidates',
     'hero_inventory_broadcast_packet_candidates',
     'hero_inventory_set_item_packet_candidates',
+    'ward_inventory_keyframe_pair_candidates',
   ].includes(prepared.eventKey);
   const killerConfig = KILLER_PARTICIPANT_EVENTS_821[prepared.eventKey] ?? null;
   if (killerParticipant != null) {
@@ -1894,7 +2125,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   if ((itemId != null || slot != null) && (!inventoryPacketEvent
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
-      '--item-id and --slot require a 16.19.821.7343 inventory packet candidate event.');
+      '--item-id and --slot require a 16.19.821.7343 inventory packet or ward/inventory keyframe pair candidate event.');
   }
   const opaqueU32Fields = OPAQUE_U32_FIELDS_821[prepared.eventKey] ?? null;
   if (opaqueU32 != null && (!opaqueU32Fields
@@ -1953,6 +2184,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   const associationKeys = new Set();
   const associationPacketPositions = new Set();
   const episodePhysicalRefs = new Map();
+  const wardPairFrames = new Map();
   const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
   try {
@@ -2005,7 +2237,7 @@ async function streamEventQuery(prepared, options, emitLine) {
           { line_number: lineNumber });
       }
       associationRow(row, prepared, lineNumber, associationKeys,
-        associationPacketPositions, episodePhysicalRefs);
+        associationPacketPositions, episodePhysicalRefs, wardPairFrames);
       if (prepared.eventKey === 'hero_death_episode_candidates') {
         if (row.return_observation_status === 'OBSERVED_RETURN') observedReturnCount += 1;
         else terminalUnobservedCount += 1;
@@ -2018,15 +2250,20 @@ async function streamEventQuery(prepared, options, emitLine) {
         }
       }
       const params = rawParam == null ? null : rawPacketParams(row, lineNumber);
+      const inventoryRecordRow = prepared.eventKey
+        === 'ward_inventory_keyframe_pair_candidates'
+        ? { records_candidate: row.inventory_records_candidate,
+          record_count: row.inventory_record_count } : row;
       const items = itemId == null ? null
         : prepared.eventKey === 'hero_inventory_set_item_packet_candidates'
           ? packetScalarItemId(row, lineNumber)
-          : packetRecordItemIds(row, lineNumber,
-            prepared.eventKey === 'hero_inventory_broadcast_packet_candidates');
+          : packetRecordItemIds(inventoryRecordRow, lineNumber,
+            ['hero_inventory_broadcast_packet_candidates',
+              'ward_inventory_keyframe_pair_candidates'].includes(prepared.eventKey));
       const slots = slot == null ? null
         : prepared.eventKey === 'hero_inventory_set_item_packet_candidates'
           ? packetScalarSlot(row, lineNumber)
-          : packetRecordSlots(row, lineNumber);
+          : packetRecordSlots(inventoryRecordRow, lineNumber);
       const opaqueValues = opaqueU32 == null ? null
         : opaqueU32Values(row, lineNumber, opaqueU32Fields);
       const pairValue = opaquePair == null ? null
@@ -2080,7 +2317,7 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (itemId != null && slot != null
             && (prepared.eventKey === 'hero_inventory_set_item_packet_candidates'
               ? (row.item_id_candidate !== itemId || row.slot_candidate !== slot)
-              : !row.records_candidate.some((record) =>
+              : !inventoryRecordRow.records_candidate.some((record) =>
                 record.item_id_candidate === itemId && record.slot_candidate === slot)))
           || (opaqueU32 != null && !opaqueValues.values.includes(opaqueU32))
           || (opaquePair != null && (!pairValue.available
@@ -2125,6 +2362,16 @@ async function streamEventQuery(prepared, options, emitLine) {
       { observed_return_count: observedReturnCount,
         terminal_unobserved_count: terminalUnobservedCount,
         verified_raw_packet_count: episodePhysicalRefs.size });
+  }
+  if (prepared.eventKey === 'ward_inventory_keyframe_pair_candidates'
+      && (wardPairFrames.size * 10 !== scannedCount
+        || [...wardPairFrames.values()].some((frame) =>
+          frame.participants.size !== 10)
+        || associationPacketPositions.size !== 2 * scannedCount)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Ward/inventory keyframes lack complete participant rosters or unique paired refs.',
+      { scanned_count: scannedCount, keyframe_count: wardPairFrames.size,
+        unique_raw_packet_count: associationPacketPositions.size });
   }
   if (prepared.eventKey === 'champion_triple_quadra_multi_group_candidates'
       && (tripleGroupCount

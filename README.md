@@ -598,6 +598,17 @@ node src/cli.js query-events "work\16-19-821-inventory-batch" `
 
 结果按场次、参与者排列，同一时间取原 JSONL 中较晚的一行；不提供 `--to-ms` 则取回放内最后观察。`matched_count` 统计过滤后的所有行，`selected_count` 统计每场每人选中的行，`latest_participant_unavailable_count` 统计过滤后无法映射参与者的行，`--limit` 仅限制写出行数。与物品或槽位筛选合用时，选择的是最后一条**符合筛选条件的观察**，不表示物品在截止时间仍然存在；任何结果都不填补观察之间的状态。
 
+同关键帧眼位统计与物品广播配对候选也可按参与者、时间、原始参数以及**当包同一条记录**的物品和槽位查询：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-ward-inventory-batch" `
+  --event ward_inventory_keyframe_pair_candidates `
+  --participant 1 --from-ms 0 --to-ms 0 `
+  --raw-param 0x400000ae --item-id 2001 --slot 7 --limit 20
+```
+
+`--item-id 0` 也可匹配 Broadcast 当包的空槽记录。`--latest-per-participant` 取每场每人最后一条符合筛选条件的原始配对行；结果仅表示同关键帧的两个候选观察，不推断插眼、交易或后续物品状态。查询会检查保存产物的来源能力、关联计数、回放身份和双包引用；缺少镜像导致关联不可用的场次会明确报告，不计作零命中。
+
 对已解码的 821 库存包按物品 ID 查询单包记录：
 
 ```powershell

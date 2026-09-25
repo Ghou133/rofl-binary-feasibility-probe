@@ -185,8 +185,8 @@ Options:
   --killer-participant <1..10>  Candidate killer in exact-821 death, assist or episode rows
   --assisting-participant <1..10>  Member of exact-821 assist or episode candidate list
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
-  --item-id <uint32|0xhex>     Exact decoded 821 inventory packet record item ID
-  --slot <0..9>                Exact observed 821 inventory packet record slot
+  --item-id <uint32|0xhex>     Exact decoded 821 inventory record item ID, including ward/inventory pairs
+  --slot <0..9>                Exact observed 821 inventory record slot, including ward/inventory pairs
   --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
   --opaque-pair <u32:u8>      Exact anonymous 821 Buff Add/Remove/Update pair
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
@@ -407,12 +407,13 @@ function parseArgs(argv) {
       'hero_inventory_packet_candidates',
       'hero_inventory_broadcast_packet_candidates',
       'hero_inventory_set_item_packet_candidates',
+      'ward_inventory_keyframe_pair_candidates',
     ].includes(options.event);
     if (options.itemId !== null && !inventoryQueryEvent) {
-      throw new Error('--item-id requires an 821 inventory packet event');
+      throw new Error('--item-id requires an 821 inventory packet event or ward/inventory keyframe pair event');
     }
     if (options.slot !== null && !inventoryQueryEvent) {
-      throw new Error('--slot requires an 821 inventory packet event');
+      throw new Error('--slot requires an 821 inventory packet event or ward/inventory keyframe pair event');
     }
     if (options.slot !== null && options.slot > 9) {
       throw new Error('--slot must be in 0..9');
