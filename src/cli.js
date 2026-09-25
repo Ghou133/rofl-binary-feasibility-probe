@@ -191,9 +191,10 @@ Options:
   --assisting-participant <1..10>  Member of exact-821 assist or episode candidate list
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
   --item-id <uint32|0xhex>     Exact decoded 821 inventory record item ID, including ward/inventory pairs
+  --previous-item-id <uint32|0xhex>  Previous endpoint item ID in an exact-821 keyframe interval difference
   --slot <0..9>                Exact observed 821 inventory record slot, including ward/inventory pairs
   Interval differences: --item-id is the CURRENT item ID on a changed slot (zero valid).
-                        With --slot, both must match the SAME changed slot.
+                        Previous/current item IDs and --slot must match the SAME changed slot.
   --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
   --opaque-pair <u32:u8>      Exact anonymous 821 Buff Add/Remove/Update pair
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
@@ -243,6 +244,7 @@ function parseArgs(argv) {
     assistingParticipant: null,
     rawParam: null,
     itemId: null,
+    previousItemId: null,
     slot: null,
     opaqueU32: null,
     opaquePair: null,
@@ -352,6 +354,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'assisting-participant') options.assistingParticipant = queryInteger(value, key);
       else if (command === 'query-events' && key === 'raw-param') options.rawParam = queryRawParam(value);
       else if (command === 'query-events' && key === 'item-id') options.itemId = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'previous-item-id') options.previousItemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'slot') options.slot = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'opaque-u32') options.opaqueU32 = queryUint32(value, key);
       else if (command === 'query-events' && key === 'opaque-pair') options.opaquePair = queryOpaquePair(value);
@@ -420,6 +423,10 @@ function parseArgs(argv) {
     ].includes(options.event);
     if (options.itemId !== null && !inventoryQueryEvent) {
       throw new Error('--item-id requires an 821 inventory packet event, ward/inventory keyframe pair event, or inventory keyframe interval difference event');
+    }
+    if (options.previousItemId !== null
+        && options.event !== 'inventory_keyframe_interval_difference_candidates') {
+      throw new Error('--previous-item-id requires inventory_keyframe_interval_difference_candidates');
     }
     if (options.slot !== null && !inventoryQueryEvent) {
       throw new Error('--slot requires an 821 inventory packet event, ward/inventory keyframe pair event, or inventory keyframe interval difference event');
@@ -2790,6 +2797,7 @@ async function runQueryEventsCommand(parsed) {
       assistingParticipant: options.assistingParticipant,
       rawParam: options.rawParam,
       itemId: options.itemId,
+      previousItemId: options.previousItemId,
       slot: options.slot,
       opaqueU32: options.opaqueU32,
       opaquePair: options.opaquePair,

@@ -546,9 +546,13 @@ node src/cli.js batch "D:\Replays\KR-16.19.821.7343" `
 node src/cli.js query-events "work\16-19-821-ward-inventory" `
   --event inventory_keyframe_interval_difference_candidates `
   --participant 1 --slot 7 --item-id 2001 --limit 20
+
+node src/cli.js query-events "work\16-19-821-ward-inventory" `
+  --event inventory_keyframe_interval_difference_candidates `
+  --slot 7 --previous-item-id 2001 --item-id 2002 --limit 20
 ```
 
-`--slot` 和 `--item-id` 必须匹配同一条差异槽位记录；`--item-id 0` 可匹配当前端点解出的零值。`--latest-per-participant --to-ms 600000` 取截止时间前每场每人最后一条符合筛选条件的差异记录，仍不表示截止时的持续库存状态。查询校验保存的关联元数据与行来源，缺镜像的场次标为不可查询。
+`--previous-item-id` 只用于这类区间差异，筛选前端点物品键；与 `--slot`、`--item-id` 合用时，所有条件必须落在同一条差异槽位记录。两个物品键均可为 `0`；同一槽位前后值相等不会生成差异行。`--latest-per-participant --to-ms 600000` 取截止时间前每场每人最后一条符合筛选条件的差异记录，仍不表示截止时的持续库存状态。查询校验保存的关联元数据与行来源，缺镜像的场次标为不可查询。
 
 只读取已观察到的 HN HeroStats keyframe 候选快照：
 

@@ -2750,7 +2750,8 @@ function killerParticipantCandidate(row, prepared, lineNumber, config) {
 function validateFilters(options) {
   const { fromMs = null, toMs = null, participant = null,
     killerParticipant = null, assistingParticipant = null, rawParam = null,
-    itemId = null, slot = null, opaqueU32 = null, opaquePair = null, opaqueI32 = null,
+    itemId = null, previousItemId = null, slot = null,
+    opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     childEventId = null, limit = null, latestPerParticipant = false } = options;
   if (typeof latestPerParticipant !== 'boolean') {
     throw new EventQueryError('INVALID_FILTER', 'Invalid latestPerParticipant query filter.');
@@ -2763,6 +2764,7 @@ function validateFilters(options) {
     ['assistingParticipant', assistingParticipant, 1, 10],
     ['rawParam', rawParam, 0, 0xffffffff],
     ['itemId', itemId, 0, 0xffffffff],
+    ['previousItemId', previousItemId, 0, 0xffffffff],
     ['slot', slot, 0, 9],
     ['opaqueU32', opaqueU32, 0, 0xffffffff],
     ['opaqueI32', opaqueI32, -0x80000000, 0x7fffffff],
@@ -2788,7 +2790,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   validateFilters(options);
   const { fromMs = null, toMs = null, participant = null,
     killerParticipant = null, assistingParticipant = null, rawParam = null,
-    itemId = null, slot = null, opaqueU32 = null, opaquePair = null, opaqueI32 = null,
+    itemId = null, previousItemId = null, slot = null,
+    opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     childEventId = null, limit = null, latestPerParticipant = false } = options;
   if (latestPerParticipant
       && (prepared.replayVersion !== '16.19.821.7343'
@@ -2842,6 +2845,12 @@ async function streamEventQuery(prepared, options, emitLine) {
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--item-id and --slot require an exact-821 inventory packet, ward/inventory pair, or keyframe interval difference candidate event.');
+  }
+  if (previousItemId != null
+      && (prepared.eventKey !== 'inventory_keyframe_interval_difference_candidates'
+        || prepared.replayVersion !== '16.19.821.7343')) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--previous-item-id requires exact 16.19.821.7343 inventory keyframe interval difference candidates.');
   }
   const opaqueU32Fields = OPAQUE_U32_FIELDS_821[prepared.eventKey] ?? null;
   if (opaqueU32 != null && (!opaqueU32Fields
@@ -3044,7 +3053,15 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (rawParam != null && !params.includes(rawParam))
           || (itemId != null && !items.values.includes(itemId))
           || (slot != null && !slots.values.includes(slot))
+          || (prepared.eventKey === 'inventory_keyframe_interval_difference_candidates'
+            && (previousItemId != null || itemId != null || slot != null)
+            && !row.changed_slots_candidate.some((change) =>
+              (previousItemId == null
+                || change.previous_item_id_candidate === previousItemId)
+              && (itemId == null || change.current_item_id_candidate === itemId)
+              && (slot == null || change.slot_candidate === slot)))
           || (itemId != null && slot != null
+            && prepared.eventKey !== 'inventory_keyframe_interval_difference_candidates'
             && (prepared.eventKey === 'hero_inventory_set_item_packet_candidates'
               ? (row.item_id_candidate !== itemId || row.slot_candidate !== slot)
               : !inventoryRecordRow.records_candidate.some((record) =>
@@ -3246,6 +3263,7 @@ async function streamEventQuery(prepared, options, emitLine) {
         : { assisting_participant_id: assistingParticipant }),
       ...(rawParam == null ? {} : { raw_param: rawParam }),
       ...(itemId == null ? {} : { item_id: itemId }),
+      ...(previousItemId == null ? {} : { previous_item_id: previousItemId }),
       ...(slot == null ? {} : { slot }),
       ...(opaqueU32 == null ? {} : { opaque_u32: opaqueU32 }),
       ...(opaquePair == null ? {} : { opaque_pair: opaquePair }),

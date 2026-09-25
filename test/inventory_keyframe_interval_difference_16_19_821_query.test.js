@@ -264,6 +264,86 @@ test('query-events filters sampled inventory differences with same-slot current 
   assert.equal(fs.readFileSync(first.eventPath, 'utf8'), `${first.lines.join('\n')}\n`);
 });
 
+test('previous item ID matches the same changed slot as current ID and slot', (t) => {
+  const { first } = fixture(t);
+  const originalJsonl = fs.readFileSync(first.eventPath, 'utf8');
+  const firstChange = query(first.directory, '--participant', '1',
+    '--to-ms', '60000', '--slot', '6',
+    '--previous-item-id', '0', '--item-id', '3340');
+  assert.equal(firstChange.status, 0, firstChange.stderr);
+  assert.equal(firstChange.stdout, `${first.lines[0]}\n`);
+  const filters = JSON.parse(firstChange.stderr).filters;
+  assert.equal(filters.participant_id, 1);
+  assert.equal(filters.to_ms, 60000);
+  assert.equal(filters.slot, 6);
+  assert.equal(filters.item_id, 3340);
+  assert.equal(filters.previous_item_id, 0);
+
+  const changedToZero = query(first.directory, '--participant', '1',
+    '--from-ms', '120000', '--slot', '6',
+    '--previous-item-id', '0xD0C', '--item-id', '0');
+  assert.equal(changedToZero.status, 0, changedToZero.stderr);
+  assert.equal(changedToZero.stdout, `${first.lines[2]}\n`);
+  assert.equal(JSON.parse(changedToZero.stderr).rows_unmodified, true);
+
+  // In this row, slot 6 previously holds 3340 while slot 0 currently holds
+  // 1001. A row-level conjunction would incorrectly match them.
+  const falseCrossRecord = query(first.directory, '--participant', '1',
+    '--from-ms', '120000', '--previous-item-id', '3340', '--item-id', '1001');
+  assert.equal(falseCrossRecord.status, 0, falseCrossRecord.stderr);
+  assert.equal(falseCrossRecord.stdout, '');
+  assert.equal(JSON.parse(falseCrossRecord.stderr).matched_count, 0);
+
+  const falseCrossSlot = query(first.directory, '--participant', '1',
+    '--to-ms', '60000', '--slot', '6',
+    '--previous-item-id', '0', '--item-id', '2001');
+  assert.equal(falseCrossSlot.status, 0, falseCrossSlot.stderr);
+  assert.equal(falseCrossSlot.stdout, '');
+  assert.equal(JSON.parse(falseCrossSlot.stderr).matched_count, 0);
+
+  const falseTwoZeros = query(first.directory, '--participant', '1',
+    '--from-ms', '120000', '--previous-item-id', '0', '--item-id', '0');
+  assert.equal(falseTwoZeros.status, 0, falseTwoZeros.stderr);
+  assert.equal(falseTwoZeros.stdout, '');
+  assert.equal(JSON.parse(falseTwoZeros.stderr).matched_count, 0);
+  assert.equal(fs.readFileSync(first.eventPath, 'utf8'), originalJsonl);
+});
+
+test('previous item ID rejects other event streams and malformed uint32 values', (t) => {
+  const { first } = fixture(t);
+  const otherEvent = spawnSync(process.execPath,
+    [CLI, 'query-events', first.directory, '--event', SOURCE_EVENT,
+      '--previous-item-id', '0'],
+    { encoding: 'utf8', cwd: path.dirname(CLI) });
+  assert.equal(otherEvent.status, 1);
+  assert.match(otherEvent.stderr, /--previous-item-id/);
+  for (const invalid of ['-1', '4294967296', '0x100000000', 'not-a-number']) {
+    const rejected = query(first.directory, '--previous-item-id', invalid);
+    assert.equal(rejected.status, 1, rejected.stderr);
+    assert.match(rejected.stderr, /--previous-item-id.*uint32/);
+    assert.equal(rejected.stdout, '');
+  }
+});
+
+test('batch previous item ID emits original JSONL rows in manifest order', (t) => {
+  const { root, first, second } = fixture(t, { batch: true });
+  const originalFirst = fs.readFileSync(first.eventPath, 'utf8');
+  const originalSecond = fs.readFileSync(second.eventPath, 'utf8');
+  const selected = query(root, '--participant', '1', '--previous-item-id', '3340',
+    '--item-id', '0', '--slot', '6');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${first.lines[2]}\n${second.lines[2]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.query_status, 'COMPLETE');
+  assert.equal(summary.replay_count, 2);
+  assert.equal(summary.scanned_count, 8);
+  assert.equal(summary.matched_count, 2);
+  assert.equal(summary.emitted_count, 2);
+  assert.equal(summary.rows_unmodified, true);
+  assert.equal(fs.readFileSync(first.eventPath, 'utf8'), originalFirst);
+  assert.equal(fs.readFileSync(second.eventPath, 'utf8'), originalSecond);
+});
+
 test('latest-per-participant chooses last matching observed difference per Replay', (t) => {
   const { first } = fixture(t);
   const latest = query(first.directory, '--latest-per-participant', '--to-ms', '120000');

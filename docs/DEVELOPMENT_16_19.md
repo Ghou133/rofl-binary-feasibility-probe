@@ -4,6 +4,16 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed previous-endpoint inventory query:** The exact-821
+  `inventory_keyframe_interval_difference_candidates` query accepts
+  `--previous-item-id` and matches it with optional current `--item-id` and
+  `--slot` on one changed slot. Both endpoint keys may be zero. In the saved
+  11-Replay batch, slot 7 `2001 -> 2002` matched 62 original rows (SHA-256
+  `20f7c1f78fae662fba31e5a35710c4afbd60b8dc5661021d4250e90a1cbb6036`),
+  slot 6 `0 -> 3340` matched 97
+  (`caf74ff8a81e6c69ca9421c2ec4838bd16e7c2fc5fef21206507d97e8509921f`),
+  and `0 -> 0` matched none; a loose cross-slot conjunction would have falsely
+  matched 119 rows. These are sampled endpoint differences, not transactions.
 - **Completed candidate bracket query:** Saved
   `increment_minion_keyframe_bracket_candidates` supports candidate
   participant, raw-parameter and time filters after exact-build/image,
