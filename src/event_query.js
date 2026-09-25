@@ -372,6 +372,94 @@ function prepareEventQuery(directory, eventKey) {
   };
 }
 
+function prepareBatchEventQuery(directory, eventKey) {
+  const artifactDirectory = path.resolve(directory);
+  const manifest = readArtifactJson(artifactDirectory, 'manifest.json');
+  if (manifest.command_args?.[0] !== 'batch'
+      || !Array.isArray(manifest.replay_inputs) || manifest.replay_inputs.length === 0) {
+    throw new EventQueryError('INVALID_BATCH_METADATA',
+      'manifest.json must identify a nonempty batch run.');
+  }
+  const replayRoot = path.join(artifactDirectory, 'replays');
+  let replayRootStat;
+  try {
+    replayRootStat = fs.lstatSync(replayRoot);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new EventQueryError('MISSING_METADATA', 'Batch Replay artifact directory is missing.',
+        { directory: replayRoot });
+    }
+    throw error;
+  }
+  if (!replayRootStat.isDirectory() || replayRootStat.isSymbolicLink()) {
+    throw new EventQueryError('UNSAFE_ARTIFACT', 'Batch Replay directory must be ordinary.',
+      { directory: replayRoot });
+  }
+  const seenDirectories = new Set();
+  const seenReplays = new Set();
+  const replays = manifest.replay_inputs.map((entry, index) => {
+    const relative = entry?.artifact_directory;
+    if (typeof relative !== 'string'
+        || !/^replays\/[A-Za-z0-9._-]+$/.test(relative)
+        || relative.endsWith('/.') || relative.endsWith('/..')
+        || seenDirectories.has(relative)) {
+      throw new EventQueryError('INVALID_BATCH_METADATA',
+        `Unsafe or duplicate Replay artifact directory at manifest entry ${index}.`);
+    }
+    seenDirectories.add(relative);
+    if (!REPLAY_SHA.test(entry.sha256)
+        || !/^16\.19\.[0-9]+\.[0-9]+$/.test(entry.version)
+        || seenReplays.has(entry.sha256)) {
+      throw new EventQueryError('INVALID_BATCH_METADATA',
+        `Invalid or duplicate Replay identity at manifest entry ${index}.`);
+    }
+    seenReplays.add(entry.sha256);
+    const replayDirectory = path.join(artifactDirectory, relative);
+    let stat;
+    try {
+      stat = fs.lstatSync(replayDirectory);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        throw new EventQueryError('MISSING_METADATA',
+          `Missing Replay artifact directory: ${relative}.`);
+      }
+      throw error;
+    }
+    if (!stat.isDirectory() || stat.isSymbolicLink()) {
+      throw new EventQueryError('UNSAFE_ARTIFACT',
+        `Replay artifact directory must be an ordinary directory: ${relative}.`);
+    }
+    let prepared = null;
+    let unavailable = null;
+    try {
+      prepared = prepareEventQuery(replayDirectory, eventKey);
+    } catch (error) {
+      if (!(error instanceof EventQueryError)
+          || !['CAPABILITY_UNAVAILABLE', 'CAPABILITY_NOT_REQUESTED',
+            'ASSOCIATION_UNAVAILABLE', 'UNSUPPORTED_EVENT_BUILD'].includes(error.code)) {
+        throw error;
+      }
+      unavailable = { code: error.code, message: error.message,
+        ...error.details };
+    }
+    // Even unavailable entries must be bound to the manifest's exact Replay.
+    const semantic = readArtifactJson(replayDirectory, 'semantic_run.json');
+    const analysis = readArtifactJson(replayDirectory, 'replay_analysis.json');
+    if (semantic.replay_sha256 !== entry.sha256
+        || analysis.replay_sha256 !== entry.sha256
+        || semantic.replay_version !== entry.version
+        || analysis.replay_version !== entry.version
+        || semantic.container_status !== 'PASS') {
+      throw new EventQueryError('ARTIFACT_IDENTITY_MISMATCH',
+        `Manifest and Replay metadata disagree at entry ${index}.`,
+        { artifact_directory: relative });
+    }
+    return { relative, replayDirectory, replaySha: entry.sha256,
+      replayVersion: entry.version, prepared, unavailable };
+  });
+  return { artifactDirectory, eventKey, replays };
+}
+
 function subjectParticipant(row, lineNumber) {
   let value = null;
   let observed = false;
@@ -882,4 +970,70 @@ async function streamEventQuery(prepared, options, emitLine) {
   };
 }
 
-module.exports = { EventQueryError, prepareEventQuery, streamEventQuery };
+async function streamBatchEventQuery(prepared, options, emitLine) {
+  validateFilters(options);
+  let scannedCount = 0;
+  let matchedCount = 0;
+  let emittedCount = 0;
+  let completedCount = 0;
+  let filters = null;
+  const replayResults = [];
+  for (const replay of prepared.replays) {
+    const identity = { artifact_directory: replay.relative,
+      replay_sha256: replay.replaySha, replay_version: replay.replayVersion };
+    if (replay.unavailable) {
+      replayResults.push({ ...identity, query_status: 'UNAVAILABLE',
+        ...replay.unavailable });
+      continue;
+    }
+    let replayEmittedCount = 0;
+    let summary;
+    try {
+      // Scan each complete JSONL, including after the global output limit.
+      summary = await streamEventQuery(replay.prepared, { ...options, limit: null },
+        async (line) => {
+          if (options.limit == null || emittedCount < options.limit) {
+            await emitLine(line);
+            emittedCount += 1;
+            replayEmittedCount += 1;
+          }
+        });
+    } catch (error) {
+      if (!(error instanceof EventQueryError)
+          || !['PARTICIPANT_UNAVAILABLE', 'RAW_PARAM_UNAVAILABLE',
+            'ITEM_ID_UNAVAILABLE', 'SLOT_UNAVAILABLE', 'OPAQUE_U32_UNAVAILABLE',
+            'OPAQUE_I32_UNAVAILABLE', 'CHILD_EVENT_ID_UNAVAILABLE'].includes(error.code)) {
+        throw error;
+      }
+      replayResults.push({ ...identity, query_status: 'UNAVAILABLE',
+        code: error.code, message: error.message, ...error.details });
+      continue;
+    }
+    completedCount += 1;
+    filters ??= { ...summary.filters, limit: options.limit ?? null };
+    scannedCount += summary.scanned_count;
+    matchedCount += summary.matched_count;
+    replayResults.push({ ...identity, query_status: 'COMPLETE',
+      capability_status: summary.capability_status,
+      declared_event_count: summary.declared_event_count,
+      scanned_count: summary.scanned_count,
+      matched_count: summary.matched_count,
+      emitted_count: replayEmittedCount });
+  }
+  if (completedCount === 0) {
+    throw new EventQueryError('BATCH_EVENT_UNAVAILABLE',
+      'No Replay in this batch has a queryable event stream.',
+      { event_key: prepared.eventKey, replay_results: replayResults });
+  }
+  return { schema_version: 1, command: 'query-events',
+    query_status: completedCount === prepared.replays.length ? 'COMPLETE' : 'PARTIAL',
+    artifact_directory: prepared.artifactDirectory, event_key: prepared.eventKey,
+    replay_count: prepared.replays.length, completed_replay_count: completedCount,
+    unavailable_replay_count: prepared.replays.length - completedCount,
+    scanned_count: scannedCount, matched_count: matchedCount,
+    emitted_count: emittedCount, filters,
+    replay_results: replayResults, rows_unmodified: true };
+}
+
+module.exports = { EventQueryError, prepareEventQuery, prepareBatchEventQuery,
+  streamEventQuery, streamBatchEventQuery };

@@ -108,7 +108,8 @@ const {
   writeJson,
   writeJsonl,
 } = require('./io');
-const { EventQueryError, prepareEventQuery, streamEventQuery } = require('./event_query');
+const { EventQueryError, prepareEventQuery, prepareBatchEventQuery,
+  streamEventQuery, streamBatchEventQuery } = require('./event_query');
 
 const REPOSITORY_ROOT = path.resolve(__dirname, '..');
 const TEST_COMMAND = 'node --test test/*.test.js';
@@ -133,7 +134,7 @@ Usage:
   node src/cli.js batch <file.rofl|directory> [more inputs ...] [--out-dir artifacts]
   node src/cli.js validate [file.rofl|directory ...] [--out-dir artifacts]
   node src/cli.js ward-events <rows.json|rows.jsonl|file.rofl> [--out-dir artifacts]
-  node src/cli.js query-events <replay-artifact-directory> --event <exact-event-key> [filters]
+  node src/cli.js query-events <replay-or-batch-artifact-directory> --event <exact-event-key> [filters]
 
 Runtime: Node >=22.15.0 with native Zstd.
 Legacy semantic CLI scope: exact 16.15.801.3452. The separate 16.16 public API
@@ -353,7 +354,7 @@ function parseArgs(argv) {
   }
   if (command === 'query-events') {
     if (positionals.length !== 1 || !options.event) {
-      throw new Error('query-events requires one Replay artifact directory and --event');
+      throw new Error('query-events requires one Replay or batch artifact directory and --event');
     }
     if (options.participant !== null && options.participant > 10) {
       throw new Error('--participant must be in 1..10');
@@ -2543,12 +2544,23 @@ async function runQueryEventsCommand(parsed) {
   let writer = process.stdout;
   let createdOutput = false;
   try {
-    const prepared = prepareEventQuery(positionals[0], options.event);
+    const artifactDirectory = path.resolve(positionals[0]);
+    const batch = fs.existsSync(path.join(artifactDirectory, 'manifest.json'));
+    const prepared = batch
+      ? prepareBatchEventQuery(artifactDirectory, options.event)
+      : prepareEventQuery(artifactDirectory, options.event);
     if (options.output && options.output !== '-') {
       outputPath = path.resolve(options.output);
-      const protectedPaths = [prepared.inputPath,
-        path.join(prepared.artifactDirectory, 'semantic_run.json'),
-        path.join(prepared.artifactDirectory, 'replay_analysis.json')];
+      const replayInputs = batch ? prepared.replays
+        .flatMap((replay) => [replay.prepared?.inputPath,
+          path.join(replay.replayDirectory, 'semantic_run.json'),
+          path.join(replay.replayDirectory, 'replay_analysis.json')]).filter(Boolean)
+        : [prepared.inputPath,
+          path.join(prepared.artifactDirectory, 'semantic_run.json'),
+          path.join(prepared.artifactDirectory, 'replay_analysis.json')];
+      const protectedPaths = batch
+        ? [path.join(prepared.artifactDirectory, 'manifest.json'), ...replayInputs]
+        : replayInputs;
       const normalize = (filename) => process.platform === 'win32'
         ? filename.toLowerCase() : filename;
       if (protectedPaths.some((filename) => normalize(filename) === normalize(outputPath))) {
@@ -2569,7 +2581,7 @@ async function runQueryEventsCommand(parsed) {
       writer = handle.createWriteStream();
       createdOutput = true;
     }
-    const summary = await streamEventQuery(prepared, {
+    const filters = {
       fromMs: options.fromMs,
       toMs: options.toMs,
       participant: options.participant,
@@ -2580,9 +2592,13 @@ async function runQueryEventsCommand(parsed) {
       opaqueI32: options.opaqueI32,
       childEventId: options.childEventId,
       limit: options.limit,
-    }, async (line) => {
+    };
+    const emitLine = async (line) => {
       if (!writer.write(line)) await once(writer, 'drain');
-    });
+    };
+    const summary = batch
+      ? await streamBatchEventQuery(prepared, filters, emitLine)
+      : await streamEventQuery(prepared, filters, emitLine);
     if (createdOutput) {
       writer.end();
       await finished(writer);

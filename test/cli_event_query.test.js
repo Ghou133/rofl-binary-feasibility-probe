@@ -252,6 +252,95 @@ function run(...args) {
     { encoding: 'utf8', cwd: path.dirname(CLI) });
 }
 
+function batchArtifact(t) {
+  const first = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 100,
+    participant_id_candidate: 1 }]);
+  const second = artifact(t, [{ replay_sha256: 'b'.repeat(64), replay_time_ms: 200,
+    participant_id_candidate: 2 }]);
+  const secondDirectory = path.join(first.root, 'replays', 'second');
+  fs.cpSync(second.replayDirectory, secondDirectory, { recursive: true });
+  const manifest = {
+    command_args: ['batch', 'synthetic-input'],
+    replay_inputs: [
+      { sha256: SHA, version: VERSION, artifact_directory: 'replays/synthetic' },
+      { sha256: 'b'.repeat(64), version: VERSION,
+        artifact_directory: 'replays/second' },
+    ],
+  };
+  rewriteJson(path.join(secondDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.replay_sha256 = 'b'.repeat(64);
+  });
+  rewriteJson(path.join(secondDirectory, 'replay_analysis.json'), (analysis) => {
+    analysis.replay_sha256 = 'b'.repeat(64);
+  });
+  const manifestPath = path.join(first.root, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  return { root: first.root, first, secondDirectory, manifestPath };
+}
+
+test('query-events reads batch JSONL with a global limit and per-Replay counts', (t) => {
+  const batch = batchArtifact(t);
+  const result = run(batch.root, '--event', EVENT, '--limit', '1');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${batch.first.lines[0]}\n`);
+  const summary = JSON.parse(result.stderr);
+  assert.equal(summary.query_status, 'COMPLETE');
+  assert.equal(summary.replay_count, 2);
+  assert.equal(summary.completed_replay_count, 2);
+  assert.equal(summary.scanned_count, 2);
+  assert.equal(summary.matched_count, 2);
+  assert.equal(summary.emitted_count, 1);
+  assert.deepEqual(summary.replay_results.map((entry) => entry.emitted_count), [1, 0]);
+});
+
+test('query-events marks unavailable batch Replays and refuses an all-unavailable batch', (t) => {
+  const batch = batchArtifact(t);
+  rewriteJson(path.join(batch.secondDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results[CAPABILITY] = {
+      status: 'PROFILE_UNAVAILABLE', event_count: null,
+      missing_input: 'exact 821 image',
+    };
+  });
+  fs.rmSync(path.join(batch.secondDirectory, `${EVENT}.jsonl`));
+  const partial = run(batch.root, '--event', EVENT);
+  assert.equal(partial.status, 0, partial.stderr);
+  assert.equal(partial.stdout, `${batch.first.lines[0]}\n`);
+  const summary = JSON.parse(partial.stderr);
+  assert.equal(summary.query_status, 'PARTIAL');
+  assert.equal(summary.unavailable_replay_count, 1);
+  assert.equal(summary.replay_results[1].code, 'CAPABILITY_UNAVAILABLE');
+  assert.equal(summary.replay_results[1].capability_status, 'PROFILE_UNAVAILABLE');
+
+  rewriteJson(path.join(batch.first.replayDirectory, 'semantic_run.json'), (semantic) => {
+    semantic.capability_results[CAPABILITY] = {
+      status: 'PROFILE_UNAVAILABLE', event_count: null,
+    };
+  });
+  const output = path.join(batch.root, 'unavailable.jsonl');
+  const unavailable = run(batch.root, '--event', EVENT, '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'BATCH_EVENT_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+});
+
+test('query-events rejects unsafe or corrupt batch artifacts and removes partial output', (t) => {
+  const batch = batchArtifact(t);
+  const output = path.join(batch.root, 'partial.jsonl');
+  fs.writeFileSync(path.join(batch.secondDirectory, `${EVENT}.jsonl`),
+    '{invalid-json}\n');
+  const corrupt = run(batch.root, '--event', EVENT, '--output', output);
+  assert.equal(corrupt.status, 2);
+  assert.equal(JSON.parse(corrupt.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
+
+  rewriteJson(batch.manifestPath, (manifest) => {
+    manifest.replay_inputs[1].artifact_directory = 'replays/../outside';
+  });
+  const unsafe = run(batch.root, '--event', EVENT);
+  assert.equal(unsafe.status, 2);
+  assert.equal(JSON.parse(unsafe.stderr).code, 'INVALID_BATCH_METADATA');
+});
+
 test('query-events filters exact 821 pair and group association rows without modifying JSONL', (t) => {
   for (const eventKey of ASSOCIATION_EVENTS) {
     const fixture = associationArtifact(t, eventKey);

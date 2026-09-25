@@ -892,11 +892,15 @@ Current progress (older notes below retain their original research context):
   `NUM_DEATHS`/`LEVEL` fields without decompressing packet chunks or using a runtime
   image. It labels 16.19 `hero_death` and `hero_death_timer` as unpublished
   `CANDIDATE` and leaves route and death-count validation pending until decode.
-- **Artifact event query:** `node src/cli.js query-events <replay-artifact-directory>
+- **Artifact event query:** `node src/cli.js query-events <replay-or-batch-artifact-directory>
   --event <exact-event-key> [--from-ms n] [--to-ms n] [--participant 1..10]
   [--raw-param uint32|0xhex] [--limit n] [--output path|-]` streams unchanged
   candidate JSONL rows from
-  either default or `--event-jsonl-only` 16.19 CLI artifacts. It checks Replay
+  either default or `--event-jsonl-only` 16.19 CLI artifacts. A batch root with
+  `manifest.json` streams its Replay artifacts in manifest order with a global
+  output limit, per-Replay availability, and `PARTIAL` status when some Replay
+  capability streams are unavailable. No queryable Replay is an error, not zero.
+  It checks Replay
   identity and declared row counts, reports the original capability status and
   separate scanned/matched/emitted counts, and leaves unknown participants
   unselected by the participant filter. The raw-parameter filter matches an
