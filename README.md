@@ -475,7 +475,8 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 并提供同一镜像。此选择会在内部读取两个来源，只输出
 `face_direction_keyframe_roster_pair_candidates.jsonl`；每行保留 FaceDirection 与
 HeroStats 两个原始包引用。查询时用 `--participant 4` 按 HeroStats 阵容候选标签
-筛选，不能据此认定 FaceDirection 包的行动者。
+筛选；`--latest-per-participant` 返回每场每位候选参与者最后一条已观察到的关键帧配对。
+不能据此认定 FaceDirection 包的行动者。
 
 单独检查 821 IncrementMinionKills 包的候选协议字段：
 

@@ -133,6 +133,7 @@ const LATEST_PARTICIPANT_EVENTS_821 = new Set([
   'hero_death_episode_candidates',
   'ward_inventory_keyframe_pair_candidates',
   'inventory_keyframe_interval_difference_candidates',
+  'face_direction_keyframe_roster_pair_candidates',
 ]);
 const OPAQUE_U32_FIELDS_821 = Object.freeze({
   npc_buff_add_packet_candidates: Object.freeze(['opaque_u32_0x10']),

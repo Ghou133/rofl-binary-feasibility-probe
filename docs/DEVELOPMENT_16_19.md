@@ -358,7 +358,8 @@ Current progress (older notes below retain their original research context):
   control preserved chunk, time and order but produced zero full-key matches.
   The real pair-only CLI batch returned 11/11 `CANDIDATE` with zero framing
   errors. `query-events --participant 4` scanned 3,270 rows and matched
-  327 roster-participant candidates. The participant label belongs to the
+  327 roster-participant candidates; `--latest-per-participant` selected
+  110 last-observed keyframe rows, ten per Replay. The participant label belongs to the
   HeroStats roster, not a proven FaceDirection actor; receiver, position,
   path and direction effect remain `UNKNOWN`. The initial one-Replay CLI
   failure caused by a missing `input_count` contract field and the corrected
