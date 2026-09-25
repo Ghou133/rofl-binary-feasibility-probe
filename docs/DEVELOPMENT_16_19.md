@@ -401,6 +401,17 @@ Current progress (older notes below retain their original research context):
   failure caused by a missing `input_count` contract field and the corrected
   rerun are both retained locally. Batch output is ignored at
   `artifacts/16_19_development/face_direction_roster_pair_batch_11_821/`.
+- **821 FaceDirection actor-binding stop-loss:** The exact-image callback
+  receives a live `AIBaseClient` and does not use the packet's `+0x0c` field
+  as an actor key. In the saved 11-Replay game stream, 151,492/194,394
+  FaceDirection rows share a millisecond with different full parameters.
+  None of 8,463 independently selected movement rows has a same-key
+  FaceDirection packet at the same millisecond; a 100 ms window finds the
+  actual canonical key for 102 movement rows versus 117 for a rotated
+  wrong-key control. These observations do not bind packets to actors.
+  Receiver identity, position, path, and effective direction remain
+  `UNKNOWN`. The ignored evidence and next gate are in
+  `artifacts/16_19_development/face_actor_scout_20260925/RESULT.md`.
 
 - **Completed candidate marker:** Exact KR 821 CLI/API now selects native
   `0x040a` child `0x000b`, named `OnChampionDoubleKill` in the pinned image.
