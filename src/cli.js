@@ -177,6 +177,7 @@ Options:
   --item-id <uint32|0xhex>     Exact decoded 821 inventory packet record item ID
   --slot <0..9>                Exact observed 821 inventory packet record slot
   --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
+  --opaque-pair <u32:u8>      Exact anonymous 821 Buff Add/Remove/Update pair
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
   --child-event-id <uint32|0xhex>  Exact 821 stealth or named multikill child ID
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
@@ -222,6 +223,7 @@ function parseArgs(argv) {
     itemId: null,
     slot: null,
     opaqueU32: null,
+    opaquePair: null,
     opaqueI32: null,
     childEventId: null,
     limit: null,
@@ -323,6 +325,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'item-id') options.itemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'slot') options.slot = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'opaque-u32') options.opaqueU32 = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'opaque-pair') options.opaquePair = queryOpaquePair(value);
       else if (command === 'query-events' && key === 'opaque-i32') options.opaqueI32 = queryInt32(value, key);
       else if (command === 'query-events' && key === 'child-event-id') options.childEventId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'limit') options.limit = queryInteger(value, key);
@@ -405,6 +408,13 @@ function parseArgs(argv) {
     ].includes(options.event)) {
       throw new Error('--opaque-u32 requires a supported 821 packet or packet-group candidate event');
     }
+    if (options.opaquePair !== null && ![
+      'npc_buff_add_packet_candidates',
+      'npc_buff_remove_packet_candidates',
+      'npc_buff_update_num_counter_packet_candidates',
+    ].includes(options.event)) {
+      throw new Error('--opaque-pair requires an 821 Buff Add, Remove, or UpdateNumCounter packet event');
+    }
     if (options.opaqueI32 !== null && options.event !== 'cast_spell_ans_packet_candidates') {
       throw new Error('--opaque-i32 requires an 821 cast_spell_ans_packet_candidates event');
     }
@@ -471,6 +481,15 @@ function queryUint32(value, label) {
     throw new Error(`--${label} must be a decimal or 0x hexadecimal uint32`);
   }
   return number;
+}
+
+function queryOpaquePair(value) {
+  const parts = String(value).split(':');
+  if (parts.length !== 2) throw new Error('--opaque-pair must be uint32:uint8');
+  const u32 = queryUint32(parts[0], 'opaque-pair');
+  const u8 = queryUint32(parts[1], 'opaque-pair');
+  if (u8 > 0xff) throw new Error('--opaque-pair byte must be in 0..255');
+  return { u32, u8 };
 }
 
 function parseEventNames(value) {
@@ -2658,6 +2677,7 @@ async function runQueryEventsCommand(parsed) {
       itemId: options.itemId,
       slot: options.slot,
       opaqueU32: options.opaqueU32,
+      opaquePair: options.opaquePair,
       opaqueI32: options.opaqueI32,
       childEventId: options.childEventId,
       limit: options.limit,

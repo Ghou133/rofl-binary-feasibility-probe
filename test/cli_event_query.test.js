@@ -1423,6 +1423,66 @@ test('query-events filters either anonymous 821 BuffUpdateNumCounter u32', (t) =
   assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
 });
 
+test('query-events filters the exact 821 Buff Add/Remove/Update anonymous pair', (t) => {
+  for (const [eventKey, u32Field, u8Field] of [
+    [BUFF_ADD_EVENT, 'opaque_u32_0x10', 'opaque_u8_0x14'],
+    [BUFF_REMOVE_EVENT, 'opaque_u32_0x10', 'opaque_u8_0x14'],
+    [BUFF_UPDATE_COUNTER_EVENT, 'opaque_u32_0x14', 'opaque_u8_0x18'],
+  ]) {
+    const rows = [
+      { replay_sha256: SHA, replay_time_ms: 10, [u32Field]: 7, [u8Field]: 3,
+        opaque_u8_0x10: 9, opaque_u32_0x1c: 9 },
+      { replay_sha256: SHA, replay_time_ms: 20, [u32Field]: 7, [u8Field]: 4 },
+      { replay_sha256: SHA, replay_time_ms: 30, [u32Field]: 8, [u8Field]: 3 },
+      { replay_sha256: SHA, replay_time_ms: 40 },
+    ];
+    const fixture = artifact(t, rows, true, eventKey);
+    const selected = run(fixture.replayDirectory, '--event', eventKey,
+      '--opaque-pair', '0x7:3');
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, `${fixture.lines[0]}\n`);
+    const summary = JSON.parse(selected.stderr);
+    assert.deepEqual(summary.filters.opaque_pair, { u32: 7, u8: 3 });
+    assert.equal(summary.opaque_pair_unavailable_count, 1);
+    const none = run(fixture.replayDirectory, '--event', eventKey,
+      '--opaque-pair', '7:9');
+    assert.equal(none.status, 0, none.stderr);
+    assert.equal(none.stdout, '');
+    const invalidRow = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+      [u32Field]: 7, [u8Field]: 256 }], true, eventKey);
+    const rejected = run(invalidRow.replayDirectory, '--event', eventKey,
+      '--opaque-pair', '7:3');
+    assert.equal(rejected.status, 2);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+  }
+  const wrongEvent = artifact(t);
+  const unsupported = run(wrongEvent.replayDirectory, '--event', EVENT,
+    '--opaque-pair', '7:3');
+  assert.equal(unsupported.status, 1);
+  assert.match(unsupported.stderr, /--opaque-pair requires/);
+});
+
+test('query-events distinguishes unavailable Buff pair fields and rejects a foreign build', (t) => {
+  const missing = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10 }],
+    true, BUFF_ADD_EVENT);
+  const unavailable = run(missing.replayDirectory, '--event', BUFF_ADD_EVENT,
+    '--opaque-pair', '0:0');
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'OPAQUE_PAIR_UNAVAILABLE');
+
+  const foreign = artifact(t, [{ replay_sha256: SHA, replay_time_ms: 10,
+    opaque_u32_0x10: 7, opaque_u8_0x14: 3 }], true, BUFF_ADD_EVENT);
+  for (const filename of ['semantic_run.json', 'replay_analysis.json']) {
+    rewriteJson(path.join(foreign.replayDirectory, filename), (document) => {
+      document.replay_version = VERSION;
+    });
+  }
+  const rejected = run(foreign.replayDirectory, '--event', BUFF_ADD_EVENT,
+    '--opaque-pair', '7:3');
+  assert.equal(rejected.status, 2);
+  assert.equal(JSON.parse(rejected.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
 test('query-events filters only anonymous 821 BuffUpdateCount +0x14 u32', (t) => {
   const rows = [
     { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae,
@@ -2186,6 +2246,8 @@ test('query-events rejects malformed numeric filters before scanning', (t) => {
     ['--item-id', '4294967296'], ['--item-id', '0xgg'],
     ['--opaque-u32', '-1'], ['--opaque-u32', '0x100000000'],
     ['--opaque-u32', '4294967296'], ['--opaque-u32', '0xgg'],
+    ['--opaque-pair', '7'], ['--opaque-pair', '7:256'],
+    ['--opaque-pair', '0x100000000:1'], ['--opaque-pair', '7:-1'],
   ]) {
     const result = run(fixture.replayDirectory, '--event', EVENT, ...args);
     assert.equal(result.status, 1, args.join(' '));

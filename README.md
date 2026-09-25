@@ -316,6 +316,9 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 `semantic_run.json` 的 `candidate_associations.npc_buff_add_update_num_counter_opaque_pair`
 汇总同一回放中匿名 `(u32,u8)` 字段组合、原始包参数及更早游戏流 Add 包的计数。
 该统计保留关键帧与游戏流的区别；重复出现会导致歧义，不输出逐包配对或 Buff 生命周期。
+可对 BuffAdd2、BuffRemove2 或 BuffUpdateNumCounter 候选使用
+`query-events --opaque-pair U32:U8`，同时筛选对应的两个匿名字段。
+支持十进制或 `0x` 整数；筛选结果仍是原始候选包，不表示跨包配对。
 
 821 的 BuffUpdateCount 可独立选择 `--events npc_buff_update_count_packet`，
 并用同 build 的 `--runtime-image` 输出 `npc_buff_update_count_packet_candidates.jsonl`。

@@ -38,6 +38,12 @@ Current progress (older notes below retain their original research context):
   rows and a `CANDIDATE` Add/UpdateNum aggregate, with zero framing errors.
   `query-events --opaque-u32` now filters BuffReplace's anonymous `+0x18`;
   a real query scanned 770 rows and matched 12.
+- **Completed:** `query-events --opaque-pair U32:U8` selects the exact
+  anonymous field pair in 821 BuffAdd2, BuffRemove2, or BuffUpdateNumCounter
+  rows. On `KR_8393821675`, pair `95298804:13` matched 712 UpdateNum and
+  12 Add rows; an 11-Replay UpdateNum batch query scanned all 132,851 rows,
+  matched 4,920, and kept every Replay queryable. These are field matches,
+  not packet or buff-instance joins.
 - **Current:** Continue exact-build field research where an independent
   receiver or raw anchor can resolve the remaining anonymous roles.
   Unavailable virtual callback receivers still block owner/target/effect

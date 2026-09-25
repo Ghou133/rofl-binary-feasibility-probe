@@ -90,6 +90,12 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
     'on_shutdown_event_u32_0x5c', 'on_champion_die_event_u32_0x04',
   ]),
 });
+const OPAQUE_PAIR_FIELDS_821 = Object.freeze({
+  npc_buff_add_packet_candidates: Object.freeze(['opaque_u32_0x10', 'opaque_u8_0x14']),
+  npc_buff_remove_packet_candidates: Object.freeze(['opaque_u32_0x10', 'opaque_u8_0x14']),
+  npc_buff_update_num_counter_packet_candidates:
+    Object.freeze(['opaque_u32_0x14', 'opaque_u8_0x18']),
+});
 const ASSOCIATION_EVENTS_821 = Object.freeze({
   champion_die_hero_death_pair_candidates: Object.freeze({
     profile: CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE,
@@ -846,6 +852,21 @@ function opaqueU32Values(row, lineNumber, fields) {
   return { values, unavailable, available: values.length > 0 };
 }
 
+function opaquePairValue(row, lineNumber, fields) {
+  const [u32Field, u8Field] = fields;
+  const u32 = row[u32Field];
+  const u8 = row[u8Field];
+  if (u32 != null && (!Number.isSafeInteger(u32) || u32 < 0 || u32 > 0xffffffff)) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid ${u32Field} at JSONL line ${lineNumber}.`, { line_number: lineNumber });
+  }
+  if (u8 != null && (!Number.isSafeInteger(u8) || u8 < 0 || u8 > 0xff)) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid ${u8Field} at JSONL line ${lineNumber}.`, { line_number: lineNumber });
+  }
+  return { u32, u8, available: u32 != null && u8 != null };
+}
+
 function castSpellAnsOpaqueI32(row, lineNumber) {
   const field = 'opaque_i32_0x14c';
   if (!Object.hasOwn(row, field)) return { value: null, available: false };
@@ -1103,7 +1124,7 @@ function candidateChildEventId(row, eventKey, lineNumber) {
 
 function validateFilters(options) {
   const { fromMs = null, toMs = null, participant = null, rawParam = null,
-    itemId = null, slot = null, opaqueU32 = null, opaqueI32 = null,
+    itemId = null, slot = null, opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     childEventId = null, limit = null } = options;
   for (const [name, value, minimum, maximum] of [
     ['fromMs', fromMs, 0, Number.MAX_SAFE_INTEGER],
@@ -1121,6 +1142,12 @@ function validateFilters(options) {
       throw new EventQueryError('INVALID_FILTER', `Invalid ${name} query filter.`);
     }
   }
+  if (opaquePair != null && (!opaquePair || typeof opaquePair !== 'object'
+      || !Number.isSafeInteger(opaquePair.u32) || opaquePair.u32 < 0
+      || opaquePair.u32 > 0xffffffff || !Number.isSafeInteger(opaquePair.u8)
+      || opaquePair.u8 < 0 || opaquePair.u8 > 0xff)) {
+    throw new EventQueryError('INVALID_FILTER', 'Invalid opaquePair query filter.');
+  }
   if (fromMs != null && toMs != null && fromMs > toMs) {
     throw new EventQueryError('INVALID_FILTER', 'fromMs must not exceed toMs.');
   }
@@ -1129,7 +1156,7 @@ function validateFilters(options) {
 async function streamEventQuery(prepared, options, emitLine) {
   validateFilters(options);
   const { fromMs = null, toMs = null, participant = null, rawParam = null,
-    itemId = null, slot = null, opaqueU32 = null, opaqueI32 = null,
+    itemId = null, slot = null, opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     childEventId = null, limit = null } = options;
   const inventoryPacketEvent = [
     'hero_inventory_packet_candidates',
@@ -1146,6 +1173,12 @@ async function streamEventQuery(prepared, options, emitLine) {
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--opaque-u32 requires a supported 821 packet or packet-association candidate event.');
+  }
+  const opaquePairFields = OPAQUE_PAIR_FIELDS_821[prepared.eventKey] ?? null;
+  if (opaquePair != null && (!opaquePairFields
+      || prepared.replayVersion !== '16.19.821.7343')) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--opaque-pair requires an 821 Buff Add, Remove, or UpdateNumCounter packet event.');
   }
   if (opaqueI32 != null && (prepared.eventKey !== 'cast_spell_ans_packet_candidates'
       || prepared.replayVersion !== '16.19.821.7343')) {
@@ -1173,6 +1206,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   let slotAvailableCount = 0;
   let opaqueU32UnavailableCount = 0;
   let opaqueU32AvailableCount = 0;
+  let opaquePairUnavailableCount = 0;
+  let opaquePairAvailableCount = 0;
   let opaqueI32UnavailableCount = 0;
   let opaqueI32AvailableCount = 0;
   let childEventIdUnavailableCount = 0;
@@ -1232,6 +1267,8 @@ async function streamEventQuery(prepared, options, emitLine) {
           : packetRecordSlots(row, lineNumber);
       const opaqueValues = opaqueU32 == null ? null
         : opaqueU32Values(row, lineNumber, opaqueU32Fields);
+      const pairValue = opaquePair == null ? null
+        : opaquePairValue(row, lineNumber, opaquePairFields);
       const opaqueI32Field = opaqueI32 == null ? null
         : castSpellAnsOpaqueI32(row, lineNumber);
       const childId = childEventId == null ? null
@@ -1244,6 +1281,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (slot != null && slots.available) slotAvailableCount += 1;
       if (opaqueU32 != null && opaqueValues.unavailable) opaqueU32UnavailableCount += 1;
       if (opaqueU32 != null && opaqueValues.available) opaqueU32AvailableCount += 1;
+      if (opaquePair != null && !pairValue.available) opaquePairUnavailableCount += 1;
+      if (opaquePair != null && pairValue.available) opaquePairAvailableCount += 1;
       if (opaqueI32 != null && !opaqueI32Field.available) opaqueI32UnavailableCount += 1;
       if (opaqueI32 != null && opaqueI32Field.available) opaqueI32AvailableCount += 1;
       if (childEventId != null && !childId.available) childEventIdUnavailableCount += 1;
@@ -1260,6 +1299,8 @@ async function streamEventQuery(prepared, options, emitLine) {
               : !row.records_candidate.some((record) =>
                 record.item_id_candidate === itemId && record.slot_candidate === slot)))
           || (opaqueU32 != null && !opaqueValues.values.includes(opaqueU32))
+          || (opaquePair != null && (!pairValue.available
+            || pairValue.u32 !== opaquePair.u32 || pairValue.u8 !== opaquePair.u8))
           || (opaqueI32 != null && opaqueI32Field.value !== opaqueI32)
           || (childEventId != null && childId.value !== childEventId)) continue;
       matchedCount += 1;
@@ -1318,6 +1359,13 @@ async function streamEventQuery(prepared, options, emitLine) {
         opaque_u32_unavailable_count: opaqueU32UnavailableCount,
         capability_status: prepared.capabilityStatus });
   }
+  if (opaquePair != null && scannedCount > 0 && opaquePairAvailableCount === 0) {
+    throw new EventQueryError('OPAQUE_PAIR_UNAVAILABLE',
+      'This event stream has no decoded anonymous Buff u32/u8 pair for filtering.',
+      { scanned_count: scannedCount,
+        opaque_pair_unavailable_count: opaquePairUnavailableCount,
+        capability_status: prepared.capabilityStatus });
+  }
   if (opaqueI32 != null && scannedCount > 0 && opaqueI32AvailableCount === 0) {
     throw new EventQueryError('OPAQUE_I32_UNAVAILABLE',
       'This event stream has no decoded CastSpellAns opaque_i32_0x14c for filtering.',
@@ -1355,6 +1403,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     ...(itemId == null ? {} : { item_id_unavailable_count: itemIdUnavailableCount }),
     ...(slot == null ? {} : { slot_unavailable_count: slotUnavailableCount }),
     ...(opaqueU32 == null ? {} : { opaque_u32_unavailable_count: opaqueU32UnavailableCount }),
+    ...(opaquePair == null ? {} : { opaque_pair_unavailable_count: opaquePairUnavailableCount }),
     ...(opaqueI32 == null ? {} : { opaque_i32_unavailable_count: opaqueI32UnavailableCount }),
     ...(childEventId == null ? {} : { child_event_id_unavailable_count: childEventIdUnavailableCount }),
     filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit,
@@ -1362,6 +1411,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       ...(itemId == null ? {} : { item_id: itemId }),
       ...(slot == null ? {} : { slot }),
       ...(opaqueU32 == null ? {} : { opaque_u32: opaqueU32 }),
+      ...(opaquePair == null ? {} : { opaque_pair: opaquePair }),
       ...(opaqueI32 == null ? {} : { opaque_i32: opaqueI32 }),
       ...(childEventId == null ? {} : { child_event_id: childEventId }) },
     rows_unmodified: true,
@@ -1400,6 +1450,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       if (!(error instanceof EventQueryError)
           || !['PARTICIPANT_UNAVAILABLE', 'RAW_PARAM_UNAVAILABLE',
             'ITEM_ID_UNAVAILABLE', 'SLOT_UNAVAILABLE', 'OPAQUE_U32_UNAVAILABLE',
+            'OPAQUE_PAIR_UNAVAILABLE',
             'OPAQUE_I32_UNAVAILABLE', 'CHILD_EVENT_ID_UNAVAILABLE'].includes(error.code)) {
         throw error;
       }
