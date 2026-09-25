@@ -82,6 +82,10 @@ const { UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
   isObservedShape: isObservedUnitApplyDamageShape821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
+const { UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
+const { UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
 const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
 const { TURRET_FIRST_BLOOD_DIE_PAIR_821_PROFILE } =
@@ -164,6 +168,61 @@ const UNIT_APPLY_DAMAGE_LOOKUP_RELATIONS_821 = Object.freeze([
 ]);
 const UNIT_APPLY_DAMAGE_NATIVE_FLOAT_SOURCES_821 = Object.freeze([
   'RAW_READER', 'CONSTANT_0', 'CONSTANT_1', 'CONSTANT_2',
+]);
+const UNIT_APPLY_DAMAGE_ROSTER_RESULT_FIELDS_821 = new Set([
+  'profile_id', 'depends_on', 'evidence_runtime_image_sha256', 'known_limits',
+  'status', 'evidence_status', 'replay_sha256', 'runtime_image_status',
+  'runtime_image_used', 'runtime_image_sha256', 'dependency_statuses',
+  'damage_packet_count', 'snapshot_count', 'keyframe_count',
+  'canonical_roster_key_count', 'matched_full_key_packet_count',
+  'unmatched_packet_count', 'excluded_alias_0x100_packet_count',
+  'first_excluded_packet_refs', 'verified_raw_packet_count', 'input_count',
+  'event_count',
+]);
+const UNIT_APPLY_DAMAGE_ROSTER_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param', 'hero_stats_participant_id_candidate',
+  'native_callback_f32_0x20_candidate', 'native_callback_f32_0x20_source',
+  'pair_basis', 'actor_assignment_status', 'source_target_role_status',
+  'semantic_effect_status', 'confidence', 'semantic_status',
+  'unit_apply_damage_raw_packet_ref', 'hero_stats_roster_raw_packet_ref',
+  'raw_packet_refs',
+]);
+const UNIT_APPLY_DAMAGE_ROSTER_DAMAGE_REF_FIELDS_821 = new Set([
+  'source_path', 'replay_sha256', 'chunk_index', 'chunk_id', 'chunk_stream',
+  'chunk_file_offset', 'decompressed_block_offset',
+  'decompressed_payload_offset', 'packet_id', 'replay_time_ms',
+  'payload_length', 'raw_param', 'raw_payload_hex', 'raw_payload_sha256',
+]);
+const UNIT_APPLY_DAMAGE_ROSTER_STATS_REF_FIELDS_821 = new Set([
+  'source_path', 'replay_sha256', 'chunk_index', 'chunk_id', 'chunk_stream',
+  'chunk_file_offset', 'decompressed_block_offset',
+  'decompressed_payload_offset', 'packet_id', 'replay_time_ms',
+  'payload_length', 'raw_param', 'raw_payload_sha256',
+]);
+const UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_RESULT_FIELDS_821 = new Set([
+  'profile_id', 'depends_on', 'evidence_runtime_image_sha256',
+  'evidence_lookup_key_0x24_table_sha256', 'known_limits', 'status',
+  'evidence_status', 'replay_sha256', 'runtime_image_status',
+  'runtime_image_used', 'runtime_image_sha256', 'dependency_statuses',
+  'damage_packet_count', 'snapshot_count', 'keyframe_count',
+  'canonical_roster_key_count', 'matched_lookup_key_packet_count',
+  'matched_alias_0x100_packet_count', 'matched_equal_packet_count',
+  'matched_other_relation_packet_count', 'unmatched_packet_count',
+  'unmatched_alias_0x100_packet_count', 'first_unmatched_packet_refs',
+  'verified_raw_packet_count', 'input_count', 'event_count',
+]);
+const UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param',
+  'native_callback_lookup_key_u32_0x24_candidate',
+  'native_callback_lookup_key_0x24_encoded_bytes_hex',
+  'native_callback_lookup_key_0x24_raw_param_relation',
+  'hero_raw_param', 'hero_stats_participant_id_candidate', 'pair_basis',
+  'lookup_resolution_status', 'actor_assignment_status',
+  'source_target_role_status', 'semantic_effect_status', 'confidence',
+  'semantic_status', 'unit_apply_damage_raw_packet_ref',
+  'hero_stats_roster_raw_packet_ref', 'raw_packet_refs',
 ]);
 const MAX_MINION_BRACKET_SOURCE_ROWS_821 = 10_000;
 const MAX_EXPERIENCE_INTERVAL_SOURCE_ROWS_821 = 100_000;
@@ -1879,6 +1938,8 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   const exactBlobPacketConfig = EXACT_BLOB_PACKET_EVENTS_821[eventKey] ?? null;
   const capability = eventKey === 'unit_apply_damage_roster_key_candidates'
     ? 'unit_apply_damage_roster_key_pair'
+    : eventKey === 'unit_apply_damage_lookup_roster_key_candidates'
+      ? 'unit_apply_damage_lookup_roster_key_pair'
     : eventKey.slice(0, -'_candidates'.length);
   const capabilityResult = associationConfig
     ? prepareAssociation(semantic, analysis, eventKey, associationConfig)
@@ -1924,6 +1985,14 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   }
   if (eventKey === 'face_direction_keyframe_roster_pair_candidates') {
     prepareFaceDirectionRosterPairEvent(semantic, analysis, eventKey,
+      capabilityResult);
+  }
+  if (eventKey === 'unit_apply_damage_roster_key_candidates') {
+    prepareUnitApplyDamageRosterKeyEvent(semantic, analysis, eventKey,
+      capabilityResult);
+  }
+  if (eventKey === 'unit_apply_damage_lookup_roster_key_candidates') {
+    prepareUnitApplyDamageLookupRosterKeyEvent(semantic, analysis, eventKey,
       capabilityResult);
   }
   const capabilityStatus = capabilityResult?.status ?? null;
@@ -2476,6 +2545,255 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
     invalid('raw byte and decoded value differ from the pinned 821 transform');
   }
   return value;
+}
+
+function validUnitApplyDamageRosterRef(ref, replaySha, sourcePath, packetId,
+  rawParam = null, replayTime = null) {
+  const damage = packetId === 0x005f;
+  const fields = damage ? UNIT_APPLY_DAMAGE_ROSTER_DAMAGE_REF_FIELDS_821
+    : UNIT_APPLY_DAMAGE_ROSTER_STATS_REF_FIELDS_821;
+  if (!ref || typeof ref !== 'object' || Array.isArray(ref)
+      || Object.keys(ref).length !== fields.size
+      || Object.keys(ref).some((field) => !fields.has(field))
+      || ref.source_path !== (sourcePath ?? null)
+      || ref.replay_sha256 !== replaySha
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset)
+      || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.chunk_stream !== (damage ? 'game_chunk' : 'keyframe')
+      || ref.packet_id !== packetId
+      || !Number.isSafeInteger(ref.replay_time_ms) || ref.replay_time_ms < 0
+      || !Number.isSafeInteger(ref.raw_param) || ref.raw_param < 0
+      || ref.raw_param > 0xffffffff
+      || (rawParam !== null && ref.raw_param !== rawParam)
+      || (replayTime !== null && ref.replay_time_ms !== replayTime)
+      || !REPLAY_SHA.test(ref.raw_payload_sha256)
+      || (!damage && ref.payload_length !== 1263)) return false;
+  if (!damage) return true;
+  const hex = ref.raw_payload_hex;
+  return ref.payload_length >= 8 && ref.payload_length <= 25
+    && typeof hex === 'string' && /^[0-9a-f]+$/.test(hex)
+    && hex.length === ref.payload_length * 2
+    && crypto.createHash('sha256').update(Buffer.from(hex, 'hex')).digest('hex')
+      === ref.raw_payload_sha256;
+}
+
+function prepareUnitApplyDamageRosterKeyEvent(semantic, analysis, eventKey, result) {
+  const profile = UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`);
+  }
+  if (result?.status !== 'CANDIDATE') return;
+  const excluded = result.first_excluded_packet_refs;
+  const damage = semantic.capability_results?.unit_apply_damage_packet;
+  const snapshot = semantic.capability_results?.hero_minions_killed_snapshot;
+  const recorded = analysis.semantic?.capability_results;
+  if (Object.keys(result).length !== UNIT_APPLY_DAMAGE_ROSTER_RESULT_FIELDS_821.size
+      || Object.keys(result).some((field) =>
+        !UNIT_APPLY_DAMAGE_ROSTER_RESULT_FIELDS_821.has(field))
+      || result.profile_id !== profile.id
+      || result.evidence_status !== profile.evidence_status
+      || result.replay_sha256 !== semantic.replay_sha256
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || !isDeepStrictEqual(result.depends_on, [...profile.depends_on])
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(result.dependency_statuses, {
+        unit_apply_damage_packet: 'CANDIDATE',
+        hero_minions_killed_snapshot: 'CANDIDATE',
+      })
+      || !isCount(result.damage_packet_count) || result.damage_packet_count === 0
+      || !isCount(result.snapshot_count)
+      || !isCount(result.keyframe_count) || result.keyframe_count === 0
+      || result.snapshot_count !== 10 * result.keyframe_count
+      || result.canonical_roster_key_count !== 10
+      || !isCount(result.matched_full_key_packet_count)
+      || result.matched_full_key_packet_count !== result.event_count
+      || !isCount(result.unmatched_packet_count)
+      || result.damage_packet_count !== result.event_count
+        + result.unmatched_packet_count
+      || !isCount(result.excluded_alias_0x100_packet_count)
+      || result.excluded_alias_0x100_packet_count > result.unmatched_packet_count
+      || result.verified_raw_packet_count !== result.damage_packet_count
+        + result.snapshot_count
+      || result.input_count !== result.verified_raw_packet_count
+      || !excluded || typeof excluded !== 'object' || Array.isArray(excluded)
+      || Object.keys(excluded).sort().join(',')
+        !== 'alias_0x100,unmatched_other'
+      || (excluded.alias_0x100 === null)
+        !== (result.excluded_alias_0x100_packet_count === 0)
+      || (excluded.unmatched_other === null)
+        !== (result.unmatched_packet_count
+          - result.excluded_alias_0x100_packet_count === 0)
+      || (excluded.alias_0x100 !== null
+        && (!validUnitApplyDamageRosterRef(excluded.alias_0x100,
+          semantic.replay_sha256, analysis.source_path, 0x005f)
+          || excluded.alias_0x100.raw_param < 0x400001ae
+          || excluded.alias_0x100.raw_param > 0x400001b7))
+      || (excluded.unmatched_other !== null
+        && (!validUnitApplyDamageRosterRef(excluded.unmatched_other,
+          semantic.replay_sha256, analysis.source_path, 0x005f)
+          || (excluded.unmatched_other.raw_param >= 0x400000ae
+            && excluded.unmatched_other.raw_param <= 0x400000b7)
+          || (excluded.unmatched_other.raw_param >= 0x400001ae
+            && excluded.unmatched_other.raw_param <= 0x400001b7)))
+      || analysis.event_counts?.[eventKey] !== result.event_count
+      || !isDeepStrictEqual(recorded?.[profile.capability], result)
+      || (damage && (damage.status !== 'CANDIDATE'
+        || ![UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821,
+          UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id]
+          .includes(damage.profile_id)
+        || damage.event_count !== result.damage_packet_count
+        || damage.runtime_image_status !== 'MATCHED_USED'
+        || damage.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+        || damage.native_witness_status !== 'FULLY_CONSUMED_ALL'))
+      || (snapshot && (snapshot.status !== 'CANDIDATE'
+        || snapshot.profile_id
+          !== FLOAT_STATS_821_PROFILES.hero_minions_killed_snapshot.id
+        || snapshot.event_count !== result.snapshot_count
+        || snapshot.keyframe_count !== result.keyframe_count))
+      || !isDeepStrictEqual(recorded?.unit_apply_damage_packet, damage)
+      || !isDeepStrictEqual(recorded?.hero_minions_killed_snapshot, snapshot)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} identity, dependency or counts differ.`,
+      { capability: profile.capability });
+  }
+}
+
+function prepareUnitApplyDamageLookupRosterKeyEvent(semantic, analysis,
+  eventKey, result) {
+  const profile = UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`);
+  }
+  if (result?.status !== 'CANDIDATE') return;
+  const unmatched = result.first_unmatched_packet_refs;
+  const damage = semantic.capability_results?.unit_apply_damage_packet;
+  const snapshot = semantic.capability_results?.hero_minions_killed_snapshot;
+  const rawPair = semantic.capability_results?.unit_apply_damage_roster_key_pair;
+  const recorded = analysis.semantic?.capability_results;
+  if (Object.keys(result).length
+        !== UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_RESULT_FIELDS_821.size
+      || Object.keys(result).some((field) =>
+        !UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_RESULT_FIELDS_821.has(field))
+      || result.profile_id !== profile.id
+      || result.evidence_status !== profile.evidence_status
+      || result.replay_sha256 !== semantic.replay_sha256
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.evidence_lookup_key_0x24_table_sha256
+        !== profile.evidence_lookup_key_0x24_table_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || !isDeepStrictEqual(result.depends_on, [...profile.depends_on])
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(result.dependency_statuses, {
+        unit_apply_damage_packet: 'CANDIDATE',
+        hero_minions_killed_snapshot: 'CANDIDATE',
+        unit_apply_damage_roster_key_pair: 'CANDIDATE',
+      })
+      || !isCount(result.damage_packet_count) || result.damage_packet_count === 0
+      || !isCount(result.snapshot_count)
+      || !isCount(result.keyframe_count) || result.keyframe_count === 0
+      || result.snapshot_count !== 10 * result.keyframe_count
+      || result.canonical_roster_key_count !== 10
+      || !isCount(result.matched_lookup_key_packet_count)
+      || result.matched_lookup_key_packet_count !== result.event_count
+      || !isCount(result.matched_alias_0x100_packet_count)
+      || !isCount(result.matched_equal_packet_count)
+      || !isCount(result.matched_other_relation_packet_count)
+      || result.event_count !== result.matched_alias_0x100_packet_count
+        + result.matched_equal_packet_count
+        + result.matched_other_relation_packet_count
+      || !isCount(result.unmatched_packet_count)
+      || result.damage_packet_count !== result.event_count
+        + result.unmatched_packet_count
+      || !isCount(result.unmatched_alias_0x100_packet_count)
+      || result.unmatched_alias_0x100_packet_count > result.unmatched_packet_count
+      || result.verified_raw_packet_count !== result.damage_packet_count
+        + result.snapshot_count
+      || result.input_count !== result.verified_raw_packet_count
+      || !unmatched || typeof unmatched !== 'object' || Array.isArray(unmatched)
+      || Object.keys(unmatched).sort().join(',') !== 'alias_0x100,other'
+      || (unmatched.alias_0x100 === null)
+        !== (result.unmatched_alias_0x100_packet_count === 0)
+      || (unmatched.other === null)
+        !== (result.unmatched_packet_count
+          - result.unmatched_alias_0x100_packet_count === 0)
+      || (unmatched.alias_0x100 !== null
+        && (!validUnitApplyDamageRosterRef(unmatched.alias_0x100,
+          semantic.replay_sha256, analysis.source_path, 0x005f)
+          || unmatched.alias_0x100.raw_param < 0x400001ae
+          || unmatched.alias_0x100.raw_param > 0x400001b7))
+      || (unmatched.other !== null
+        && (!validUnitApplyDamageRosterRef(unmatched.other,
+          semantic.replay_sha256, analysis.source_path, 0x005f)
+          || (unmatched.other.raw_param >= 0x400001ae
+            && unmatched.other.raw_param <= 0x400001b7)))
+      || analysis.event_counts?.[eventKey] !== result.event_count
+      || !isDeepStrictEqual(recorded?.[profile.capability], result)
+      || (damage && (damage.status !== 'CANDIDATE'
+        || damage.profile_id !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id
+        || damage.evidence_status
+          !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.evidence_status
+        || damage.event_count !== result.damage_packet_count
+        || damage.input_count !== damage.event_count
+        || damage.native_witness_status !== 'FULLY_CONSUMED_ALL'
+        || damage.native_full_success_count !== result.damage_packet_count
+        || damage.native_callback_lookup_full_write_count
+          !== result.damage_packet_count
+        || !REPLAY_SHA.test(damage.native_input_sha256 ?? '')
+        || damage.evidence_lookup_key_0x24_table_sha256
+          !== profile.evidence_lookup_key_0x24_table_sha256
+        || damage.evidence_lookup_key_0x2c_table_sha256
+          !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821
+            .evidence_lookup_key_0x2c_table_sha256
+        || damage.runtime_image_status !== 'MATCHED_USED'
+        || damage.runtime_image_used !== true
+        || damage.runtime_image_sha256
+          !== profile.evidence_runtime_image_sha256))
+      || (snapshot && (snapshot.status !== 'CANDIDATE'
+        || snapshot.profile_id
+          !== FLOAT_STATS_821_PROFILES.hero_minions_killed_snapshot.id
+        || snapshot.event_count !== result.snapshot_count
+        || snapshot.input_count !== snapshot.event_count
+        || snapshot.keyframe_count !== result.keyframe_count
+        || snapshot.observed_participant_count !== 10))
+      || (rawPair && (rawPair.status !== 'CANDIDATE'
+        || rawPair.profile_id !== UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE.id
+        || rawPair.evidence_status
+          !== UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE.evidence_status
+        || rawPair.damage_packet_count !== result.damage_packet_count
+        || rawPair.snapshot_count !== result.snapshot_count
+        || rawPair.keyframe_count !== result.keyframe_count
+        || rawPair.verified_raw_packet_count
+          !== result.verified_raw_packet_count
+        || rawPair.input_count !== rawPair.verified_raw_packet_count
+        || !isCount(rawPair.event_count)
+        || rawPair.event_count > result.damage_packet_count
+        || !isCount(rawPair.excluded_alias_0x100_packet_count)
+        || rawPair.excluded_alias_0x100_packet_count
+          < result.matched_alias_0x100_packet_count
+            + result.unmatched_alias_0x100_packet_count))
+      || !isDeepStrictEqual(recorded?.unit_apply_damage_packet, damage)
+      || !isDeepStrictEqual(recorded?.hero_minions_killed_snapshot, snapshot)
+      || !isDeepStrictEqual(recorded?.unit_apply_damage_roster_key_pair,
+        rawPair)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} identity, native v3 dependency or counts differ.`,
+      { capability: profile.capability });
+  }
 }
 
 function prepareCircularMovementRestrictionRecordCount(prepared) {
@@ -5039,6 +5357,176 @@ function faceDirectionRosterPairRow(row, prepared, lineNumber, state) {
   }
 }
 
+function unitApplyDamageRosterKeyRow(row, prepared, lineNumber, state) {
+  if (prepared.eventKey !== 'unit_apply_damage_roster_key_candidates') return;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid UnitApplyDamage roster key pair at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const profile = UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE;
+  const damageRef = row.unit_apply_damage_raw_packet_ref;
+  const statsRef = row.hero_stats_roster_raw_packet_ref;
+  const rawParam = row.raw_param;
+  if (Object.keys(row).length !== UNIT_APPLY_DAMAGE_ROSTER_ROW_FIELDS_821.size
+      || Object.keys(row).some((field) =>
+        !UNIT_APPLY_DAMAGE_ROSTER_ROW_FIELDS_821.has(field))
+      || row.event_type !== 'UNIT_APPLY_DAMAGE_ROSTER_KEY_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.replay_sha256 !== prepared.replaySha
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== profile.evidence_status
+      || row.pair_basis !== 'EXACT_FULL_RAW_PARAM_IN_CANONICAL_HEROSTATS_ROSTER'
+      || row.actor_assignment_status !== 'UNKNOWN'
+      || row.source_target_role_status !== 'UNKNOWN'
+      || row.semantic_effect_status !== 'UNKNOWN'
+      || !Number.isSafeInteger(rawParam)
+      || rawParam < 0x400000ae || rawParam > 0x400000b7
+      || row.hero_stats_participant_id_candidate
+        !== rawParam - 0x400000ae + 1
+      || !Number.isFinite(row.native_callback_f32_0x20_candidate)
+      || !UNIT_APPLY_DAMAGE_NATIVE_FLOAT_SOURCES_821.includes(
+        row.native_callback_f32_0x20_source)
+      || (row.native_callback_f32_0x20_source === 'CONSTANT_0'
+        && row.native_callback_f32_0x20_candidate !== 0)
+      || (row.native_callback_f32_0x20_source === 'CONSTANT_1'
+        && row.native_callback_f32_0x20_candidate !== 1)
+      || (row.native_callback_f32_0x20_source === 'CONSTANT_2'
+        && row.native_callback_f32_0x20_candidate !== 2)
+      || !Array.isArray(row.raw_packet_refs)
+      || !isDeepStrictEqual(row.raw_packet_refs, [damageRef, statsRef])
+      || !validUnitApplyDamageRosterRef(damageRef, prepared.replaySha,
+        prepared.sourcePath, 0x005f, rawParam, row.replay_time_ms)
+      || !validUnitApplyDamageRosterRef(statsRef, prepared.replaySha,
+        prepared.sourcePath, 0x0089, rawParam)) {
+    invalid('exact full key, unknown roles, native value or named source references differ');
+  }
+  const payload = Buffer.from(damageRef.raw_payload_hex, 'hex');
+  const selector24 = payload[3] & 7;
+  const selector0 = payload[0] & 7;
+  const selector3 = (payload[0] >>> 3) & 7;
+  const expectedSource = ({ 3: 'CONSTANT_0', 5: 'CONSTANT_1',
+    7: 'CONSTANT_2' })[selector3] ?? 'RAW_READER';
+  if (!isObservedUnitApplyDamageShape821(
+    payload.length, selector24, selector0, selector3)
+      || row.native_callback_f32_0x20_source !== expectedSource) {
+    invalid('raw 0x005f packet shape or native float source differs');
+  }
+  if (damageRef.chunk_index < state.previousDamageChunkIndex
+      || (damageRef.chunk_index === state.previousDamageChunkIndex
+        && damageRef.decompressed_block_offset
+          <= state.previousDamageBlockOffset)) {
+    invalid('damage packet order differs from Replay walk order');
+  }
+  state.previousDamageChunkIndex = damageRef.chunk_index;
+  state.previousDamageBlockOffset = damageRef.decompressed_block_offset;
+  const rosterFrame = `${statsRef.chunk_index}/${statsRef.chunk_id}/` +
+    `${statsRef.chunk_file_offset}/${statsRef.replay_time_ms}`;
+  if (state.rosterFrame !== null && state.rosterFrame !== rosterFrame) {
+    invalid('HeroStats reference is not from the canonical roster keyframe');
+  }
+  state.rosterFrame = rosterFrame;
+  const priorStatsRef = state.rosterRefs.get(rawParam);
+  if (priorStatsRef && !isDeepStrictEqual(priorStatsRef, statsRef)) {
+    invalid('same full key uses conflicting HeroStats roster references');
+  }
+  const statsPosition = `${statsRef.chunk_index}/${statsRef.decompressed_block_offset}`;
+  const priorKey = state.rosterPositions.get(statsPosition);
+  if (priorKey != null && priorKey !== rawParam) {
+    invalid('different full keys share one HeroStats packet position');
+  }
+  state.rosterRefs.set(rawParam, statsRef);
+  state.rosterPositions.set(statsPosition, rawParam);
+  state.damagePositions.add(`${damageRef.chunk_index}/` +
+    `${damageRef.decompressed_block_offset}`);
+}
+
+function unitApplyDamageLookupRosterKeyRow(row, prepared, lineNumber, state) {
+  if (prepared.eventKey !== 'unit_apply_damage_lookup_roster_key_candidates') return;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid UnitApplyDamage lookup roster key pair at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const profile = UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE;
+  const damageRef = row.unit_apply_damage_raw_packet_ref;
+  const statsRef = row.hero_stats_roster_raw_packet_ref;
+  const rawParam = row.raw_param;
+  const key = row.native_callback_lookup_key_u32_0x24_candidate;
+  const relation = rawParam === key ? 'EQUAL'
+    : rawParam - key === 0x100 ? 'RAW_PARAM_IS_LOOKUP_PLUS_0X100' : 'OTHER';
+  if (Object.keys(row).length
+        !== UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_ROW_FIELDS_821.size
+      || Object.keys(row).some((field) =>
+        !UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_ROW_FIELDS_821.has(field))
+      || row.event_type !== 'UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.replay_sha256 !== prepared.replaySha
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== profile.evidence_status
+      || row.pair_basis
+        !== 'NATIVE_CALLBACK_LOOKUP_KEY_0X24_EXACT_FULL_KEY_IN_CANONICAL_HEROSTATS_ROSTER'
+      || row.lookup_resolution_status !== 'UNKNOWN'
+      || row.actor_assignment_status !== 'UNKNOWN'
+      || row.source_target_role_status !== 'UNKNOWN'
+      || row.semantic_effect_status !== 'UNKNOWN'
+      || !Number.isSafeInteger(rawParam) || rawParam <= 0
+      || rawParam > 0xffffffff
+      || !Number.isSafeInteger(key)
+      || key < 0x400000ae || key > 0x400000b7
+      || decodeUnitApplyDamageLookupKeyFromRaw821(
+        row.native_callback_lookup_key_0x24_encoded_bytes_hex, 0x24) !== key
+      || row.native_callback_lookup_key_0x24_raw_param_relation !== relation
+      || row.hero_raw_param !== key
+      || row.hero_stats_participant_id_candidate !== key - 0x400000ae + 1
+      || !Array.isArray(row.raw_packet_refs)
+      || !isDeepStrictEqual(row.raw_packet_refs, [damageRef, statsRef])
+      || !validUnitApplyDamageRosterRef(damageRef, prepared.replaySha,
+        prepared.sourcePath, 0x005f, rawParam, row.replay_time_ms)
+      || !validUnitApplyDamageRosterRef(statsRef, prepared.replaySha,
+        prepared.sourcePath, 0x0089, key)) {
+    invalid('native lookup full key, roster label, unknown roles or source references differ');
+  }
+  const payload = Buffer.from(damageRef.raw_payload_hex, 'hex');
+  const selector24 = payload[3] & 7;
+  const selector0 = payload[0] & 7;
+  const selector3 = (payload[0] >>> 3) & 7;
+  if (!isObservedUnitApplyDamageShape821(
+    payload.length, selector24, selector0, selector3)) {
+    invalid('0x005f raw packet shape differs from exact 821 observed catalog');
+  }
+  if (damageRef.chunk_index < state.previousDamageChunkIndex
+      || (damageRef.chunk_index === state.previousDamageChunkIndex
+        && damageRef.decompressed_block_offset
+          <= state.previousDamageBlockOffset)) {
+    invalid('damage packet order differs from Replay walk order');
+  }
+  state.previousDamageChunkIndex = damageRef.chunk_index;
+  state.previousDamageBlockOffset = damageRef.decompressed_block_offset;
+  const rosterFrame = `${statsRef.chunk_index}/${statsRef.chunk_id}/` +
+    `${statsRef.chunk_file_offset}/${statsRef.replay_time_ms}`;
+  if (state.rosterFrame !== null && state.rosterFrame !== rosterFrame) {
+    invalid('HeroStats reference is not from the canonical roster keyframe');
+  }
+  state.rosterFrame = rosterFrame;
+  const priorStatsRef = state.rosterRefs.get(key);
+  if (priorStatsRef && !isDeepStrictEqual(priorStatsRef, statsRef)) {
+    invalid('same full lookup key uses conflicting HeroStats roster references');
+  }
+  const statsPosition = `${statsRef.chunk_index}/${statsRef.decompressed_block_offset}`;
+  const priorKey = state.rosterPositions.get(statsPosition);
+  if (priorKey != null && priorKey !== key) {
+    invalid('different full lookup keys share one HeroStats packet position');
+  }
+  state.rosterRefs.set(key, statsRef);
+  state.rosterPositions.set(statsPosition, key);
+  state.damagePositions.add(`${damageRef.chunk_index}/` +
+    `${damageRef.decompressed_block_offset}`);
+  state.relationCounts[relation] += 1;
+}
+
 function candidateChildEventId(row, eventKey, lineNumber) {
   const field = eventKey === 'champion_triple_quadra_multi_group_candidates'
     ? 'on_champion_triple_quadra_child_event_id'
@@ -5389,6 +5877,19 @@ async function streamEventQuery(prepared, options, emitLine) {
       DIFFERS_FROM_BOTH_ENDPOINTS: 0,
     } };
   const faceRosterPairState = { frames: new Map(), positions: new Set() };
+  const damageRosterPairState = {
+    previousDamageChunkIndex: -1, previousDamageBlockOffset: -1,
+    damagePositions: new Set(), rosterFrame: null,
+    rosterRefs: new Map(), rosterPositions: new Map(),
+  };
+  const lookupRosterPairState = {
+    previousDamageChunkIndex: -1, previousDamageBlockOffset: -1,
+    damagePositions: new Set(), rosterFrame: null,
+    rosterRefs: new Map(), rosterPositions: new Map(),
+    relationCounts: {
+      EQUAL: 0, RAW_PARAM_IS_LOOKUP_PLUS_0X100: 0, OTHER: 0,
+    },
+  };
   const minionBracketExpected = prepared.associationConfig?.minionBracket
     ? await loadMinionBracketExpectedRows(prepared) : null;
   const experienceIntervalExpected = prepared.associationConfig?.experienceInterval
@@ -5444,6 +5945,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       incrementMinionKillsPacketRow(row, prepared, lineNumber,
         associationPacketPositions);
       faceDirectionRosterPairRow(row, prepared, lineNumber, faceRosterPairState);
+      unitApplyDamageRosterKeyRow(row, prepared, lineNumber,
+        damageRosterPairState);
+      unitApplyDamageLookupRosterKeyRow(row, prepared, lineNumber,
+        lookupRosterPairState);
       if (prepared.eventKey === 'revive_ally_event_packet_candidates'
           && (row.event_type !== 'REVIVE_ALLY_EVENT_PACKET_CANDIDATE'
             || row.game_version !== prepared.replayVersion
@@ -5485,7 +5990,9 @@ async function streamEventQuery(prepared, options, emitLine) {
           quadraGroupCount += 1;
         }
       }
-      const params = rawParam == null ? null : rawPacketParams(row, lineNumber);
+      const params = rawParam == null ? null
+        : prepared.eventKey === 'unit_apply_damage_lookup_roster_key_candidates'
+          ? [row.raw_param] : rawPacketParams(row, lineNumber);
       const inventoryRecordRow = prepared.eventKey
         === 'inventory_keyframe_interval_difference_candidates'
         ? { records_candidate: row.changed_slots_candidate.map((change) => ({
@@ -5713,6 +6220,31 @@ async function streamEventQuery(prepared, options, emitLine) {
       { scanned_count: scannedCount,
         keyframe_count: faceRosterPairState.frames.size,
         unique_raw_packet_count: faceRosterPairState.positions.size });
+  }
+  if (prepared.eventKey === 'unit_apply_damage_roster_key_candidates'
+      && (damageRosterPairState.damagePositions.size !== scannedCount
+        || damageRosterPairState.rosterRefs.size > 10)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'UnitApplyDamage roster pair rows have duplicate packet references or an invalid roster.',
+      { scanned_count: scannedCount,
+        unique_damage_packet_count: damageRosterPairState.damagePositions.size,
+        observed_roster_key_count: damageRosterPairState.rosterRefs.size });
+  }
+  if (prepared.eventKey === 'unit_apply_damage_lookup_roster_key_candidates'
+      && (lookupRosterPairState.damagePositions.size !== scannedCount
+        || lookupRosterPairState.rosterRefs.size > 10
+        || lookupRosterPairState.relationCounts.EQUAL
+          !== prepared.capabilityResult.matched_equal_packet_count
+        || lookupRosterPairState.relationCounts.RAW_PARAM_IS_LOOKUP_PLUS_0X100
+          !== prepared.capabilityResult.matched_alias_0x100_packet_count
+        || lookupRosterPairState.relationCounts.OTHER
+          !== prepared.capabilityResult.matched_other_relation_packet_count)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'UnitApplyDamage lookup roster rows disagree with packet order, roster or relation counts.',
+      { scanned_count: scannedCount,
+        unique_damage_packet_count: lookupRosterPairState.damagePositions.size,
+        observed_roster_key_count: lookupRosterPairState.rosterRefs.size,
+        relation_counts: lookupRosterPairState.relationCounts });
   }
   if (prepared.eventKey === 'inventory_keyframe_interval_difference_candidates') {
     const association = prepared.capabilityResult;

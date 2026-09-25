@@ -57,6 +57,24 @@ Current progress (older notes below retain their original research context):
   source packet references (damage and roster) and ordered native input
   digests were physically checked. The roster label is a co-key candidate
   and does not establish a damage actor, source, target or health effect.
+- **UnitApplyDamage native lookup-key roster pair:** Selecting
+  `unit_apply_damage_lookup_roster_key_pair` independently checks the native
+  callback's decoded object `+0x24` full key against the complete ten-key
+  `0x0089` HeroStats roster. It requires the native-witnessed v3 damage
+  outcome, the complete roster and the validated raw-key pair, and preserves
+  both original packet references plus each `raw_param`/lookup-key relation.
+  A fresh 11-Replay CLI batch returned `CANDIDATE` in 11/11 with zero framing
+  errors: 62,860/628,909 damage packets matched a roster key, including
+  49,473 `EQUAL`, 10,284 `raw_param = key + 0x100`, and 3,103 `OTHER`
+  relations (`+0x200..+0xA00` observed); 566,049 packets were unmatched.
+  The prerequisite pair physically checked 632,179 damage and roster source
+  references. The original raw-parameter pair remains separate at 49,473;
+  no blanket alias normalization is applied. The roster participant label
+  records lookup-key co-occurrence only. Object lookup/type conversion,
+  actor, source, target, actual amount and health effect remain `UNKNOWN`.
+  Saved `query-events --raw-param 0x400001ae --limit 1` then checked all
+  62,860 rows in the new batch and selected 2,075 by the damage packet's
+  original parameter; it does not substitute the decoded lookup or roster key.
 - **ShowHealthBar packet candidate:** The image registers `0x0165` as
   `PKT_S2C_ShowHealthBar_s`. All 89,515 observed packets in 11 exact-build
   KR Replays were fully consumed by the native deserializer: 61,813 had

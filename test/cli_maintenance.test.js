@@ -243,6 +243,26 @@ test('821 damage roster-key pair preflight names both native and roster dependen
   assert.ok(pair.validation_pending.some((pending) => pending.includes('ten-hero')));
 });
 
+test('821 native damage lookup-roster pair preflight reports its exact inputs', () => {
+  const cli = loadCli();
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.821.7343');
+  const unavailablePython = path.join(os.tmpdir(), 'rofl-821-python-does-not-exist');
+  const result = cli.capabilityQuery(replay, { python: unavailablePython });
+  const pair = result.capabilities.find((row) =>
+    row.capability === 'unit_apply_damage_lookup_roster_key_pair');
+  assert.equal(result.packet_framing_inspected, false);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(pair.status, 'CANDIDATE');
+  assert.equal(pair.output, 'unit_apply_damage_lookup_roster_key_candidates');
+  assert.equal(pair.runtime_image_requirement, 'EXACT_IMAGE_REQUIRED');
+  assert.ok(pair.required_inputs.some((input) => input.name === 'exact_runtime_image'));
+  assert.ok(pair.required_inputs.some((input) => input.name === 'python_unicorn'));
+  assert.ok(pair.required_inputs.some((input) => input.name === 'replay_tail_MINIONS_KILLED'));
+  assert.ok(pair.missing_inputs.includes('exact_runtime_image'));
+  assert.ok(pair.missing_inputs.includes('python_unicorn'));
+  assert.ok(pair.validation_pending.some((pending) => pending.includes('+0x24')));
+});
+
 test('capabilities exposes missing Replay tail stats without treating it as zero events', (t) => {
   const cli = loadCli();
   const input = fixture(t, '16.19.820.7193');
