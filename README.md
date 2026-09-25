@@ -53,6 +53,7 @@
 | `16.19.821.7343 --events champion_die_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0004` 子包，保留 OnChampionDie 镜像名表标签、回调用作对象树查找键的 `+0x04` 整数和原始包来源 | 仅写入 `champion_die_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断实际死亡、对象查找成功、受害者、击杀者或状态变化 |
 | `16.19.821.7343 --events champion_kill_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0007` 子包，保留 OnChampionKill 镜像名表标签、回调用作同一对象树查找键的 `+0x04` 及匿名 `+0x58/+0x5c` 整数和原始包来源 | 仅写入 `champion_kill_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断实际击杀、对象查找成功、击杀者、受害者或状态变化 |
 | `16.19.821.7343 --events champion_multiple_kill_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0009` 子包，保留 OnChampionMultipleKill 镜像名表标签、作为对象查找键的 `+0x04`、控制 `+0x10` 键数组遍历的 `+0x0c`、原样传入后续虚调用的 `+0x08` 和原始包来源 | 仅写入 `champion_multiple_kill_event_packet_candidates`，状态为 `CANDIDATE`；不把包标记或整数解释为实际多杀、等级、击杀者、受害者或状态变化 |
+| `16.19.821.7343 --events champion_double_kill_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x000b` 子包，保留 OnChampionDoubleKill 镜像名表标签、原生子包摘要与原始包来源 | 仅写入 `champion_double_kill_event_packet_candidates`，状态为 `CANDIDATE`；同为 104 字节的其他子事件按原生 ID 排除；不推断实际双杀、回调字段、参与者或状态变化 |
 | `16.19.821.7343 --events on_shutdown_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x00e8` 子包，保留 OnShutdown 镜像名表标签、匿名 `+0x04/+0x58/+0x5c` 整数和原始包来源 | 仅写入 `on_shutdown_event_packet_candidates`，状态为 `CANDIDATE`；不推断实际 shutdown 效果、对象角色或状态变化 |
 | `16.19.821.7343 --events resurrect_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x002d` 子包，保留 OnResurrect 镜像名表标签、匿名原生子包 `+0x04/+0x08` 整数和原始包来源 | 有此包形状的回放写入 `resurrect_event_packet_candidates`，状态为 `CANDIDATE`；无此形状的回放报告 `PROFILE_UNAVAILABLE`；不推断实际复活、对象角色或状态变化 |
 | `16.19.821.7343 --events turret_plate_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0107` 子包，保留 OnTurretPlateDestroyed 镜像名表标签、匿名原生子包 `+0x04` 整数和原始包来源 | 仅写入 `turret_plate_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断镀层破坏、建筑、参与者或状态变化 |
@@ -193,6 +194,10 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-multiple-kill-reports"
 node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
+  --events champion_double_kill_event_packet `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-double-kill-markers"
+node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events hero_death,champion_die_event_packet,on_shutdown_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-on-shutdown-packet-groups"
@@ -230,6 +235,12 @@ Die/Hero 配对没有 Multi 子包；其中 72 个 Multi 包组没有同刻 Kill
 Multi 外层参数等于 Die 子包 `+0x04` 和 Hero_Die 来源候选值，Multi 子包
 `+0x04` 清除 `0x100` 位后等于 Hero_Die 受害者原始参数。
 该分组也只说明包的对应关系，不确认实际多杀或对象角色。
+
+独立选择 `champion_double_kill_event_packet` 可查询镜像标为
+OnChampionDoubleKill 的 `0x000b` 当包标记。11 份 KR 821 回放中 654 个同长度包有
+63 个目标、591 个其他子事件；目标 63 个均能与已有 Multi/Die/Hero 候选包组
+同回放、同 chunk、同毫秒唯一对应，但此入口不写入已确认的双杀或对象字段。
+原生子包仅保留 SHA-256 摘要和来源，不把匿名偏移解释为回调字段。
 
 同时选择 `hero_death,champion_die_event_packet,on_shutdown_event_packet`
 后，`on_shutdown_die_hero_death_pair_candidates.jsonl` 记录第三种候选包组，

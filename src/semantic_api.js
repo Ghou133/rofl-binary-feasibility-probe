@@ -64,6 +64,8 @@ const { decodeChampionKillEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_kill_event_packet_candidate');
 const { decodeChampionMultipleKillEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_champion_multiple_kill_event_packet_candidate');
+const { decodeChampionDoubleKillEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_champion_double_kill_event_packet_candidate');
 const { decodeOnShutdownEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
 const { decodeResurrectEventPacketCandidates821 } =
@@ -2223,6 +2225,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    champion_double_kill_event_packet: (input, collected) =>
+      decodeChampionDoubleKillEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     on_shutdown_event_packet: (input, collected) =>
       decodeOnShutdownEventPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2314,6 +2322,7 @@ function decode1619821(replay, profile, options = {}) {
     champion_die_event_packet: 'champion_die_event_packet_candidates',
     champion_kill_event_packet: 'champion_kill_event_packet_candidates',
     champion_multiple_kill_event_packet: 'champion_multiple_kill_event_packet_candidates',
+    champion_double_kill_event_packet: 'champion_double_kill_event_packet_candidates',
     on_shutdown_event_packet: 'on_shutdown_event_packet_candidates',
     resurrect_event_packet: 'resurrect_event_packet_candidates',
     turret_plate_event_packet: 'turret_plate_event_packet_candidates',
@@ -2349,6 +2358,7 @@ function decode1619821(replay, profile, options = {}) {
     'champion_die_event_packet',
     'champion_kill_event_packet',
     'champion_multiple_kill_event_packet',
+    'champion_double_kill_event_packet',
     'on_shutdown_event_packet',
     'resurrect_event_packet',
     'turret_plate_event_packet',
@@ -2395,6 +2405,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'champion_die_event_packet'
         || capability === 'champion_kill_event_packet'
         || capability === 'champion_multiple_kill_event_packet'
+        || capability === 'champion_double_kill_event_packet'
         || capability === 'on_shutdown_event_packet'
         || capability === 'resurrect_event_packet'
         || capability === 'turret_plate_event_packet'
@@ -2435,6 +2446,8 @@ function decode1619821(replay, profile, options = {}) {
               ? '0x040a/child_0007'
               : capability === 'champion_multiple_kill_event_packet'
                 ? '0x040a/child_0009'
+                : capability === 'champion_double_kill_event_packet'
+                  ? '0x040a/child_000b'
                 : capability === 'on_shutdown_event_packet'
                   ? '0x040a/child_00e8'
                   : capability === 'resurrect_event_packet'
@@ -2449,6 +2462,8 @@ function decode1619821(replay, profile, options = {}) {
           ? result.target_packet_count
           : capability === 'champion_multiple_kill_event_packet'
             ? result.event_count
+            : capability === 'champion_double_kill_event_packet'
+              ? result.event_count
             : capability === 'on_shutdown_event_packet'
               ? result.event_count
               : capability === 'resurrect_event_packet'

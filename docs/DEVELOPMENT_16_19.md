@@ -4,6 +4,20 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed candidate marker:** Exact KR 821 CLI/API now selects native
+  `0x040a` child `0x000b`, named `OnChampionDoubleKill` in the pinned image.
+  Across the 11 supplied Replays, 63/654 length-104 packets are targets;
+  591 same-length children are excluded controls. Every target uniquely
+  shares Replay/chunk/ms with a prior Multi/Die/Hero packet group, but the
+  callback accesses a live virtual receiver absent from the mapped image.
+  The output retains child identity, blob digest, and raw provenance only;
+  no effective double kill, actor, or callback field is inferred. The real
+  11-Replay CLI batch returned 63 target JSONL rows from 654 same-length
+  packets, excluded 591 controls, and had zero framing errors. Ignored
+  CLI output is under `artifacts/16_19_development/on_event_000b_cli_batch_821/`;
+  underlying evidence is under
+  `artifacts/16_19_development/on_event_000b_followup_821/` and
+  `artifacts/16_19_development/on_event_000b_group_join_821/`.
 - **Completed:** `query-events` accepts a batch artifact root, keeps the
   manifest's Replay order, validates each Replay and full JSONL, and reports
   per-Replay unavailable states. The existing 11-Replay OnResurrect batch

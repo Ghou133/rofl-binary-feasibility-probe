@@ -143,6 +143,7 @@ is not dispatched by this CLI; see docs/PUBLIC_DEVELOPMENT.md.
 For 821, hero_death with champion_die_event_packet emits a candidate packet pair;
 adding champion_kill_event_packet, champion_multiple_kill_event_packet, or
 on_shutdown_event_packet emits the corresponding candidate three-route packet group.
+champion_double_kill_event_packet emits a separate packet-local named child marker.
 resurrect_event_packet emits a separate packet-local OnResurrect candidate.
 turret_plate_event_packet emits a separate packet-local OnTurretPlateDestroyed candidate.
 Inspect reads the container and packet framing without a runtime image.
@@ -682,6 +683,7 @@ function parseOne1619(replay, options, started) {
       'champion_die_event_packet',
       'champion_kill_event_packet',
       'champion_multiple_kill_event_packet',
+      'champion_double_kill_event_packet',
       'on_shutdown_event_packet',
       'resurrect_event_packet',
       'turret_plate_event_packet',
@@ -1886,6 +1888,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'champion_die_event_packet'
             || capability === 'champion_kill_event_packet'
             || capability === 'champion_multiple_kill_event_packet'
+            || capability === 'champion_double_kill_event_packet'
             || capability === 'on_shutdown_event_packet'
             || capability === 'resurrect_event_packet'
             || capability === 'turret_plate_event_packet'
@@ -2186,6 +2189,11 @@ function capabilityQuery(replay, options = {}) {
           'OnChampionMultipleKill image label and anonymous u32 fields; no effective multikill, actor, or lifecycle inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'champion_double_kill_event_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x000b packet consumption',
+          'OnChampionDoubleKill image label only; no callback-backed field, effective double kill, actor, or lifecycle inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'on_shutdown_event_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x00e8 packet consumption',
           'OnShutdown image label and anonymous u32 fields; no gameplay shutdown effect, actor, or lifecycle inference');
@@ -2420,6 +2428,7 @@ function capabilityQuery(replay, options = {}) {
             champion_die_event_packet: 'champion_die_event_packet_candidates',
             champion_kill_event_packet: 'champion_kill_event_packet_candidates',
             champion_multiple_kill_event_packet: 'champion_multiple_kill_event_packet_candidates',
+            champion_double_kill_event_packet: 'champion_double_kill_event_packet_candidates',
             on_shutdown_event_packet: 'on_shutdown_event_packet_candidates',
             resurrect_event_packet: 'resurrect_event_packet_candidates',
             turret_plate_event_packet: 'turret_plate_event_packet_candidates',

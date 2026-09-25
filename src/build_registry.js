@@ -39,6 +39,8 @@ const championKillEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_champion_kill_event_packet_candidate');
 const championMultipleKillEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_champion_multiple_kill_event_packet_candidate');
+const championDoubleKillEventPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_champion_double_kill_event_packet_candidate');
 const onShutdownEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_on_shutdown_event_packet_candidate');
 const resurrectEventPacketCandidate1619821 =
@@ -532,6 +534,7 @@ const BUILD_PROFILES = deepFreeze({
       champion_die_event_packet: 0x040a,
       champion_kill_event_packet: 0x040a,
       champion_multiple_kill_event_packet: 0x040a,
+      champion_double_kill_event_packet: 0x040a,
       on_shutdown_event_packet: 0x040a,
       resurrect_event_packet: 0x040a,
       turret_plate_event_packet: 0x040a,
@@ -605,6 +608,8 @@ const BUILD_PROFILES = deepFreeze({
         championKillEventPacketCandidate1619821.CHAMPION_KILL_EVENT_PACKET_CANDIDATE_PROFILE_821,
       champion_multiple_kill_event_packet:
         championMultipleKillEventPacketCandidate1619821.CHAMPION_MULTIPLE_KILL_EVENT_PACKET_821_PROFILE,
+      champion_double_kill_event_packet:
+        championDoubleKillEventPacketCandidate1619821.CHAMPION_DOUBLE_KILL_EVENT_PACKET_821_PROFILE,
       on_shutdown_event_packet:
         onShutdownEventPacketCandidate1619821.ON_SHUTDOWN_EVENT_PACKET_821_PROFILE,
       resurrect_event_packet:
@@ -674,6 +679,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_NATIVE_ON_CHAMPION_KILL_NAMED_PACKET_FIELDS',
       champion_multiple_kill_event_packet:
         'CANDIDATE_821_NATIVE_ON_CHAMPION_MULTIPLE_KILL_NAMED_PACKET_FIELDS',
+      champion_double_kill_event_packet:
+        'CANDIDATE_821_NATIVE_ON_CHAMPION_DOUBLE_KILL_NAMED_PACKET_MARKER',
       on_shutdown_event_packet:
         'CANDIDATE_821_NATIVE_ON_SHUTDOWN_NAMED_PACKET_FIELDS',
       resurrect_event_packet:
@@ -728,6 +735,7 @@ const BUILD_PROFILES = deepFreeze({
       champion_die_event_packet: 'exact 821 native 0x040a OnEvent child 0x0004 ParamsDie registration and OnChampionDie name table; callback reads anonymous child +0x04 u32; no effective death, actor, or state transition inference',
       champion_kill_event_packet: 'exact 821 native 0x040a OnEvent child 0x0007 ParamsChampionKill registration and OnChampionKill name table; callback reads anonymous child +0x04/+0x58/+0x5c u32; no effective kill, actor, or state transition inference',
       champion_multiple_kill_event_packet: 'exact 821 native 0x040a OnEvent child 0x0009 ParamsKillingSpree registration and OnChampionMultipleKill name table; callback reads anonymous child +0x04/+0x08/+0x0c u32; no effective multikill, actor, or state transition inference',
+      champion_double_kill_event_packet: 'exact 821 native 0x040a OnEvent child 0x000b and OnChampionDoubleKill name table; packet marker only, no callback-backed field, effective double kill, actor, or state transition inference',
       on_shutdown_event_packet: 'exact 821 native 0x040a OnEvent child 0x00e8 registration and OnShutdown name table; callback reads anonymous child +0x04/+0x58/+0x5c u32; no gameplay shutdown effect, actor, or state transition inference',
       resurrect_event_packet: 'exact 821 native 0x040a OnEvent child 0x002d registration and OnResurrect name table; native child +0x04/+0x08 u32 remain anonymous; no resurrection, actor, or state transition inference',
       turret_plate_event_packet: 'exact 821 native 0x040a OnEvent child 0x0107 and OnTurretPlateDestroyed name table; native child +0x04 u32 remains anonymous; no callback-field, structure, or game-state transition inference',
@@ -763,6 +771,7 @@ const BUILD_PROFILES = deepFreeze({
       'champion_die_event_packet',
       'champion_kill_event_packet',
       'champion_multiple_kill_event_packet',
+      'champion_double_kill_event_packet',
       'on_shutdown_event_packet',
       'resurrect_event_packet',
       'turret_plate_event_packet',

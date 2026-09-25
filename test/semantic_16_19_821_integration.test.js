@@ -184,6 +184,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'champion_die_event_packet',
       'champion_kill_event_packet',
       'champion_multiple_kill_event_packet',
+      'champion_double_kill_event_packet',
       'on_shutdown_event_packet',
       'resurrect_event_packet',
       'turret_plate_event_packet',
