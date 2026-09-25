@@ -2136,7 +2136,10 @@ function decode1619821(replay, profile, options = {}) {
   const capabilities = [...new Set(requested)];
   const decoders = {
     hero_death: decodeHeroDeathCandidates821,
-    hero_assist: decodeHeroAssistCandidates821,
+    hero_assist: (input, collected) => decodeHeroAssistCandidates821(input, collected, {
+      runtimeImagePath: options.runtimeImagePath,
+      pythonExecutable: options.pythonExecutable,
+    }),
     hero_death_timer: decodeHeroDeathTimerCandidates821,
     hero_respawn: decodeHeroRespawnCandidates821,
     hero_deaths_snapshot: decodeHeroDeathsSnapshotCandidates821,
@@ -2462,7 +2465,8 @@ function decode1619821(replay, profile, options = {}) {
     }
     outcomes[capability] = outcome;
     const { events: candidateEvents, ...result } = outcome;
-    if (capability === 'hero_inventory_packet'
+    if (capability === 'hero_assist'
+        || capability === 'hero_inventory_packet'
         || capability === 'hero_inventory_broadcast_packet'
         || capability === 'hero_inventory_set_item_packet'
         || capability === 'params_heal_packet'

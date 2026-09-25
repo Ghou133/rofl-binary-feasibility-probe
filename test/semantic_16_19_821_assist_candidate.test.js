@@ -1,6 +1,11 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const childProcess = require('node:child_process');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
 
 const { replayFromChunks } = require('./helpers/synthetic_replay');
@@ -76,6 +81,36 @@ function replayWithAssists(options = {}) {
   return replay;
 }
 
+function fakeImage(t) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-821-assist-native-'));
+  const image = path.join(directory, 'runtime.bin');
+  fs.writeFileSync(image, Buffer.from([1, 2, 3]));
+  t.after(() => { fs.unlinkSync(image); fs.rmdirSync(directory); });
+  return image;
+}
+
+function nativeResult(request) {
+  return {
+    status: 'PASS',
+    runtime_image_sha256: HERO_ASSIST_CANDIDATE_PROFILE_821.evidence_runtime_image_sha256,
+    results: request.packets.map((packetRow, index) => {
+      const payload = Buffer.from(packetRow.payload_hex, 'hex');
+      const first = payload[2] === 0xb9;
+      return {
+        status: 'DECODED', input_index: index, raw_param: packetRow.raw_param,
+        raw_payload_sha256: crypto.createHash('sha256').update(payload).digest('hex'),
+        deserialize_return_al: 1, bytes_consumed: 44,
+        native_packet_id: 0x040a, native_raw_param: packetRow.raw_param,
+        event_id: first ? 0x0056 : 0x0057,
+        raw_event_id_hex: first ? '0x4914' : '0x49d4',
+        event_blob_length: 36, event_blob_sha256: 'a'.repeat(64),
+        event_u32_0x04: 0x400000ae,
+        ...(first ? {} : { event_u32_0x20: 123 }),
+      };
+    }),
+  };
+}
+
 test('821 assist requires all three exact-build Replay tail fields', () => {
   const replay = replayWithAssists();
   assert.equal(HERO_ASSIST_CANDIDATE_PROFILE_821.replay_version, REPLAY_VERSION_821);
@@ -103,6 +138,7 @@ test('821 paired 0x040a/44 packets bind individual assistant to matched Hero_Die
   assert.equal(standalone.assist_pair_count, 1);
   assert.equal(standalone.input_count, 3);
   assert.equal(standalone.nondeath_first_shape_count, 1);
+  assert.equal(standalone.native_child_identity_status, 'NOT_CHECKED');
   assert.deepEqual(standalone.observed_assists_by_participant,
     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0]);
   assert.deepEqual(standalone.events.map((event) =>
@@ -122,6 +158,69 @@ test('821 paired 0x040a/44 packets bind individual assistant to matched Hero_Die
   assert.ok(event.assist_pair_raw_packet_refs[0].second_raw_packet_ref
     .decompressed_block_offset < event.matched_hero_die_raw_packet_ref
       .decompressed_block_offset);
+});
+
+test('821 assist optional exact-image child IDs bind matched and excluded packet refs', (t) => {
+  const image = fakeImage(t);
+  const replay = replayWithAssists();
+  const invoke = t.mock.method(childProcess, 'spawnSync', (_python, args, options) => {
+    assert.match(args[1], /decode_assist_child_packet_16_19_821\.py$/);
+    assert.equal(args[3], path.resolve(image));
+    const request = JSON.parse(options.input);
+    assert.equal(request.replay_version, REPLAY_VERSION_821);
+    assert.deepEqual(request.packets.map((row) => row.packet_id), [0x040a, 0x040a, 0x040a]);
+    return { status: 0, stderr: '', stdout: JSON.stringify(nativeResult(request)) };
+  });
+  const result = decodeHeroAssistCandidates821(replay, null, { runtimeImagePath: image });
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.runtime_image_status, 'MATCHED_USED');
+  assert.equal(result.runtime_image_used, true);
+  assert.equal(result.native_child_identity_status, 'MATCHED_USED');
+  assert.equal(result.native_child_first_count, 2);
+  assert.equal(result.native_child_second_count, 1);
+  const pair = result.events[0].assist_pair_raw_packet_refs[0];
+  assert.equal(pair.first_raw_packet_ref.native_child_event_id, 0x0056);
+  assert.equal(pair.second_raw_packet_ref.native_child_event_id, 0x0057);
+  assert.equal(pair.second_raw_packet_ref.event_u32_0x20, 123);
+  assert.equal(result.nondeath_first_shape_packet_refs[0].native_child_event_id, 0x0056);
+  assert.equal(result.events[1].assisting_participant_ids_candidate.length, 0);
+  assert.equal(invoke.mock.callCount(), 1);
+});
+
+test('821 assist native child disagreement and wrong image suppress candidate output', (t) => {
+  const image = fakeImage(t);
+  const replay = replayWithAssists();
+  const wrongChild = t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const result = nativeResult(JSON.parse(options.input));
+    result.results[0].event_id = 0x0057;
+    result.results[0].raw_event_id_hex = '0x49d4';
+    result.results[0].event_u32_0x20 = 123;
+    return { status: 0, stderr: '', stdout: JSON.stringify(result) };
+  });
+  const mismatch = decodeHeroAssistCandidates821(replay, null, { runtimeImagePath: image });
+  assert.equal(mismatch.status, 'DECODE_FAILED');
+  assert.match(mismatch.error, /raw shape and exact native child ID disagree/);
+  assert.equal(mismatch.events, null);
+  assert.equal(mismatch.runtime_image_status, 'MATCHED_USED');
+  wrongChild.mock.restore();
+  const inconsistentRawId = t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const result = nativeResult(JSON.parse(options.input));
+    result.results[0].raw_event_id_hex = '0x1356';
+    return { status: 0, stderr: '', stdout: JSON.stringify(result) };
+  });
+  const rawMismatch = decodeHeroAssistCandidates821(replay, null, { runtimeImagePath: image });
+  assert.equal(rawMismatch.status, 'DECODE_FAILED');
+  assert.match(rawMismatch.error, /did not match exact child identity/);
+  assert.equal(rawMismatch.events, null);
+  inconsistentRawId.mock.restore();
+  t.mock.method(childProcess, 'spawnSync', () => ({
+    status: 1, stderr: 'runtime image SHA-256 mismatch: wrong image', stdout: '',
+  }));
+  const wrongImage = decodeHeroAssistCandidates821(replay, null, { runtimeImagePath: image });
+  assert.equal(wrongImage.status, 'DECODE_FAILED');
+  assert.equal(wrongImage.runtime_image_status, 'HASH_MISMATCH');
+  assert.equal(wrongImage.native_child_identity_status, 'FAILED');
+  assert.equal(wrongImage.events, null);
 });
 
 test('nonhero death source preserves unavailable attribution', () => {

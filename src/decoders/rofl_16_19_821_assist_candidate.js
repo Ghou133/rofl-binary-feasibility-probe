@@ -6,6 +6,7 @@ const { REPLAY_VERSION_821, assessHeroDeathTail821,
   decodeHeroDeathCandidates821 } = require('./rofl_16_19_821_7343');
 const { assessHeroStatsTail821 } = require('./rofl_16_19_821_hero_stats_candidate');
 const { collect821Routes, rowsFor821Capability } = require('./rofl_16_19_821_scan');
+const { validateAssistNativeChildren821 } = require('./rofl_16_19_821_assist_native_identity');
 const { RUNTIME_IMAGE_SHA256 } = require('./rofl_16_19_821_runtime_bytes');
 
 const PACKET_ID = 0x040a;
@@ -36,6 +37,7 @@ const HERO_ASSIST_CANDIDATE_PROFILE_821 = Object.freeze({
     'The 0x040a route carries other data; even the first 44-byte shape occurs 282 times outside matched deaths in the observed corpus.',
     'A candidate assist requires both 44-byte shapes before a co-timed, matched 0x0438 Hero_Die packet, identical bytes 5..42, a killer-tail-aligned source, and all ten ASSISTS tails aligned.',
     'The exact 821 native 0x040a deserializer fully consumed 2476 observed 44-byte packets; its packet-specific callback and field name remain unconfirmed.',
+    'Optional exact-image child identity checks confirm 0x0056/0x0057 packet identities, not an effective assist or actor role.',
     'The hero participant and killer labels rely on exact-build route and Replay-tail correlations; nonhero death sources do not imply an empty assist list.',
   ]),
 });
@@ -87,7 +89,7 @@ function participantFromAssistParam(rawParam, part) {
   return low - 0xad;
 }
 
-function rawRef(replay, row, role) {
+function rawRef(replay, row, role, nativeChild = null) {
   const { block, chunk } = row;
   return {
     role,
@@ -104,6 +106,14 @@ function rawRef(replay, row, role) {
     payload_length: block.payload_length,
     raw_param: block.param >>> 0,
     raw_payload_sha256: crypto.createHash('sha256').update(block.payload).digest('hex'),
+    ...(nativeChild === null ? {} : {
+      native_child_event_id: nativeChild.event_id,
+      raw_child_event_id_hex: nativeChild.raw_event_id_hex,
+      child_blob_sha256: nativeChild.event_blob_sha256,
+      event_u32_0x04: nativeChild.event_u32_0x04,
+      ...(nativeChild.event_id === 0x0057
+        ? { event_u32_0x20: nativeChild.event_u32_0x20 } : {}),
+    }),
   };
 }
 
@@ -111,7 +121,7 @@ function deathKey(chunkIndex, timeMs) {
   return `${chunkIndex}/${timeMs}`;
 }
 
-function decodeHeroAssistCandidates821(replay, precollected = null) {
+function decodeHeroAssistCandidates821(replay, precollected = null, options = {}) {
   const profile = HERO_ASSIST_CANDIDATE_PROFILE_821;
   const base = {
     profile_id: profile.id,
@@ -162,8 +172,27 @@ function decodeHeroAssistCandidates821(replay, precollected = null) {
     matched_death_count: deathOutcome.events.length,
     final_assists: tail.assists,
   };
-  const fail = (error) => ({ ...common, status: 'DECODE_FAILED', event_count: null,
+  const fail = (error) => ({ ...common,
+    ...(native?.status === 'PASS' ? {
+      runtime_image_status: native.runtime_image_status,
+      runtime_image_used: native.runtime_image_used,
+      runtime_image_sha256: native.runtime_image_sha256,
+      native_child_identity_status: 'MATCHED_USED',
+    } : {}),
+    status: 'DECODE_FAILED', event_count: null,
     assist_pair_count: null, events: null, error });
+  const native = options.runtimeImagePath == null ? null
+    : validateAssistNativeChildren821(packets, {
+      runtimeImagePath: options.runtimeImagePath,
+      pythonExecutable: options.pythonExecutable,
+    });
+  if (native !== null && native.status !== 'PASS') {
+    return { ...common, ...native, input_count: packets.length,
+      native_child_identity_status: 'FAILED',
+      event_count: null, assist_pair_count: null, events: null };
+  }
+  const nativeByRow = native === null ? null
+    : new Map(packets.map((row, index) => [row, native.results[index]]));
   const deaths = new Map();
   for (const event of deathOutcome.events) {
     const die = event.die_source_raw_packet_ref;
@@ -183,7 +212,13 @@ function decodeHeroAssistCandidates821(replay, precollected = null) {
         || block.payload_length !== PAYLOAD_LENGTH) {
       return fail('0x040a route row differs from selected 821 game-stream 44-byte scope');
     }
-    const part = shape(block);
+    const fingerprintPart = shape(block);
+    const nativeChild = nativeByRow?.get(row) ?? null;
+    const part = nativeChild === null ? fingerprintPart
+      : nativeChild.event_id === 0x0056 ? 'first' : 'second';
+    if (nativeChild !== null && part !== fingerprintPart) {
+      return fail('0x040a/44 raw shape and exact native child ID disagree');
+    }
     if (part === null) return fail('0x040a/44 has an unrecognized exact-build payload shape');
     const assistant = participantFromAssistParam(block.param >>> 0, part);
     if (assistant === null) return fail('0x040a/44 raw param differs from observed hero family');
@@ -236,8 +271,10 @@ function decodeHeroAssistCandidates821(replay, precollected = null) {
     const mappedHeroKiller = death.killer_participant_id_candidate !== null;
     const assistRefs = pairs.map((pair) => ({
       assistant_participant_id_candidate: pair.assistant,
-      first_raw_packet_ref: rawRef(replay, pair.first, 'candidate_assist_first_0x040a'),
-      second_raw_packet_ref: rawRef(replay, pair.second, 'candidate_assist_second_0x040a'),
+      first_raw_packet_ref: rawRef(replay, pair.first, 'candidate_assist_first_0x040a',
+        nativeByRow?.get(pair.first) ?? null),
+      second_raw_packet_ref: rawRef(replay, pair.second, 'candidate_assist_second_0x040a',
+        nativeByRow?.get(pair.second) ?? null),
     }));
     return {
       event_type: 'HERO_ASSIST_ATTRIBUTION_CANDIDATE',
@@ -254,6 +291,7 @@ function decodeHeroAssistCandidates821(replay, precollected = null) {
       assist_observation_status: mappedHeroKiller
         ? SEMANTIC_STATUS : 'UNAVAILABLE_NONHERO_SOURCE',
       confidence: 'CANDIDATE',
+      native_child_identity_status: native === null ? 'NOT_CHECKED' : 'MATCHED_USED',
       semantic_status: mappedHeroKiller
         ? SEMANTIC_STATUS : 'UNAVAILABLE_NONHERO_SOURCE',
       field_confidence: {
@@ -284,7 +322,15 @@ function decodeHeroAssistCandidates821(replay, precollected = null) {
     observed_assists_by_participant: observedCounts,
     nondeath_first_shape_count: nondeathFirst.length,
     nondeath_first_shape_packet_refs: nondeathFirst.map((row) =>
-      rawRef(replay, row, 'nondeath_first_shape_excluded')),
+      rawRef(replay, row, 'nondeath_first_shape_excluded', nativeByRow?.get(row) ?? null)),
+    native_child_identity_status: native === null ? 'NOT_CHECKED' : 'MATCHED_USED',
+    ...(native === null ? {} : {
+      runtime_image_status: native.runtime_image_status,
+      runtime_image_used: native.runtime_image_used,
+      runtime_image_sha256: native.runtime_image_sha256,
+      native_child_first_count: native.native_child_first_count,
+      native_child_second_count: native.native_child_second_count,
+    }),
     events,
   };
 }
