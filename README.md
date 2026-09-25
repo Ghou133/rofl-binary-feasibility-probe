@@ -174,7 +174,7 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --event-jsonl-only --out-dir "work\16-19-821-champion-kill-reports"
 ```
 
-821 的候选死亡记录保留原始包来源及未配对路由的负例计数。该 build 的运行时镜像已从真实回放进程捕获；当前死亡包的计时浮点和 Hero_Die 来源 ID 均有独立候选解码，单次助攻候选在 `hero_assist` 入口。可追加 `hero_assist,hero_respawn,hero_death_timer,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_assists_snapshot,hero_missions_minions_killed_snapshot,hero_ward_stats_snapshot,hero_missions_cannon_minions_killed_snapshot,hero_experience_snapshot,hero_vision_score_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_damage_totals_snapshot,hero_damage_taken_from_champions_snapshot,hero_damage_self_mitigated_snapshot,hero_structure_objective_damage_snapshot,hero_longest_living_time_snapshot,hero_total_time_spent_dead_snapshot,hero_total_heal_snapshot,hero_total_units_healed_snapshot,hero_epic_monster_damage_snapshot,hero_crowd_control_time_snapshot,hero_level_state` 到 `--events`；计数、浮点、计时和等级使用已固定的精确镜像变换，CLI 运行时无需再次提供镜像。库存 `hero_inventory_packet`、广播包 `hero_inventory_broadcast_packet`、单包 `hero_inventory_set_item_packet`、治疗上报包 `params_heal_packet`、护盾配对包 `shielding_params_packet_pair`、隐身名表子包 `stealth_event_packet`、CastSpellAns 包 `cast_spell_ans_packet`、DirectInput turn 包 `direct_input_movement_turn_packet` 和 SetMovementDriver 包 `set_movement_driver_packet` 需要 `--runtime-image` 指向同一完整 build 的镜像。各能力独立报告状态；载荷形状超出已验证范围、解码值违反参与者结算上界等情况仍会保留其他已通过能力的候选输出，并明确标出失败项。11 份现有 KR 回放中的等级 20 和高击杀/助攻编码均已被相应变换覆盖。计时值不用于预测返回时点。
+821 的候选死亡记录保留原始包来源及未配对路由的负例计数。该 build 的运行时镜像已从真实回放进程捕获；当前死亡包的计时浮点和 Hero_Die 来源 ID 均有独立候选解码，单次助攻候选在 `hero_assist` 入口。可追加 `hero_assist,hero_respawn,hero_death_timer,hero_deaths_snapshot,hero_champion_kills_snapshot,hero_assists_snapshot,hero_missions_minions_killed_snapshot,hero_ward_stats_snapshot,hero_missions_cannon_minions_killed_snapshot,hero_experience_snapshot,hero_vision_score_snapshot,hero_gold_earned_snapshot,hero_gold_spent_snapshot,hero_damage_totals_snapshot,hero_damage_taken_from_champions_snapshot,hero_damage_self_mitigated_snapshot,hero_structure_objective_damage_snapshot,hero_longest_living_time_snapshot,hero_total_time_spent_dead_snapshot,hero_total_heal_snapshot,hero_total_units_healed_snapshot,hero_epic_monster_damage_snapshot,hero_crowd_control_time_snapshot,hero_level_state` 到 `--events`；计数、浮点、计时和等级使用已固定的精确镜像变换，CLI 运行时无需再次提供镜像。库存 `hero_inventory_packet`、广播包 `hero_inventory_broadcast_packet`、单包 `hero_inventory_set_item_packet`、治疗上报包 `params_heal_packet`、护盾配对包 `shielding_params_packet_pair`、隐身名表子包 `stealth_event_packet`、CastSpellAns 包 `cast_spell_ans_packet`、DirectInput turn 包 `direct_input_movement_turn_packet`、SetMovementDriver 包 `set_movement_driver_packet`、OnChampionDie 子包 `champion_die_event_packet` 和 OnChampionKill 子包 `champion_kill_event_packet` 需要 `--runtime-image` 指向同一完整 build 的镜像。各能力独立报告状态；载荷形状超出已验证范围、解码值违反参与者结算上界等情况仍会保留其他已通过能力的候选输出，并明确标出失败项。11 份现有 KR 回放中的等级 20 和高击杀/助攻编码均已被相应变换覆盖。计时值不用于预测返回时点。
 
 对 HN 路由的同一完整 build，可单独选择计时候选，或用
 `--events hero_death,hero_death_timer` 一起运行。计时输出包含原始包引用、
@@ -252,6 +252,15 @@ node src/cli.js query-events "work\16-19-821-heal-report\replays\KR_example" `
 ```
 
 `--opaque-u32` 同时支持 `shielding_params_packet_pair_candidates`、`stealth_event_packet_candidates`、`champion_die_event_packet_candidates` 和 `champion_kill_event_packet_candidates`，匹配各记录中已解码的匿名 u32 字段；它不使用外层 `raw_param` 代替字段，也不赋予治疗、护盾、隐身、死亡或击杀参与者角色。十进制、十六进制和 `0` 均可精确查询；汇总保留字段不可用数与已检查后的零命中。
+
+按精确解码的 821 OnEvent 子事件 ID 查询 OnEnterStealth 标签（`0x0101`）：
+
+```powershell
+node src/cli.js query-events "work\16-19-821-stealth-reports\replays\KR_example" `
+  --event stealth_event_packet_candidates --child-event-id 0x0101 --limit 20
+```
+
+`--child-event-id` 只用于 `stealth_event_packet_candidates`，接受十进制 `257`/`258` 或十六进制 `0x0101`/`0x0102`；分别匹配镜像注册名 OnEnterStealth/OnExitStealth 的子包。它按已解码的 `child_event_id` 筛选，不从外层 `raw_param` 推断。汇总保留 `child_event_id_unavailable_count`，输出是未经修改的原始 JSONL 行；标签不证明实际可见性变化或隐身持续状态。
 
 执行 **16.15.801.3452** 的旧版整合语义分析：
 

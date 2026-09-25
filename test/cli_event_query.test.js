@@ -390,6 +390,85 @@ test('query-events keeps missing 821 stealth u32 unavailable and enforces exact 
   assert.equal(JSON.parse(notDecoded.stderr).code, 'CAPABILITY_UNAVAILABLE');
 });
 
+test('query-events filters exact 821 stealth child IDs while preserving rows and full counts', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x0102, child_event_id: 0x0101,
+      registered_event_name: 'OnEnterStealth', event_u32_0x04: 4 },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x0101, child_event_id: 0x0102,
+      registered_event_name: 'OnExitStealth', event_u32_0x04: 5 },
+    { replay_sha256: SHA, replay_time_ms: 30, child_event_id: 0x0101,
+      registered_event_name: 'OnEnterStealth', event_u32_0x04: 6 },
+    { replay_sha256: SHA, replay_time_ms: 40, child_event_id: null },
+  ];
+  const fixture = artifact(t, rows, true, STEALTH_PACKET_EVENT);
+  const enter = run(fixture.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--child-event-id', '257', '--limit', '1');
+  assert.equal(enter.status, 0, enter.stderr);
+  assert.equal(enter.stdout, `${fixture.lines[0]}\n`);
+  const summary = JSON.parse(enter.stderr);
+  assert.equal(summary.scanned_count, 4);
+  assert.equal(summary.matched_count, 2);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.child_event_id_unavailable_count, 1);
+  assert.equal(summary.filters.child_event_id, 0x0101);
+  assert.equal(summary.rows_unmodified, true);
+  const exit = run(fixture.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--child-event-id=0x0102', '--opaque-u32', '5');
+  assert.equal(exit.status, 0, exit.stderr);
+  assert.equal(exit.stdout, `${fixture.lines[1]}\n`);
+  assert.equal(JSON.parse(exit.stderr).matched_count, 1);
+});
+
+test('query-events distinguishes missing stealth child ID from explicit zero', (t) => {
+  const missing = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae },
+    { replay_sha256: SHA, replay_time_ms: 20, child_event_id: null },
+  ], true, STEALTH_PACKET_EVENT);
+  const output = path.join(missing.root, 'missing-child-id.jsonl');
+  const unavailable = run(missing.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--child-event-id', '0x0101', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'CHILD_EVENT_ID_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const zero = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, child_event_id: 0 },
+  ], true, STEALTH_PACKET_EVENT);
+  const invalid = run(zero.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--child-event-id', '0x0101');
+  assert.equal(invalid.status, 2);
+  assert.equal(JSON.parse(invalid.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('query-events rejects unsupported stealth child IDs, streams, and builds before row scan', (t) => {
+  const absentDirectory = path.join(os.tmpdir(), 'rofl-child-id-unopened-artifact');
+  for (const value of ['0', '0x0103', '0xffffffff', '-1', '4294967296', '0xgg']) {
+    const rejected = run(absentDirectory, '--event', STEALTH_PACKET_EVENT,
+      '--child-event-id', value);
+    assert.equal(rejected.status, 1, `${value}: ${rejected.stderr}`);
+    assert.match(rejected.stderr, /--child-event-id/, value);
+    assert.doesNotMatch(rejected.stderr, /MISSING_METADATA/, value);
+  }
+  const otherStream = run(absentDirectory, '--event', HEAL_PACKET_EVENT,
+    '--child-event-id', '0x0101');
+  assert.equal(otherStream.status, 1);
+  assert.match(otherStream.stderr, /--child-event-id requires/);
+
+  const wrongBuild = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, child_event_id: 0x0101 },
+  ], true, STEALTH_PACKET_EVENT);
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(wrongBuild.replayDirectory, name);
+    const document = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    document.replay_version = VERSION;
+    fs.writeFileSync(filename, JSON.stringify(document));
+  }
+  const wrongVersion = run(wrongBuild.replayDirectory, '--event', STEALTH_PACKET_EVENT,
+    '--child-event-id', '0x0101');
+  assert.equal(wrongVersion.status, 2);
+  assert.equal(JSON.parse(wrongVersion.stderr).code, 'UNSUPPORTED_FILTER');
+});
+
 test('query-events filters OnChampionDie child u32 without using its different raw param', (t) => {
   const rows = [
     { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000ae,

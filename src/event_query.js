@@ -290,9 +290,19 @@ function opaqueU32Values(row, lineNumber, fields) {
   return { values, unavailable, available: values.length > 0 };
 }
 
+function stealthChildEventId(row, lineNumber) {
+  const value = row.child_event_id;
+  if (value == null) return { value: null, available: false };
+  if (!Number.isSafeInteger(value) || ![0x0101, 0x0102].includes(value)) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid child_event_id at JSONL line ${lineNumber}.`, { line_number: lineNumber });
+  }
+  return { value, available: true };
+}
+
 function validateFilters(options) {
   const { fromMs = null, toMs = null, participant = null, rawParam = null,
-    itemId = null, opaqueU32 = null, limit = null } = options;
+    itemId = null, opaqueU32 = null, childEventId = null, limit = null } = options;
   for (const [name, value, minimum, maximum] of [
     ['fromMs', fromMs, 0, Number.MAX_SAFE_INTEGER],
     ['toMs', toMs, 0, Number.MAX_SAFE_INTEGER],
@@ -300,6 +310,7 @@ function validateFilters(options) {
     ['rawParam', rawParam, 0, 0xffffffff],
     ['itemId', itemId, 0, 0xffffffff],
     ['opaqueU32', opaqueU32, 0, 0xffffffff],
+    ['childEventId', childEventId, 0, 0xffffffff],
     ['limit', limit, 1, Number.MAX_SAFE_INTEGER],
   ]) {
     if (value != null && (!Number.isSafeInteger(value) || value < minimum || value > maximum)) {
@@ -309,12 +320,16 @@ function validateFilters(options) {
   if (fromMs != null && toMs != null && fromMs > toMs) {
     throw new EventQueryError('INVALID_FILTER', 'fromMs must not exceed toMs.');
   }
+  if (childEventId != null && ![0x0101, 0x0102].includes(childEventId)) {
+    throw new EventQueryError('INVALID_FILTER',
+      'childEventId must be 0x0101 (OnEnterStealth) or 0x0102 (OnExitStealth).');
+  }
 }
 
 async function streamEventQuery(prepared, options, emitLine) {
   validateFilters(options);
   const { fromMs = null, toMs = null, participant = null, rawParam = null,
-    itemId = null, opaqueU32 = null, limit = null } = options;
+    itemId = null, opaqueU32 = null, childEventId = null, limit = null } = options;
   const inventoryPacketEvent = [
     'hero_inventory_packet_candidates',
     'hero_inventory_broadcast_packet_candidates',
@@ -331,6 +346,11 @@ async function streamEventQuery(prepared, options, emitLine) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, or OnChampionKill packet candidate event.');
   }
+  if (childEventId != null && (prepared.eventKey !== 'stealth_event_packet_candidates'
+      || prepared.replayVersion !== '16.19.821.7343')) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--child-event-id requires a 16.19.821.7343 stealth packet candidate event.');
+  }
   let scannedCount = 0;
   let matchedCount = 0;
   let emittedCount = 0;
@@ -340,6 +360,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   let itemIdAvailableCount = 0;
   let opaqueU32UnavailableCount = 0;
   let opaqueU32AvailableCount = 0;
+  let childEventIdUnavailableCount = 0;
+  let childEventIdAvailableCount = 0;
   const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
   try {
@@ -376,18 +398,23 @@ async function streamEventQuery(prepared, options, emitLine) {
             prepared.eventKey === 'hero_inventory_broadcast_packet_candidates');
       const opaqueValues = opaqueU32 == null ? null
         : opaqueU32Values(row, lineNumber, opaqueU32Fields);
+      const childId = childEventId == null ? null
+        : stealthChildEventId(row, lineNumber);
       if (participant != null && subject.value == null) participantUnavailableCount += 1;
       if (rawParam != null && params.length === 0) rawParamUnavailableCount += 1;
       if (itemId != null && items.unavailable) itemIdUnavailableCount += 1;
       if (itemId != null && items.available) itemIdAvailableCount += 1;
       if (opaqueU32 != null && opaqueValues.unavailable) opaqueU32UnavailableCount += 1;
       if (opaqueU32 != null && opaqueValues.available) opaqueU32AvailableCount += 1;
+      if (childEventId != null && !childId.available) childEventIdUnavailableCount += 1;
+      if (childEventId != null && childId.available) childEventIdAvailableCount += 1;
       if ((fromMs != null && replayTime < fromMs)
           || (toMs != null && replayTime > toMs)
           || (participant != null && subject.value !== participant)
           || (rawParam != null && !params.includes(rawParam))
           || (itemId != null && !items.values.includes(itemId))
-          || (opaqueU32 != null && !opaqueValues.values.includes(opaqueU32))) continue;
+          || (opaqueU32 != null && !opaqueValues.values.includes(opaqueU32))
+          || (childEventId != null && childId.value !== childEventId)) continue;
       matchedCount += 1;
       if (limit == null || emittedCount < limit) {
         // Reuse the original line so candidate grades, provenance, and field order survive.
@@ -429,6 +456,13 @@ async function streamEventQuery(prepared, options, emitLine) {
         opaque_u32_unavailable_count: opaqueU32UnavailableCount,
         capability_status: prepared.capabilityStatus });
   }
+  if (childEventId != null && scannedCount > 0 && childEventIdAvailableCount === 0) {
+    throw new EventQueryError('CHILD_EVENT_ID_UNAVAILABLE',
+      'This event stream has no decoded stealth child event ID for filtering.',
+      { scanned_count: scannedCount,
+        child_event_id_unavailable_count: childEventIdUnavailableCount,
+        capability_status: prepared.capabilityStatus });
+  }
   return {
     schema_version: 1,
     command: 'query-events',
@@ -451,10 +485,12 @@ async function streamEventQuery(prepared, options, emitLine) {
     ...(rawParam == null ? {} : { raw_param_unavailable_count: rawParamUnavailableCount }),
     ...(itemId == null ? {} : { item_id_unavailable_count: itemIdUnavailableCount }),
     ...(opaqueU32 == null ? {} : { opaque_u32_unavailable_count: opaqueU32UnavailableCount }),
+    ...(childEventId == null ? {} : { child_event_id_unavailable_count: childEventIdUnavailableCount }),
     filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit,
       ...(rawParam == null ? {} : { raw_param: rawParam }),
       ...(itemId == null ? {} : { item_id: itemId }),
-      ...(opaqueU32 == null ? {} : { opaque_u32: opaqueU32 }) },
+      ...(opaqueU32 == null ? {} : { opaque_u32: opaqueU32 }),
+      ...(childEventId == null ? {} : { child_event_id: childEventId }) },
     rows_unmodified: true,
   };
 }

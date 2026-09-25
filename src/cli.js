@@ -164,7 +164,8 @@ Options:
   --participant <1..10>        Candidate subject participant; unknown rows do not match
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
   --item-id <uint32|0xhex>     Exact decoded 821 inventory packet record item ID
-  --opaque-u32 <uint32|0xhex>  Exact anonymous 821 heal/shield packet field value
+  --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet u32 field
+  --child-event-id <uint32|0xhex>  Exact 821 stealth child ID (0x0101 or 0x0102)
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
   --output <path|->            Write unmodified JSONL rows (default: stdout)
                                 Query summary is JSON on stderr when output is stdout
@@ -207,6 +208,7 @@ function parseArgs(argv) {
     rawParam: null,
     itemId: null,
     opaqueU32: null,
+    childEventId: null,
     limit: null,
     python: null,
     wardSpawns: null,
@@ -305,6 +307,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'raw-param') options.rawParam = queryRawParam(value);
       else if (command === 'query-events' && key === 'item-id') options.itemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'opaque-u32') options.opaqueU32 = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'child-event-id') options.childEventId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'limit') options.limit = queryInteger(value, key);
       else if (command === 'ward-events' && key === 'format') options.format = String(value).toLowerCase();
       else if (command === 'ward-events' && key === 'collection') options.collection = value;
@@ -362,6 +365,14 @@ function parseArgs(argv) {
       'champion_kill_event_packet_candidates',
     ].includes(options.event)) {
       throw new Error('--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, or OnChampionKill packet event');
+    }
+    if (options.childEventId !== null) {
+      if (options.event !== 'stealth_event_packet_candidates') {
+        throw new Error('--child-event-id requires an 821 stealth_event_packet_candidates event');
+      }
+      if (![0x0101, 0x0102].includes(options.childEventId)) {
+        throw new Error('--child-event-id must be 0x0101 (OnEnterStealth) or 0x0102 (OnExitStealth)');
+      }
     }
     if (options.output === '') throw new Error('--output must be a path or -');
   }
@@ -2492,6 +2503,7 @@ async function runQueryEventsCommand(parsed) {
       rawParam: options.rawParam,
       itemId: options.itemId,
       opaqueU32: options.opaqueU32,
+      childEventId: options.childEventId,
       limit: options.limit,
     }, async (line) => {
       if (!writer.write(line)) await once(writer, 'drain');
