@@ -1537,7 +1537,7 @@ function prepareBatchEventQuery(directory, eventKey) {
     throw new EventQueryError('INVALID_BATCH_METADATA',
       'Manifest Replay entries differ from the batch output hash inventory.');
   }
-  return { artifactDirectory, eventKey, replays };
+  return { artifactDirectory, eventKey, replays, outputHashes: hashes };
 }
 
 function subjectParticipant(row, lineNumber, eventKey = null) {
@@ -2060,6 +2060,165 @@ function inventoryKeyframeIntervalDifferenceRow(row, prepared, lineNumber, state
     state.endpoints.set(endpointKey, ref);
   }
   state.changedSlotCount += changes.length;
+}
+
+async function loadInventoryIntervalEndpointSnapshots(prepared) {
+  const source = prepareEventQuery(prepared.artifactDirectory,
+    'hero_inventory_broadcast_packet_candidates');
+  const association = prepared.capabilityResult;
+  const sourceResult = source?.capabilityResult;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid inventory Broadcast endpoint source: ${reason}.`);
+  };
+  if (!source || source.replayVersion !== prepared.replayVersion
+      || source.replaySha !== prepared.replaySha
+      || source.capabilityStatus !== 'CANDIDATE'
+      || sourceResult?.profile_id
+        !== HERO_INVENTORY_BROADCAST_PACKET_CANDIDATE_PROFILE_821.id
+      || sourceResult.runtime_image_sha256
+        !== HERO_INVENTORY_BROADCAST_PACKET_CANDIDATE_PROFILE_821
+          .evidence_runtime_image_sha256
+      || sourceResult.event_count !== association.input_count
+      || source.declaredCount !== association.input_count
+      || association.input_count > 512) {
+    throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
+      'Inventory interval Broadcast endpoint source differs from exact-build metadata.');
+  }
+  const snapshots = new Map();
+  const frames = new Map();
+  const positions = new Set();
+  let keyframeCount = 0;
+  let gameCount = 0;
+  const summary = await streamEventQuery(source, {}, async (line) => {
+    const row = JSON.parse(line);
+    const ref = row.raw_packet_ref;
+    const keyframe = row.packet_stream === 'keyframe';
+    const recordCount = keyframe ? 10 : row.record_count;
+    if (row.event_type !== 'HERO_INVENTORY_BROADCAST_PACKET_CANDIDATE'
+        || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+        || row.build_profile
+          !== HERO_INVENTORY_BROADCAST_PACKET_CANDIDATE_PROFILE_821.id
+        || row.replay_sha256 !== prepared.replaySha
+        || row.confidence !== 'CANDIDATE'
+        || row.semantic_status !== 'CANDIDATE_EXACT_RUNTIME_BROADCAST_PACKET_FIELDS'
+        || row.snapshot_application !== 'RESET_SLOTS_0_TO_9_THEN_APPLY_RECORDS'
+        || (row.packet_stream !== 'keyframe' && row.packet_stream !== 'game_chunk')
+        || !ref || typeof ref !== 'object' || Array.isArray(ref)
+        || ref.replay_sha256 !== prepared.replaySha
+        || ref.source_path !== prepared.sourcePath
+        || ref.packet_id !== 0x0357 || ref.chunk_stream !== row.packet_stream
+        || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+        || !Number.isSafeInteger(ref.decompressed_block_offset)
+        || ref.decompressed_block_offset < 0
+        || !Number.isSafeInteger(ref.payload_length)
+        || ref.payload_length < 76 || ref.payload_length > 166
+        || !REPLAY_SHA.test(ref.raw_payload_sha256)
+        || ref.raw_param !== row.hero_raw_param
+        || ref.replay_time_ms !== row.replay_time_ms
+        || !Array.isArray(row.records_candidate)
+        || !Array.isArray(row.packet_slot_snapshot_candidate)
+        || row.packet_slot_snapshot_candidate.length !== 10
+        || row.record_count !== recordCount
+        || row.records_candidate.length !== recordCount
+        || (!keyframe && (recordCount < 6 || recordCount > 9))) {
+      invalid('packet identity, stream, record count or Replay reference differs');
+    }
+    const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+    if (positions.has(position)) invalid('duplicate Broadcast physical packet reference');
+    positions.add(position);
+    const values = Array(10).fill(null);
+    let previousSlot = -1;
+    for (const [recordIndex, record] of row.records_candidate.entries()) {
+      const slot = record?.slot_candidate;
+      const item = record?.item_id_candidate;
+      if (record?.record_index !== recordIndex
+          || !Number.isSafeInteger(slot) || slot <= previousSlot
+          || slot > (keyframe ? 9 : 8)
+          || (keyframe && slot !== previousSlot + 1)
+          || !Number.isSafeInteger(item) || item < 0 || item > 0xffffffff) {
+        invalid('record slots or item keys differ from complete packet observations');
+      }
+      values[slot] = item;
+      previousSlot = slot;
+    }
+    for (let slot = 0; slot < 10; slot += 1) {
+      const observed = row.packet_slot_snapshot_candidate[slot];
+      if (observed?.slot_candidate !== slot
+          || observed.item_id_candidate !== values[slot]
+          || observed.value_basis !== (values[slot] === null
+            ? 'CALLBACK_RESET_WITH_NO_PACKET_RECORD' : 'DECODED_PACKET_RECORD')) {
+        invalid('slot snapshot differs from packet records');
+      }
+    }
+    if (!keyframe) {
+      gameCount += 1;
+      return;
+    }
+    const param = row.hero_raw_param;
+    if (!Number.isSafeInteger(param) || param < 0x400000ae
+        || param > 0x400000b7
+        || row.participant_id_candidate !== param - 0x400000ae + 1) {
+      invalid('keyframe has a noncanonical or contradictory participant key');
+    }
+    const frame = frames.get(ref.chunk_index)
+      ?? { timeMs: row.replay_time_ms, participants: new Set() };
+    if (frame.timeMs !== row.replay_time_ms
+        || frame.participants.has(row.participant_id_candidate)) {
+      invalid('keyframe time or participant roster differs');
+    }
+    frame.participants.add(row.participant_id_candidate);
+    frames.set(ref.chunk_index, frame);
+    snapshots.set(`${ref.chunk_index}/${param}`, { ref, values });
+    keyframeCount += 1;
+  });
+  if (summary.scanned_count !== association.input_count
+      || keyframeCount !== association.broadcast_keyframe_packet_count
+      || gameCount !== association.excluded_game_broadcast_count
+      || frames.size !== association.keyframe_count
+      || [...frames.values()].some((frame) => frame.participants.size !== 10)
+      || snapshots.size !== keyframeCount) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Inventory Broadcast source lacks a complete keyframe endpoint roster.');
+  }
+  return snapshots;
+}
+
+function endpointReversedPair(row, prepared, lineNumber, snapshots) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid inventory interval endpoint at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const previous = snapshots.get(
+    `${row.previous_keyframe_chunk_index}/${row.hero_raw_param}`);
+  const current = snapshots.get(
+    `${row.current_keyframe_chunk_index}/${row.hero_raw_param}`);
+  if (!previous || !current
+      || !isDeepStrictEqual(previous.ref, row.previous_raw_packet_ref)
+      || !isDeepStrictEqual(current.ref, row.current_raw_packet_ref)) {
+    invalid('named raw packet references differ from saved Broadcast endpoints');
+  }
+  const changes = [];
+  for (let slot = 0; slot < 10; slot += 1) {
+    const before = previous.values[slot];
+    const after = current.values[slot];
+    if (before !== after) changes.push({ slot_candidate: slot,
+      previous_item_id_candidate: before, current_item_id_candidate: after });
+  }
+  if (!isDeepStrictEqual(changes, row.changed_slots_candidate)) {
+    invalid('changed slots differ from complete saved Broadcast endpoints');
+  }
+  if (changes.length !== 2) return false;
+  const [first, second] = changes;
+  const firstItem = first.previous_item_id_candidate;
+  const secondItem = second.previous_item_id_candidate;
+  if (firstItem === 0 || secondItem === 0 || firstItem === secondItem
+      || first.current_item_id_candidate !== secondItem
+      || second.current_item_id_candidate !== firstItem) return false;
+  return [firstItem, secondItem].every((item) =>
+    previous.values.filter((value) => value === item).length === 1
+    && current.values.filter((value) => value === item).length === 1);
 }
 
 function wardInventoryKeyframePairRow(row, prepared, lineNumber, seenKeys,
@@ -2937,9 +3096,13 @@ function validateFilters(options) {
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
-    childEventId = null, limit = null, latestPerParticipant = false } = options;
+    childEventId = null, limit = null, latestPerParticipant = false,
+    endpointReversedPair: endpointReversedPairFilter = false } = options;
   if (typeof latestPerParticipant !== 'boolean') {
     throw new EventQueryError('INVALID_FILTER', 'Invalid latestPerParticipant query filter.');
+  }
+  if (typeof endpointReversedPairFilter !== 'boolean') {
+    throw new EventQueryError('INVALID_FILTER', 'Invalid endpointReversedPair query filter.');
   }
   for (const [name, value, minimum, maximum] of [
     ['fromMs', fromMs, 0, Number.MAX_SAFE_INTEGER],
@@ -2977,7 +3140,15 @@ async function streamEventQuery(prepared, options, emitLine) {
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
-    childEventId = null, limit = null, latestPerParticipant = false } = options;
+    childEventId = null, limit = null, latestPerParticipant = false,
+    endpointReversedPair: endpointReversedPairFilter = false } = options;
+  if (endpointReversedPairFilter
+      && (prepared.eventKey !== 'inventory_keyframe_interval_difference_candidates'
+        || prepared.replayVersion !== '16.19.821.7343'
+        || prepared.capabilityStatus !== 'CANDIDATE')) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--endpoint-reversed-pair requires exact 16.19.821.7343 inventory keyframe interval difference candidates.');
+  }
   if (latestPerParticipant
       && (prepared.replayVersion !== '16.19.821.7343'
         || prepared.capabilityStatus !== 'CANDIDATE'
@@ -3068,6 +3239,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   let matchedCount = 0;
   let emittedCount = 0;
   let latestParticipantUnavailableCount = 0;
+  let endpointReversedPairInspectedCount = 0;
   const latestByParticipant = new Map();
   let participantUnavailableCount = 0;
   let killerParticipantUnavailableCount = 0;
@@ -3100,6 +3272,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   const faceRosterPairState = { frames: new Map(), positions: new Set() };
   const minionBracketExpected = prepared.associationConfig?.minionBracket
     ? await loadMinionBracketExpectedRows(prepared) : null;
+  const inventoryEndpointSnapshots = endpointReversedPairFilter
+    ? await loadInventoryIntervalEndpointSnapshots(prepared) : null;
   const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
   try {
@@ -3157,6 +3331,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       associationRow(row, prepared, lineNumber, associationKeys,
         associationPacketPositions, episodePhysicalRefs, wardPairFrames,
         inventoryIntervalState, minionBracketExpected);
+      const reversedPairObserved = endpointReversedPairFilter
+        ? endpointReversedPair(row, prepared, lineNumber, inventoryEndpointSnapshots)
+        : false;
+      if (endpointReversedPairFilter) endpointReversedPairInspectedCount += 1;
       if (prepared.eventKey === 'hero_death_episode_candidates') {
         if (row.return_observation_status === 'OBSERVED_RETURN') observedReturnCount += 1;
         else terminalUnobservedCount += 1;
@@ -3233,6 +3411,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (childEventId != null && childId.available) childEventIdAvailableCount += 1;
       if ((fromMs != null && replayTime < fromMs)
           || (toMs != null && replayTime > toMs)
+          || (endpointReversedPairFilter && !reversedPairObserved)
           || (participant != null && subject.value !== participant)
           || (killerParticipant != null && killerCandidate.value !== killerParticipant)
           || (assistingParticipant != null
@@ -3441,6 +3620,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       selected_count: latestByParticipant.size,
       latest_participant_unavailable_count: latestParticipantUnavailableCount,
     } : {}),
+    ...(endpointReversedPairFilter ? {
+      endpoint_reversed_pair_inspected_count: endpointReversedPairInspectedCount,
+      endpoint_reversed_pair_unavailable_count: 0,
+    } : {}),
     participant_unavailable_count: participantUnavailableCount,
     ...(killerParticipant == null ? {}
       : { killer_participant_unavailable_count: killerParticipantUnavailableCount }),
@@ -3455,6 +3638,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     ...(childEventId == null ? {} : { child_event_id_unavailable_count: childEventIdUnavailableCount }),
     filters: { from_ms: fromMs, to_ms: toMs, participant_id: participant, limit,
       ...(latestPerParticipant ? { latest_per_participant: true } : {}),
+      ...(endpointReversedPairFilter ? { endpoint_reversed_pair: true } : {}),
       ...(killerParticipant == null ? {}
         : { killer_participant_id: killerParticipant }),
       ...(assistingParticipant == null ? {}
@@ -3473,11 +3657,31 @@ async function streamEventQuery(prepared, options, emitLine) {
 
 async function streamBatchEventQuery(prepared, options, emitLine) {
   validateFilters(options);
+  if (options.endpointReversedPair
+      && prepared.eventKey !== 'inventory_keyframe_interval_difference_candidates') {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--endpoint-reversed-pair requires exact 16.19.821.7343 inventory keyframe interval difference candidates.');
+  }
+  if (options.endpointReversedPair) {
+    for (const replay of prepared.replays) {
+      if (!replay.prepared) continue;
+      const source = prepareEventQuery(replay.replayDirectory,
+        'hero_inventory_broadcast_packet_candidates');
+      const relative = `${replay.relative}/${source.eventKey}.jsonl`;
+      const expected = prepared.outputHashes?.[relative];
+      if (!REPLAY_SHA.test(expected) || sha256File(source.inputPath) !== expected) {
+        throw new EventQueryError('ARTIFACT_HASH_MISMATCH',
+          `Batch manifest SHA-256 differs for ${relative}.`,
+          { filename: source.inputPath, relative });
+      }
+    }
+  }
   let scannedCount = 0;
   let matchedCount = 0;
   let emittedCount = 0;
   let selectedCount = 0;
   let latestParticipantUnavailableCount = 0;
+  let endpointReversedPairInspectedCount = 0;
   let completedCount = 0;
   let filters = null;
   const replayResults = [];
@@ -3523,6 +3727,9 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       selectedCount += summary.selected_count;
       latestParticipantUnavailableCount += summary.latest_participant_unavailable_count;
     }
+    if (options.endpointReversedPair) {
+      endpointReversedPairInspectedCount += summary.endpoint_reversed_pair_inspected_count;
+    }
     replayResults.push({ ...identity, query_status: 'COMPLETE',
       capability_status: summary.capability_status,
       declared_event_count: summary.declared_event_count,
@@ -3531,6 +3738,11 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       ...(options.latestPerParticipant ? {
         selected_count: summary.selected_count,
         latest_participant_unavailable_count: summary.latest_participant_unavailable_count,
+      } : {}),
+      ...(options.endpointReversedPair ? {
+        endpoint_reversed_pair_inspected_count:
+          summary.endpoint_reversed_pair_inspected_count,
+        endpoint_reversed_pair_unavailable_count: 0,
       } : {}),
       emitted_count: replayEmittedCount });
   }
@@ -3548,6 +3760,11 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     ...(options.latestPerParticipant ? {
       selected_count: selectedCount,
       latest_participant_unavailable_count: latestParticipantUnavailableCount,
+    } : {}),
+    ...(options.endpointReversedPair ? {
+      endpoint_reversed_pair_inspected_count: endpointReversedPairInspectedCount,
+      endpoint_reversed_pair_unavailable_replay_count:
+        prepared.replays.length - completedCount,
     } : {}),
     emitted_count: emittedCount, filters,
     replay_results: replayResults, rows_unmodified: true };

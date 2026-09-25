@@ -205,6 +205,8 @@ Options:
   --child-event-id <uint32|0xhex>  Exact 821 stealth or named multikill child ID
   --latest-per-participant    Last matching observed row per participant and Replay
                                 For interval differences: last matching observed difference.
+  --endpoint-reversed-pair    Exact-821 interval rows with two unique nonzero item keys
+                               observed in reversed slots at adjacent keyframe endpoints
   --limit <number>              Maximum rows emitted; all rows are still checked and counted
   --output <path|->            Write unmodified JSONL rows (default: stdout)
                                 Query summary is JSON on stderr when output is stdout
@@ -255,6 +257,7 @@ function parseArgs(argv) {
     opaqueI32: null,
     childEventId: null,
     latestPerParticipant: false,
+    endpointReversedPair: false,
     limit: null,
     python: null,
     wardSpawns: null,
@@ -301,6 +304,10 @@ function parseArgs(argv) {
     }
     if (command === 'query-events' && token === '--latest-per-participant') {
       options.latestPerParticipant = true;
+      continue;
+    }
+    if (command === 'query-events' && token === '--endpoint-reversed-pair') {
+      options.endpointReversedPair = true;
       continue;
     }
     if (command === 'ward-events' && token === '--ally') {
@@ -431,6 +438,10 @@ function parseArgs(argv) {
     if (options.previousItemId !== null
         && options.event !== 'inventory_keyframe_interval_difference_candidates') {
       throw new Error('--previous-item-id requires inventory_keyframe_interval_difference_candidates');
+    }
+    if (options.endpointReversedPair
+        && options.event !== 'inventory_keyframe_interval_difference_candidates') {
+      throw new Error('--endpoint-reversed-pair requires inventory_keyframe_interval_difference_candidates');
     }
     if (options.slot !== null && !inventoryQueryEvent) {
       throw new Error('--slot requires an 821 inventory packet event, ward/inventory keyframe pair event, or inventory keyframe interval difference event');
@@ -2835,6 +2846,7 @@ async function runQueryEventsCommand(parsed) {
       opaqueI32: options.opaqueI32,
       childEventId: options.childEventId,
       latestPerParticipant: options.latestPerParticipant,
+      endpointReversedPair: options.endpointReversedPair,
       limit: options.limit,
     };
     const emitLine = async (line) => {

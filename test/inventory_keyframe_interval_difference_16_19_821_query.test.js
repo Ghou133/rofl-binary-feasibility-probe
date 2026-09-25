@@ -127,6 +127,38 @@ function sourceOutcomes(seed = 0) {
   return { replay, inventoryBroadcastOutcome, association };
 }
 
+function reversalOutcomes(seed = 0, kind = 'positive') {
+  const source = sourceOutcomes(seed);
+  const bytes = new Map([[0, 'eaeaeaea'], [1001, 'f248eaea'],
+    [2001, 'aad8eaea'], [3340, '0eb8eaea']]);
+  const setSlot = (row, slot, item) => {
+    row.records_candidate[slot].item_id_candidate = item;
+    row.records_candidate[slot].emulated_object_item_id_bytes_hex = bytes.get(item);
+    row.packet_slot_snapshot_candidate[slot].item_id_candidate = item;
+  };
+  const frames = source.inventoryBroadcastOutcome.events.filter((row) =>
+    row.packet_stream === 'keyframe' && row.participant_id_candidate === 1
+      && [0, 60000].includes(row.replay_time_ms));
+  assert.equal(frames.length, 2);
+  for (const row of frames) {
+    setSlot(row, 6, 3340);
+    setSlot(row, 7, 0);
+    if (kind === 'zero') {
+      setSlot(row, 2, row.replay_time_ms === 0 ? 0 : 2001);
+      setSlot(row, 4, row.replay_time_ms === 0 ? 2001 : 0);
+    } else {
+      setSlot(row, 2, row.replay_time_ms === 0 ? 1001 : 2001);
+      setSlot(row, 4, row.replay_time_ms === 0 ? 2001 : 1001);
+    }
+    if (kind === 'duplicate') setSlot(row, 5, 1001);
+    if (kind === 'extra' && row.replay_time_ms === 60000) setSlot(row, 0, 1001);
+  }
+  source.association = derive(source.replay,
+    { inventoryBroadcastOutcome: source.inventoryBroadcastOutcome });
+  assert.equal(source.association.status, 'CANDIDATE', source.association.error);
+  return source;
+}
+
 function withoutEvents(outcome) {
   const copy = structuredClone(outcome);
   delete copy.events;
@@ -182,16 +214,19 @@ function writeReplayArtifact(root, name, source, { imageMissing = false } = {}) 
     lines: (rows[EVENT] ?? []).map(JSON.stringify),
     semanticPath: path.join(directory, 'semantic_run.json'),
     analysisPath: path.join(directory, 'replay_analysis.json'),
+    sourceEventPath: path.join(directory, `${SOURCE_EVENT}.jsonl`),
     eventPath: path.join(directory, `${EVENT}.jsonl`) };
 }
 
-function fixture(t, { batch = false, partial = false } = {}) {
+function fixture(t, { batch = false, partial = false, reversalKind = null } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-821-inventory-diff-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const first = writeReplayArtifact(root, 'first', sourceOutcomes(1));
+  const first = writeReplayArtifact(root, 'first', reversalKind
+    ? reversalOutcomes(1, reversalKind) : sourceOutcomes(1));
   let second = null;
   if (batch) {
-    second = writeReplayArtifact(root, 'second', sourceOutcomes(2),
+    second = writeReplayArtifact(root, 'second', reversalKind
+      ? reversalOutcomes(2, reversalKind) : sourceOutcomes(2),
       { imageMissing: partial });
     const replayInputs = [first, second].map((entry) => ({
       sha256: entry.sha, version: BUILD,
@@ -468,4 +503,96 @@ test('batch query stays PARTIAL when one Replay lacks exact image evidence', (t)
   assert.equal(summary.matched_count, 2);
   assert.equal(summary.emitted_count, 1);
   assert.equal(summary.replay_results[1].code, 'ASSOCIATION_UNAVAILABLE');
+});
+
+test('endpoint reversed pair uses complete unique nonzero endpoints and original rows', (t) => {
+  const { first } = fixture(t, { reversalKind: 'positive' });
+  const original = fs.readFileSync(first.eventPath, 'utf8');
+  const expected = first.lines.find((line) => {
+    const row = JSON.parse(line);
+    return row.participant_id_candidate === 1
+      && row.previous_observation_time_ms === 0;
+  });
+  assert.ok(expected);
+  const selected = query(first.directory, '--endpoint-reversed-pair');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${expected}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.endpoint_reversed_pair_inspected_count, first.lines.length);
+  assert.equal(summary.endpoint_reversed_pair_unavailable_count, 0);
+  assert.equal(summary.filters.endpoint_reversed_pair, true);
+  assert.equal(summary.rows_unmodified, true);
+  const sameSlot = query(first.directory, '--endpoint-reversed-pair',
+    '--slot', '2', '--previous-item-id', '1001', '--item-id', '2001');
+  assert.equal(sameSlot.status, 0, sameSlot.stderr);
+  assert.equal(sameSlot.stdout, `${expected}\n`);
+  const crossSlot = query(first.directory, '--endpoint-reversed-pair',
+    '--previous-item-id', '1001', '--item-id', '1001');
+  assert.equal(crossSlot.status, 0, crossSlot.stderr);
+  assert.equal(crossSlot.stdout, '');
+  assert.equal(JSON.parse(crossSlot.stderr).matched_count, 0);
+  assert.equal(fs.readFileSync(first.eventPath, 'utf8'), original);
+});
+
+test('endpoint reversed pair rejects zero moves, extra changes and full-roster duplicates', (t) => {
+  for (const kind of ['zero', 'extra', 'duplicate']) {
+    const { first } = fixture(t, { reversalKind: kind });
+    const selected = query(first.directory, '--endpoint-reversed-pair');
+    assert.equal(selected.status, 0, `${kind}: ${selected.stderr}`);
+    assert.equal(selected.stdout, '', kind);
+    const summary = JSON.parse(selected.stderr);
+    assert.equal(summary.matched_count, 0, kind);
+    assert.equal(summary.endpoint_reversed_pair_inspected_count,
+      first.lines.length, kind);
+  }
+});
+
+test('endpoint reversed pair rejects wrong stream/build and corrupted Broadcast source', (t) => {
+  const { first } = fixture(t, { reversalKind: 'positive' });
+  const wrongEvent = spawnSync(process.execPath,
+    [CLI, 'query-events', first.directory, '--event', SOURCE_EVENT,
+      '--endpoint-reversed-pair'],
+    { encoding: 'utf8', cwd: path.dirname(CLI) });
+  assert.equal(wrongEvent.status, 1);
+  assert.match(wrongEvent.stderr, /--endpoint-reversed-pair/);
+  const sourceJsonl = fs.readFileSync(first.sourceEventPath, 'utf8');
+  const rows = sourceJsonl.trim().split(/\r?\n/).map(JSON.parse);
+  const firstKeyframe = rows.find((row) => row.packet_stream === 'keyframe');
+  firstKeyframe.packet_slot_snapshot_candidate[2].item_id_candidate = 1234;
+  fs.writeFileSync(first.sourceEventPath, `${rows.map(JSON.stringify).join('\n')}\n`);
+  const output = path.join(path.dirname(first.directory), 'must-not-exist.jsonl');
+  const corrupted = query(first.directory, '--endpoint-reversed-pair',
+    '--output', output);
+  assert.equal(corrupted.status, 2, corrupted.stderr);
+  assert.equal(JSON.parse(corrupted.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(output), false);
+  fs.writeFileSync(first.sourceEventPath, sourceJsonl);
+  for (const file of [first.semanticPath, first.analysisPath]) {
+    rewriteJson(file, (document) => {
+      document.replay_version = '16.19.820.7193';
+    });
+  }
+  const wrongBuild = query(first.directory, '--endpoint-reversed-pair');
+  assert.equal(wrongBuild.status, 2, wrongBuild.stderr);
+  assert.equal(JSON.parse(wrongBuild.stderr).code, 'UNSUPPORTED_EVENT_BUILD');
+});
+
+test('batch endpoint reversed pair counts inspected and unavailable Replays', (t) => {
+  const { root, first } = fixture(t,
+    { batch: true, partial: true, reversalKind: 'positive' });
+  const selected = query(root, '--endpoint-reversed-pair', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout.trimEnd().split('\n').length, 1);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.query_status, 'PARTIAL');
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.endpoint_reversed_pair_inspected_count, first.lines.length);
+  assert.equal(summary.endpoint_reversed_pair_unavailable_replay_count, 1);
+  assert.equal(summary.replay_results[1].query_status, 'UNAVAILABLE');
+  fs.appendFileSync(first.sourceEventPath, '\n');
+  const tampered = query(root, '--endpoint-reversed-pair');
+  assert.equal(tampered.status, 2, tampered.stderr);
+  assert.equal(JSON.parse(tampered.stderr).code, 'ARTIFACT_HASH_MISMATCH');
 });

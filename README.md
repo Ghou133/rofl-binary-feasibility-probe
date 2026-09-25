@@ -572,9 +572,15 @@ node src/cli.js query-events "work\16-19-821-ward-inventory" `
 node src/cli.js query-events "work\16-19-821-ward-inventory" `
   --event inventory_keyframe_interval_difference_candidates `
   --slot 7 --previous-item-id 2001 --item-id 2002 --limit 20
+
+node src/cli.js query-events "work\16-19-821-ward-inventory" `
+  --event inventory_keyframe_interval_difference_candidates `
+  --endpoint-reversed-pair --limit 20
 ```
 
 `--previous-item-id` 只用于这类区间差异，筛选前端点物品键；与 `--slot`、`--item-id` 合用时，所有条件必须落在同一条差异槽位记录。两个物品键均可为 `0`；同一槽位前后值相等不会生成差异行。`--latest-per-participant --to-ms 600000` 取截止时间前每场每人最后一条符合筛选条件的差异记录，仍不表示截止时的持续库存状态。查询校验保存的关联元数据与行来源，缺镜像的场次标为不可查询。
+
+`--endpoint-reversed-pair` 只选择恰好两个槽位发生差异、两个非零物品键在前后端点交叉且在两端完整 10 槽快照中各自唯一的行。查询读取并校验保存的 Broadcast 来源快照，原样输出区间 JSONL；这只表示相邻关键帧的端点模式，不确定区间内动作或变化时刻。
 
 只读取已观察到的 HN HeroStats keyframe 候选快照：
 
