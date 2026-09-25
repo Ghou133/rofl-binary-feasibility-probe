@@ -192,6 +192,9 @@ without actor, source, target, or effective damage attribution.
 unit_apply_damage_lookup_roster_key_pair matches the native +0x24 lookup key
 against that complete roster, retaining +0x100 raw-key aliases as candidates;
 lookup success, actor, source, target, and effect remain unknown.
+unit_apply_damage_lookup2c_roster_key_pair matches the independent native +0x2c
+lookup key against that complete roster by full equality; lookup success, actor,
+source, target, and effect remain unknown.
 face_direction_keyframe_roster_pair pairs canonical keyframe FaceDirection packets
 with same-keyframe HeroStats roster candidates; the roster label does not identify the packet actor.
 Inspect reads the container and packet framing without a runtime image.
@@ -940,6 +943,7 @@ function parseOne1619(replay, options, started) {
       && options.events.some((name) => [
         'unit_apply_damage_roster_key_pair',
         'unit_apply_damage_lookup_roster_key_pair',
+        'unit_apply_damage_lookup2c_roster_key_pair',
       ].includes(name))) {
     for (const source of ['unit_apply_damage_packet', 'hero_minions_killed_snapshot']) {
       if (!selected821.includes(source)) selected821.push(source);
@@ -2203,6 +2207,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'show_health_bar_packet'
             || capability === 'unit_apply_damage_roster_key_pair'
             || capability === 'unit_apply_damage_lookup_roster_key_pair'
+            || capability === 'unit_apply_damage_lookup2c_roster_key_pair'
             || capability === 'face_direction_keyframe_roster_pair'));
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
@@ -2279,12 +2284,14 @@ function capabilityQuery(replay, options = {}) {
           && ['hero_minions_killed_snapshot', 'face_direction_keyframe_roster_pair',
             'unit_apply_damage_roster_key_pair',
             'unit_apply_damage_lookup_roster_key_pair',
+            'unit_apply_damage_lookup2c_roster_key_pair',
             'hero_experience_snapshot', 'hero_vision_score_snapshot',
             'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot'].includes(capability)
           ? assessHeroFloatSnapshotTail821(replay,
             ['face_direction_keyframe_roster_pair',
               'unit_apply_damage_roster_key_pair',
-              'unit_apply_damage_lookup_roster_key_pair'].includes(capability)
+              'unit_apply_damage_lookup_roster_key_pair',
+              'unit_apply_damage_lookup2c_roster_key_pair'].includes(capability)
               ? 'hero_minions_killed_snapshot' : capability)
         : profile.game_version === '16.19.821.7343'
           && (capability === 'hero_death' || capability === 'hero_death_timer')
@@ -2354,11 +2361,13 @@ function capabilityQuery(replay, options = {}) {
             : { name: 'exact_runtime_image', status: 'MISSING', path: null },
           ...(['unit_apply_damage_packet', 'show_health_bar_packet',
             'unit_apply_damage_roster_key_pair',
-            'unit_apply_damage_lookup_roster_key_pair'].includes(capability)
+            'unit_apply_damage_lookup_roster_key_pair',
+            'unit_apply_damage_lookup2c_roster_key_pair'].includes(capability)
             ? [pythonUnicornDependency(options.python ?? options.pythonExecutable)] : []),
           ...(['face_direction_keyframe_roster_pair',
             'unit_apply_damage_roster_key_pair',
-            'unit_apply_damage_lookup_roster_key_pair'].includes(capability)
+            'unit_apply_damage_lookup_roster_key_pair',
+            'unit_apply_damage_lookup2c_roster_key_pair'].includes(capability)
             ? tailStatInput : [])]
           : [...dependencies, ...tailStatInput,
             ...(profile.game_version === '16.19.821.7343' && capability === 'hero_respawn'
@@ -2592,6 +2601,11 @@ function capabilityQuery(replay, options = {}) {
       if (profile.game_version === '16.19.821.7343'
           && capability === 'unit_apply_damage_lookup_roster_key_pair') {
         validationPending.push('v3 native-gated 0x005f callback +0x24 lookup key and complete ten-hero 0x0089 keyframe roster',
+          'full lookup-key equality and both source references; no proven lookup success, actor, source, target, or applied-damage inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'unit_apply_damage_lookup2c_roster_key_pair') {
+        validationPending.push('v3 native-gated 0x005f callback +0x2c lookup key and complete ten-hero 0x0089 keyframe roster',
           'full lookup-key equality and both source references; no proven lookup success, actor, source, target, or applied-damage inference');
       }
       if (profile.game_version === '16.19.821.7343'
@@ -2883,6 +2897,8 @@ function capabilityQuery(replay, options = {}) {
             unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
             unit_apply_damage_lookup_roster_key_pair:
               'unit_apply_damage_lookup_roster_key_candidates',
+            unit_apply_damage_lookup2c_roster_key_pair:
+              'unit_apply_damage_lookup2c_roster_key_candidates',
             face_direction_keyframe_roster_pair:
               'face_direction_keyframe_roster_pair_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
