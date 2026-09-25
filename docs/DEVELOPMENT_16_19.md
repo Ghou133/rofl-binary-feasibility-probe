@@ -4,6 +4,12 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed saved decode-root query:** `query-events` now accepts a valid
+  single- or multi-Replay `decode` output root as well as `batch`, retaining
+  manifest, Replay identity, directory and requested-event hash checks.
+  The saved exact-821 OnHQKill decode roots queried 1/1 and 11/11 Replays
+  with the same original JSONL SHA-256 as the corresponding true batch
+  outputs. Unknown commands and malformed roots remain rejected.
 - **Completed 821 OnHQKill packet candidate:** The exact-image `0x040a`
   child `0x0046` now has a selected `hq_kill_event_packet` API/CLI output.
   The 11 supplied KR Replays produced one candidate row each and retained
