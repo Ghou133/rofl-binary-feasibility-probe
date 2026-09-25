@@ -221,7 +221,7 @@ function associateFaceDirectionKeyframeRosterPairs821(replay, {
     excluded_noncanonical_keyframe_packet_count: null,
     first_excluded_face_packet_refs: null,
     verified_raw_packet_count: null,
-    event_count: null, events: null, error, diagnostics,
+    input_count: null, event_count: null, events: null, error, diagnostics,
   });
   if (replay?.header?.version !== BUILD) {
     return fail('UNSUPPORTED', `FaceDirection keyframe roster pair supports only ${BUILD}`);
@@ -422,6 +422,7 @@ function associateFaceDirectionKeyframeRosterPairs821(replay, {
     excluded_noncanonical_keyframe_packet_count: exclusions.noncanonical_keyframe,
     first_excluded_face_packet_refs: firstExcluded,
     verified_raw_packet_count: physical.verified_count,
+    input_count: physical.verified_count,
     event_count: events.length, events,
   };
 }

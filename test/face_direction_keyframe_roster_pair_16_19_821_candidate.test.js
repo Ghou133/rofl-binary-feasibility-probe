@@ -177,6 +177,9 @@ test('821 FaceDirection keyframe pair uses full key, same chunk/time and Stats-b
   assert.equal(result.excluded_game_packet_count, 1);
   assert.equal(result.excluded_noncanonical_keyframe_packet_count, 1);
   assert.equal(result.verified_raw_packet_count, 22);
+  assert.equal(result.input_count,
+    result.face_packet_count + result.snapshot_count);
+  assert.equal(result.input_count, result.verified_raw_packet_count);
   assert.equal(result.event_count, 10);
   assert.equal(result.events[0].hero_raw_param, FIRST_PARAM);
   assert.equal(result.events[0].hero_stats_participant_id_candidate, 1);
@@ -245,6 +248,7 @@ test('821 FaceDirection keyframe pair preserves decisive source failure and miss
   values.faceDirectionPacketOutcome.status = 'DECODE_FAILED';
   const result = associate(values.replay, values);
   assert.equal(result.status, 'DECODE_FAILED');
+  assert.equal(result.input_count, null);
   assert.deepEqual(result.diagnostics.dependency_statuses, {
     face_direction_packet: 'DECODE_FAILED',
     hero_minions_killed_snapshot: 'CANDIDATE',
