@@ -13,7 +13,11 @@ import struct
 import sys
 from pathlib import Path
 
+from unicorn import UC_HOOK_CODE, UC_HOOK_MEM_WRITE
+from unicorn.x86_const import UC_X86_REG_RIP, UC_X86_REG_RSI
+
 from decode_mapview_inventory_16_19_821 import make_emulator
+import emulate_exact_packet_decoder as exact
 
 
 BUILD = '16.19.821.7343'
@@ -31,6 +35,20 @@ CONSTRUCTOR_RVA = 0xecec40
 VTABLE_RVA = 0x1ba21c8
 DESERIALIZER_RVA = 0xf49dd0
 CALLBACK_FLOAT_HELPER_RVA = 0x251c60
+RAW_FLOAT_READER_RVA = 0xe79810
+FLOAT_READ_CALL_RVAS = (0xf4a911, 0xf4a97f, 0xf4a9ef, 0xf4aa60)
+FLOAT_FINAL_WRITE_RVAS = {
+    0: 0xf4aaaf,
+    2: 0xf4aa3f,
+    3: 0xf4a7d0,
+    4: 0xf4a9cf,
+    5: 0xf4a8f0,
+    6: 0xf4a95f,
+    7: 0xf4a890,
+}
+FLOAT_CONSTANTS = {3: ('CONSTANT_0', 0.0, '9f9f9f9f'),
+                   5: ('CONSTANT_1', 1.0, '9f9f36ef'),
+                   7: ('CONSTANT_2', 2.0, '9f9f9fed')}
 PROFILE = {
     'constructor_rva': CONSTRUCTOR_RVA,
     'deserialize_rva': DESERIALIZER_RVA,
@@ -131,10 +149,78 @@ def validate_batch_tuple(packet):
     return raw_param, payload, has_float
 
 
-def run_batch(packets, image, digest):
+def make_damage_emulator(image):
+    """Trace only exact deserializer writes and its +0x20 raw float reader."""
     emulator, context = make_emulator(image)
+    state = {'in_deserializer': False, 'float_write_rvas': set(),
+             'float_read_offsets': []}
+
+    def enter_deserializer(uc, _address, _size, _user_data):
+        state['in_deserializer'] = True
+
+    def float_write(uc, _access, _address, _size, _value, _user_data):
+        if state['in_deserializer']:
+            state['float_write_rvas'].add(uc.reg_read(UC_X86_REG_RIP) - IMAGE_BASE)
+
+    def float_read(uc, _address, _size, _user_data):
+        cursor_address = uc.reg_read(UC_X86_REG_RSI)
+        payload_pointer = struct.unpack('<Q', bytes(uc.mem_read(cursor_address, 8)))[0]
+        state['float_read_offsets'].append(payload_pointer - exact.PAYLOAD_ADDRESS)
+
+    emulator.emulator.hook_add(UC_HOOK_CODE, enter_deserializer,
+                               begin=IMAGE_BASE + DESERIALIZER_RVA,
+                               end=IMAGE_BASE + DESERIALIZER_RVA)
+    emulator.emulator.hook_add(UC_HOOK_MEM_WRITE, float_write,
+                               begin=exact.OBJECT_ADDRESS + 0x20,
+                               end=exact.OBJECT_ADDRESS + 0x23)
+    for rva in FLOAT_READ_CALL_RVAS:
+        emulator.emulator.hook_add(UC_HOOK_CODE, float_read,
+                                   begin=IMAGE_BASE + rva, end=IMAGE_BASE + rva)
+    return emulator, context, state
+
+
+def reset_float_trace(state):
+    state['in_deserializer'] = False
+    state['float_write_rvas'].clear()
+    state['float_read_offsets'].clear()
+
+
+def inspect_callback_float(payload, object_bytes, decoded_value, state, byte_table):
+    """Require a concrete +0x20 write and distinguish raw-read from constants."""
+    selector = (payload[0] >> 3) & 7
+    if selector not in FLOAT_FINAL_WRITE_RVAS:
+        raise ValueError('821 +0x20 float selector is outside observed scope')
+    if FLOAT_FINAL_WRITE_RVAS[selector] not in state['float_write_rvas']:
+        raise ValueError('821 +0x20 float was not explicitly written')
+    if decoded_value is None or not math.isfinite(decoded_value):
+        raise ValueError('821 +0x20 callback float is unavailable or nonfinite')
+    encoded = object_bytes[0x20:0x24]
+    if selector in FLOAT_CONSTANTS:
+        source, expected_value, expected_hex = FLOAT_CONSTANTS[selector]
+        if (state['float_read_offsets'] or decoded_value != expected_value
+                or encoded.hex() != expected_hex):
+            raise ValueError('821 +0x20 constant branch differs')
+        return source, None
+    if len(state['float_read_offsets']) != 1:
+        raise ValueError('821 +0x20 raw reader was not invoked exactly once')
+    offset = state['float_read_offsets'][0]
+    raw = payload[offset:offset + 4] if 0 <= offset <= len(payload) - 4 else b''
+    if len(raw) != 4 or raw != encoded:
+        raise ValueError('821 +0x20 raw bytes differ from native object')
+    redecoded = struct.unpack('<f', raw.translate(byte_table))[0]
+    if redecoded != decoded_value:
+        raise ValueError('821 +0x20 raw helper transform differs')
+    return 'RAW_READER', offset
+
+
+def run_batch(packets, image, digest):
+    emulator, context, trace = make_damage_emulator(image)
+    float_table = emulator.prepare_profile(PROFILE)['byte_tables'][CALLBACK_FLOAT_HELPER_RVA]
     input_digest = hashlib.sha256()
     float_rows = []
+    native_float_rows = []
+    native_float_source_counts = {'RAW_READER': 0, 'CONSTANT_0': 0,
+                                  'CONSTANT_1': 0, 'CONSTANT_2': 0}
     accepted_count = 0
     first_failure = None
     for index, packet in enumerate(packets):
@@ -144,6 +230,7 @@ def run_batch(packets, image, digest):
         if first_failure is not None:
             continue
         context['raw_param'] = raw_param
+        reset_float_trace(trace)
         try:
             native = emulator.decode(payload, PROFILE)
             object_bytes = bytes.fromhex(native['object_hex'])
@@ -162,12 +249,16 @@ def run_batch(packets, image, digest):
                     'object_opcode': opcode, 'object_raw_param': object_param,
                 }
                 continue
+            value = native['decoded_fields']['callback_f32_0x20']
+            source, raw_offset = inspect_callback_float(
+                payload, object_bytes, value, trace, float_table)
+            if has_float and (source != 'RAW_READER' or raw_offset != 5):
+                first_failure = {'index': index,
+                                 'reason': 'legacy 15-byte float family raw offset differs'}
+                continue
+            native_float_rows.append([index, value, source, raw_offset])
+            native_float_source_counts[source] += 1
             if has_float:
-                value = native['decoded_fields']['callback_f32_0x20']
-                if value is None or not math.isfinite(value):
-                    first_failure = {'index': index,
-                                     'reason': 'native callback float is unavailable or nonfinite'}
-                    continue
                 float_rows.append([index, value])
             accepted_count += 1
         except Exception as error:
@@ -181,6 +272,8 @@ def run_batch(packets, image, digest):
         'native_full_success_count': accepted_count,
         'first_failure': first_failure,
         'float_rows': float_rows,
+        'native_float_rows': native_float_rows,
+        'native_float_source_counts': native_float_source_counts,
     }, allow_nan=False))
 
 
@@ -195,11 +288,13 @@ def main():
     if options.batch:
         run_batch(packets, image, digest)
         return
-    emulator, context = make_emulator(image)
+    emulator, context, trace = make_damage_emulator(image)
+    float_table = emulator.prepare_profile(PROFILE)['byte_tables'][CALLBACK_FLOAT_HELPER_RVA]
     rows = []
     for index, packet in enumerate(packets):
         raw_param, payload = validate_packet(packet)
         context['raw_param'] = raw_param
+        reset_float_trace(trace)
         try:
             native = emulator.decode(payload, PROFILE)
             object_bytes = bytes.fromhex(native['object_hex'])
@@ -210,9 +305,11 @@ def main():
                         and opcode == PACKET_ID
                         and object_param == raw_param)
             value = native['decoded_fields']['callback_f32_0x20'] if accepted else None
-            if value is not None and not math.isfinite(value):
-                accepted = False
-                value = None
+            source = None
+            raw_offset = None
+            if accepted:
+                source, raw_offset = inspect_callback_float(
+                    payload, object_bytes, value, trace, float_table)
             rows.append({
                 'index': index,
                 'status': 'DECODED' if accepted else 'FAILED',
@@ -223,6 +320,8 @@ def main():
                 'object_raw_param': object_param,
                 'object_field_0x20_encoded_bytes_hex': object_bytes[0x20:0x24].hex(),
                 'callback_f32_0x20_candidate': value,
+                'native_callback_f32_0x20_source': source,
+                'native_callback_f32_0x20_raw_offset': raw_offset,
             })
         except Exception as error:
             rows.append({'index': index, 'status': 'FAILED', 'error': str(error)})
