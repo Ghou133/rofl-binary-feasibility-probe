@@ -342,7 +342,7 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 
 16.19 `decode` 或 `batch` 使用 `--events` 时，可额外指定 `--event-jsonl-only` 减少大量事件的重复输出。此模式仍写入每项事件的完整 JSONL、`semantic_run.json` 和各报告；`replay_analysis.json` 中的 `events` 为 `null`，同时记录 `event_storage: "JSONL_ONLY"`、`event_jsonl_files` 相对路径与 `event_counts`，不生成重复的 `events.json`。输出 manifest 只散列实际生成的文件。默认模式保持原有三份事件输出；此选项不适用于 `inspect`、旧版回放或未指定 `--events` 的调用。
 
-`query-events` 也可直接读取 `batch` 的输出根目录，从 `manifest.json` 逐场校验回放身份和事件 JSONL，再把匹配行原样输出。`--limit` 作用于整批输出，仍会检查所有可用场次的完整行数。汇总列出每场 `COMPLETE` 或 `UNAVAILABLE` 和原有能力状态；部分场次缺少包形状时返回 `PARTIAL`，不会把缺失当作零命中。全部场次不可查询时命令失败，已创建的输出文件会清理。
+`query-events` 也可直接读取 `batch` 的输出根目录，从 `manifest.json` 逐场校验回放身份、目录清单和每场元数据及所查 JSONL 的 SHA-256，再把匹配行原样输出。`--limit` 作用于整批输出，仍会检查所有可用场次的完整行数。汇总列出每场 `COMPLETE` 或 `UNAVAILABLE` 和原有能力状态；部分场次缺少包形状时返回 `PARTIAL`，不会把缺失当作零命中。全部场次不可查询时命令失败，已创建的输出文件会清理。
 
 ```powershell
 node src/cli.js query-events "work\16-19-821-batch" `

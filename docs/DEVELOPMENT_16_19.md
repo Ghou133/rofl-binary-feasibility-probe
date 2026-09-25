@@ -19,7 +19,8 @@ Current progress (older notes below retain their original research context):
   `artifacts/16_19_development/on_event_000b_followup_821/` and
   `artifacts/16_19_development/on_event_000b_group_join_821/`.
 - **Completed:** `query-events` accepts a batch artifact root, keeps the
-  manifest's Replay order, validates each Replay and full JSONL, and reports
+  manifest's Replay order, validates its exact Replay directory inventory,
+  metadata and queried JSONL hashes, then scans each full JSONL and reports
   per-Replay unavailable states. The existing 11-Replay OnResurrect batch
   produced 29 rows from seven queryable Replays; four remained
   `PROFILE_UNAVAILABLE` and the query reported `PARTIAL`.

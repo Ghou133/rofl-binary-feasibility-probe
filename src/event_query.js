@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const readline = require('node:readline');
 const { isDeepStrictEqual } = require('node:util');
@@ -164,6 +165,22 @@ function readArtifactJson(directory, basename) {
     throw new EventQueryError('INVALID_METADATA', `Cannot parse ${basename}: ${error.message}`,
       { filename });
   }
+}
+
+function sha256File(filename) {
+  const digest = crypto.createHash('sha256');
+  const handle = fs.openSync(filename, 'r');
+  const chunk = Buffer.allocUnsafe(1024 * 1024);
+  try {
+    for (;;) {
+      const bytes = fs.readSync(handle, chunk, 0, chunk.length, null);
+      if (bytes === 0) break;
+      digest.update(chunk.subarray(0, bytes));
+    }
+  } finally {
+    fs.closeSync(handle);
+  }
+  return digest.digest('hex');
 }
 
 function isCount(value) {
@@ -375,10 +392,12 @@ function prepareEventQuery(directory, eventKey) {
 function prepareBatchEventQuery(directory, eventKey) {
   const artifactDirectory = path.resolve(directory);
   const manifest = readArtifactJson(artifactDirectory, 'manifest.json');
+  const hashes = manifest.output_hashes_excluding_manifest;
   if (manifest.command_args?.[0] !== 'batch'
-      || !Array.isArray(manifest.replay_inputs) || manifest.replay_inputs.length === 0) {
+      || !Array.isArray(manifest.replay_inputs) || manifest.replay_inputs.length === 0
+      || !hashes || typeof hashes !== 'object' || Array.isArray(hashes)) {
     throw new EventQueryError('INVALID_BATCH_METADATA',
-      'manifest.json must identify a nonempty batch run.');
+      'manifest.json must identify a nonempty batch run with output hashes.');
   }
   const replayRoot = path.join(artifactDirectory, 'replays');
   let replayRootStat;
@@ -395,6 +414,13 @@ function prepareBatchEventQuery(directory, eventKey) {
     throw new EventQueryError('UNSAFE_ARTIFACT', 'Batch Replay directory must be ordinary.',
       { directory: replayRoot });
   }
+  const checkHash = (relative, filename) => {
+    const expected = hashes[relative];
+    if (!REPLAY_SHA.test(expected) || sha256File(filename) !== expected) {
+      throw new EventQueryError('ARTIFACT_HASH_MISMATCH',
+        `Batch manifest SHA-256 differs for ${relative}.`, { filename, relative });
+    }
+  };
   const seenDirectories = new Set();
   const seenReplays = new Set();
   const replays = manifest.replay_inputs.map((entry, index) => {
@@ -454,9 +480,29 @@ function prepareBatchEventQuery(directory, eventKey) {
         `Manifest and Replay metadata disagree at entry ${index}.`,
         { artifact_directory: relative });
     }
+    checkHash(`${relative}/semantic_run.json`,
+      path.join(replayDirectory, 'semantic_run.json'));
+    checkHash(`${relative}/replay_analysis.json`,
+      path.join(replayDirectory, 'replay_analysis.json'));
+    if (prepared) checkHash(`${relative}/${eventKey}.jsonl`, prepared.inputPath);
     return { relative, replayDirectory, replaySha: entry.sha256,
       replayVersion: entry.version, prepared, unavailable };
   });
+  const physical = fs.readdirSync(replayRoot, { withFileTypes: true });
+  if (physical.some((entry) => !entry.isDirectory() || entry.isSymbolicLink())
+      || physical.length !== seenDirectories.size
+      || physical.some((entry) => !seenDirectories.has(`replays/${entry.name}`))) {
+    throw new EventQueryError('INVALID_BATCH_METADATA',
+      'Manifest Replay entries differ from the batch Replay directories.');
+  }
+  const hashedDirectories = new Set(Object.keys(hashes)
+    .map((relative) => /^replays\/([^/]+)\//.exec(relative)?.[1])
+    .filter(Boolean).map((name) => `replays/${name}`));
+  if (hashedDirectories.size !== seenDirectories.size
+      || [...hashedDirectories].some((relative) => !seenDirectories.has(relative))) {
+    throw new EventQueryError('INVALID_BATCH_METADATA',
+      'Manifest Replay entries differ from the batch output hash inventory.');
+  }
   return { artifactDirectory, eventKey, replays };
 }
 

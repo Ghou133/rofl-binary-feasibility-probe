@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -275,7 +276,26 @@ function batchArtifact(t) {
   });
   const manifestPath = path.join(first.root, 'manifest.json');
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  refreshBatchHashes(manifestPath);
   return { root: first.root, first, secondDirectory, manifestPath };
+}
+
+function refreshBatchHashes(manifestPath) {
+  rewriteJson(manifestPath, (manifest) => {
+    const root = path.dirname(manifestPath);
+    const hashes = {};
+    for (const entry of manifest.replay_inputs) {
+      for (const name of ['semantic_run.json', 'replay_analysis.json', `${EVENT}.jsonl`]) {
+        const relative = `${entry.artifact_directory}/${name}`;
+        const filename = path.join(root, relative);
+        if (fs.existsSync(filename)) {
+          hashes[relative] = crypto.createHash('sha256')
+            .update(fs.readFileSync(filename)).digest('hex');
+        }
+      }
+    }
+    manifest.output_hashes_excluding_manifest = hashes;
+  });
 }
 
 test('query-events reads batch JSONL with a global limit and per-Replay counts', (t) => {
@@ -302,6 +322,7 @@ test('query-events marks unavailable batch Replays and refuses an all-unavailabl
     };
   });
   fs.rmSync(path.join(batch.secondDirectory, `${EVENT}.jsonl`));
+  refreshBatchHashes(batch.manifestPath);
   const partial = run(batch.root, '--event', EVENT);
   assert.equal(partial.status, 0, partial.stderr);
   assert.equal(partial.stdout, `${batch.first.lines[0]}\n`);
@@ -316,6 +337,7 @@ test('query-events marks unavailable batch Replays and refuses an all-unavailabl
       status: 'PROFILE_UNAVAILABLE', event_count: null,
     };
   });
+  refreshBatchHashes(batch.manifestPath);
   const output = path.join(batch.root, 'unavailable.jsonl');
   const unavailable = run(batch.root, '--event', EVENT, '--output', output);
   assert.equal(unavailable.status, 2);
@@ -328,6 +350,7 @@ test('query-events rejects unsafe or corrupt batch artifacts and removes partial
   const output = path.join(batch.root, 'partial.jsonl');
   fs.writeFileSync(path.join(batch.secondDirectory, `${EVENT}.jsonl`),
     '{invalid-json}\n');
+  refreshBatchHashes(batch.manifestPath);
   const corrupt = run(batch.root, '--event', EVENT, '--output', output);
   assert.equal(corrupt.status, 2);
   assert.equal(JSON.parse(corrupt.stderr).code, 'INVALID_EVENT_ROW');
@@ -339,6 +362,24 @@ test('query-events rejects unsafe or corrupt batch artifacts and removes partial
   const unsafe = run(batch.root, '--event', EVENT);
   assert.equal(unsafe.status, 2);
   assert.equal(JSON.parse(unsafe.stderr).code, 'INVALID_BATCH_METADATA');
+});
+
+test('query-events refuses changed batch rows and omitted manifest Replay entries', (t) => {
+  const changed = batchArtifact(t);
+  const eventPath = path.join(changed.first.replayDirectory, `${EVENT}.jsonl`);
+  const original = JSON.parse(changed.first.lines[0]);
+  fs.writeFileSync(eventPath, `${JSON.stringify({ ...original, replay_time_ms: 101 })}\n`);
+  const altered = run(changed.root, '--event', EVENT);
+  assert.equal(altered.status, 2);
+  assert.equal(JSON.parse(altered.stderr).code, 'ARTIFACT_HASH_MISMATCH');
+
+  const omitted = batchArtifact(t);
+  rewriteJson(omitted.manifestPath, (manifest) => {
+    manifest.replay_inputs.pop();
+  });
+  const query = run(omitted.root, '--event', EVENT);
+  assert.equal(query.status, 2);
+  assert.equal(JSON.parse(query.stderr).code, 'INVALID_BATCH_METADATA');
 });
 
 test('query-events filters exact 821 pair and group association rows without modifying JSONL', (t) => {
