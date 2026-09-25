@@ -20,6 +20,7 @@ const SHIELD_PAIR_EVENT = 'shielding_params_packet_pair_candidates';
 const STEALTH_PACKET_EVENT = 'stealth_event_packet_candidates';
 const CHAMPION_DIE_EVENT = 'champion_die_event_packet_candidates';
 const CHAMPION_KILL_EVENT = 'champion_kill_event_packet_candidates';
+const CHAMPION_MULTIPLE_KILL_EVENT = 'champion_multiple_kill_event_packet_candidates';
 
 function artifact(t, rows = [
   { replay_sha256: SHA, replay_time_ms: 0, participant_id_candidate: 1,
@@ -34,7 +35,8 @@ function artifact(t, rows = [
   const capability = eventKey.slice(0, -'_candidates'.length);
   const replayVersion = [INVENTORY_EVENT, BROADCAST_EVENT, SET_ITEM_EVENT,
     HEAL_PACKET_EVENT, SHIELD_PAIR_EVENT, STEALTH_PACKET_EVENT,
-    CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT].includes(eventKey)
+    CHAMPION_DIE_EVENT, CHAMPION_KILL_EVENT,
+    CHAMPION_MULTIPLE_KILL_EVENT].includes(eventKey)
     ? '16.19.821.7343' : VERSION;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-event-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -565,6 +567,81 @@ test('query-events matches only OnChampionKill decoded u32 fields and rejects in
     '--opaque-u32', '0');
   assert.equal(unavailable.status, 2);
   assert.equal(JSON.parse(unavailable.stderr).code, 'CAPABILITY_UNAVAILABLE');
+});
+
+test('query-events filters only OnChampionMultipleKill decoded scalar u32 fields', (t) => {
+  const rows = [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 0x400000aa,
+      event_u32_0x04: 0x400000ab, event_u32_0x08: 0, event_u32_0x0c: 2,
+      event_u32_list_0x10: [0x400000aa, 0x400000ae] },
+    { replay_sha256: SHA, replay_time_ms: 20, raw_param: 0x400000ab,
+      event_u32_0x04: 5, event_u32_0x08: 6, event_u32_0x0c: 1,
+      event_u32_list_0x10: [9] },
+    { replay_sha256: SHA, replay_time_ms: 30, raw_param: 9,
+      event_u32_0x04: null, event_u32_0x08: null,
+      event_u32_0x0c: null, event_u32_list_0x10: [9] },
+  ];
+  const fixture = artifact(t, rows, true, CHAMPION_MULTIPLE_KILL_EVENT);
+  for (const [value, expectedLine] of [
+    ['0x400000ab', 0], ['0', 0], ['2', 0], ['5', 1], ['6', 1],
+  ]) {
+    const selected = run(fixture.replayDirectory, '--event', CHAMPION_MULTIPLE_KILL_EVENT,
+      '--opaque-u32', value);
+    assert.equal(selected.status, 0, `${value}: ${selected.stderr}`);
+    assert.equal(selected.stdout, `${fixture.lines[expectedLine]}\n`, value);
+    assert.equal(JSON.parse(selected.stderr).opaque_u32_unavailable_count, 1);
+  }
+  for (const value of ['0x400000aa', '9']) {
+    const excluded = run(fixture.replayDirectory, '--event', CHAMPION_MULTIPLE_KILL_EVENT,
+      '--opaque-u32', value);
+    assert.equal(excluded.status, 0, `${value}: ${excluded.stderr}`);
+    assert.equal(excluded.stdout, '', `raw param or +0x10 list matched ${value}`);
+    assert.equal(JSON.parse(excluded.stderr).matched_count, 0);
+  }
+});
+
+test('query-events keeps missing multikill scalar u32 unavailable and rejects corruption and old build', (t) => {
+  const missing = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10, raw_param: 5,
+      event_u32_list_0x10: [0] },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      event_u32_0x04: null, event_u32_0x08: null,
+      event_u32_0x0c: null, event_u32_list_0x10: [5] },
+  ], true, CHAMPION_MULTIPLE_KILL_EVENT);
+  const output = path.join(missing.root, 'missing-multikill-u32.jsonl');
+  const unavailable = run(missing.replayDirectory, '--event', CHAMPION_MULTIPLE_KILL_EVENT,
+    '--opaque-u32', '0', '--output', output);
+  assert.equal(unavailable.status, 2);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'OPAQUE_U32_UNAVAILABLE');
+  assert.equal(fs.existsSync(output), false);
+
+  const invalid = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      event_u32_0x04: 5, event_u32_0x08: 0, event_u32_0x0c: 2 },
+    { replay_sha256: SHA, replay_time_ms: 20,
+      event_u32_0x04: 6, event_u32_0x08: -1, event_u32_0x0c: 2 },
+  ], true, CHAMPION_MULTIPLE_KILL_EVENT);
+  const invalidOutput = path.join(invalid.root, 'invalid-multikill-u32.jsonl');
+  const failed = run(invalid.replayDirectory, '--event', CHAMPION_MULTIPLE_KILL_EVENT,
+    '--opaque-u32', '5', '--output', invalidOutput);
+  assert.equal(failed.status, 2);
+  assert.equal(JSON.parse(failed.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(fs.existsSync(invalidOutput), false);
+
+  const wrongBuild = artifact(t, [
+    { replay_sha256: SHA, replay_time_ms: 10,
+      event_u32_0x04: 5, event_u32_0x08: 0, event_u32_0x0c: 1 },
+  ], true, CHAMPION_MULTIPLE_KILL_EVENT);
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(wrongBuild.replayDirectory, name);
+    const document = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    document.replay_version = VERSION;
+    fs.writeFileSync(filename, JSON.stringify(document));
+  }
+  const oldBuild = run(wrongBuild.replayDirectory, '--event', CHAMPION_MULTIPLE_KILL_EVENT,
+    '--opaque-u32', '0');
+  assert.equal(oldBuild.status, 2);
+  assert.equal(JSON.parse(oldBuild.stderr).code, 'UNSUPPORTED_FILTER');
 });
 
 test('query-events distinguishes missing anonymous u32 fields from zero matches', (t) => {

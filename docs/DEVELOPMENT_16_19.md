@@ -63,7 +63,8 @@ Current progress (older notes below retain their original research context):
   `shielding_params_packet_pair_candidates`, or `event_u32_0x04` in
   `stealth_event_packet_candidates`. It also matches callback-read anonymous
   u32 fields in `champion_die_event_packet_candidates` and
-  `champion_kill_event_packet_candidates`. It preserves JSONL rows,
+  `champion_kill_event_packet_candidates`, and scalar `+0x04/+0x08/+0x0c`
+  fields in `champion_multiple_kill_event_packet_candidates`. It preserves JSONL rows,
   reports missing fields separately from zero matches, and never substitutes
   outer `raw_param` or assigns entity roles. A real KR Replay query scanned
   6,059 heal rows and 164 shield pairs, matching 321 and 100 respectively

@@ -363,8 +363,9 @@ function parseArgs(argv) {
       'stealth_event_packet_candidates',
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
+      'champion_multiple_kill_event_packet_candidates',
     ].includes(options.event)) {
-      throw new Error('--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, or OnChampionKill packet event');
+      throw new Error('--opaque-u32 requires an 821 ParamsHeal, ShieldingParams, stealth, OnChampionDie, OnChampionKill, or OnChampionMultipleKill packet event');
     }
     if (options.childEventId !== null) {
       if (options.event !== 'stealth_event_packet_candidates') {
