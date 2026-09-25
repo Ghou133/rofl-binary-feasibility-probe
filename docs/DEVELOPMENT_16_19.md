@@ -4,6 +4,22 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed 821 game Broadcast/keyframe bracket candidate:** Selecting
+  `hero_inventory_broadcast_packet` now also emits
+  `inventory_game_broadcast_keyframe_bracket_candidates` through the API/CLI.
+  A fresh exact-image 11-Replay batch returned 11/11 `CANDIDATE` with zero
+  framing errors: 55/61 game-stream Broadcast packets lay strictly between
+  adjacent complete keyframes for the same canonical raw parameter, yielding
+  421 explicit slot comparisons across 42 participant intervals. Four
+  noncanonical and two after-last packets retain exclusion references; all
+  3,331 source Broadcast references were verified by the prerequisite.
+  The five comparison labels counted 355 same as both endpoints, 31 different
+  despite equal endpoints, 3 previous only, 27 next only, and 5 neither.
+  The saved-artifact query validated and emitted all 55 original rows (SHA-256
+  `96e7c50fa77aa8bc90411fe61047e104037c55b839d9337b181382d825abe046`).
+  These are three packet observations, not continuous inventory or actions.
+  Local output is ignored under
+  `artifacts/16_19_development/inventory_game_broadcast_bracket_batch_11_821/`.
 - **Completed 821 inventory endpoint reversal query:**
   `query-events --event inventory_keyframe_interval_difference_candidates
   --endpoint-reversed-pair` checks both saved complete 10-slot Broadcast
