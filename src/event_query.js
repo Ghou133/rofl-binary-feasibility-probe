@@ -45,6 +45,11 @@ const { INVENTORY_KEYFRAME_INTERVAL_DIFFERENCE_821_PROFILE } =
   require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
 const { INCREMENT_MINION_KEYFRAME_BRACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_increment_minion_keyframe_bracket_candidate');
+const { FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
+const { FACE_DIRECTION_PACKET_CANDIDATE_PROFILE_821,
+  transformFaceDirectionVectorBytes821 } =
+  require('./decoders/rofl_16_19_821_face_direction_packet_candidate');
 const { PROFILES: FLOAT_STATS_821_PROFILES } =
   require('./decoders/rofl_16_19_821_float_stats_candidate');
 const { HERO_WARD_STATS_SNAPSHOT_821_CANDIDATE_PROFILE } =
@@ -100,6 +105,15 @@ const MINION_BRACKET_ROW_FIELDS_821 = new Set([
   'confidence', 'semantic_status', 'field_confidence', 'raw_packet_ref',
   'increment_minion_kills_raw_packet_ref', 'previous_snapshot_raw_packet_ref',
   'current_snapshot_raw_packet_ref', 'raw_packet_refs',
+]);
+const FACE_DIRECTION_ROSTER_PAIR_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'keyframe_chunk_index', 'hero_raw_param',
+  'hero_stats_participant_id_candidate', 'face_raw_payload_hex',
+  'face_raw_selector_byte', 'packet_vector_xyz_f32_candidate', 'pair_basis',
+  'actor_assignment_status', 'semantic_direction_effect_status',
+  'confidence', 'semantic_status', 'hero_stats_raw_packet_ref',
+  'face_direction_raw_packet_ref', 'raw_packet_refs',
 ]);
 const SUBJECT_PARTICIPANT_FIELDS = [
   'participant_id_candidate', 'participant_id',
@@ -480,6 +494,80 @@ function prepareIncrementMinionKillsPacketEvent(semantic, analysis, eventKey, re
         analysis.semantic?.capability_results?.[profile.capability], result)) {
     throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
       `${profile.capability} identity or counts differ from its exact-build profile.`,
+      { capability: profile.capability });
+  }
+}
+
+function prepareFaceDirectionRosterPairEvent(semantic, analysis, eventKey, result) {
+  const profile = FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`,
+      { replay_version: semantic.replay_version,
+        required_replay_version: profile.replay_version });
+  }
+  if (result?.status !== 'CANDIDATE') return;
+  const imageSha = profile.evidence_runtime_image_sha256;
+  const face = semantic.capability_results?.face_direction_packet;
+  const snapshot = semantic.capability_results?.hero_minions_killed_snapshot;
+  const excluded = result.first_excluded_face_packet_refs;
+  const validExcludedRef = (ref, stream) => ref && typeof ref === 'object'
+    && !Array.isArray(ref) && ref.replay_sha256 === semantic.replay_sha256
+    && ref.chunk_stream === stream && ref.packet_id === 0x038e
+    && Number.isSafeInteger(ref.chunk_index) && ref.chunk_index >= 0
+    && Number.isSafeInteger(ref.decompressed_block_offset)
+    && ref.decompressed_block_offset >= 0
+    && Number.isSafeInteger(ref.raw_param)
+    && ref.raw_param >= 0 && ref.raw_param <= 0xffffffff
+    && REPLAY_SHA.test(ref.raw_payload_sha256);
+  if (result.profile_id !== profile.id
+      || result.evidence_status !== profile.evidence_status
+      || result.evidence_runtime_image_sha256 !== imageSha
+      || result.replay_sha256 !== semantic.replay_sha256
+      || result.runtime_image_sha256 !== imageSha
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || !isDeepStrictEqual(result.depends_on, [...profile.depends_on])
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(result.dependency_statuses, {
+        face_direction_packet: 'CANDIDATE',
+        hero_minions_killed_snapshot: 'CANDIDATE',
+      })
+      || !isCount(result.face_packet_count)
+      || !isCount(result.snapshot_count)
+      || !isCount(result.keyframe_count) || result.keyframe_count === 0
+      || result.snapshot_count !== 10 * result.keyframe_count
+      || result.paired_packet_count !== result.snapshot_count
+      || result.event_count !== result.paired_packet_count
+      || !isCount(result.excluded_game_packet_count)
+      || !isCount(result.excluded_noncanonical_keyframe_packet_count)
+      || result.face_packet_count !== result.paired_packet_count
+        + result.excluded_game_packet_count
+        + result.excluded_noncanonical_keyframe_packet_count
+      || result.verified_raw_packet_count
+        !== result.face_packet_count + result.snapshot_count
+      || result.input_count !== result.verified_raw_packet_count
+      || !excluded || typeof excluded !== 'object'
+      || (result.excluded_game_packet_count === 0)
+        !== (excluded.game === null)
+      || (result.excluded_noncanonical_keyframe_packet_count === 0)
+        !== (excluded.noncanonical_keyframe === null)
+      || (result.excluded_game_packet_count > 0
+        && !validExcludedRef(excluded.game, 'game_chunk'))
+      || (result.excluded_noncanonical_keyframe_packet_count > 0
+        && (!validExcludedRef(excluded.noncanonical_keyframe, 'keyframe')
+          || (excluded.noncanonical_keyframe.raw_param >= 0x400000ae
+            && excluded.noncanonical_keyframe.raw_param <= 0x400000b7)))
+      || analysis.event_counts?.[eventKey] !== result.event_count
+      || !isDeepStrictEqual(analysis.semantic?.capability_results?.[profile.capability], result)
+      || (face && (face.status !== 'CANDIDATE'
+        || face.profile_id !== FACE_DIRECTION_PACKET_CANDIDATE_PROFILE_821.id
+        || face.event_count !== result.face_packet_count))
+      || (snapshot && (snapshot.status !== 'CANDIDATE'
+        || snapshot.profile_id !== FLOAT_STATS_821_PROFILES.hero_minions_killed_snapshot.id
+        || snapshot.event_count !== result.snapshot_count))) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} identity, image, dependency or counts differ.`,
       { capability: profile.capability });
   }
 }
@@ -1221,6 +1309,10 @@ function prepareEventQuery(directory, eventKey) {
     prepareIncrementMinionKillsPacketEvent(semantic, analysis, eventKey,
       capabilityResult);
   }
+  if (eventKey === 'face_direction_keyframe_roster_pair_candidates') {
+    prepareFaceDirectionRosterPairEvent(semantic, analysis, eventKey,
+      capabilityResult);
+  }
   const capabilityStatus = capabilityResult?.status ?? null;
   if (capabilityStatus && !['CANDIDATE', 'PASS'].includes(capabilityStatus)) {
     throw new EventQueryError('CAPABILITY_UNAVAILABLE',
@@ -1447,7 +1539,16 @@ function prepareBatchEventQuery(directory, eventKey) {
   return { artifactDirectory, eventKey, replays };
 }
 
-function subjectParticipant(row, lineNumber) {
+function subjectParticipant(row, lineNumber, eventKey = null) {
+  if (eventKey === 'face_direction_keyframe_roster_pair_candidates') {
+    const value = row.hero_stats_participant_id_candidate;
+    if (!Number.isSafeInteger(value) || value < 1 || value > 10) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        `Invalid HeroStats roster participant at JSONL line ${lineNumber}.`,
+        { line_number: lineNumber });
+    }
+    return { value, observed: true };
+  }
   let value = null;
   let observed = false;
   for (const field of SUBJECT_PARTICIPANT_FIELDS) {
@@ -2644,6 +2745,89 @@ function incrementMinionKillsPacketRow(row, prepared, lineNumber, seenPacketPosi
   seenPacketPositions.add(position);
 }
 
+function faceDirectionRosterPairRow(row, prepared, lineNumber, state) {
+  if (prepared.eventKey !== 'face_direction_keyframe_roster_pair_candidates') return;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid FaceDirection roster pair at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const profile = FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE;
+  const statsRef = row.hero_stats_raw_packet_ref;
+  const faceRef = row.face_direction_raw_packet_ref;
+  const fields = Object.keys(row);
+  const param = row.hero_raw_param;
+  const participant = row.hero_stats_participant_id_candidate;
+  const payloadHex = row.face_raw_payload_hex;
+  if (fields.length !== FACE_DIRECTION_ROSTER_PAIR_ROW_FIELDS_821.size
+      || fields.some((field) => !FACE_DIRECTION_ROSTER_PAIR_ROW_FIELDS_821.has(field))
+      || row.event_type !== 'FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_CANDIDATE'
+      || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== profile.evidence_status
+      || row.pair_basis !== 'SAME_KEYFRAME_CHUNK_TIME_FULL_RAW_PARAM_STATS_BEFORE_FACE'
+      || row.actor_assignment_status !== 'UNKNOWN'
+      || row.semantic_direction_effect_status !== 'UNKNOWN'
+      || !Number.isSafeInteger(param) || param < 0x400000ae || param > 0x400000b7
+      || participant !== param - 0x400000ae + 1
+      || !Number.isSafeInteger(row.keyframe_chunk_index)
+      || row.keyframe_chunk_index < 0
+      || !Array.isArray(row.raw_packet_refs) || row.raw_packet_refs.length !== 2
+      || !isDeepStrictEqual(row.raw_packet_refs, [statsRef, faceRef])
+      || typeof payloadHex !== 'string' || !/^83[0-9a-f]{24}$/.test(payloadHex)
+      || row.face_raw_selector_byte !== 0x83) {
+    invalid('exact-build profile, roster label, candidate limits or named references differ');
+  }
+  const validRef = (ref, packetId, length) => ref && typeof ref === 'object'
+    && !Array.isArray(ref)
+    && ref.replay_sha256 === prepared.replaySha
+    && (prepared.sourcePath === undefined || ref.source_path === prepared.sourcePath)
+    && (ref.source_path === null
+      || (typeof ref.source_path === 'string' && ref.source_path.length > 0))
+    && ref.chunk_stream === 'keyframe'
+    && ref.chunk_index === row.keyframe_chunk_index
+    && Number.isSafeInteger(ref.chunk_id) && ref.chunk_id >= 0
+    && Number.isSafeInteger(ref.chunk_file_offset) && ref.chunk_file_offset >= 0
+    && Number.isSafeInteger(ref.decompressed_block_offset)
+    && ref.decompressed_block_offset >= 0
+    && Number.isSafeInteger(ref.decompressed_payload_offset)
+    && ref.decompressed_payload_offset > ref.decompressed_block_offset
+    && ref.packet_id === packetId && ref.payload_length === length
+    && ref.raw_param === param && ref.replay_time_ms === row.replay_time_ms
+    && REPLAY_SHA.test(ref.raw_payload_sha256);
+  if (!validRef(statsRef, 0x0089, 1263) || !validRef(faceRef, 0x038e, 13)
+      || statsRef.chunk_id !== faceRef.chunk_id
+      || statsRef.chunk_file_offset !== faceRef.chunk_file_offset
+      || statsRef.source_path !== faceRef.source_path
+      || statsRef.decompressed_block_offset >= faceRef.decompressed_block_offset
+      || faceRef.raw_payload_sha256 !== crypto.createHash('sha256')
+        .update(Buffer.from(payloadHex, 'hex')).digest('hex')) {
+    invalid('full raw key, keyframe time, Stats-before-Face order or packet bytes differ');
+  }
+  const bytes = transformFaceDirectionVectorBytes821(Buffer.from(payloadHex, 'hex'));
+  const vector = row.packet_vector_xyz_f32_candidate;
+  if (!vector || typeof vector !== 'object' || Array.isArray(vector)
+      || Object.keys(vector).length !== 3
+      || vector.x !== bytes.readFloatLE(0)
+      || vector.y !== bytes.readFloatLE(4)
+      || vector.z !== bytes.readFloatLE(8)) {
+    invalid('packet-local vector differs from exact 821 byte transform');
+  }
+  const frame = state.frames.get(row.keyframe_chunk_index)
+    ?? { timeMs: row.replay_time_ms, participants: new Set() };
+  if (frame.timeMs !== row.replay_time_ms || frame.participants.has(participant)) {
+    invalid('duplicate or contradictory HeroStats roster observation');
+  }
+  frame.participants.add(participant);
+  state.frames.set(row.keyframe_chunk_index, frame);
+  for (const ref of [statsRef, faceRef]) {
+    const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+    if (state.positions.has(position)) invalid('duplicate raw packet position');
+    state.positions.add(position);
+  }
+}
+
 function candidateChildEventId(row, eventKey, lineNumber) {
   const field = eventKey === 'champion_triple_quadra_multi_group_candidates'
     ? 'on_champion_triple_quadra_child_event_id'
@@ -2912,6 +3096,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   const wardPairFrames = new Map();
   const inventoryIntervalState = { pairs: new Map(), frameTimes: new Map(),
     endpoints: new Map(), changedSlotCount: 0 };
+  const faceRosterPairState = { frames: new Map(), positions: new Set() };
   const minionBracketExpected = prepared.associationConfig?.minionBracket
     ? await loadMinionBracketExpectedRows(prepared) : null;
   const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
@@ -2932,7 +3117,7 @@ async function streamEventQuery(prepared, options, emitLine) {
           `Event JSONL line ${lineNumber} is not an object.`, { line_number: lineNumber });
       }
       const replayTime = rowReplayTime(row, lineNumber);
-      const subject = subjectParticipant(row, lineNumber);
+      const subject = subjectParticipant(row, lineNumber, prepared.eventKey);
       if (latestPerParticipant && !subject.observed) {
         throw new EventQueryError('INVALID_EVENT_ROW',
           `Missing subject participant field at JSONL line ${lineNumber}.`,
@@ -2953,6 +3138,7 @@ async function streamEventQuery(prepared, options, emitLine) {
         associationPacketPositions);
       incrementMinionKillsPacketRow(row, prepared, lineNumber,
         associationPacketPositions);
+      faceDirectionRosterPairRow(row, prepared, lineNumber, faceRosterPairState);
       if (prepared.eventKey === 'revive_ally_event_packet_candidates'
           && (row.event_type !== 'REVIVE_ALLY_EVENT_PACKET_CANDIDATE'
             || row.game_version !== prepared.replayVersion
@@ -3119,6 +3305,17 @@ async function streamEventQuery(prepared, options, emitLine) {
       'Ward/inventory keyframes lack complete participant rosters or unique paired refs.',
       { scanned_count: scannedCount, keyframe_count: wardPairFrames.size,
         unique_raw_packet_count: associationPacketPositions.size });
+  }
+  if (prepared.eventKey === 'face_direction_keyframe_roster_pair_candidates'
+      && (faceRosterPairState.frames.size !== prepared.capabilityResult.keyframe_count
+        || [...faceRosterPairState.frames.values()].some((frame) =>
+          frame.participants.size !== 10)
+        || faceRosterPairState.positions.size !== 2 * scannedCount)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'FaceDirection roster pairs lack complete keyframes or unique packet references.',
+      { scanned_count: scannedCount,
+        keyframe_count: faceRosterPairState.frames.size,
+        unique_raw_packet_count: faceRosterPairState.positions.size });
   }
   if (prepared.eventKey === 'inventory_keyframe_interval_difference_candidates') {
     const association = prepared.capabilityResult;

@@ -112,6 +112,8 @@ const { decodeIncrementMinionKillsPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_increment_minion_kills_packet_candidate');
 const { decodeFaceDirectionPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_face_direction_packet_candidate');
+const { associateFaceDirectionKeyframeRosterPairs821 } =
+  require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
 const { RUNTIME_IMAGE_SHA256: RUNTIME_IMAGE_SHA256_821 } =
   require('./decoders/rofl_16_19_821_runtime_bytes');
 const { decodeHeroDamageSnapshotCandidates821 } =
@@ -2458,6 +2460,7 @@ function decode1619821(replay, profile, options = {}) {
     set_movement_driver_packet: 'set_movement_driver_packet_candidates',
     increment_minion_kills_packet: 'increment_minion_kills_packet_candidates',
     face_direction_packet: 'face_direction_packet_candidates',
+    face_direction_keyframe_roster_pair: 'face_direction_keyframe_roster_pair_candidates',
   };
   const capabilityResults = {};
   const events = {};
@@ -2507,7 +2510,11 @@ function decode1619821(replay, profile, options = {}) {
     'increment_minion_kills_packet',
     'face_direction_packet',
   ]);
-  const supported = capabilities.filter((capability) => sharedScanCapabilities.has(capability));
+  const pairSelected = capabilities.includes('face_direction_keyframe_roster_pair');
+  const supported = [...new Set([
+    ...capabilities.filter((capability) => sharedScanCapabilities.has(capability)),
+    ...(pairSelected ? ['face_direction_packet', 'hero_minions_killed_snapshot'] : []),
+  ])];
   let candidate821Scan = options.candidate821Scan ?? null;
   if (candidate821Scan === null
       && (supported.length > 1 || supported.includes('hero_respawn'))) {
@@ -2520,19 +2527,31 @@ function decode1619821(replay, profile, options = {}) {
       candidate821Scan = null;
     }
   }
-  for (const capability of capabilities) {
+  const decodedSources = new Map();
+  function decodeCapability(capability) {
+    if (decodedSources.has(capability)) return decodedSources.get(capability);
     let outcome;
-    if (!decoders[capability]) {
-      outcome = { status: 'UNSUPPORTED', input_count: null, event_count: null,
-        error: `16.19.821.7343 has no decoder for ${capability}`, events: null };
-    } else {
-      try {
+    try {
+      if (capability === 'face_direction_keyframe_roster_pair') {
+        outcome = associateFaceDirectionKeyframeRosterPairs821(replay, {
+          faceDirectionPacketOutcome: decodeCapability('face_direction_packet'),
+          minionsKilledSnapshotOutcome: decodeCapability('hero_minions_killed_snapshot'),
+        });
+      } else if (decoders[capability]) {
         outcome = decoders[capability](replay, candidate821Scan);
-      } catch (error) {
-        outcome = { status: 'DECODE_FAILED', input_count: null, event_count: null,
-          error: error.message || String(error), events: null };
+      } else {
+        outcome = { status: 'UNSUPPORTED', input_count: null, event_count: null,
+          error: `16.19.821.7343 has no decoder for ${capability}`, events: null };
       }
+    } catch (error) {
+      outcome = { status: 'DECODE_FAILED', input_count: null, event_count: null,
+        error: error.message || String(error), events: null };
     }
+    decodedSources.set(capability, outcome);
+    return outcome;
+  }
+  for (const capability of capabilities) {
+    const outcome = decodeCapability(capability);
     outcomes[capability] = outcome;
     const { events: candidateEvents, ...result } = outcome;
     if (capability === 'hero_assist'
@@ -2564,7 +2583,8 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'direct_input_movement_turn_packet'
         || capability === 'set_movement_driver_packet'
         || capability === 'increment_minion_kills_packet'
-        || capability === 'face_direction_packet') {
+        || capability === 'face_direction_packet'
+        || capability === 'face_direction_keyframe_roster_pair') {
       result.runtime_image_status ??= options.runtimeImagePath
         ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
       result.runtime_image_used ??= false;
@@ -2582,8 +2602,18 @@ function decode1619821(replay, profile, options = {}) {
   const usable = results.filter((result) => result.status === 'CANDIDATE');
   const failed = results.filter((result) => result.status !== 'CANDIDATE');
   const uniqueDecodedInputCounts = new Map();
+  if (pairSelected) {
+    for (const dependency of ['face_direction_packet', 'hero_minions_killed_snapshot']) {
+      const source = decodedSources.get(dependency);
+      if (source?.status === 'CANDIDATE'
+          && Number.isSafeInteger(source.input_count) && source.input_count >= 0) {
+        uniqueDecodedInputCounts.set(source.input_packet_id, source.input_count);
+      }
+    }
+  }
   for (const [capability, result] of Object.entries(capabilityResults)) {
     if (result.status !== 'CANDIDATE') continue;
+    if (capability === 'face_direction_keyframe_roster_pair') continue;
     // The 0x040a route carries disjoint child packet shapes. The stealth
     // scan also natively checks six other length-17 child IDs as controls.
     const packetGroup = capability === 'params_heal_packet'

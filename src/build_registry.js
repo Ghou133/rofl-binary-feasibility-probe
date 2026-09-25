@@ -81,6 +81,8 @@ const incrementMinionKillsPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_increment_minion_kills_packet_candidate');
 const faceDirectionPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_face_direction_packet_candidate');
+const faceDirectionKeyframeRosterPair1619821 =
+  require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
 const damageFloatCandidate1619821 =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
 const timeStatsCandidate1619821 =
@@ -579,6 +581,7 @@ const BUILD_PROFILES = deepFreeze({
       set_movement_driver_packet: 0x0335,
       increment_minion_kills_packet: 0x03a7,
       face_direction_packet: 0x038e,
+      face_direction_keyframe_roster_pair: 0x038e,
     },
     decoder_profile: {
       hero_death: decoder1619821.HERO_DEATH_CANDIDATE_PROFILE_821,
@@ -686,6 +689,8 @@ const BUILD_PROFILES = deepFreeze({
         incrementMinionKillsPacketCandidate1619821.INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821,
       face_direction_packet:
         faceDirectionPacketCandidate1619821.FACE_DIRECTION_PACKET_CANDIDATE_PROFILE_821,
+      face_direction_keyframe_roster_pair:
+        faceDirectionKeyframeRosterPair1619821.FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE,
     },
     evidence_grades: {
       hero_death: 'CANDIDATE_821_REPLAY_TAIL_ROUTE_AND_RUNTIME_DIE_SOURCE',
@@ -778,6 +783,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_EXACT_RUNTIME_CALLBACK_LOOKUP_KEY',
       face_direction_packet:
         'CANDIDATE_EXACT_821_FACE_DIRECTION_PACKET_UNIT_VECTOR',
+      face_direction_keyframe_roster_pair:
+        faceDirectionKeyframeRosterPair1619821.FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE.evidence_status,
     },
     semantic_mappings: {
       victim_participant: '(raw_param & 0xff) - 0xad, 821 route-profile bounded',
@@ -840,6 +847,7 @@ const BUILD_PROFILES = deepFreeze({
       set_movement_driver_packet: 'exact 821 native 0x0335 SetMovementDriver constructor/deserializer and callback transform for opaque byte at object offset 0x2a; no driver-state transition, position, path or participant inference',
       increment_minion_kills_packet: 'exact 821 native 0x03a7 IncrementMinionKills constructor/deserializer and callback lookup-key transform; packet-local key only, with no proven lookup success, CS delta, last hit or participant attribution',
       face_direction_packet: 'exact 821 native 0x038e FaceDirection constructor/deserializer packet vector and optional scalar candidates; no proven world position, path, actor, or direction effect',
+      face_direction_keyframe_roster_pair: 'same-keyframe 0x038e packet and canonical 0x0089 hero roster candidate matched by raw parameter; participant label belongs to the roster observation, with no proven packet actor or direction effect',
     },
     verified_capabilities: [],
     candidate_capabilities: [
@@ -886,6 +894,7 @@ const BUILD_PROFILES = deepFreeze({
       'set_movement_driver_packet',
       'increment_minion_kills_packet',
       'face_direction_packet',
+      'face_direction_keyframe_roster_pair',
     ],
     unsupported_capabilities: [],
     validation_artifacts: [],

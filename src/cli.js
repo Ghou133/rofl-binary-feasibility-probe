@@ -166,6 +166,8 @@ Selecting it with hero_minions_killed_snapshot also emits packet-to-keyframe bra
 the endpoint difference does not establish a per-packet CS effect or last hit.
 face_direction_packet emits exact-821 packet-local direction-vector candidates;
 its raw param does not identify an actor, and the packet does not establish position or path.
+face_direction_keyframe_roster_pair pairs canonical keyframe FaceDirection packets
+with same-keyframe HeroStats roster candidates; the roster label does not identify the packet actor.
 Inspect reads the container and packet framing without a runtime image.
 Capabilities reads the container/build registry without packet framing or semantic decode.
 
@@ -800,6 +802,12 @@ function parseOne1619(replay, options, started) {
       'increment_minion_kills_packet',
       'face_direction_packet',
     ].includes(name)))] : [];
+  if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('face_direction_keyframe_roster_pair')) {
+    for (const source of ['face_direction_packet', 'hero_minions_killed_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
   const selectsBuffAdd = options.semantic !== false
     && Array.isArray(options.events) && options.events.includes('npc_buff_add_packet');
   const selectsBuffRemove = options.semantic !== false
@@ -2031,7 +2039,8 @@ function capabilityQuery(replay, options = {}) {
           && (capability === 'direct_input_movement_turn_packet'
             || capability === 'set_movement_driver_packet'
             || capability === 'increment_minion_kills_packet'
-            || capability === 'face_direction_packet'));
+            || capability === 'face_direction_packet'
+            || capability === 'face_direction_keyframe_roster_pair'));
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
           && capability === 'hero_respawn'
@@ -2104,9 +2113,12 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_kill_stats_snapshot'
           ? assessHeroKillStatsTail821(replay)
         : profile.game_version === '16.19.821.7343'
-          && ['hero_minions_killed_snapshot', 'hero_experience_snapshot', 'hero_vision_score_snapshot',
+          && ['hero_minions_killed_snapshot', 'face_direction_keyframe_roster_pair',
+            'hero_experience_snapshot', 'hero_vision_score_snapshot',
             'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot'].includes(capability)
-          ? assessHeroFloatSnapshotTail821(replay, capability)
+          ? assessHeroFloatSnapshotTail821(replay,
+            capability === 'face_direction_keyframe_roster_pair'
+              ? 'hero_minions_killed_snapshot' : capability)
         : profile.game_version === '16.19.821.7343'
           && (capability === 'hero_death' || capability === 'hero_death_timer')
           ? (() => {
@@ -2172,7 +2184,9 @@ function capabilityQuery(replay, options = {}) {
         ? needs1619RuntimeImage
           ? [dependencies[0], options.runtimeImage
             ? fileInputDependency('exact_runtime_image', options.runtimeImage)
-            : { name: 'exact_runtime_image', status: 'MISSING', path: null }]
+            : { name: 'exact_runtime_image', status: 'MISSING', path: null },
+          ...(capability === 'face_direction_keyframe_roster_pair'
+            ? tailStatInput : [])]
           : [...dependencies, ...tailStatInput,
             ...(profile.game_version === '16.19.821.7343' && capability === 'hero_respawn'
               ? [{ name: 'replay_tail_gameLength',
@@ -2427,6 +2441,11 @@ function capabilityQuery(replay, options = {}) {
         validationPending.push('exact 821 runtime image SHA-256 and bounded 0x038e packet shape validation',
           'packet-local unit-vector and optional scalar candidates with raw provenance; no actor, world position, path or direction effect');
       }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'face_direction_keyframe_roster_pair') {
+        validationPending.push('exact 821 FaceDirection image and complete 0x0089 ten-participant MINIONS_KILLED keyframe source',
+          'same chunk, time, full raw parameter and Stats-before-Face ordering; roster participant label does not identify the Face packet actor');
+      }
       if (profile.game_version === '16.19.820.7193'
           && (capability === 'hero_death_timer' || capability === 'hero_respawn')) {
         validationPending.push('ten-participant NUM_DEATHS presence and equality',
@@ -2647,6 +2666,8 @@ function capabilityQuery(replay, options = {}) {
             set_movement_driver_packet: 'set_movement_driver_packet_candidates',
             increment_minion_kills_packet: 'increment_minion_kills_packet_candidates',
             face_direction_packet: 'face_direction_packet_candidates',
+            face_direction_keyframe_roster_pair:
+              'face_direction_keyframe_roster_pair_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
             hero_damage_taken_from_champions_snapshot:
               'hero_damage_taken_from_champions_snapshot_candidates',
