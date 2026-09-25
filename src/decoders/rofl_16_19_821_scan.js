@@ -32,6 +32,7 @@ const CAPABILITIES = new Set([
   'on_shutdown_event_packet',
   'resurrect_event_packet',
   'revive_ally_event_packet',
+  'turret_die_event_packet',
   'turret_plate_event_packet',
   'cast_spell_ans_packet', 'npc_buff_remove_packet', 'npc_buff_add_packet',
   'npc_buff_update_num_counter_packet', 'npc_buff_update_count_packet',
@@ -63,6 +64,7 @@ const MAX_CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_ROWS = 2_000;
 const MAX_ON_SHUTDOWN_EVENT_PACKET_ROWS = 2_000;
 const MAX_RESURRECT_EVENT_PACKET_ROWS = 2_000;
 const MAX_REVIVE_ALLY_EVENT_PACKET_ROWS = 2_000;
+const MAX_TURRET_DIE_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_PLATE_EVENT_PACKET_ROWS = 10_000;
 const MAX_DIRECT_INPUT_TURN_PACKET_ROWS = 20_000;
 const MAX_SET_MOVEMENT_DRIVER_PACKET_ROWS = 20_000;
@@ -119,6 +121,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     on_shutdown_event_packet: [],
     resurrect_event_packet: [],
     revive_ally_event_packet: [],
+    turret_die_event_packet: [],
     turret_plate_event_packet: [],
     cast_spell_ans_packet: [],
     npc_buff_remove_packet: [],
@@ -204,6 +207,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let onShutdownEventPacketCount = 0;
   let resurrectEventPacketCount = 0;
   let reviveAllyEventPacketCount = 0;
+  let turretDieEventPacketCount = 0;
   let turretPlateEventPacketCount = 0;
   let directInputTurnPacketCount = 0;
   let setMovementDriverPacketCount = 0;
@@ -223,6 +227,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsOnShutdownEvent = selected.has('on_shutdown_event_packet');
   const selectsResurrectEvent = selected.has('resurrect_event_packet');
   const selectsReviveAllyEvent = selected.has('revive_ally_event_packet');
+  const selectsTurretDieEvent = selected.has('turret_die_event_packet');
   const selectsTurretPlateEvent = selected.has('turret_plate_event_packet');
   const selectsInventoryPacket = selected.has('hero_inventory_packet');
   const selectsInventoryBroadcast = selected.has('hero_inventory_broadcast_packet');
@@ -335,6 +340,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
         reviveAllyEventPacketCount += 1;
         if (rows.revive_ally_event_packet.length < MAX_REVIVE_ALLY_EVENT_PACKET_ROWS) {
           rows.revive_ally_event_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsTurretDieEvent
+          && block.packet_id === 0x040a && block.payload_length === 116) {
+        turretDieEventPacketCount += 1;
+        if (rows.turret_die_event_packet.length < MAX_TURRET_DIE_EVENT_PACKET_ROWS) {
+          rows.turret_die_event_packet.push(copyRow(block, chunk));
         }
       }
       if (selectsTurretPlateEvent
@@ -465,6 +477,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         onShutdownEventPacketCount,
         resurrectEventPacketCount,
         reviveAllyEventPacketCount,
+        turretDieEventPacketCount,
         turretPlateEventPacketCount,
         directInputTurnPacketCount,
         setMovementDriverPacketCount,
@@ -603,6 +616,13 @@ function rowsFor821Capability(replay, token, capability) {
       && bound.reviveAllyEventPacketCount > MAX_REVIVE_ALLY_EVENT_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.reviveAllyEventPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'turret_die_event_packet'
+      && bound.turretDieEventPacketCount > MAX_TURRET_DIE_EVENT_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.turretDieEventPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }

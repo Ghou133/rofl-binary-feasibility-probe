@@ -189,6 +189,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'on_shutdown_event_packet',
       'resurrect_event_packet',
       'revive_ally_event_packet',
+      'turret_die_event_packet',
       'turret_plate_event_packet',
       'cast_spell_ans_packet',
       'npc_buff_remove_packet', 'npc_buff_add_packet',

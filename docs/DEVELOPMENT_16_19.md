@@ -4,6 +4,17 @@ Updated: 2026-09-25. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Completed packet candidate:** Exact KR 821 `0x040a/116` child `0x003b`,
+  named `OnTurretDie` in the pinned runtime image, is selectable through
+  CLI/API with the exact image SHA-256 gate. All 11 supplied Replays returned
+  `CANDIDATE`: 136 target packets passed native full consumption and child
+  identity checks, while 695 same-length foreign children were excluded by
+  their observed raw fingerprints and retained as raw source references.
+  The batch scanned 18,235,209 blocks with zero framing errors. Rows preserve
+  the anonymous 108-byte child blob, its SHA-256, and packet provenance. The
+  image label does not establish an actual turret death, structure or actor
+  identity, or state transition. Ignored real CLI output is under
+  `artifacts/16_19_development/turret_die_cli_batch_11/`.
 - **Completed packet candidate:** Exact KR 821 `0x040a/16` child `0x002c`,
   named `OnReviveAlly` in the pinned runtime image, is selectable through
   CLI/API with the exact image SHA-256 gate. One of the 11 supplied Replays
