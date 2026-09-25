@@ -273,9 +273,16 @@ Current progress (older notes below retain their original research context):
   capability was promoted.
 - **Next:** Seek independent owner/spell or ward-identity anchors before
   interpreting packet fields as actions or placing wards on a map.
-- **Blocked:** KR 821 ward spawn/position/owner remains unavailable; the
-  surveyed routes occur in zero-increment ward windows. Exact HN 820 image
-  remains absent. Ignored probe results retain the negative controls.
+- **Blocked:** KR 821 ward spawn/position/owner remains unavailable. Surveyed
+  routes occur in zero-increment ward windows. The exact HN 820 image remains
+  absent. The exact 821 image's `OnPlaceWard`/`OnKillWard` child registrations
+  (`0x00dd`/`0x00de`)
+  have zero observed children among 86,604 fully consumed `0x040a` packets in
+  the 11 supplied Replays, despite candidate HeroStats ward-counter increments.
+  The static callbacks do not bind a Replay packet to a typed ward object;
+  owner and coordinates remain `UNKNOWN`. The image/Replay hash recheck and
+  negative controls are retained under ignored
+  `artifacts/16_19_development/ward_anchor_followup_821/`.
 
 - **New exact KR build:** The user supplied 11 `16.19.821.7343` Replays under
   `kr-rofl-batch-collector/data/KR/16.19/builds/16.19.821.7343/rofl/`.
