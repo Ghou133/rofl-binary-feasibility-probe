@@ -371,6 +371,37 @@ Current progress (older notes below retain their original research context):
   packets across the 11 original Replays and emitted one original row.
   Focused saved-query tests passed 24/24 after this correction, including
   unfiltered physical-source checks for each V3 through V8 profile.
+- **CastSpellAns ordered native-output witness (opt-in V9):** V9 keeps every
+  V8 candidate field and remains separate from V4 default and all saved V3–V8
+  artifacts. For each native batch of at most 8,192 exact-821 packets, Python
+  SHA-256 hashes the ASCII domain `CAST_SPELL_ANS_821_V9_NATIVE_OUTPUT_V1` plus
+  a zero byte, then each row's local u32 index, raw u32 parameter, u32 consumed
+  payload length, 32-byte payload SHA-256, decoded flag byte and signed i32,
+  protected float bytes at `+0xe0`, protected and decoded byte at `+0x140`,
+  protected and decoded bits at `+0x24`, protected and decoded u32 at `+0x1c`
+  and `+0x4c`, protected float bytes at `+0xa0`, and protected and decoded
+  lookup-key u32 at `+0x28`. Integers are little endian. The protected float
+  bytes are hashed while decoded float values are checked against the pinned
+  transforms; this avoids JSON float formatting differences. Only fields
+  retained in candidate JSONL enter the digest. JavaScript verifies each
+  native batch digest before accepting the batch. It then hashes the ASCII
+  domain `CAST_SPELL_ANS_821_V9_REPLAY_V1` plus a zero byte, the 32-byte
+  Replay SHA-256, and each ordered batch's u32 start, u32 count, and 32-byte
+  native digest into replay-level `native_output_sha256`.
+  The original exact `16.19.821.7343` image SHA-256
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`
+  decoded 63,496/63,496 CastSpellAns packets across 11/11 original KR
+  Replays to ignored
+  `artifacts/16_19_development/cast_v9_11_replay_20260926/` with zero
+  framing errors. A saved V9 query with `--cast-nested-u32-0x28 190941627
+  --limit 1 --verify-source` checked all 63,496 ordered digest rows and
+  physical source packets, matched 4,136 rows, and emitted one unchanged row.
+  A portable Python/JavaScript digest agreement test, later-batch failure,
+  late forged-row, and V9 metadata downgrade controls passed in the focused
+  suite: 78 passed, 0 failed, 6 private-fixture tests skipped. The source
+  check proves physical Replay provenance separately; the output digest binds
+  persisted candidate fields to the native run. Neither proves a runtime-tree
+  lookup hit, receiver, actor, spell, target, successful cast, or effect.
 - **Damage identity stop-loss:** In saved V5 output for the 11 KR Replays,
   anonymous `+0x18` `RAW_READER` occurred in 11/1,035 death-coincident
   victim-key packets and 823/62,860 first-lookup roster pairs. Conditional

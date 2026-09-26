@@ -81,6 +81,7 @@
 | `16.19.821.7343 --events cast_spell_ans_packet --cast-packet-v6 --runtime-image PATH` | 显式选择 CastSpellAns V6，保留 V5 字段并追加嵌套对象的受保护原始四字节 `raw_u32_0x4c_hex` 和回调变换后的匿名 `opaque_u32_0x4c`；11 份原始 KR 回放的 63,496/63,496 个包通过原生完整消费 | V4 仍是默认 profile，V5 保存结果保持原身份；V6 只输出 `CANDIDATE`，不确认施法者、技能、目标、施法成功或游戏效果；API 用 `castPacketProfile: 'v6'` 显式选择 |
 | `16.19.821.7343 --events cast_spell_ans_packet --cast-packet-v7 --runtime-image PATH` | 显式选择 CastSpellAns V7，保留 V5/V6 字段并追加嵌套对象 `+0x90` 的受保护原始四字节 `raw_f32_0xa0_bytes_hex` 与直接回调变换后的匿名 `opaque_f32_0xa0`；11 份原始 KR 回放的 63,496/63,496 个包通过原生完整消费 | V4 仍是默认；V7 只输出 `CANDIDATE`，不推断位置、时间、施法者、技能、目标或实际效果；API 用 `castPacketProfile: 'v7'` 显式选择 |
 | `16.19.821.7343 --events cast_spell_ans_packet --cast-packet-v8 --runtime-image PATH` | 显式选择 CastSpellAns V8，保留 V7 字段并追加嵌套对象 `+0x18`（包对象 `+0x28`）的受保护原始四字节 `raw_u32_0x28_hex` 与回调变换后的匿名 `opaque_u32_0x28`；11 份原始 KR 回放的 63,496/63,496 个包通过原生完整消费 | V4 仍是默认；运行时树查询结果、施法者、技能、目标和实际效果均为 `UNKNOWN`；API 用 `castPacketProfile: 'v8'` 显式选择 |
+| `16.19.821.7343 --events cast_spell_ans_packet --cast-packet-v9 --runtime-image PATH` | 显式选择 CastSpellAns V9，保留 V8 字段并要求原生辅助程序为每批输出有序摘要；解析器复核每批并记录每份回放的汇总摘要。11 份原始 KR 回放的 63,496/63,496 包通过原生完整消费与摘要复核 | V4 仍是默认，V3–V8 旧产物不改写；保存查询会在 `--limit` 后继续核对全部 V9 行。该见证不证明运行时树命中、施法者、技能、目标或实际效果；API 用 `castPacketProfile: 'v9'` 显式选择 |
 | `16.19.821.7343 --events direct_input_movement_turn_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x00ba` DirectInputMovementDriverServerTurnData 包，输出三个回调变换后的匿名 f32 字段与原始包来源 | 仅写入 `direct_input_movement_turn_packet_candidates`，状态为 `CANDIDATE`；不将字段标为世界坐标、英雄路径或参与者位置；仅接受已观察到的 13 字节 `0x85` 形状 |
 | `16.19.821.7343 --events set_movement_driver_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x0335` SetMovementDriver 包，输出回调变换后的匿名分发字节和原始包来源 | 仅写入 `set_movement_driver_packet_candidates`，状态为 `CANDIDATE`；不声称驱动状态已改变，也不推断位置、路径或参与者；仅接受两种已观察到的包形状 |
 | `16.19.821.7343 --events face_direction_packet --runtime-image PATH` | 对 KR `0x038e` 已观察到的 13/17 字节包形状使用精确 821 镜像，输出包内向量、可选标量候选值和原始包来源 | 仅写入 `face_direction_packet_candidates`，状态为 `CANDIDATE`；不据原始参数认定行动者，不推断世界位置、路径或方向效果；其他 build 与未观察到的形状明确拒绝 |
@@ -891,6 +892,8 @@ V8 可用 `--cast-packet-v8` 显式生成，保留 V7 字段。保存结果用
 筛选匿名无符号整数。查询会扫描并复核包括 `--limit` 后的全部行，核对精确 build、固定镜像摘要、原始受保护字节和变换；V3 至 V7 产物明确报告该字段不可用。
 `callback_tree_lookup_status` 保持 `UNKNOWN`，数值频次不能用于识别角色或技能。
 加 `--verify-source` 可再逐包核对原始 ROFL 的完整文件 SHA、build、包顺序、位置、时间、参数及载荷 SHA，含 `--limit` 后的行；它不重跑原生解码，也不证明树查询是否命中。
+
+V9 可用 `--cast-packet-v9` 显式生成。原生辅助程序对按顺序保存的包字段、原始包参数和载荷 SHA 计算每批摘要；解析器逐批复核并在 `semantic_run.json` 中记录回放级 `native_output_sha256`。保存查询无论有无字段筛选都会验证全部 V9 行及该摘要，包括 `--limit` 后的行；`--verify-source` 另行核对物理回放。V3–V8 旧产物不被追认为具有这项原生见证。V9 仍只输出 `CANDIDATE`，运行时树查询结果保持 `UNKNOWN`。
 
 对 821 移动限制包的保存结果，可用 `--packet-record-count 1` 找出单记录包，或用 `0` 查看空记录包：
 
