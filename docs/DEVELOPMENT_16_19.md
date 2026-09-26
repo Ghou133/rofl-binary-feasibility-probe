@@ -4,6 +4,14 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Bounded output hashing:** Batch manifest hashing now opens at most eight
+  output streams at once and waits for each stream to close before reusing
+  its slot. On an existing 11-Replay artifact with 86 files (1,357.8 MiB),
+  the peak open stream count fell from 86 to 8; the sorted hash inventory
+  retained SHA-256 `455023242fb7fc0b20a5109518a696e9ecbe68f693ba045237ec7e1613fdb6dc`.
+  One local run took 738 ms after the change versus a prior 740 ms run;
+  this is a resource bound, not a cross-platform speed claim.
+
 - **ShieldingParams fields to roster keys (opt-in candidate):** Exact-821
   `--events shielding_params_roster_key_pair --runtime-image IMAGE
   --event-jsonl-only` and the matching API capability compare native

@@ -88,9 +88,16 @@ function sha256File(filePath) {
   const hash = crypto.createHash('sha256');
   const stream = fs.createReadStream(filePath);
   return new Promise((resolve, reject) => {
+    let ended = false;
+    let streamError = null;
     stream.on('data', (chunk) => hash.update(chunk));
-    stream.on('error', reject);
-    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', (error) => { streamError = error; });
+    stream.on('end', () => { ended = true; });
+    stream.on('close', () => {
+      if (streamError) reject(streamError);
+      else if (!ended) reject(new Error(`Hash input closed before EOF: ${filePath}`));
+      else resolve(hash.digest('hex'));
+    });
   });
 }
 
@@ -118,7 +125,7 @@ function safeStem(filePath) {
   return /^\.*$/.test(stem) ? 'replay' : stem;
 }
 
-function outputHashes(directory, options = {}) {
+async function outputHashes(directory, options = {}) {
   const excluded = (options.exclude || []).map((filePath) => filePath.replaceAll(path.sep, '/').replace(/\/$/, ''));
   const isExcluded = (relative) => excluded.some((entry) => relative === entry || relative.startsWith(`${entry}/`));
   const files = [];
@@ -133,10 +140,27 @@ function outputHashes(directory, options = {}) {
     }
   }
   if (fs.existsSync(directory)) visit(directory);
-  return Promise.all(files.sort().map(async (filePath) => [
-    path.relative(directory, filePath).replaceAll(path.sep, '/'),
-    await sha256File(filePath),
-  ])).then((entries) => Object.fromEntries(entries));
+  const sorted = files.sort();
+  const entries = new Array(sorted.length);
+  let nextIndex = 0;
+  let firstError = null;
+  async function hashWorker() {
+    while (firstError === null && nextIndex < sorted.length) {
+      const index = nextIndex++;
+      const filePath = sorted[index];
+      try {
+        entries[index] = [
+          path.relative(directory, filePath).replaceAll(path.sep, '/'),
+          await sha256File(filePath),
+        ];
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(8, sorted.length) }, hashWorker));
+  if (firstError) throw firstError;
+  return Object.fromEntries(entries);
 }
 
 module.exports = {

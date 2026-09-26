@@ -5,9 +5,10 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { Readable } = require('node:stream');
 const test = require('node:test');
 
-const { writeJsonl } = require('../src/io');
+const { outputHashes, writeJsonl } = require('../src/io');
 
 function work(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-jsonl-'));
@@ -88,4 +89,71 @@ test('serialization failure preserves the prior JSONL and removes the temp file'
     /circular/i);
   assert.equal(fs.readFileSync(file, 'utf8'), 'prior\n');
   assert.deepEqual(fs.readdirSync(directory), ['events.jsonl']);
+});
+
+test('output hashes preserve sorted bytes with at most eight open streams', async (t) => {
+  const directory = work(t);
+  const expected = {};
+  for (let index = 0; index < 20; index += 1) {
+    const name = `candidate-${String(index).padStart(2, '0')}.jsonl`;
+    const bytes = Buffer.from(`${index}:候选:${'x'.repeat(index * 17)}\n`, 'utf8');
+    fs.writeFileSync(path.join(directory, name), bytes);
+    expected[name] = crypto.createHash('sha256').update(bytes).digest('hex');
+  }
+  fs.writeFileSync(path.join(directory, 'manifest.json'), 'excluded\n');
+
+  let open = 0;
+  let peakOpen = 0;
+  const originalCreateReadStream = fs.createReadStream;
+  fs.createReadStream = function instrumentReadStream(...args) {
+    const stream = Reflect.apply(originalCreateReadStream, this, args);
+    open += 1;
+    peakOpen = Math.max(peakOpen, open);
+    stream.once('close', () => { open -= 1; });
+    return stream;
+  };
+  let actual;
+  try {
+    actual = await outputHashes(directory, { exclude: ['manifest.json'] });
+  } finally {
+    fs.createReadStream = originalCreateReadStream;
+  }
+
+  assert.deepEqual(actual, expected);
+  assert.deepEqual(Object.keys(actual), Object.keys(expected));
+  assert.equal(open, 0);
+  assert.equal(peakOpen, 8);
+});
+
+test('output hash failure drains active streams before rejecting', async (t) => {
+  const directory = work(t);
+  const names = Array.from({ length: 16 }, (_, index) =>
+    `candidate-${String(index).padStart(2, '0')}.jsonl`);
+  for (const name of names) fs.writeFileSync(path.join(directory, name), name);
+  const failure = new Error('controlled hash read failure');
+  const started = [];
+  let open = 0;
+  const originalCreateReadStream = fs.createReadStream;
+  fs.createReadStream = function delayedReadStream(filePath) {
+    const name = path.basename(filePath);
+    const stream = new Readable({ read() {} });
+    started.push(name);
+    open += 1;
+    stream.once('close', () => { open -= 1; });
+    setTimeout(() => {
+      if (name === names[0]) stream.destroy(failure);
+      else {
+        stream.push(Buffer.from(name));
+        stream.push(null);
+      }
+    }, name === names[0] ? 5 : 25);
+    return stream;
+  };
+  try {
+    await assert.rejects(outputHashes(directory), (error) => error === failure);
+    assert.equal(open, 0);
+    assert.deepEqual(started, names.slice(0, 8));
+  } finally {
+    fs.createReadStream = originalCreateReadStream;
+  }
 });
