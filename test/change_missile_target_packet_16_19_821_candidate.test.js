@@ -10,8 +10,10 @@ const { replayFromChunks } = require('./helpers/synthetic_replay');
 const { decodeSemanticReplay } = require('../src/semantic_api');
 const {
   CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821: profile,
+  CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821: profileV2,
   decodeChangeMissileTargetPacketCandidates821: decode,
   decodeProtectedChangeMissileTargetComparisonKeyU32,
+  decodeProtectedChangeMissileTargetVectorF32,
 } = require('../src/decoders/rofl_16_19_821_change_missile_target_packet_candidate');
 
 const IMAGE = process.env.ROFL_821_RUNTIME_IMAGE;
@@ -33,13 +35,18 @@ function fixture({ version = profile.replay_version, stream = 1,
   return replayFromChunks([{ stream, body: Buffer.concat(packets) }], version);
 }
 
-function outputHash(rows) {
+function outputHash(rows, version = 'v1') {
   const hash = crypto.createHash('sha256');
   for (const row of rows) {
     const key = Buffer.alloc(4);
     key.writeUInt32LE(row.native_callback_comparison_key_u32);
     hash.update(Buffer.from(row.native_protected_comparison_bytes_hex, 'hex'))
       .update(key);
+    if (version === 'v2') {
+      hash.update(Buffer.from(row.native_vector_protected_bytes_hex, 'hex'))
+        .update(Buffer.from(row.native_vector_raw_f32_bytes_hex, 'hex'))
+        .update(Buffer.from([row.native_vector_source === 'PACKET_RAW_12' ? 1 : 0]));
+    }
   }
   return hash.digest('hex');
 }
@@ -122,3 +129,69 @@ test('wrong image never emits candidate rows', () => {
   assert.equal(result.status, 'MISSING_INPUT');
   assert.equal(result.events, null);
 });
+
+test('V2 is explicit and reports native object +0x10 f32 data without target meaning',
+  { skip: !IMAGE || !fs.existsSync(IMAGE) ? 'exact 821 image unavailable' : false }, () => {
+    const replay = fixture({ packets: [packet(SHORT), packet(LONG, 1100)] });
+    const old = decode(replay, { runtimeImagePath: IMAGE });
+    const v2 = decode(replay, { runtimeImagePath: IMAGE, profileVersion: 'v2' });
+    assert.equal(old.profile_id, profile.id);
+    assert.equal('native_vector_f32' in old.events[0], false);
+    assert.equal(v2.status, 'CANDIDATE', v2.error);
+    assert.equal(v2.profile_id, profileV2.id);
+    assert.equal(v2.native_output_sha256, outputHash(v2.events, 'v2'));
+    assert.deepEqual(v2.events.map((row) => row.native_vector_source),
+      ['NATIVE_DEFAULT_ZERO', 'PACKET_RAW_12']);
+    assert.deepEqual(v2.events[0].native_vector_f32, [0, 0, 0]);
+    assert.equal(v2.events[0].native_vector_protected_bytes_hex, '0b'.repeat(12));
+    assert.equal(v2.events[0].native_vector_raw_f32_bytes_hex, '00'.repeat(12));
+    assert.equal(v2.events[1].native_vector_protected_bytes_hex,
+      '2cad7569287b66ec56981069');
+    const decoded = decodeProtectedChangeMissileTargetVectorF32(
+      v2.events[1].native_vector_protected_bytes_hex);
+    assert.equal(v2.events[1].native_vector_raw_f32_bytes_hex,
+      decoded.raw_bytes_hex);
+    assert.deepEqual(v2.events[1].native_vector_f32, decoded.values);
+    assert.equal(v2.events[1].target_status, 'UNKNOWN');
+    assert.equal(v2.events[1].target_change_effect_status, 'UNKNOWN');
+    const api = decodeSemanticReplay(replay, {
+      capabilities: ['change_missile_target_packet'], runtimeImagePath: IMAGE,
+      changeMissileTargetProfile: 'v2',
+    });
+    assert.equal(api.capability_results.change_missile_target_packet.profile_id,
+      profileV2.id);
+  });
+
+test('V2 native vector is packet-byte local under 12 mutations and rejects wrong shapes',
+  { skip: !IMAGE || !fs.existsSync(IMAGE) ? 'exact 821 image unavailable' : false }, () => {
+    const altered = [];
+    for (let index = 1; index <= 12; index += 1) {
+      const bytes = Buffer.from(LONG, 'hex');
+      bytes[index] ^= 1;
+      altered.push(packet(bytes.toString('hex'), 1100 + index));
+    }
+    const result = decode(fixture({ packets: [packet(LONG), ...altered] }), {
+      runtimeImagePath: IMAGE, profileVersion: 'v2',
+    });
+    assert.equal(result.status, 'CANDIDATE', result.error);
+    assert.equal(result.native_full_success_count, 13);
+    for (let index = 1; index <= 12; index += 1) {
+      const before = Buffer.from(result.events[0].native_vector_protected_bytes_hex, 'hex');
+      const after = Buffer.from(result.events[index].native_vector_protected_bytes_hex, 'hex');
+      assert.equal(before.reduce((count, byte, offset) =>
+        count + Number(byte !== after[offset]), 0), 1);
+      assert.equal(result.events[index].native_callback_comparison_key_u32, 0);
+    }
+    for (const hex of [LONG.slice(0, -2), `${LONG}00`]) {
+      const rejected = decode(fixture({ packets: [packet(hex)] }), {
+        runtimeImagePath: IMAGE, profileVersion: 'v2',
+      });
+      assert.equal(rejected.status, 'DECODE_FAILED', hex);
+      assert.equal(rejected.events, null);
+    }
+    const wrongImage = decode(fixture({ packets: [packet(LONG)] }), {
+      runtimeImagePath: __filename, profileVersion: 'v2',
+    });
+    assert.equal(wrongImage.status, 'MISSING_INPUT');
+    assert.equal(wrongImage.events, null);
+  });

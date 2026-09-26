@@ -15,6 +15,7 @@ const PACKET_ID = 0x040c;
 const IMAGE_SIZE = 48_488_448;
 const IMAGE_SHA256 = '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325';
 const EVIDENCE_STATUS = 'CANDIDATE_EXACT_821_NATIVE_CHANGE_MISSILE_TARGET_COMPARISON_KEY';
+const EVIDENCE_STATUS_V2 = 'CANDIDATE_EXACT_821_NATIVE_CHANGE_MISSILE_TARGET_VECTOR_AND_COMPARISON_KEY';
 const MAX_PACKETS = 20_000;
 const MAX_NATIVE_BATCH = 10_000;
 const OBSERVED_LENGTHS = new Set([3, 4, 13]);
@@ -38,6 +39,31 @@ function decodeProtectedChangeMissileTargetComparisonKeyU32(rawHex) {
     decoded[i] = (ror8((ror8(encoded[i], 6) - 0x56) & 0xff, 3) - 0x3a) & 0xff;
   }
   return decoded.readUInt32LE(0);
+}
+
+function canonicalJsonFloat(value) {
+  return value === 0 ? 0 : value;
+}
+
+function decodeProtectedChangeMissileTargetVectorF32(rawHex) {
+  if (typeof rawHex !== 'string' || !/^[0-9a-f]{24}$/.test(rawHex)) return null;
+  const protectedBytes = Buffer.from(rawHex, 'hex');
+  const rawBytes = Buffer.alloc(12);
+  for (let i = 0; i < 12; i += 1) {
+    rawBytes[i] = (ror8((protectedBytes[i] - 0x32) & 0xff, 7) - 0x36) & 0xff;
+    rawBytes[i] ^= 0x7d;
+  }
+  const values = [0, 4, 8].map((offset) => canonicalJsonFloat(
+    rawBytes.readFloatLE(offset)));
+  if (!values.every(Number.isFinite)) return null;
+  return { raw_bytes_hex: rawBytes.toString('hex'), values };
+}
+
+function expectedProtectedVector(payload) {
+  return payload.length === 13
+    ? Buffer.concat([payload.subarray(9, 13), payload.subarray(5, 9),
+      payload.subarray(1, 5)]).toString('hex')
+    : '0b'.repeat(12);
 }
 
 function isObservedChangeMissileTargetPayload(payload) {
@@ -68,6 +94,18 @@ const CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
     'The callback comparison u32 is packet-local; execution stops before the live receiver comparison.',
     'The ChangeMissileTarget RTTI does not establish a receiver match, missile identity, owner, resolved target, actual target change, effect, or causal link.',
     'Four of the 11 original Replays have no 0x040c route; only the 13 observed game packet shapes are accepted.',
+  ]),
+});
+
+const CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821 = Object.freeze({
+  ...CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821,
+  id: 'rofl-16.19.821.7343-kr-change-missile-target-packet-candidate-v2',
+  evidence_status: EVIDENCE_STATUS_V2,
+  evidence_scope: 'The exact 821 deserializer writes a protected f32 triplet at packet object +0x10/+0x14/+0x18. In 11 KR Replays all 12,869 observed 13-byte packets carry twelve raw bytes in native component order; all 256 short packets use the native default zero triplet. The callback comparison key remains packet-local +0x1c.',
+  known_limits: Object.freeze([
+    ...CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821.known_limits,
+    'The three f32 values are anonymous packet-local data, not a proven target position or movement effect.',
+    'Short packets contain no vector bytes; their zero triplet is the native default.',
   ]),
 });
 
@@ -127,14 +165,19 @@ function hashInput(rows) {
   return hash.digest('hex');
 }
 
-function updateOutputHash(hash, nativeRow) {
+function updateOutputHash(hash, nativeRow, profileVersion) {
   const key = Buffer.alloc(4);
   key.writeUInt32LE(nativeRow.native_callback_comparison_key_u32);
   hash.update(Buffer.from(nativeRow.native_protected_comparison_bytes_hex, 'hex')).update(key);
+  if (profileVersion === 'v2') {
+    hash.update(Buffer.from(nativeRow.native_vector_protected_bytes_hex, 'hex'))
+      .update(Buffer.from(nativeRow.native_vector_raw_f32_bytes_hex, 'hex'))
+      .update(Buffer.from([nativeRow.native_vector_source === 'PACKET_RAW_12' ? 1 : 0]));
+  }
 }
 
-function validRow(nativeRow, block) {
-  return nativeRow && typeof nativeRow.native_protected_comparison_bytes_hex === 'string'
+function validRow(nativeRow, block, profileVersion) {
+  const baseValid = nativeRow && typeof nativeRow.native_protected_comparison_bytes_hex === 'string'
     && /^[0-9a-f]{8}$/.test(nativeRow.native_protected_comparison_bytes_hex)
     && nativeRow.native_callback_witness_status === 'SYNTHETIC_RECEIVER_PRE_COMPARE'
     && Number.isInteger(nativeRow.native_callback_comparison_key_u32)
@@ -143,15 +186,33 @@ function validRow(nativeRow, block) {
     && nativeRow.native_callback_comparison_key_u32
       === decodeProtectedChangeMissileTargetComparisonKeyU32(nativeRow.native_protected_comparison_bytes_hex)
     && nativeRow.raw_payload_sha256 === sha256(block.payload);
+  if (!baseValid || profileVersion !== 'v2') return baseValid;
+  const protectedHex = nativeRow.native_vector_protected_bytes_hex;
+  const decoded = decodeProtectedChangeMissileTargetVectorF32(protectedHex);
+  return nativeRow.native_vector_source
+      === (block.payload.length === 13 ? 'PACKET_RAW_12' : 'NATIVE_DEFAULT_ZERO')
+    && protectedHex === expectedProtectedVector(block.payload)
+    && decoded !== null
+    && nativeRow.native_vector_raw_f32_bytes_hex === decoded.raw_bytes_hex
+    && Array.isArray(nativeRow.native_vector_f32)
+    && nativeRow.native_vector_f32.length === 3
+    && nativeRow.native_vector_f32.every((value, index) =>
+      Number.isFinite(value)
+      && Object.is(canonicalJsonFloat(value), decoded.values[index]));
 }
 
 function decodeChangeMissileTargetPacketCandidates821(replay, {
-  runtimeImagePath, pythonExecutable, precollected,
+  runtimeImagePath, pythonExecutable, precollected, profileVersion = 'v1',
 } = {}) {
-  const profile = CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821;
+  if (profileVersion !== 'v1' && profileVersion !== 'v2') {
+    throw new TypeError('exact 821 ChangeMissileTarget packet profile must be v1 or v2');
+  }
+  const profile = profileVersion === 'v2'
+    ? CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821
+    : CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821;
   const base = {
     profile_id: profile.id, input_packet_id: PACKET_ID,
-    evidence_status: EVIDENCE_STATUS,
+    evidence_status: profile.evidence_status,
     evidence_runtime_image_sha256: IMAGE_SHA256,
   };
   const fail = (status, error, extra = {}) => ({
@@ -239,6 +300,7 @@ function decodeChangeMissileTargetPacketCandidates821(replay, {
   for (let start = 0; start < rows.length; start += MAX_NATIVE_BATCH) {
     const batch = rows.slice(start, start + MAX_NATIVE_BATCH);
     const request = JSON.stringify({ replay_version: BUILD, packet_id: PACKET_ID,
+      ...(profileVersion === 'v2' ? { profile_version: 'v2' } : {}),
       packets: batch.map(({ block }) => [block.param >>> 0, block.payload.toString('hex')]) });
     if (Buffer.byteLength(request) > 512 * 1024) {
       return fail('UNSUPPORTED', 'change-missile-target native witness batch exceeds 512 KiB', {
@@ -277,6 +339,8 @@ function decodeChangeMissileTargetPacketCandidates821(replay, {
     }
     if (native?.replay_version !== BUILD || native.runtime_image_sha256 !== IMAGE_SHA256
         || native.packet_id !== PACKET_ID || native.packet_count !== batch.length
+        || (profileVersion === 'v2' && native.profile_version !== 'v2')
+        || (profileVersion === 'v1' && native.profile_version !== undefined)
         || native.input_sha256 !== hashInput(batch)
         || native.native_full_success_count !== batch.length
         || native.first_failure !== null || !Array.isArray(native.rows)
@@ -290,15 +354,15 @@ function decodeChangeMissileTargetPacketCandidates821(replay, {
     for (let index = 0; index < batch.length; index += 1) {
       const { block, chunk } = batch[index];
       const nativeRow = native.rows[index];
-      if (!validRow(nativeRow, block)) {
+      if (!validRow(nativeRow, block, profileVersion)) {
         return fail('DECODE_FAILED', `native row ${start + index} differs from packet`, {
           input_count: observedCount, scanned_block_count: scannedBlockCount,
           runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
           first_failed_packet_ref: packetRef(replay, block, chunk),
         });
       }
-      updateOutputHash(batchOutputHash, nativeRow);
-      updateOutputHash(outputHash, nativeRow);
+      updateOutputHash(batchOutputHash, nativeRow, profileVersion);
+      updateOutputHash(outputHash, nativeRow, profileVersion);
       events.push({
         event_type: 'CHANGE_MISSILE_TARGET_PACKET_CANDIDATE',
         game_version: BUILD, patch: '16.19', build_profile: profile.id,
@@ -308,12 +372,18 @@ function decodeChangeMissileTargetPacketCandidates821(replay, {
         native_protected_comparison_bytes_hex: nativeRow.native_protected_comparison_bytes_hex,
         native_callback_comparison_key_u32: nativeRow.native_callback_comparison_key_u32,
         native_callback_witness_status: nativeRow.native_callback_witness_status,
+        ...(profileVersion === 'v2' ? {
+          native_vector_source: nativeRow.native_vector_source,
+          native_vector_protected_bytes_hex: nativeRow.native_vector_protected_bytes_hex,
+          native_vector_raw_f32_bytes_hex: nativeRow.native_vector_raw_f32_bytes_hex,
+          native_vector_f32: nativeRow.native_vector_f32.map(canonicalJsonFloat),
+        } : {}),
         live_receiver_comparison_status: 'UNKNOWN',
         source_actor_status: 'UNKNOWN', owner_status: 'UNKNOWN',
         missile_identity_status: 'UNKNOWN', target_status: 'UNKNOWN',
         target_change_effect_status: 'UNKNOWN', causality_status: 'UNKNOWN',
         confidence: 'CANDIDATE',
-        semantic_status: EVIDENCE_STATUS,
+        semantic_status: profile.evidence_status,
         raw_packet_ref: packetRef(replay, block, chunk),
       });
     }
@@ -331,6 +401,9 @@ function decodeChangeMissileTargetPacketCandidates821(replay, {
     event_field_confidence: {
       replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
       native_callback_comparison_key_u32: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+      ...(profileVersion === 'v2' ? {
+        native_vector_f32: 'CANDIDATE_EXACT_RUNTIME_PACKET_LOCAL_F32',
+      } : {}),
     },
     native_witness_status: 'FULLY_CONSUMED_ALL',
     native_full_success_count: events.length, native_batch_count: nativeRuns,
@@ -343,8 +416,11 @@ function decodeChangeMissileTargetPacketCandidates821(replay, {
 
 module.exports = {
   CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821,
+  CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821,
   CHANGE_MISSILE_TARGET_OBSERVED_LENGTHS_821: OBSERVED_LENGTHS,
   isObservedChangeMissileTargetPayload,
   decodeProtectedChangeMissileTargetComparisonKeyU32,
+  decodeProtectedChangeMissileTargetVectorF32,
+  expectedProtectedVector,
   decodeChangeMissileTargetPacketCandidates821,
 };

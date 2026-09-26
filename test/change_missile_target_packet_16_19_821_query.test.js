@@ -9,7 +9,9 @@ const path = require('node:path');
 const test = require('node:test');
 
 const { CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821: profile,
-  decodeProtectedChangeMissileTargetComparisonKeyU32 } =
+  CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821: profileV2,
+  decodeProtectedChangeMissileTargetComparisonKeyU32,
+  decodeProtectedChangeMissileTargetVectorF32 } =
   require('../src/decoders/rofl_16_19_821_change_missile_target_packet_candidate');
 const { bindSavedPacketArtifactToPhysicalReplay } =
   require('./helpers/physical_saved_packet_replay');
@@ -26,24 +28,35 @@ const PACKETS = [
 
 function sha256(bytes) { return crypto.createHash('sha256').update(bytes).digest('hex'); }
 
-function row(index) {
+function row(index, selectedProfile = profile) {
   const [hex, protectedHex, comparisonKey] = PACKETS[index];
   const time = 1000 + index;
   const rawParam = 0x400000b5;
   return {
     event_type: 'CHANGE_MISSILE_TARGET_PACKET_CANDIDATE',
     game_version: profile.replay_version, patch: '16.19',
-    build_profile: profile.id, replay_sha256: REPLAY_SHA,
+    build_profile: selectedProfile.id, replay_sha256: REPLAY_SHA,
     replay_time_ms: time, raw_param: rawParam,
     packet_name_candidate: profile.packet_name,
     native_protected_comparison_bytes_hex: protectedHex,
     native_callback_comparison_key_u32: comparisonKey,
     native_callback_witness_status: 'SYNTHETIC_RECEIVER_PRE_COMPARE',
+    ...(selectedProfile === profileV2 ? (() => {
+      const vectorProtected = index === 0
+        ? '2cad7569287b66ec56981069' : '0b'.repeat(12);
+      const decoded = decodeProtectedChangeMissileTargetVectorF32(vectorProtected);
+      return {
+        native_vector_source: index === 0 ? 'PACKET_RAW_12' : 'NATIVE_DEFAULT_ZERO',
+        native_vector_protected_bytes_hex: vectorProtected,
+        native_vector_raw_f32_bytes_hex: decoded.raw_bytes_hex,
+        native_vector_f32: decoded.values,
+      };
+    })() : {}),
     live_receiver_comparison_status: 'UNKNOWN',
     source_actor_status: 'UNKNOWN', owner_status: 'UNKNOWN',
     missile_identity_status: 'UNKNOWN', target_status: 'UNKNOWN',
     target_change_effect_status: 'UNKNOWN', causality_status: 'UNKNOWN',
-    confidence: 'CANDIDATE', semantic_status: profile.evidence_status,
+    confidence: 'CANDIDATE', semantic_status: selectedProfile.evidence_status,
     raw_packet_ref: {
       source_path: SOURCE_PATH, replay_sha256: REPLAY_SHA,
       chunk_index: index, chunk_id: index + 1, chunk_stream: 'game_chunk',
@@ -56,7 +69,7 @@ function row(index) {
   };
 }
 
-function hashes(rows) {
+function hashes(rows, selectedProfile = profile) {
   const input = crypto.createHash('sha256');
   const output = crypto.createHash('sha256');
   for (const item of rows) {
@@ -69,32 +82,41 @@ function hashes(rows) {
     key.writeUInt32LE(item.native_callback_comparison_key_u32);
     output.update(Buffer.from(item.native_protected_comparison_bytes_hex, 'hex'))
       .update(key);
+    if (selectedProfile === profileV2) {
+      output.update(Buffer.from(item.native_vector_protected_bytes_hex, 'hex'))
+        .update(Buffer.from(item.native_vector_raw_f32_bytes_hex, 'hex'))
+        .update(Buffer.from([item.native_vector_source === 'PACKET_RAW_12' ? 1 : 0]));
+    }
   }
   return [input.digest('hex'), output.digest('hex')];
 }
 
-function fixture(t) {
+function fixture(t, selectedProfile = profile) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-missile-query-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const dir = path.join(root, 'replays', 'sample');
   fs.mkdirSync(dir, { recursive: true });
-  const rows = [row(0), row(1)];
-  const [nativeInput, nativeOutput] = hashes(rows);
+  const rows = [row(0, selectedProfile), row(1, selectedProfile)];
+  const [nativeInput, nativeOutput] = hashes(rows, selectedProfile);
   const result = {
-    profile_id: profile.id, input_packet_id: profile.replay_block_packet_id,
-    evidence_status: profile.evidence_status,
-    evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+    profile_id: selectedProfile.id,
+    input_packet_id: selectedProfile.replay_block_packet_id,
+    evidence_status: selectedProfile.evidence_status,
+    evidence_runtime_image_sha256: selectedProfile.evidence_runtime_image_sha256,
     status: 'CANDIDATE', input_count: 2, event_count: 2, scanned_block_count: 2,
-    known_limits: [...profile.known_limits],
+    known_limits: [...selectedProfile.known_limits],
     event_field_confidence: {
       replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
       native_callback_comparison_key_u32: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+      ...(selectedProfile === profileV2 ? {
+        native_vector_f32: 'CANDIDATE_EXACT_RUNTIME_PACKET_LOCAL_F32',
+      } : {}),
     },
     native_witness_status: 'FULLY_CONSUMED_ALL', native_full_success_count: 2,
     native_batch_count: 1, native_input_sha256: nativeInput,
     native_output_sha256: nativeOutput, runtime_image_status: 'MATCHED_USED',
     runtime_image_used: true,
-    runtime_image_sha256: profile.evidence_runtime_image_sha256,
+    runtime_image_sha256: selectedProfile.evidence_runtime_image_sha256,
   };
   const semantic = {
     replay_version: profile.replay_version, replay_sha256: REPLAY_SHA,
@@ -237,4 +259,43 @@ test('candidate metadata and exact image remain fail closed', (t) => {
     fs.writeFileSync(f.analysisPath, JSON.stringify(analysis));
     assert.equal(errorCode(query(f.dir)), 'CAPABILITY_METADATA_MISMATCH');
   }
+});
+
+test('saved V2 vector rows preserve both native packet forms and physical source', (t) => {
+  const f = fixture(t, profileV2);
+  assert.equal(f.rows[0].native_vector_source, 'PACKET_RAW_12');
+  assert.equal(f.rows[1].native_vector_source, 'NATIVE_DEFAULT_ZERO');
+  assert.deepEqual(f.rows[1].native_vector_f32, [0, 0, 0]);
+  const physical = bindSavedPacketArtifactToPhysicalReplay(f.dir);
+  const selected = query(f.dir, '--verify-source', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 2);
+  assert.equal(summary.source_provenance_status, 'SOURCE_REPLAY_VERIFIED');
+});
+
+test('saved V2 rejects later forged vector bytes, float, source and signed zero', (t) => {
+  const f = fixture(t, profileV2);
+  const originals = f.rows.map(JSON.stringify);
+  for (const mutate of [
+    (row) => { row.native_vector_protected_bytes_hex = `0a${'0b'.repeat(11)}`; },
+    (row) => { row.native_vector_raw_f32_bytes_hex = '00'.repeat(12).replace(/^00/, '01'); },
+    (row) => { row.native_vector_f32[0] = 1; },
+    (row) => { row.native_vector_source = 'PACKET_RAW_12'; },
+  ]) {
+    const changed = structuredClone(f.rows);
+    mutate(changed[1]);
+    fs.writeFileSync(f.eventPath, `${changed.map(JSON.stringify).join('\n')}\n`);
+    const rejected = query(f.dir, '--limit', '1');
+    assert.equal(errorCode(rejected), 'INVALID_EVENT_ROW');
+    assert.equal(rejected.stdout, '');
+  }
+  const literalNegativeZero = originals[1].replace(
+    '"native_vector_f32":[0,0,0]', '"native_vector_f32":[-0.0,0,0]');
+  assert.notEqual(literalNegativeZero, originals[1]);
+  fs.writeFileSync(f.eventPath, `${originals[0]}\n${literalNegativeZero}\n`);
+  const rejectedZero = query(f.dir, '--limit', '1');
+  assert.equal(errorCode(rejectedZero), 'INVALID_EVENT_ROW');
+  assert.equal(rejectedZero.stdout, '');
 });

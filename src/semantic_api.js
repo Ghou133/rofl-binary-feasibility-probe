@@ -2224,6 +2224,10 @@ function decode1619821(replay, profile, options = {}) {
   if (itemGroupPacketProfile !== 'v1' && itemGroupPacketProfile !== 'v2') {
     throw new TypeError('exact 821 item-group packet profile must be v1 or v2');
   }
+  const changeMissileTargetProfile = options.changeMissileTargetProfile ?? 'v1';
+  if (changeMissileTargetProfile !== 'v1' && changeMissileTargetProfile !== 'v2') {
+    throw new TypeError('exact 821 ChangeMissileTarget packet profile must be v1 or v2');
+  }
   const damagePacketProfile = options.damagePacketProfile ?? 'v5';
   if (damagePacketProfile !== 'v5' && damagePacketProfile !== 'v6') {
     throw new TypeError('exact 821 UnitApplyDamage packet profile must be v5 or v6');
@@ -2555,6 +2559,7 @@ function decode1619821(replay, profile, options = {}) {
         runtimeImagePath: options.runtimeImagePath,
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
+        profileVersion: changeMissileTargetProfile,
       }),
     set_dimension_missile_packet: (input, collected) =>
       decodeSetDimensionMissilePacketCandidates821(input, {

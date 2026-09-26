@@ -190,7 +190,9 @@ const { FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821,
   isObservedForceCreateMissilePayload } =
   require('./decoders/rofl_16_19_821_force_create_missile_packet_candidate');
 const { CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821,
+  CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821,
   decodeProtectedChangeMissileTargetComparisonKeyU32,
+  decodeProtectedChangeMissileTargetVectorF32, expectedProtectedVector,
   isObservedChangeMissileTargetPayload } =
   require('./decoders/rofl_16_19_821_change_missile_target_packet_candidate');
 const { SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821,
@@ -336,6 +338,11 @@ const CHANGE_MISSILE_TARGET_ROW_FIELDS_821 = new Set([
   'live_receiver_comparison_status', 'source_actor_status', 'owner_status',
   'missile_identity_status', 'target_status', 'target_change_effect_status',
   'causality_status', 'confidence', 'semantic_status', 'raw_packet_ref',
+]);
+const CHANGE_MISSILE_TARGET_V2_ROW_FIELDS_821 = new Set([
+  ...CHANGE_MISSILE_TARGET_ROW_FIELDS_821,
+  'native_vector_source', 'native_vector_protected_bytes_hex',
+  'native_vector_raw_f32_bytes_hex', 'native_vector_f32',
 ]);
 const CHANGE_MISSILE_TARGET_REF_FIELDS_821 =
   NOTIFY_CONTEXTUAL_SITUATION_REF_FIELDS_821;
@@ -2167,7 +2174,11 @@ function forceCreateMissilePacketRow(row, prepared, lineNumber, state) {
 }
 
 function prepareChangeMissileTargetPacketEvent(semantic, analysis, eventKey, result) {
-  const profile = CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821;
+  const profile = result?.profile_id
+    === CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821.id
+    ? CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821
+    : CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821;
+  const v2 = profile === CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821;
   if (semantic.replay_version !== profile.replay_version) {
     throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
       `${eventKey} requires exact build ${profile.replay_version}.`);
@@ -2194,6 +2205,7 @@ function prepareChangeMissileTargetPacketEvent(semantic, analysis, eventKey, res
       || !isDeepStrictEqual(result.event_field_confidence, {
         replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
         native_callback_comparison_key_u32: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+        ...(v2 ? { native_vector_f32: 'CANDIDATE_EXACT_RUNTIME_PACKET_LOCAL_F32' } : {}),
       })
       || result.native_witness_status !== 'FULLY_CONSUMED_ALL'
       || result.native_full_success_count !== result.event_count
@@ -2213,15 +2225,21 @@ function changeMissileTargetPacketRow(row, prepared, lineNumber, state) {
     throw new EventQueryError('INVALID_EVENT_ROW',
       `Invalid change-missile-target packet row at JSONL line ${lineNumber}: ${reason}.`);
   };
-  const profile = CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821;
+  const profile = prepared.capabilityResult.profile_id
+    === CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821.id
+    ? CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821
+    : CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821;
+  const v2 = profile === CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821;
+  const fields = v2 ? CHANGE_MISSILE_TARGET_V2_ROW_FIELDS_821
+    : CHANGE_MISSILE_TARGET_ROW_FIELDS_821;
   const ref = row.raw_packet_ref;
   const rowFields = Object.keys(row);
   const refFields = ref && typeof ref === 'object' && !Array.isArray(ref)
     ? Object.keys(ref) : [];
   const payloadHex = ref?.raw_payload_hex;
   const protectedHex = row.native_protected_comparison_bytes_hex;
-  if (rowFields.length !== CHANGE_MISSILE_TARGET_ROW_FIELDS_821.size
-      || rowFields.some((field) => !CHANGE_MISSILE_TARGET_ROW_FIELDS_821.has(field))
+  if (rowFields.length !== fields.size
+      || rowFields.some((field) => !fields.has(field))
       || refFields.length !== CHANGE_MISSILE_TARGET_REF_FIELDS_821.size
       || refFields.some((field) => !CHANGE_MISSILE_TARGET_REF_FIELDS_821.has(field))
       || row.event_type !== 'CHANGE_MISSILE_TARGET_PACKET_CANDIDATE'
@@ -2266,6 +2284,21 @@ function changeMissileTargetPacketRow(row, prepared, lineNumber, state) {
     invalid('exact-build profile, packet shape, callback key, or provenance differs');
   }
   const payload = Buffer.from(payloadHex, 'hex');
+  if (v2) {
+    const protectedVector = row.native_vector_protected_bytes_hex;
+    const decoded = decodeProtectedChangeMissileTargetVectorF32(protectedVector);
+    const source = payload.length === 13 ? 'PACKET_RAW_12' : 'NATIVE_DEFAULT_ZERO';
+    if (row.native_vector_source !== source
+        || protectedVector !== expectedProtectedVector(payload)
+        || decoded === null
+        || row.native_vector_raw_f32_bytes_hex !== decoded.raw_bytes_hex
+        || !Array.isArray(row.native_vector_f32)
+        || row.native_vector_f32.length !== 3
+        || row.native_vector_f32.some((value, index) =>
+          !Number.isFinite(value) || !Object.is(value, decoded.values[index]))) {
+      invalid('native object +0x10 f32 triplet differs from exact packet bytes');
+    }
+  }
   if (ref.raw_payload_sha256 !== crypto.createHash('sha256').update(payload).digest('hex')) {
     invalid('raw payload SHA-256 differs');
   }
@@ -2279,6 +2312,12 @@ function changeMissileTargetPacketRow(row, prepared, lineNumber, state) {
   const key = Buffer.alloc(4);
   key.writeUInt32LE(row.native_callback_comparison_key_u32);
   state.nativeOutputHash.update(Buffer.from(protectedHex, 'hex')).update(key);
+  if (v2) {
+    state.nativeOutputHash
+      .update(Buffer.from(row.native_vector_protected_bytes_hex, 'hex'))
+      .update(Buffer.from(row.native_vector_raw_f32_bytes_hex, 'hex'))
+      .update(Buffer.from([row.native_vector_source === 'PACKET_RAW_12' ? 1 : 0]));
+  }
 }
 
 function prepareSetDimensionMissilePacketEvent(semantic, analysis, eventKey, result) {

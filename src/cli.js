@@ -216,6 +216,8 @@ missile identity, owner, target, creation, effect and causality are unknown.
 change_missile_target_packet emits an exact-821 game packet-local callback
 comparison u32 before consulting live receiver state; receiver match, missile
 identity, owner, resolved target, target change and effect are unknown.
+--change-missile-target-v2 also exposes an anonymous native f32 triplet from
+object +0x10/+0x14/+0x18; it does not establish a target position.
 set_dimension_missile_packet emits an exact-821 game packet-local callback u8
 before the receiver method; receiver state, missile identity, owner, target,
 dimension change, effect and causality are unknown.
@@ -267,6 +269,7 @@ Options:
   --spell-timer-packet-v2       Opt into exact 821 SetSpellTimerFromBuff native receiver callback candidates (decode/batch)
   --spell-level-packet-v2       Opt into exact 821 SetSpellLevel callback receiver/scalar candidates (decode/batch)
   --item-group-packet-v2        Opt into exact 821 item-group conditional callback byte candidate (decode/batch)
+  --change-missile-target-v2    Opt into exact 821 ChangeMissileTarget native f32 triplet (decode/batch)
   --damage-packet-v6            Opt into exact 821 UnitApplyDamage +0x1c u32 packet/association candidates (decode/batch)
   --event-jsonl-only            Store 16.19 event rows only in JSONL (decode/batch with --events)
   --jobs <1|2>                  Exact-821 batch with --events and --event-jsonl-only (default: 1)
@@ -405,6 +408,7 @@ function parseArgs(argv) {
     spellTimerPacketV2: false,
     spellLevelPacketV2: false,
     itemGroupPacketV2: false,
+    changeMissileTargetV2: false,
     damagePacketV6: false,
     damageLookupKey24: null,
     damageLookupKey2c: null,
@@ -490,6 +494,10 @@ function parseArgs(argv) {
     }
     if (token === '--item-group-packet-v2') {
       options.itemGroupPacketV2 = true;
+      continue;
+    }
+    if (token === '--change-missile-target-v2') {
+      options.changeMissileTargetV2 = true;
       continue;
     }
     if (token === '--spell-timer-packet-v2') {
@@ -681,6 +689,10 @@ function parseArgs(argv) {
   if (options.itemGroupPacketV2 && (!['decode', 'batch'].includes(command)
       || !options.events?.includes('item_group_data_broadcast_packet'))) {
     throw new Error('--item-group-packet-v2 requires decode or batch with exact-821 item_group_data_broadcast_packet in --events');
+  }
+  if (options.changeMissileTargetV2 && (!['decode', 'batch'].includes(command)
+      || !options.events?.includes('change_missile_target_packet'))) {
+    throw new Error('--change-missile-target-v2 requires decode or batch with exact-821 change_missile_target_packet in --events');
   }
   if (options.spellTimerPacketV2 && (!['decode', 'batch'].includes(command)
       || !options.events?.includes('set_spell_timer_from_buff_packet'))) {
@@ -1388,6 +1400,7 @@ function parseOne1619(replay, options, started) {
           setSpellTimerProfile: options.spellTimerPacketV2 ? 'v2' : undefined,
           setSpellLevelProfile: options.spellLevelPacketV2 ? 'v2' : undefined,
           itemGroupPacketProfile: options.itemGroupPacketV2 ? 'v2' : undefined,
+          changeMissileTargetProfile: options.changeMissileTargetV2 ? 'v2' : undefined,
           damagePacketProfile: options.damagePacketV6 ? 'v6' : undefined,
         });
       } catch (error) {

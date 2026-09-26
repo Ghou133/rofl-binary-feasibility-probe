@@ -8,6 +8,7 @@ state, missile identity, target and effect are not observed.
 import argparse
 import hashlib
 import json
+import math
 import re
 import struct
 import sys
@@ -46,6 +47,8 @@ PROFILE = {'constructor_rva': CONSTRUCTOR_RVA,
 SHORT_PREFIXES = frozenset({0x91, 0x93, 0x95, 0x99, 0x9d, 0x9f})
 MAX_REQUEST_BYTES = 512 * 1024
 MAX_PACKETS = 10_000
+VECTOR_SOURCE_PACKET = 'PACKET_RAW_12'
+VECTOR_SOURCE_DEFAULT = 'NATIVE_DEFAULT_ZERO'
 
 
 def rip_target(image, rva):
@@ -70,6 +73,14 @@ def decode_comparison_key(protected):
     return struct.unpack('<I', bytes(
         (ror8((ror8(value, 6) - 0x56) & 255, 3) - 0x3a) & 255
         for value in protected))[0]
+
+
+def decode_vector_f32_bytes(protected):
+    if len(protected) != 12:
+        raise ValueError('expected twelve protected vector bytes')
+    return bytes(
+        ((ror8((value - 0x32) & 255, 7) - 0x36) & 255) ^ 0x7d
+        for value in protected)
 
 
 def observed_payload(payload):
@@ -134,7 +145,10 @@ def read_request():
         if not observed_payload(payload):
             raise ValueError('payload differs from observed exact-build shapes')
         packets.append((raw_param, payload))
-    return packets
+    version = request.get('profile_version', 'v1')
+    if version not in ('v1', 'v2'):
+        raise ValueError('profile_version must be v1 or v2')
+    return packets, version
 
 
 def input_hash(packets):
@@ -145,11 +159,16 @@ def input_hash(packets):
     return digest.hexdigest()
 
 
-def output_hash(rows):
+def output_hash(rows, version):
     digest = hashlib.sha256()
     for row in rows:
         digest.update(bytes.fromhex(row['native_protected_comparison_bytes_hex']))
         digest.update(struct.pack('<I', row['native_callback_comparison_key_u32']))
+        if version == 'v2':
+            digest.update(bytes.fromhex(row['native_vector_protected_bytes_hex']))
+            digest.update(bytes.fromhex(row['native_vector_raw_f32_bytes_hex']))
+            digest.update(b'\x01' if row['native_vector_source'] == VECTOR_SOURCE_PACKET
+                          else b'\x00')
     return digest.hexdigest()
 
 
@@ -167,7 +186,7 @@ def make_native(image):
     return emulator, context, witness
 
 
-def decode_one(emulator, context, witness, raw_param, payload):
+def decode_one(emulator, context, witness, raw_param, payload, version):
     context['raw_param'] = raw_param
     native = emulator.decode(payload, PROFILE)
     if (native['deserialize_return_al'] != 1 or not native['fully_consumed']
@@ -189,26 +208,46 @@ def decode_one(emulator, context, witness, raw_param, payload):
                   rdx=exact.OBJECT_ADDRESS)
     if witness != [expected]:
         raise ValueError('native callback pre-compare key differs from packet-local inverse')
-    return {
+    row = {
         'native_protected_comparison_bytes_hex': protected.hex(),
         'native_callback_comparison_key_u32': expected,
         'native_callback_witness_status': 'SYNTHETIC_RECEIVER_PRE_COMPARE',
         'raw_payload_sha256': hashlib.sha256(payload).hexdigest(),
     }
+    if version == 'v2':
+        vector_protected = obj[0x10:0x1c]
+        source = (VECTOR_SOURCE_PACKET if len(payload) == 13
+                  else VECTOR_SOURCE_DEFAULT)
+        expected_protected = (payload[9:13] + payload[5:9] + payload[1:5]
+                              if source == VECTOR_SOURCE_PACKET else b'\x0b' * 12)
+        if vector_protected != expected_protected:
+            raise ValueError('native protected vector differs from packet form')
+        raw_f32 = decode_vector_f32_bytes(vector_protected)
+        values = struct.unpack('<fff', raw_f32)
+        if not all(math.isfinite(value) for value in values):
+            raise ValueError('native vector contains nonfinite f32')
+        row.update({
+            'native_vector_source': source,
+            'native_vector_protected_bytes_hex': vector_protected.hex(),
+            'native_vector_raw_f32_bytes_hex': raw_f32.hex(),
+            'native_vector_f32': list(values),
+        })
+    return row
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--image', required=True, type=Path)
     options = parser.parse_args()
-    packets = read_request()
+    packets, version = read_request()
     image, image_sha = read_image(options.image)
     emulator, context, witness = make_native(image)
     rows = []
     first_failure = None
     for index, (raw_param, payload) in enumerate(packets):
         try:
-            rows.append(decode_one(emulator, context, witness, raw_param, payload))
+            rows.append(decode_one(emulator, context, witness, raw_param, payload,
+                                   version))
         except Exception as error:
             first_failure = {'index': index,
                              'reason': f'{type(error).__name__}: {error}'}
@@ -219,10 +258,12 @@ def main():
         'packet_id': PACKET_ID,
         'packet_count': len(packets),
         'input_sha256': input_hash(packets),
-        'native_output_sha256': output_hash(rows) if first_failure is None else None,
+        'native_output_sha256': output_hash(rows, version)
+        if first_failure is None else None,
         'native_full_success_count': len(rows),
         'first_failure': first_failure,
         'rows': rows if first_failure is None else [],
+        **({'profile_version': 'v2'} if version == 'v2' else {}),
     }, separators=(',', ':')))
     return 0 if first_failure is None else 1
 
