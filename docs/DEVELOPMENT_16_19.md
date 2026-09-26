@@ -878,6 +878,19 @@ Current progress (older notes below retain their original research context):
   routes failed full target consumption. No spell or Buff identity, owner,
   timer effect, or lifecycle claim is made. Ignored output is in
   `artifacts/16_19_development/set_spell_timer_cli_batch_11/`.
+- **Completed opt-in SetSpellTimerFromBuff callback witness V2:** The pinned
+  821 callback at RVA `0x2c2760` accepts decoded object `+0x20` values
+  0..5 and 63, selects that slot through receiver lookup RVA `0x98a840`,
+  and forwards the five other decoded fields to call entry RVA `0x946cf0`.
+  A synthetic receiver table witnesses the exact callback route and all
+  forwarded arguments for each source-bound packet; the receiver function
+  is stopped at entry because the live receiver heap and clock are absent.
+  All 5,481/5,481 target packets across 11 original KR Replays completed
+  V2 witness after scanning 18,235,209 blocks with zero framing errors.
+  Selector counts were 0:1,601; 1:1,728; 2:1,299; 3:324; 4:12; 5:2;
+  63:515. Native controls for 6, 62 and 64 reached no receiver call and
+  fail closed in V2. V1 remains the default; no Buff or spell identity,
+  owner, timer effect or lifecycle is inferred.
 
 - **Completed candidate:** Exact KR 821 `0x0194` BuffUpdateNumCounter and
   `0x02d9` BuffUpdateCount are selectable CLI/API packet candidates with
