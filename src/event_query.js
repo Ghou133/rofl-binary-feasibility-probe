@@ -13,6 +13,8 @@ const { SHIELDING_PARAMS_PACKET_PAIR_821_PROFILE } =
   require('./decoders/rofl_16_19_821_shielding_params_packet_pair_candidate');
 const { SHIELDING_PARAMS_ROSTER_KEY_PAIR_821_PROFILE } =
   require('./decoders/rofl_16_19_821_shielding_params_roster_key_pair_candidate');
+const { SET_SPELL_LEVEL_ROSTER_KEY_PAIR_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_set_spell_level_roster_key_pair_candidate');
 const { CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE } =
   require('./decoders/rofl_16_19_821_champion_die_hero_death_pair_candidate');
 const { CHAMPION_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
@@ -221,6 +223,7 @@ const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
   'hero_total_units_healed_snapshot_candidates',
   'target_hero_roster_key_pair_candidates',
   'shielding_params_roster_key_pair_candidates',
+  'set_spell_level_roster_key_pair_candidates',
   'cast_spell_ans_packet_candidates',
   'show_health_bar_packet_candidates',
   'notify_contextual_situation_packet_candidates',
@@ -789,6 +792,7 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
   npc_buff_replace_packet_candidates: Object.freeze(['opaque_u32_0x18']),
   anonymous_029c_packet_candidates: Object.freeze(['anonymous_u32_candidate']),
   anonymous_029c_roster_key_pair_candidates: Object.freeze(['raw_param']),
+  set_spell_level_roster_key_pair_candidates: Object.freeze(['raw_param']),
   set_spell_timer_from_buff_packet_candidates:
     Object.freeze(['opaque_u32_0x18', 'opaque_u32_0x1c']),
   set_spell_level_packet_candidates:
@@ -3729,6 +3733,23 @@ const TARGET_HERO_ROSTER_PAIR_EVENT_821 = 'target_hero_roster_key_pair_candidate
 const SHIELDING_PARAMS_ROSTER_PAIR_EVENT_821 =
   'shielding_params_roster_key_pair_candidates';
 const ANONYMOUS_029C_ROSTER_PAIR_EVENT_821 = 'anonymous_029c_roster_key_pair_candidates';
+const SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821 =
+  'set_spell_level_roster_key_pair_candidates';
+const SET_SPELL_LEVEL_ROSTER_PAIR_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param', 'hero_raw_param',
+  'participant_id_candidate', 'metadata_index_candidate',
+  'champion_metadata', 'team_id_metadata', 'team_metadata', 'role_metadata',
+  'metadata_sha256', 'stats_json_sha256', 'opaque_u32_0x10', 'opaque_u32_0x14',
+  'raw_object_u32_0x10_hex', 'raw_object_u32_0x14_hex',
+  'native_receiver_slot_candidate', 'native_receiver_selection_source',
+  'native_clamped_scalar_candidate', 'native_positive_flag_written',
+  'association_status', 'roster_to_metadata_status', 'packet_actor_status',
+  'owner_status', 'live_receiver_status', 'spell_identity_status',
+  'actual_level_change_status', 'semantic_effect_status', 'confidence',
+  'semantic_status', 'field_confidence', 'raw_packet_ref',
+  'roster_keyframe_packet_ref', 'known_limits',
+]);
 const SHIELDING_PARAMS_SOURCE_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'child_event_ids', 'event_u32_0x08', 'event_u32_0x0c',
@@ -4450,6 +4471,308 @@ function shieldingParamsRosterPairRow(row, prepared, lineNumber, state) {
   }
 }
 
+function prepareSetSpellLevelRosterPairEvent(artifactDirectory, semantic,
+  analysis, result) {
+  const profile = SET_SPELL_LEVEL_ROSTER_KEY_PAIR_821_PROFILE;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${profile.capability} requires exact build ${profile.replay_version}.`);
+  }
+  if (result?.status !== 'CANDIDATE') return null;
+  const packet = prepareEventQueryFromDocuments(artifactDirectory,
+    'set_spell_level_packet_candidates', semantic, analysis);
+  const roster = prepareEventQueryFromDocuments(artifactDirectory,
+    ROSTER_BRIDGE_EVENT_821, semantic, analysis);
+  prepareSetSpellLevelCallbackFields(packet);
+  if (result.profile_id !== profile.id
+      || result.evidence_status !== profile.evidence_status
+      || result.input_packet_id !== 0x025d
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || result.packet_profile_id
+        !== SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_821.id
+      || result.input_count !== packet.declaredCount
+      || result.event_count
+        !== analysis.event_counts?.[SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821]
+      || result.event_count !== result.matched_roster_header_count
+      || !isCount(result.zero_header_count)
+      || !isCount(result.nonroster_nonzero_header_count)
+      || result.event_count + result.zero_header_count
+        + result.nonroster_nonzero_header_count !== result.input_count
+      || !isCount(result.plus_0x100_alias_excluded_count)
+      || !isCount(result.low_byte_alias_excluded_count)
+      || result.plus_0x100_alias_excluded_count
+        > result.low_byte_alias_excluded_count
+      || result.low_byte_alias_excluded_count
+        > result.nonroster_nonzero_header_count
+      || !isDeepStrictEqual(result.dependency_statuses, {
+        set_spell_level_packet: 'CANDIDATE',
+        hero_roster_metadata_bridge: 'CANDIDATE',
+      })
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || result.metadata_sha256 !== roster.capabilityResult.metadata_sha256
+      || result.stats_json_sha256 !== roster.capabilityResult.stats_json_sha256
+      || !isDeepStrictEqual(
+        analysis.semantic?.capability_results?.[profile.capability], result)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'SetSpellLevel roster pair differs from its exact-build V2 and roster sources.');
+  }
+  const outputRoot = path.dirname(path.dirname(artifactDirectory));
+  const relative = `replays/${path.basename(artifactDirectory)}`;
+  const manifest = readArtifactJson(outputRoot, 'manifest.json');
+  const hashes = manifest.output_hashes_excluding_manifest;
+  if (!hashes || typeof hashes !== 'object' || Array.isArray(hashes)) {
+    throw new EventQueryError('INVALID_BATCH_METADATA',
+      'SetSpellLevel roster pair requires a manifest-hashed Replay artifact.');
+  }
+  for (const source of [packet, roster]) {
+    checkBatchHash(hashes, `${relative}/${source.eventKey}.jsonl`,
+      source.inputPath);
+  }
+  return { packet, roster };
+}
+
+function prepareSetSpellLevelPhysicalSource(prepared, sourceReplay,
+  runtimeImage, pythonExecutable) {
+  if (typeof runtimeImage !== 'string' || runtimeImage.trim() === '') {
+    throw new EventQueryError('MISSING_RUNTIME_IMAGE',
+      'SetSpellLevel roster source verification requires --runtime-image.');
+  }
+  const filename = sourceReplay ?? prepared.sourcePath;
+  if (typeof filename !== 'string' || filename.trim() === '') {
+    throw new EventQueryError('MISSING_SOURCE_REPLAY',
+      'No original ROFL path is available; supply --source-replay.');
+  }
+  const resolved = path.resolve(filename);
+  let replay;
+  try {
+    replay = parseReplayFile(resolved);
+  } catch (error) {
+    throw new EventQueryError(error.code === 'INPUT_READ_ERROR'
+      ? 'SOURCE_REPLAY_READ_FAILED' : 'SOURCE_REPLAY_INVALID',
+    `Cannot verify original ROFL: ${error.message}`,
+    { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  if (replay.header.version !== prepared.replayVersion
+      || replay.source_sha256 !== prepared.replaySha) {
+    throw new EventQueryError('SOURCE_REPLAY_IDENTITY_MISMATCH',
+      'Original ROFL build or SHA-256 differs from saved Replay identity.',
+      { source_replay: resolved });
+  }
+  let decoded;
+  try {
+    decoded = decodeSemanticReplay(replay, {
+      capabilities: ['set_spell_level_roster_key_pair'],
+      runtimeImagePath: path.resolve(runtimeImage),
+      pythonExecutable,
+    });
+  } catch (error) {
+    throw new EventQueryError('SOURCE_REPLAY_DECODE_FAILED',
+      `Cannot re-decode original SetSpellLevel packets: ${error.message}`,
+      { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  const { packet, roster } = prepared.setSpellLevelRosterPairSources;
+  for (const [capability, saved] of [
+    ['set_spell_level_packet', packet.capabilityResult],
+    ['hero_roster_metadata_bridge', roster.capabilityResult],
+    ['set_spell_level_roster_key_pair', prepared.capabilityResult],
+  ]) {
+    if (decoded.capability_results?.[capability]?.status !== 'CANDIDATE'
+        || !isDeepStrictEqual(decoded.capability_results[capability], saved)) {
+      throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+        `Physical ROFL or pinned runtime image differs from saved ${capability} metadata.`,
+        { source_replay: resolved,
+          source_status: decoded.capability_results?.[capability]?.status ?? null });
+    }
+  }
+  if (!Array.isArray(decoded.events?.set_spell_level_packet_candidates)
+      || !Array.isArray(decoded.events?.[ROSTER_BRIDGE_EVENT_821])
+      || !Array.isArray(decoded.events?.[SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821])
+      || decoded.events.set_spell_level_packet_candidates.length
+        !== packet.declaredCount
+      || decoded.events[ROSTER_BRIDGE_EVENT_821].length !== 10
+      || decoded.events[SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821].length
+        !== prepared.declaredCount) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Physical SetSpellLevel V2 or HeroStats event stream is incomplete.',
+      { source_replay: resolved });
+  }
+  return { kind: 'SET_SPELL_LEVEL_ROSTER_PAIR',
+    packetRows: decoded.events.set_spell_level_packet_candidates,
+    rosterRows: decoded.events[ROSTER_BRIDGE_EVENT_821],
+    pairRows: decoded.events[SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821] };
+}
+
+function setSpellLevelRosterExpectedRow(packet, roster, prepared) {
+  const profile = SET_SPELL_LEVEL_ROSTER_KEY_PAIR_821_PROFILE;
+  const association = 'CANDIDATE_FULL_U32_HEADER_ROSTER_KEY_EQUALITY';
+  return {
+    event_type: 'SET_SPELL_LEVEL_ROSTER_KEY_PAIR_CANDIDATE',
+    game_version: prepared.replayVersion, patch: '16.19',
+    build_profile: profile.id, replay_sha256: prepared.replaySha,
+    replay_time_ms: packet.replay_time_ms, raw_param: packet.raw_param,
+    hero_raw_param: roster.hero_raw_param,
+    participant_id_candidate: roster.participant_id_candidate,
+    metadata_index_candidate: roster.metadata_index_candidate,
+    champion_metadata: roster.champion_metadata,
+    team_id_metadata: roster.team_id_metadata,
+    team_metadata: roster.team_metadata,
+    role_metadata: roster.role_metadata,
+    metadata_sha256: roster.metadata_sha256,
+    stats_json_sha256: roster.stats_json_sha256,
+    opaque_u32_0x10: packet.opaque_u32_0x10,
+    opaque_u32_0x14: packet.opaque_u32_0x14,
+    raw_object_u32_0x10_hex: packet.raw_object_u32_0x10_hex,
+    raw_object_u32_0x14_hex: packet.raw_object_u32_0x14_hex,
+    native_receiver_slot_candidate: packet.native_receiver_slot_candidate,
+    native_receiver_selection_source: packet.native_receiver_selection_source,
+    native_clamped_scalar_candidate: packet.native_clamped_scalar_candidate,
+    native_positive_flag_written: packet.native_positive_flag_written,
+    association_status: association,
+    roster_to_metadata_status: roster.roster_to_metadata_status,
+    packet_actor_status: 'UNKNOWN', owner_status: 'UNKNOWN',
+    live_receiver_status: 'UNKNOWN', spell_identity_status: 'UNKNOWN',
+    actual_level_change_status: 'UNKNOWN', semantic_effect_status: 'UNKNOWN',
+    confidence: 'CANDIDATE', semantic_status: profile.evidence_status,
+    field_confidence: {
+      raw_param: 'VERIFIED_DIRECT', hero_raw_param: association,
+      participant_id_candidate: association,
+      champion_metadata: 'VERIFIED_FROM_METADATA',
+      team_metadata: 'VERIFIED_FROM_METADATA',
+      role_metadata: 'VERIFIED_FROM_METADATA',
+      native_receiver_slot_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+      native_clamped_scalar_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+      packet_actor_status: 'UNKNOWN', owner_status: 'UNKNOWN',
+      actual_level_change_status: 'UNKNOWN',
+    },
+    raw_packet_ref: packet.raw_packet_ref,
+    roster_keyframe_packet_ref: roster.raw_packet_ref,
+    known_limits: [...profile.known_limits],
+  };
+}
+
+async function prepareSetSpellLevelRosterPairRows(prepared, physical = null) {
+  const { packet, roster } = prepared.setSpellLevelRosterPairSources;
+  const rosterState = { players: roster.rosterBridgeState.players,
+    seen: new Set(), positions: new Set() };
+  const rosterByKey = new Map();
+  let rosterCount = 0;
+  const rosterInput = fs.createReadStream(roster.inputPath, { encoding: 'utf8' });
+  const rosterLines = readline.createInterface({ input: rosterInput,
+    crlfDelay: Infinity });
+  try {
+    for await (const line of rosterLines) {
+      const lineNumber = ++rosterCount;
+      let row;
+      try { row = JSON.parse(line); } catch (error) {
+        throw new EventQueryError('INVALID_EVENT_ROW',
+          `Invalid roster source JSONL line ${lineNumber}: ${error.message}.`);
+      }
+      rosterBridgeRow(row, roster, lineNumber, rosterState);
+      if (physical && !isDeepStrictEqual(row,
+        normalizeReplaySourcePaths(physical.rosterRows?.[lineNumber - 1],
+          roster.sourcePath ?? null))) {
+        throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+          `Roster source line ${lineNumber} differs from the physical ROFL.`);
+      }
+      rosterByKey.set(row.hero_raw_param, row);
+    }
+  } finally {
+    rosterInput.destroy();
+  }
+  if (rosterCount !== 10 || rosterState.seen.size !== 10
+      || rosterByKey.size !== 10 || (physical && physical.rosterRows?.length !== 10)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'SetSpellLevel pair requires all ten saved HeroStats roster rows.');
+  }
+  const expectedRows = [];
+  const positions = new Set();
+  let previousPosition = null;
+  let sourceCount = 0;
+  let zeroCount = 0;
+  let nonrosterCount = 0;
+  let plus100Count = 0;
+  let lowByteCount = 0;
+  const packetInput = fs.createReadStream(packet.inputPath, { encoding: 'utf8' });
+  const packetLines = readline.createInterface({ input: packetInput,
+    crlfDelay: Infinity });
+  try {
+    for await (const line of packetLines) {
+      const lineNumber = ++sourceCount;
+      let row;
+      try { row = JSON.parse(line); } catch (error) {
+        throw new EventQueryError('INVALID_EVENT_ROW',
+          `Invalid SetSpellLevel source JSONL line ${lineNumber}: ${error.message}.`);
+      }
+      setSpellLevelCallbackFields(row, packet, lineNumber, positions);
+      const ref = row.raw_packet_ref;
+      if (previousPosition && (ref.chunk_index < previousPosition.chunk
+          || (ref.chunk_index === previousPosition.chunk
+            && ref.decompressed_block_offset <= previousPosition.offset))) {
+        throw new EventQueryError('INVALID_EVENT_ROW',
+          `Reordered SetSpellLevel source packet at line ${lineNumber}.`);
+      }
+      previousPosition = { chunk: ref.chunk_index,
+        offset: ref.decompressed_block_offset };
+      if (physical && !isDeepStrictEqual(row,
+        normalizeReplaySourcePaths(physical.packetRows?.[lineNumber - 1],
+          packet.sourcePath ?? null))) {
+        throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+          `SetSpellLevel source line ${lineNumber} differs from the physical ROFL.`);
+      }
+      if (row.raw_param === 0) {
+        zeroCount += 1;
+        continue;
+      }
+      const matched = rosterByKey.get(row.raw_param);
+      if (!matched) {
+        nonrosterCount += 1;
+        if (rosterByKey.has(row.raw_param - 0x100)) plus100Count += 1;
+        if ([...rosterByKey.keys()].some((key) => (key & 255)
+          === (row.raw_param & 255))) lowByteCount += 1;
+        continue;
+      }
+      expectedRows.push(setSpellLevelRosterExpectedRow(row, matched, prepared));
+    }
+  } finally {
+    packetInput.destroy();
+  }
+  const result = prepared.capabilityResult;
+  if (sourceCount !== packet.declaredCount || positions.size !== sourceCount
+      || expectedRows.length !== result.event_count
+      || zeroCount !== result.zero_header_count
+      || nonrosterCount !== result.nonroster_nonzero_header_count
+      || plus100Count !== result.plus_0x100_alias_excluded_count
+      || lowByteCount !== result.low_byte_alias_excluded_count
+      || (physical && physical.packetRows?.length !== sourceCount)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Complete SetSpellLevel V2 packet and roster counts differ from pair metadata.');
+  }
+  return { expectedRows, physicalRows: physical?.pairRows ?? null,
+    savedPath: prepared.sourcePath ?? null };
+}
+
+function setSpellLevelRosterPairRow(row, prepared, lineNumber, state) {
+  if (!state) return;
+  if (!exactFields(row, SET_SPELL_LEVEL_ROSTER_PAIR_ROW_FIELDS_821)
+      || !isDeepStrictEqual(row, state.expectedRows[lineNumber - 1])) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `SetSpellLevel roster pair line ${lineNumber} differs from complete source streams.`,
+      { line_number: lineNumber });
+  }
+  if (state.physicalRows && !isDeepStrictEqual(row,
+    normalizeReplaySourcePaths(state.physicalRows[lineNumber - 1],
+      state.savedPath))) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      `SetSpellLevel roster pair line ${lineNumber} differs from the physical ROFL.`,
+      { line_number: lineNumber });
+  }
+}
+
 function prepareTargetHeroRosterPairEvent(artifactDirectory, semantic, analysis,
   result) {
   const profile = TARGET_HERO_ROSTER_KEY_PAIR_821_PROFILE;
@@ -5151,6 +5474,9 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   const anonymous029cRosterPairSources = eventKey === ANONYMOUS_029C_ROSTER_PAIR_EVENT_821
     ? prepareAnonymous029cRosterPairEvent(artifactDirectory, semantic, analysis,
       capabilityResult) : null;
+  const setSpellLevelRosterPairSources = eventKey === SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821
+    ? prepareSetSpellLevelRosterPairEvent(artifactDirectory, semantic, analysis,
+      capabilityResult) : null;
   if (eventKey === 'force_create_missile_packet_candidates') {
     prepareForceCreateMissilePacketEvent(semantic, analysis, eventKey,
       capabilityResult);
@@ -5293,6 +5619,7 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
     targetHeroRosterPairSources,
     shieldingParamsRosterPairSources,
     anonymous029cRosterPairSources,
+    setSpellLevelRosterPairSources,
     rosterBridgeState: eventKey === ROSTER_BRIDGE_EVENT_821
       ? prepareRosterBridgeInventory(artifactDirectory, semantic, analysis,
         capabilityResult) : null,
@@ -5328,6 +5655,7 @@ function checkPreparedBatchHashes(relative, prepared, checkHash) {
     ...Object.values(prepared.objectiveBountyTurretPairSources ?? {}),
     ...Object.values(prepared.targetHeroRosterPairSources ?? {}),
     ...Object.values(prepared.anonymous029cRosterPairSources ?? {}),
+    ...Object.values(prepared.setSpellLevelRosterPairSources ?? {}),
   ].filter(Boolean);
   for (const source of sources) {
     checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
@@ -5545,7 +5873,8 @@ function listSavedEvents(directory, batch = false) {
 function subjectParticipant(row, lineNumber, eventKey = null) {
   if (eventKey === TARGET_HERO_ROSTER_PAIR_EVENT_821
       || eventKey === SHIELDING_PARAMS_ROSTER_PAIR_EVENT_821
-      || eventKey === ANONYMOUS_029C_ROSTER_PAIR_EVENT_821) {
+      || eventKey === ANONYMOUS_029C_ROSTER_PAIR_EVENT_821
+      || eventKey === SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821) {
     return { value: null, observed: false };
   }
   if (eventKey === 'face_direction_keyframe_roster_pair_candidates') {
@@ -10872,6 +11201,9 @@ async function streamEventQuery(prepared, options, emitLine) {
       : prepared.eventKey === SHIELDING_PARAMS_ROSTER_PAIR_EVENT_821
         ? prepareShieldingParamsPhysicalSource(prepared,
           options.sourceReplay, options.runtimeImage, options.pythonExecutable)
+      : prepared.eventKey === SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821
+        ? prepareSetSpellLevelPhysicalSource(prepared,
+          options.sourceReplay, options.runtimeImage, options.pythonExecutable)
       : prepared.eventKey === ANONYMOUS_029C_ROSTER_PAIR_EVENT_821
         ? { kind: 'ANONYMOUS_029C_ROSTER_PAIR' }
       : prepareSourceReplayVerification(prepared, options.sourceReplay)) : null;
@@ -10885,6 +11217,10 @@ async function streamEventQuery(prepared, options, emitLine) {
   const anonymous029cRosterPairState = prepared.anonymous029cRosterPairSources
     ? await prepareAnonymous029cRosterPairRows(prepared, options.verifySource
       ? (options.sourceReplay ?? prepared.sourcePath ?? '') : null) : null;
+  const setSpellLevelRosterPairState = prepared.setSpellLevelRosterPairSources
+    ? await prepareSetSpellLevelRosterPairRows(prepared,
+      sourceReplayVerification?.kind === 'SET_SPELL_LEVEL_ROSTER_PAIR'
+        ? sourceReplayVerification : null) : null;
   const rosterBridgeState = prepared.rosterBridgeState
     ? { players: prepared.rosterBridgeState.players,
       seen: new Set(), positions: new Set() } : null;
@@ -10947,7 +11283,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   if (participant != null
       && [TARGET_HERO_ROSTER_PAIR_EVENT_821,
         SHIELDING_PARAMS_ROSTER_PAIR_EVENT_821,
-        ANONYMOUS_029C_ROSTER_PAIR_EVENT_821].includes(prepared.eventKey)) {
+        ANONYMOUS_029C_ROSTER_PAIR_EVENT_821,
+        SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821].includes(prepared.eventKey)) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--participant cannot assign an actor or target to a roster-key equality; use --opaque-u32 for the anonymous key.');
   }
@@ -11394,6 +11731,8 @@ async function streamEventQuery(prepared, options, emitLine) {
         shieldingParamsRosterPairState);
       anonymous029cRosterPairRow(row, prepared, lineNumber,
         anonymous029cRosterPairState);
+      setSpellLevelRosterPairRow(row, prepared, lineNumber,
+        setSpellLevelRosterPairState);
       if (forceCreateMissileState) {
         forceCreateMissilePacketRow(row, prepared, lineNumber,
           forceCreateMissileState);
@@ -11414,7 +11753,8 @@ async function streamEventQuery(prepared, options, emitLine) {
           && sourceReplayVerification.kind !== 'HERO_HEAL_SNAPSHOT'
           && sourceReplayVerification.kind !== 'TARGET_HERO_ROSTER_PAIR'
           && sourceReplayVerification.kind !== 'SHIELDING_PARAMS_ROSTER_PAIR'
-          && sourceReplayVerification.kind !== 'ANONYMOUS_029C_ROSTER_PAIR') {
+          && sourceReplayVerification.kind !== 'ANONYMOUS_029C_ROSTER_PAIR'
+          && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_ROSTER_PAIR') {
         updateSourcePacketHash(sourceReplayVerification.savedHash,
           sourcePacketFieldsFromRef(row.raw_packet_ref,
             sourceReplayVerification.payloadMode));
@@ -11712,6 +12052,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       && sourceReplayVerification.kind !== 'TARGET_HERO_ROSTER_PAIR'
       && sourceReplayVerification.kind !== 'SHIELDING_PARAMS_ROSTER_PAIR'
       && sourceReplayVerification.kind !== 'ANONYMOUS_029C_ROSTER_PAIR'
+      && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_ROSTER_PAIR'
       && sourceReplayVerification.savedHash.digest('hex')
         !== sourceReplayVerification.sourceDigest) {
     throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
@@ -11779,6 +12120,13 @@ async function streamEventQuery(prepared, options, emitLine) {
           && scannedCount !== shieldingParamsRosterPairState.physicalRows.length))) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
       'ShieldingParams roster pair rows differ from complete source streams.');
+  }
+  if (setSpellLevelRosterPairState
+      && (scannedCount !== setSpellLevelRosterPairState.expectedRows.length
+        || (setSpellLevelRosterPairState.physicalRows
+          && scannedCount !== setSpellLevelRosterPairState.physicalRows.length))) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'SetSpellLevel roster pair rows differ from complete source streams.');
   }
   if (anonymous029cRosterPairState
       && (anonymous029cRosterPairState.positions.size !== scannedCount

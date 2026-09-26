@@ -310,7 +310,7 @@ Options:
   --slot <0..9>                Exact observed 821 inventory record slot, including saved associations
   Interval differences: --item-id is the CURRENT item ID on a changed slot (zero valid).
                         Previous/current item IDs and --slot must match the SAME changed slot.
-  --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
+  --opaque-u32 <uint32|0xhex>  Exact anonymous 821 u32 or full packet-header key
   --item-group-callback-u8 <0..255|0xhex>  Exact 821 item-group V2 conditional callback byte candidate
   --item-charges-selector-u8 <0..255|0xhex>  Exact 821 0x0437 callback selector argument
   --item-charges-value-u16 <0..65535|0xhex>  Exact 821 0x0437 callback value argument
