@@ -22,6 +22,33 @@ Current progress (older notes below retain their original research context):
   live receiver lookup, source actor, resolved target, target state and
   gameplay effect remain `UNKNOWN`. Unexpected nonzero keys or incomplete
   source outcomes fail the entire pair with no partial rows.
+
+- **Anonymous `0x029c` packet-local u32 (explicit opt-in candidate):** The
+  pinned `16.19.821.7343` image maps game packet `0x029c` to factory case
+  `0xf06643`, constructor `0xe9abf0`, object vtable `0x1ba3c88`, and
+  deserializer `0xf88030`. Eleven original KR Replays supplied 457,095
+  packets in 13 observed shapes, including 43,038 with nonzero raw parameters.
+  Every packet passed native full consumption, object identity including its
+  original parameter, and ordered input/output hash checks; the object
+  selector at `+0x10` was the same protected byte on all packets. The
+  protected `+0x14` word decodes to an anonymous u32 on 453,545 packets and
+  to the `0xffffffff` sentinel on 3,550 one-byte packets. Every shape's
+  truncated and appended controls failed the full packet gate. No exact
+  packet class or callback name has been established for this route.
+  Select `--events anonymous_029c_packet --runtime-image IMAGE
+  --event-jsonl-only`, or API capability `anonymous_029c_packet`; the parser
+  accepts at most 50,000 route packets per Replay. A real 32,336-packet
+  Replay produced candidate JSONL with four native batches and passed a
+  saved query with `--verify-source --limit 1`, which checked all 32,336
+  physical packets before emitting one row. The first CLI attempt failed
+  because it incorrectly required zero raw parameters; the corrected gate
+  accepts the original u32 and checks its native object identity. The failed
+  artifact remains in the ignored worktree evidence. Actor, target, object
+  role, receiver state, behavior and effect remain `UNKNOWN`.
+  [The native gate](ANONYMOUS_029C_821_NATIVE_GATE.json) records source
+  hashes, packet counts, nonzero raw parameter counts, ordered digests,
+  negative controls and the real Replay smoke without raw payloads.
+
 - **HeroStats roster to Replay metadata (opt-in candidate):** Select
   `--events hero_roster_metadata_bridge --event-jsonl-only` on exact
   `16.19.821.7343`, or request API capability
