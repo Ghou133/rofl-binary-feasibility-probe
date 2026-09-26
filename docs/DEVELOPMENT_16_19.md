@@ -4,6 +4,38 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **SetItemGroupData_Broadcast packet lookup key (opt-in candidate):** Exact
+  KR `16.19.821.7343` keyframe route `0x013f` is a packet factory route,
+  separate from `0x040a` OnEvent child IDs. The pinned runtime image SHA-256
+  is `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`;
+  factory/constructor/deserializer/callback RVAs are
+  `0xf0214f`/`0xebdd70`/`0x10425b0`/`0x350440`. The callback transforms the
+  packet object's protected `+0x20` word and forwards a u32 lookup key to
+  `0x5d3bd0`. The native helper forces that lookup to miss; the captured
+  module has no live receiver map. In 11 original exact-build KR Replays,
+  strict framing found 1,229,520 `0x013f` packets, all keyframe, across 15
+  observed length/selector shapes and zero framing errors. The largest
+  single Replay had 124,080 packets, below the explicit 150,000 cap;
+  overflow is reported as `UNSUPPORTED`. For each selected Replay, the
+  decoder uses bounded native batches and requires full consumption plus
+  separate ordered raw-input and native-output SHA-256 digests before
+  emitting candidate rows. Representative truncate/append controls failed
+  native full consumption as expected. Real CLI `--events
+  item_group_data_broadcast_packet --runtime-image IMAGE --event-jsonl-only`
+  produced 124,080/124,080 and 90,240/90,240 candidate rows on two original
+  Replays, each with `MATCHED_USED`, zero framing errors, and respectively 13
+  and 10 native batches. The saved `query-events --event
+  item_group_data_broadcast_packet_candidates --opaque-u32 5247418 --limit 1`
+  validated all 124,080 first-Replay rows, matched 330 and emitted one
+  unchanged row; it checks all rows after the limit, verifies those separate
+  ordered digests, and gates per-row provenance fields.
+  `native_callback_lookup_key_u32` is
+  packet-local only. Lookup success, group/item/slot/owner/participant,
+  purchase/state change and gameplay effect remain `UNKNOWN`; this candidate
+  does not enter default semantic output. The image, Replays and output
+  JSONL stay ignored outside Git. Focused Node and exact-image native tests
+  passed; the two real CLI runs took about 10.2 and 7.3 seconds, writing
+  about 177 and 129 MB of JSONL.
 - **NotifyContextualSituation packet string (opt-in candidate):** Exact
   `16.19.821.7343` route `0x0113` is distinct from the `0x040a` OnEvent
   child `0x0113`. The pinned image factory/constructor/deserializer are at
