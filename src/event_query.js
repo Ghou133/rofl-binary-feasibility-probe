@@ -201,6 +201,9 @@ const { SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821,
   decodeProtectedSetDimensionMissileArgumentU8,
   isObservedSetDimensionMissilePayload } =
   require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
+const { ANONYMOUS_029C_PACKET_CANDIDATE_PROFILE_821,
+  decodeProtectedAnonymous029cU32, isObservedAnonymous029cPayload } =
+  require('./decoders/rofl_16_19_821_anonymous_029c_packet_candidate');
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
@@ -218,6 +221,7 @@ const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
   'change_missile_target_packet_candidates',
   'unit_apply_damage_packet_candidates',
   'set_dimension_missile_packet_candidates',
+  'anonymous_029c_packet_candidates',
 ]);
 const CIRCULAR_MOVEMENT_RESTRICTION_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
@@ -359,6 +363,16 @@ const SET_DIMENSION_MISSILE_ROW_FIELDS_821 = new Set([
   'causality_status', 'confidence', 'semantic_status', 'raw_packet_ref',
 ]);
 const SET_DIMENSION_MISSILE_REF_FIELDS_821 =
+  NOTIFY_CONTEXTUAL_SITUATION_REF_FIELDS_821;
+const ANONYMOUS_029C_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param', 'native_protected_selector_byte_hex',
+  'native_selector_u8', 'native_protected_u32_hex', 'anonymous_u32_candidate',
+  'anonymous_u32_is_sentinel', 'actor_status', 'target_status',
+  'object_role_status', 'receiver_state_status', 'behavior_status',
+  'effect_status', 'confidence', 'semantic_status', 'raw_packet_ref',
+]);
+const ANONYMOUS_029C_REF_FIELDS_821 =
   NOTIFY_CONTEXTUAL_SITUATION_REF_FIELDS_821;
 const OBJECTIVE_STEAL_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
@@ -761,6 +775,7 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
     Object.freeze(['opaque_u32_0x14', 'opaque_u32_0x1c']),
   npc_buff_update_count_packet_candidates: Object.freeze(['opaque_u32_0x14']),
   npc_buff_replace_packet_candidates: Object.freeze(['opaque_u32_0x18']),
+  anonymous_029c_packet_candidates: Object.freeze(['anonymous_u32_candidate']),
   set_spell_timer_from_buff_packet_candidates:
     Object.freeze(['opaque_u32_0x18', 'opaque_u32_0x1c']),
   set_spell_level_packet_candidates:
@@ -2323,6 +2338,125 @@ function changeMissileTargetPacketRow(row, prepared, lineNumber, state) {
       .update(Buffer.from(row.native_vector_raw_f32_bytes_hex, 'hex'))
       .update(Buffer.from([row.native_vector_source === 'PACKET_RAW_12' ? 1 : 0]));
   }
+}
+
+function prepareAnonymous029cPacketEvent(semantic, analysis, eventKey, result) {
+  const profile = ANONYMOUS_029C_PACKET_CANDIDATE_PROFILE_821;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      eventKey + ' requires exact build ' + profile.replay_version + '.');
+  }
+  if (result && !['CANDIDATE', 'MISSING_INPUT', 'PROFILE_UNAVAILABLE',
+    'DECODE_FAILED', 'UNSUPPORTED'].includes(result.status)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      profile.capability + ' must remain a candidate or declared unavailable.');
+  }
+  if (result?.status !== 'CANDIDATE') return;
+  if (result.profile_id !== profile.id
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || result.evidence_status !== profile.evidence_status
+      || result.evidence_runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || !isCount(result.input_count) || result.input_count === 0
+      || result.input_count > 50_000
+      || result.event_count !== result.input_count
+      || result.event_count !== analysis.event_counts?.[eventKey]
+      || !isCount(result.scanned_block_count)
+      || result.scanned_block_count < result.event_count
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(result.event_field_confidence, {
+        replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
+        native_selector_u8: 'CANDIDATE_EXACT_RUNTIME_NATIVE_OBJECT',
+        anonymous_u32_candidate: 'CANDIDATE_EXACT_RUNTIME_NATIVE_OBJECT',
+      })
+      || result.native_witness_status !== 'FULLY_CONSUMED_ALL'
+      || result.native_full_success_count !== result.event_count
+      || result.native_batch_count !== Math.ceil(result.event_count / 10_000)
+      || !REPLAY_SHA.test(result.native_input_sha256 ?? '')
+      || !REPLAY_SHA.test(result.native_output_sha256 ?? '')
+      || !isDeepStrictEqual(
+        analysis.semantic?.capability_results?.[profile.capability], result)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      profile.capability + ' identity or native witness counts differ.');
+  }
+}
+
+function anonymous029cPacketRow(row, prepared, lineNumber, state) {
+  if (prepared.eventKey !== 'anonymous_029c_packet_candidates') return;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      'Invalid anonymous 0x029c packet row at JSONL line ' + lineNumber
+        + ': ' + reason + '.');
+  };
+  const profile = ANONYMOUS_029C_PACKET_CANDIDATE_PROFILE_821;
+  const ref = row.raw_packet_ref;
+  const rowFields = Object.keys(row);
+  const refFields = ref && typeof ref === 'object' && !Array.isArray(ref)
+    ? Object.keys(ref) : [];
+  const payloadHex = ref?.raw_payload_hex;
+  const protectedHex = row.native_protected_u32_hex;
+  const value = decodeProtectedAnonymous029cU32(protectedHex);
+  if (rowFields.length !== ANONYMOUS_029C_ROW_FIELDS_821.size
+      || rowFields.some((field) => !ANONYMOUS_029C_ROW_FIELDS_821.has(field))
+      || refFields.length !== ANONYMOUS_029C_REF_FIELDS_821.size
+      || refFields.some((field) => !ANONYMOUS_029C_REF_FIELDS_821.has(field))
+      || row.event_type !== 'ANONYMOUS_029C_PACKET_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.semantic_status !== profile.evidence_status
+      || row.native_protected_selector_byte_hex !== '3e'
+      || row.native_selector_u8 !== 0
+      || value === null || row.anonymous_u32_candidate !== value
+      || row.anonymous_u32_is_sentinel !== (value === 0xffffffff)
+      || row.actor_status !== 'UNKNOWN' || row.target_status !== 'UNKNOWN'
+      || row.object_role_status !== 'UNKNOWN'
+      || row.receiver_state_status !== 'UNKNOWN'
+      || row.behavior_status !== 'UNKNOWN' || row.effect_status !== 'UNKNOWN'
+      || row.confidence !== 'CANDIDATE'
+      || row.replay_sha256 !== prepared.replaySha
+      || !Number.isSafeInteger(row.replay_time_ms) || row.replay_time_ms < 0
+      || !Number.isInteger(row.raw_param) || row.raw_param < 0
+      || row.raw_param > 0xffffffff
+      || ref?.source_path !== prepared.sourcePath
+      || ref.replay_sha256 !== prepared.replaySha
+      || ref.chunk_stream !== 'game_chunk'
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== profile.replay_block_packet_id
+      || ref.replay_time_ms !== row.replay_time_ms
+      || ref.raw_param !== row.raw_param
+      || typeof payloadHex !== 'string'
+      || !/^(?:[0-9a-f]{2})+$/.test(payloadHex)
+      || !isObservedAnonymous029cPayload(Buffer.from(payloadHex, 'hex'))
+      || ref.payload_length !== payloadHex.length / 2
+      || !REPLAY_SHA.test(ref.raw_payload_sha256 ?? '')
+      || ((payloadHex === '72') !== (value === 0xffffffff))
+      || (payloadHex !== '72' && value >>> 24 !== 0x40)) {
+    invalid('exact-build profile, packet shape, native u32, or provenance differs');
+  }
+  const payload = Buffer.from(payloadHex, 'hex');
+  if (ref.raw_payload_sha256 !== crypto.createHash('sha256').update(payload).digest('hex')) {
+    invalid('raw payload SHA-256 differs');
+  }
+  const position = ref.chunk_index + '/' + ref.decompressed_block_offset;
+  if (state.positions.has(position)) invalid('duplicate raw packet position');
+  state.positions.add(position);
+  const header = Buffer.alloc(8);
+  header.writeUInt32LE(row.raw_param, 0);
+  header.writeUInt32LE(payload.length, 4);
+  state.nativeInputHash.update(header).update(payload);
+  const decoded = Buffer.alloc(4);
+  decoded.writeUInt32LE(value, 0);
+  state.nativeOutputHash
+    .update(Buffer.from(row.native_protected_selector_byte_hex, 'hex'))
+    .update(Buffer.from(protectedHex, 'hex')).update(decoded);
 }
 
 function prepareSetDimensionMissilePacketEvent(semantic, analysis, eventKey, result) {
@@ -4204,6 +4338,10 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   }
   if (eventKey === 'set_dimension_missile_packet_candidates') {
     prepareSetDimensionMissilePacketEvent(semantic, analysis, eventKey,
+      capabilityResult);
+  }
+  if (eventKey === 'anonymous_029c_packet_candidates') {
+    prepareAnonymous029cPacketEvent(semantic, analysis, eventKey,
       capabilityResult);
   }
   if (eventKey === 'face_direction_keyframe_roster_pair_candidates') {
@@ -10211,6 +10349,10 @@ async function streamEventQuery(prepared, options, emitLine) {
     === 'set_dimension_missile_packet_candidates'
     ? { positions: new Set(), nativeInputHash: crypto.createHash('sha256'),
       nativeOutputHash: crypto.createHash('sha256') } : null;
+  const anonymous029cState = prepared.eventKey
+    === 'anonymous_029c_packet_candidates'
+    ? { positions: new Set(), nativeInputHash: crypto.createHash('sha256'),
+      nativeOutputHash: crypto.createHash('sha256') } : null;
   const firstBloodAssistPacketPositions = prepared.eventKey
     === 'first_blood_assist_event_packet_candidates'
     ? new Set(prepared.capabilityResult.excluded_same_length_foreign_packet_refs
@@ -10401,6 +10543,9 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (setDimensionMissileState) {
         setDimensionMissilePacketRow(row, prepared, lineNumber,
           setDimensionMissileState);
+      }
+      if (anonymous029cState) {
+        anonymous029cPacketRow(row, prepared, lineNumber, anonymous029cState);
       }
       if (sourceReplayVerification
           && sourceReplayVerification.kind !== 'ROSTER_BRIDGE'
@@ -10786,6 +10931,15 @@ async function streamEventQuery(prepared, options, emitLine) {
           !== prepared.capabilityResult.native_output_sha256)) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
       'Set-dimension-missile raw packet count or ordered native input/output SHA-256 differs from capability metadata.');
+  }
+  if (anonymous029cState
+      && (anonymous029cState.positions.size !== scannedCount
+        || anonymous029cState.nativeInputHash.digest('hex')
+          !== prepared.capabilityResult.native_input_sha256
+        || anonymous029cState.nativeOutputHash.digest('hex')
+          !== prepared.capabilityResult.native_output_sha256)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Anonymous 0x029c raw packet count or ordered native input/output SHA-256 differs from capability metadata.');
   }
   if (objectiveStealChildCounts
       && !isDeepStrictEqual(objectiveStealChildCounts,

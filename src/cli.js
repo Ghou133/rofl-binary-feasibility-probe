@@ -224,6 +224,8 @@ object +0x10/+0x14/+0x18; it does not establish a target position.
 set_dimension_missile_packet emits an exact-821 game packet-local callback u8
 before the receiver method; receiver state, missile identity, owner, target,
 dimension change, effect and causality are unknown.
+anonymous_029c_packet emits an exact-821 game packet-local decoded u32 or
+0xffffffff sentinel; the packet class name, actor, target, role and effect are unknown.
 unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
 packet-local selectors or a bounded anonymous float candidate; these do not
@@ -809,6 +811,7 @@ function parseArgs(argv) {
       'force_create_missile_packet_candidates',
       'change_missile_target_packet_candidates',
       'set_dimension_missile_packet_candidates',
+      'anonymous_029c_packet_candidates',
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
       'champion_multiple_kill_event_packet_candidates',
@@ -1287,6 +1290,7 @@ function parseOne1619(replay, options, started) {
       'force_create_missile_packet',
       'change_missile_target_packet',
       'set_dimension_missile_packet',
+      'anonymous_029c_packet',
       'unit_apply_damage_packet',
       'show_health_bar_packet',
     ].includes(name)))] : [];
@@ -2681,6 +2685,7 @@ function capabilityQuery(replay, options = {}) {
              || capability === 'force_create_missile_packet'
              || capability === 'change_missile_target_packet'
              || capability === 'set_dimension_missile_packet'
+             || capability === 'anonymous_029c_packet'
             || capability === 'unit_apply_damage_packet'
             || capability === 'show_health_bar_packet'
             || capability === 'unit_apply_damage_roster_key_pair'
@@ -3229,6 +3234,11 @@ function capabilityQuery(replay, options = {}) {
           'packet-local callback u8 before receiver method; receiver state, missile identity, owner, target, dimension change, effect and causality remain unknown');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'anonymous_029c_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full 0x029c packet consumption',
+          'anonymous packet-local u32 or sentinel; packet class, actor, target, role and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'face_direction_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and bounded 0x038e packet shape validation',
           'packet-local unit-vector and optional scalar candidates with raw provenance; no actor, world position, path or direction effect');
@@ -3482,6 +3492,8 @@ function capabilityQuery(replay, options = {}) {
               'change_missile_target_packet_candidates',
             set_dimension_missile_packet:
               'set_dimension_missile_packet_candidates',
+            anonymous_029c_packet:
+              'anonymous_029c_packet_candidates',
             unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
             show_health_bar_packet: 'show_health_bar_packet_candidates',
             unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',

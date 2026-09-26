@@ -145,6 +145,8 @@ const { decodeChangeMissileTargetPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_change_missile_target_packet_candidate');
 const { decodeSetDimensionMissilePacketCandidates821 } =
   require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
+const { decodeAnonymous029cPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_anonymous_029c_packet_candidate');
 const { associateUnitApplyDamageRosterKeys821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const { associateUnitApplyDamageLookupRosterKeys821 } =
@@ -2574,6 +2576,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    anonymous_029c_packet: (input, collected) =>
+      decodeAnonymous029cPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -2656,6 +2664,7 @@ function decode1619821(replay, profile, options = {}) {
     force_create_missile_packet: 'force_create_missile_packet_candidates',
     change_missile_target_packet: 'change_missile_target_packet_candidates',
     set_dimension_missile_packet: 'set_dimension_missile_packet_candidates',
+    anonymous_029c_packet: 'anonymous_029c_packet_candidates',
     unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
     unit_apply_damage_lookup_roster_key_pair:
       'unit_apply_damage_lookup_roster_key_candidates',
@@ -2727,6 +2736,7 @@ function decode1619821(replay, profile, options = {}) {
     'force_create_missile_packet',
     'change_missile_target_packet',
     'set_dimension_missile_packet',
+    'anonymous_029c_packet',
   ]);
   const facePairSelected = capabilities.includes('face_direction_keyframe_roster_pair');
   const rosterMetadataSelected = capabilities.includes('hero_roster_metadata_bridge');
@@ -2876,6 +2886,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'force_create_missile_packet'
         || capability === 'change_missile_target_packet'
         || capability === 'set_dimension_missile_packet'
+        || capability === 'anonymous_029c_packet'
         || capability === 'unit_apply_damage_roster_key_pair'
         || capability === 'unit_apply_damage_lookup_roster_key_pair'
         || capability === 'unit_apply_damage_lookup2c_roster_key_pair'
