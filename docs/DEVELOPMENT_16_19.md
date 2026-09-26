@@ -21,6 +21,33 @@ Current progress (older notes below retain their original research context):
   for 4,600 item-charges and 6,703 target-hero rows; a copy with only saved
   time/offset edits failed `SOURCE_PROVENANCE_MISMATCH` after `--limit 1` with
   zero stdout bytes.
+- **ForceCreateMissile 0x0087 packet-local comparison key (opt-in candidate):**
+  The pinned KR `16.19.821.7343` image registers `PKT_S2C_ForceCreateMissile_s`
+  on `AIBaseClient` through factory `0xeffb9f`, constructor `0xeac850`,
+  deserializer `0x10f0690`, and callback `0x2bf6d0`. Strict framing of the
+  11 original KR Replays found 206,957 game packets in 12 observed shapes
+  (3/4 bytes with selectors `f0/f1/f2/f4/f6/f7`). All 206,957 natively
+  returned success, consumed the full payload, and matched the registered
+  object identity. The callback's exact byte transform yielded 61,952
+  distinct anonymous comparison keys. A synthetic receiver caused all
+  12 representative shapes to reach the pre-comparison key; hit, mismatch,
+  and null-receiver controls behaved as expected. Twelve truncated,
+  twelve appended, and eleven foreign `0x008a` samples were rejected as
+  full route packets. [The sanitized native gate](FORCE_CREATE_MISSILE_821_NATIVE_GATE.json)
+  records per-Replay ordered input/output SHA-256 values. The hashes cover
+  raw parameter/payload and native callback bytes; full source provenance
+  still requires the original ROFL. `--events force_create_missile_packet
+  --runtime-image IMAGE --event-jsonl-only` and API
+  `capabilities: ['force_create_missile_packet']` are explicit opt-ins.
+  A real CLI run on one original Replay emitted 14,353/14,353 candidate rows,
+  used two native batches and the matched image, and had zero framing errors;
+  its ordered input/output digests matched the independent gate. Saved
+  `query-events --event force_create_missile_packet_candidates --limit 1`
+  validated all 14,353 rows and emitted one unchanged row. Live receiver
+  lookup and match, missile identity, owner, target, actual creation, effect,
+  and causality remain `UNKNOWN`. Original Replays, image, and full raw
+  packet/CLI artifacts remain local and ignored.
+
 - **Combined 821 CLI/API validation (2026-09-26):** After registering both
   new opt-in candidates, `npm test` passed 1,150 Node tests across 41 groups
   with zero failures and 120 declared skips, plus 19 Python unittests. Exact
