@@ -34,8 +34,13 @@ Current progress (older notes below retain their original research context):
   purchase/state change and gameplay effect remain `UNKNOWN`; this candidate
   does not enter default semantic output. The image, Replays and output
   JSONL stay ignored outside Git. Focused Node and exact-image native tests
-  passed; the two real CLI runs took about 10.2 and 7.3 seconds, writing
-  about 177 and 129 MB of JSONL.
+  passed 7/7 and 3/3 without skips; the two real CLI runs took about 10.2
+  and 7.3 seconds, writing about 177 and 129 MB of JSONL. An initial public
+  test run found one stale capability-list assertion, which was corrected;
+  the final `npm test` passed with 1,127 Node passes, 110 declared skips
+  (private inputs were not set), zero failures, and 19 Python unittest passes.
+  Both run logs are retained under ignored
+  `artifacts/16_19_development/item_group_821_integration/`.
 - **NotifyContextualSituation packet string (opt-in candidate):** Exact
   `16.19.821.7343` route `0x0113` is distinct from the `0x040a` OnEvent
   child `0x0113`. The pinned image factory/constructor/deserializer are at
