@@ -697,6 +697,37 @@ test('V9 query checks its ordered native-output digest after limit and without f
   assert.equal(fs.existsSync(output), false);
 });
 
+test('V9 rejects literal negative-zero float forgeries after limit', (t) => {
+  for (const field of ['opaque_f32_0xe0', 'opaque_f32_0xa0']) {
+    const rows = [rowV9(0, '9194b8fb'), rowV9(1, '7cef92cb'),
+      rowV9(2, '09a09cbb')];
+    for (const entry of rows) {
+      entry.raw_f32_0xa0_bytes_hex = '58585858';
+      entry.opaque_f32_0xa0 = 0;
+    }
+    // The third row represents a native -0 serialized as JSON number 0.
+    rows[2].raw_f32_0xe0_bytes_hex = 'ffffffef';
+    rows[2].raw_f32_0xa0_bytes_hex = '585858c8';
+    const { directory, lines } = fixture(t, rows, { fieldProfile: v9Profile });
+    const valid = command(directory, '--limit', '1');
+    assert.equal(valid.status, 0, valid.stderr);
+    assert.equal(valid.stdout, `${lines[0]}\n`);
+    assert.equal(JSON.parse(valid.stderr).scanned_count, 3);
+    assert.equal(JSON.parse(valid.stderr).native_witness_check,
+      'ORDERED_NATIVE_OUTPUT_DIGEST');
+
+    const forged = lines.slice();
+    forged[1] = forged[1].replace(`"${field}":0`, `"${field}":-0.0`);
+    assert.notEqual(forged[1], lines[1]);
+    fs.writeFileSync(path.join(directory, `${EVENT}.jsonl`),
+      `${forged.join('\n')}\n`);
+    const rejected = command(directory, '--limit', '1');
+    assert.equal(rejected.status, 2, rejected.stderr);
+    assert.equal(rejected.stdout, '');
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+  }
+});
+
 test('V9 saved query rejects missing digest metadata and V8 downgrade', (t) => {
   for (const change of [
     (result) => { delete result.native_output_sha256; },

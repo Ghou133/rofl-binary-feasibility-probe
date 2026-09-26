@@ -118,7 +118,7 @@ const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821 = Object.freeze({
   ...CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821,
   id: CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_ID_821,
   evidence_native_output_digest_schema: V9_DIGEST_SCHEMA,
-  evidence_scope: 'exact 821 V8 packet fields plus native-produced ordered output digest bound to every persisted field and source packet payload SHA; receiver-tree result remains unknown',
+  evidence_scope: 'exact 821 V8 packet fields plus native-produced ordered output digest bound to persisted native-derived fields, raw parameter, payload length and payload SHA; packet positions and receiver-tree result remain outside this witness',
   known_limits: Object.freeze([
     ...CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821.known_limits,
     'The ordered digest binds persisted native packet fields, not receiver-tree lookup results or gameplay effects.',

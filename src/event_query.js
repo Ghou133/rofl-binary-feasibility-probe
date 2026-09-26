@@ -4284,6 +4284,12 @@ function prepareCastSpellAnsNestedU32At28(prepared) {
   prepareCastSpellAnsNestedBits(prepared);
 }
 
+function matchesSavedCastV9Float(saved, decoded) {
+  // JSON.stringify stores both IEEE-754 zeros as 0. Reject a literal -0.0
+  // in saved JSONL while accepting a genuine native -0 after serialization.
+  return Object.is(saved, decoded === 0 ? 0 : decoded);
+}
+
 function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
   const invalid = (reason) => {
     throw new EventQueryError('INVALID_EVENT_ROW',
@@ -4336,8 +4342,8 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
         || row.opaque_i32_0x14c > 0x7fffffff
         || !/^[0-9a-f]{8}$/.test(row.raw_f32_0xe0_bytes_hex ?? '')
         || !Number.isFinite(row.opaque_f32_0xe0)
-        || row.opaque_f32_0xe0 !== decodeNestedFloat(
-          row.raw_f32_0xe0_bytes_hex)
+        || !matchesSavedCastV9Float(row.opaque_f32_0xe0,
+          decodeNestedFloat(row.raw_f32_0xe0_bytes_hex))
         || !/^[0-9a-f]{2}$/.test(row.raw_u8_0x140_hex ?? '')
         || row.opaque_u8_0x140 !== decodeNestedByte(row.raw_u8_0x140_hex))) {
     invalid('V9 prior native packet fields or raw-byte transforms differ');
@@ -4375,10 +4381,12 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
         CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821].includes(profile)) {
         const rawAtA0 = row.raw_f32_0xa0_bytes_hex;
         const valueAtA0 = row.opaque_f32_0xa0;
+        const decodedAtA0 = decodeCastSpellAnsNestedF32AtA0FromRaw821(rawAtA0);
         if (typeof rawAtA0 !== 'string' || !/^[0-9a-f]{8}$/.test(rawAtA0)
             || !Number.isFinite(valueAtA0)
-            || valueAtA0 !== decodeCastSpellAnsNestedF32AtA0FromRaw821(
-              rawAtA0)) {
+            || (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821
+              ? !matchesSavedCastV9Float(valueAtA0, decodedAtA0)
+              : valueAtA0 !== decodedAtA0)) {
           invalid('raw +0xa0 f32 and decoded value differ from the pinned 821 transform');
         }
         if ([CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821,
