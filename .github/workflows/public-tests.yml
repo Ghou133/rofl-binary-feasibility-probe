@@ -32,6 +32,11 @@ jobs:
           node --version
           python --version
           node -e 'const s=require("./package.json").scripts; console.log(JSON.stringify({test:s.test,package:s["package:source"],verify:s["verify:source"]},null,2))'
+      - name: Check all public source paths before regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          python -B scripts/check_public_sources.py 2>&1 | tee public-source-preflight.log
       - name: Public tests (no private replay or runtime image required)
         shell: bash
         run: |
@@ -54,6 +59,7 @@ jobs:
         with:
           name: public-acceptance-${{ github.sha }}
           path: |
+            public-source-preflight.log
             public-tests.log
             focused-tests.log
             package-tests.log
