@@ -185,6 +185,8 @@ const { ITEM_CHARGES_PACKET_CANDIDATE_PROFILE_821,
 const { TARGET_HERO_PACKET_CANDIDATE_PROFILE_821,
   decodeProtectedTargetHeroLookupKeyU32, isObservedTargetHeroPayload } =
   require('./decoders/rofl_16_19_821_target_hero_packet_candidate');
+const { TARGET_HERO_ROSTER_KEY_PAIR_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_target_hero_roster_key_pair_candidate');
 const { FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821,
   decodeProtectedForceCreateMissileComparisonKeyU32,
   isObservedForceCreateMissilePayload } =
@@ -204,6 +206,7 @@ const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
 const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
   'hero_roster_metadata_bridge_candidates',
+  'target_hero_roster_key_pair_candidates',
   'cast_spell_ans_packet_candidates',
   'show_health_bar_packet_candidates',
   'notify_contextual_situation_packet_candidates',
@@ -745,6 +748,8 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
   cooldown_broadcast_packet_candidates:
     Object.freeze(['native_callback_lookup_key_u32']),
   target_hero_packet_candidates:
+    Object.freeze(['native_callback_lookup_key_u32']),
+  target_hero_roster_key_pair_candidates:
     Object.freeze(['native_callback_lookup_key_u32']),
   force_create_missile_packet_candidates:
     Object.freeze(['native_callback_comparison_key_u32']),
@@ -3566,6 +3571,20 @@ const ROSTER_BRIDGE_REF_FIELDS_821 = new Set([
   'decompressed_payload_offset', 'packet_id', 'replay_time_ms',
   'payload_length', 'raw_param', 'raw_payload_sha256',
 ]);
+const TARGET_HERO_ROSTER_PAIR_EVENT_821 = 'target_hero_roster_key_pair_candidates';
+const TARGET_HERO_ROSTER_PAIR_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'target_hero_raw_param',
+  'native_protected_lookup_bytes_hex', 'native_callback_lookup_key_u32',
+  'hero_raw_param', 'participant_id_candidate', 'metadata_index_candidate',
+  'champion_metadata', 'team_id_metadata', 'team_metadata', 'role_metadata',
+  'metadata_sha256', 'stats_json_sha256', 'association_status',
+  'roster_to_metadata_status', 'native_receiver_call_status',
+  'source_actor_status', 'target_object_status', 'target_state_status',
+  'live_lookup_status', 'semantic_effect_status', 'confidence',
+  'semantic_status', 'field_confidence', 'raw_packet_ref',
+  'roster_keyframe_packet_ref', 'known_limits',
+]);
 
 function exactFields(value, fields) {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -3779,6 +3798,283 @@ function rosterBridgeRow(row, prepared, lineNumber, state) {
   state.positions.add(position);
 }
 
+function prepareTargetHeroRosterPairEvent(artifactDirectory, semantic, analysis,
+  result) {
+  const profile = TARGET_HERO_ROSTER_KEY_PAIR_821_PROFILE;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${profile.capability} requires exact build ${profile.replay_version}.`);
+  }
+  if (result?.status !== 'CANDIDATE') return null;
+  const target = prepareEventQueryFromDocuments(artifactDirectory,
+    'target_hero_packet_candidates', semantic, analysis);
+  const roster = prepareEventQueryFromDocuments(artifactDirectory,
+    ROSTER_BRIDGE_EVENT_821, semantic, analysis);
+  if (result.profile_id !== profile.id
+      || result.evidence_status !== profile.evidence_status
+      || result.input_packet_id !== 0x0265
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || result.native_witness_status !== 'FULLY_CONSUMED_ALL'
+      || result.native_full_success_count !== target.declaredCount
+      || result.input_count !== target.declaredCount
+      || result.event_count !== analysis.event_counts?.[TARGET_HERO_ROSTER_PAIR_EVENT_821]
+      || result.event_count !== result.matched_nonzero_count
+      || result.nonzero_lookup_key_count !== result.matched_nonzero_count
+      || result.zero_lookup_key_count + result.nonzero_lookup_key_count
+        !== result.input_count
+      || result.unexpected_nonzero_count !== 0
+      || !isDeepStrictEqual(result.dependency_statuses, {
+        target_hero_packet: 'CANDIDATE',
+        hero_roster_metadata_bridge: 'CANDIDATE',
+      })
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || result.metadata_sha256 !== roster.capabilityResult.metadata_sha256
+      || result.stats_json_sha256 !== roster.capabilityResult.stats_json_sha256
+      || result.target_hero_native_input_sha256
+        !== target.capabilityResult.native_input_sha256
+      || result.target_hero_native_output_sha256
+        !== target.capabilityResult.native_output_sha256
+      || !isDeepStrictEqual(
+        analysis.semantic?.capability_results?.[profile.capability], result)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'TargetHero roster pair differs from its exact native and metadata source capabilities.');
+  }
+  const replayParent = path.dirname(artifactDirectory);
+  const outputRoot = path.dirname(replayParent);
+  const relative = `replays/${path.basename(artifactDirectory)}`;
+  const manifest = readArtifactJson(outputRoot, 'manifest.json');
+  const hashes = manifest.output_hashes_excluding_manifest;
+  if (!hashes || typeof hashes !== 'object' || Array.isArray(hashes)) {
+    throw new EventQueryError('INVALID_BATCH_METADATA',
+      'TargetHero roster pair requires a manifest-hashed Replay artifact.');
+  }
+  for (const source of [target, roster]) {
+    checkBatchHash(hashes, `${relative}/${source.eventKey}.jsonl`, source.inputPath);
+  }
+  return { target, roster };
+}
+
+function targetHeroRosterPairTuple(target, roster) {
+  return [target.replay_time_ms, target.raw_param,
+    target.native_protected_lookup_bytes_hex,
+    target.native_callback_lookup_key_u32, target.raw_packet_ref,
+    roster.hero_raw_param, roster.participant_id_candidate,
+    roster.metadata_index_candidate, roster.champion_metadata,
+    roster.team_id_metadata, roster.team_metadata, roster.role_metadata,
+    roster.metadata_sha256, roster.stats_json_sha256,
+    roster.raw_packet_ref];
+}
+
+function targetHeroRosterPairRowTuple(row) {
+  return [row.replay_time_ms, row.target_hero_raw_param,
+    row.native_protected_lookup_bytes_hex,
+    row.native_callback_lookup_key_u32, row.raw_packet_ref,
+    row.hero_raw_param, row.participant_id_candidate,
+    row.metadata_index_candidate, row.champion_metadata,
+    row.team_id_metadata, row.team_metadata, row.role_metadata,
+    row.metadata_sha256, row.stats_json_sha256,
+    row.roster_keyframe_packet_ref];
+}
+
+function updateTargetHeroRosterPairHash(hash, tuple) {
+  hash.update(JSON.stringify(tuple)).update('\n');
+}
+
+async function prepareTargetHeroRosterPairRows(prepared, sourceReplay = null) {
+  const { target, roster } = prepared.targetHeroRosterPairSources;
+  const rosterSource = sourceReplay === null ? null
+    : prepareRosterBridgeSourceVerification(roster, sourceReplay);
+  const targetSource = sourceReplay === null ? null
+    : prepareSourceReplayVerification(target, sourceReplay);
+  const rosterState = { players: roster.rosterBridgeState.players,
+    seen: new Set(), positions: new Set() };
+  const rosterByKey = new Map();
+  let rosterCount = 0;
+  const rosterInput = fs.createReadStream(roster.inputPath, { encoding: 'utf8' });
+  const rosterLines = readline.createInterface({ input: rosterInput,
+    crlfDelay: Infinity });
+  try {
+    for await (const line of rosterLines) {
+      const lineNumber = ++rosterCount;
+      let row;
+      try { row = JSON.parse(line); } catch (error) {
+        throw new EventQueryError('INVALID_EVENT_ROW',
+          `Invalid roster source JSONL line ${lineNumber}: ${error.message}.`);
+      }
+      rosterBridgeRow(row, roster, lineNumber, rosterState);
+      if (rosterSource) {
+        const canonical = rosterSource.rows[lineNumber - 1];
+        if (!canonical || !isDeepStrictEqual(row, {
+          ...canonical,
+          raw_packet_ref: { ...canonical.raw_packet_ref,
+            source_path: roster.sourcePath ?? null },
+        })) {
+          throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+            `Roster source line ${lineNumber} differs from the physical ROFL.`);
+        }
+      }
+      rosterByKey.set(row.hero_raw_param, row);
+    }
+  } finally {
+    rosterInput.destroy();
+  }
+  if (rosterCount !== 10 || rosterState.seen.size !== 10
+      || rosterByKey.size !== 10) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'TargetHero pair requires all ten saved HeroStats roster rows.');
+  }
+  const targetState = { positions: new Set(),
+    nativeInputHash: crypto.createHash('sha256'),
+    nativeOutputHash: crypto.createHash('sha256') };
+  const expectedHash = crypto.createHash('sha256');
+  let targetCount = 0;
+  let zeroCount = 0;
+  let matchedCount = 0;
+  const targetInput = fs.createReadStream(target.inputPath, { encoding: 'utf8' });
+  const targetLines = readline.createInterface({ input: targetInput,
+    crlfDelay: Infinity });
+  try {
+    for await (const line of targetLines) {
+      const lineNumber = ++targetCount;
+      let row;
+      try { row = JSON.parse(line); } catch (error) {
+        throw new EventQueryError('INVALID_EVENT_ROW',
+          `Invalid TargetHero source JSONL line ${lineNumber}: ${error.message}.`);
+      }
+      targetHeroPacketRow(row, target, lineNumber, targetState);
+      if (targetSource) {
+        updateSourcePacketHash(targetSource.savedHash,
+          sourcePacketFieldsFromRef(row.raw_packet_ref, targetSource.payloadMode));
+      }
+      if (row.native_callback_lookup_key_u32 === 0) {
+        zeroCount += 1;
+        continue;
+      }
+      const rosterRow = rosterByKey.get(row.native_callback_lookup_key_u32);
+      if (!rosterRow) {
+        throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+          `TargetHero source line ${lineNumber} has a nonzero key outside the ten-key roster.`);
+      }
+      matchedCount += 1;
+      updateTargetHeroRosterPairHash(expectedHash,
+        targetHeroRosterPairTuple(row, rosterRow));
+    }
+  } finally {
+    targetInput.destroy();
+  }
+  if (targetCount !== target.declaredCount
+      || zeroCount !== prepared.capabilityResult.zero_lookup_key_count
+      || matchedCount !== prepared.declaredCount
+      || targetState.positions.size !== targetCount
+      || targetState.nativeInputHash.digest('hex')
+        !== target.capabilityResult.native_input_sha256
+      || targetState.nativeOutputHash.digest('hex')
+        !== target.capabilityResult.native_output_sha256) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Complete TargetHero native source rows disagree with the saved roster pair.');
+  }
+  if (targetSource && targetSource.savedHash.digest('hex')
+      !== targetSource.sourceDigest) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'TargetHero source packets differ from the physical ROFL.');
+  }
+  return { rosterByKey, expectedDigest: expectedHash.digest('hex'),
+    actualHash: crypto.createHash('sha256'), positions: new Set(),
+    targetCount, matchedCount };
+}
+
+function targetHeroRosterPairRow(row, prepared, lineNumber, state) {
+  if (!state) return;
+  const profile = TARGET_HERO_ROSTER_KEY_PAIR_821_PROFILE;
+  const targetRef = row?.raw_packet_ref;
+  const rosterRef = row?.roster_keyframe_packet_ref;
+  const rosterRow = state.rosterByKey.get(row?.native_callback_lookup_key_u32);
+  const payloadHex = targetRef?.raw_payload_hex;
+  const protectedHex = row?.native_protected_lookup_bytes_hex;
+  const expectedConfidence = {
+    native_callback_lookup_key_u32: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+    hero_raw_param: 'CANDIDATE_FULL_U32_ROSTER_KEY_EQUALITY',
+    champion_metadata: 'VERIFIED_FROM_METADATA',
+    team_metadata: 'VERIFIED_FROM_METADATA',
+    role_metadata: 'VERIFIED_FROM_METADATA',
+    participant_id_candidate: 'CANDIDATE_FULL_U32_ROSTER_KEY_EQUALITY',
+    source_actor_status: 'UNKNOWN',
+    target_object_status: 'UNKNOWN',
+  };
+  if (!rosterRow
+      || !exactFields(row, TARGET_HERO_ROSTER_PAIR_ROW_FIELDS_821)
+      || !exactFields(targetRef, TARGET_HERO_REF_FIELDS_821)
+      || !exactFields(rosterRef, ROSTER_BRIDGE_REF_FIELDS_821)
+      || row.event_type !== 'TARGET_HERO_ROSTER_KEY_PAIR_CANDIDATE'
+      || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.replay_sha256 !== prepared.replaySha
+      || row.replay_time_ms !== targetRef.replay_time_ms
+      || row.target_hero_raw_param !== targetRef.raw_param
+      || row.native_callback_lookup_key_u32 !== row.hero_raw_param
+      || row.native_callback_lookup_key_u32 === 0
+      || !/^[0-9a-f]{8}$/.test(protectedHex ?? '')
+      || decodeProtectedTargetHeroLookupKeyU32(protectedHex)
+        !== row.native_callback_lookup_key_u32
+      || row.participant_id_candidate !== rosterRow.participant_id_candidate
+      || row.metadata_index_candidate !== rosterRow.metadata_index_candidate
+      || row.champion_metadata !== rosterRow.champion_metadata
+      || row.team_id_metadata !== rosterRow.team_id_metadata
+      || row.team_metadata !== rosterRow.team_metadata
+      || row.role_metadata !== rosterRow.role_metadata
+      || row.metadata_sha256 !== rosterRow.metadata_sha256
+      || row.stats_json_sha256 !== rosterRow.stats_json_sha256
+      || row.association_status !== 'CANDIDATE_FULL_U32_ROSTER_KEY_EQUALITY'
+      || row.roster_to_metadata_status
+        !== HERO_ROSTER_METADATA_BRIDGE_821_PROFILE.evidence_status
+      || row.native_receiver_call_status !== 'NOT_EXECUTED'
+      || row.source_actor_status !== 'UNKNOWN'
+      || row.target_object_status !== 'UNKNOWN'
+      || row.target_state_status !== 'UNKNOWN'
+      || row.live_lookup_status !== 'UNKNOWN'
+      || row.semantic_effect_status !== 'UNKNOWN'
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== profile.evidence_status
+      || !isDeepStrictEqual(row.field_confidence, expectedConfidence)
+      || !isDeepStrictEqual(row.known_limits, [...profile.known_limits])
+      || targetRef.source_path !== (prepared.sourcePath ?? null)
+      || targetRef.replay_sha256 !== prepared.replaySha
+      || targetRef.chunk_stream !== 'game_chunk'
+      || !isCount(targetRef.chunk_index) || !isCount(targetRef.chunk_id)
+      || !isCount(targetRef.chunk_file_offset)
+      || !isCount(targetRef.decompressed_block_offset)
+      || !isCount(targetRef.decompressed_payload_offset)
+      || targetRef.decompressed_payload_offset
+        <= targetRef.decompressed_block_offset
+      || targetRef.packet_id !== 0x0265
+      || typeof payloadHex !== 'string'
+      || !/^(?:[0-9a-f]{2})+$/.test(payloadHex)
+      || !isObservedTargetHeroPayload(Buffer.from(payloadHex, 'hex'))
+      || targetRef.payload_length !== payloadHex.length / 2
+      || !REPLAY_SHA.test(targetRef.raw_payload_sha256 ?? '')
+      || targetRef.raw_payload_sha256 !== crypto.createHash('sha256')
+        .update(Buffer.from(payloadHex, 'hex')).digest('hex')
+      || !isDeepStrictEqual(rosterRef, rosterRow.raw_packet_ref)) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `TargetHero roster pair line ${lineNumber} differs from its native or metadata source.`,
+      { line_number: lineNumber });
+  }
+  const position = `${targetRef.chunk_index}/${targetRef.decompressed_block_offset}`;
+  if (state.positions.has(position)) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Duplicate TargetHero packet reference at pair line ${lineNumber}.`,
+      { line_number: lineNumber });
+  }
+  state.positions.add(position);
+  updateTargetHeroRosterPairHash(state.actualHash,
+    targetHeroRosterPairRowTuple(row));
+}
+
 function prepareEventQuery(directory, eventKey) {
   if (typeof eventKey !== 'string' || !EVENT_KEY.test(eventKey)) {
     throw new EventQueryError('INVALID_EVENT_KEY',
@@ -3895,6 +4191,9 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
     prepareTargetHeroPacketEvent(semantic, analysis, eventKey,
       capabilityResult);
   }
+  const targetHeroRosterPairSources = eventKey === TARGET_HERO_ROSTER_PAIR_EVENT_821
+    ? prepareTargetHeroRosterPairEvent(artifactDirectory, semantic, analysis,
+      capabilityResult) : null;
   if (eventKey === 'force_create_missile_packet_candidates') {
     prepareForceCreateMissilePacketEvent(semantic, analysis, eventKey,
       capabilityResult);
@@ -4030,6 +4329,7 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
     exactBlobPacketConfig, bracketSources, experienceIntervalSource,
     levelExperienceBracketSources,
     objectiveBountyTurretPairSources,
+    targetHeroRosterPairSources,
     rosterBridgeState: eventKey === ROSTER_BRIDGE_EVENT_821
       ? prepareRosterBridgeInventory(artifactDirectory, semantic, analysis,
         capabilityResult) : null,
@@ -4063,6 +4363,7 @@ function checkPreparedBatchHashes(relative, prepared, checkHash) {
     prepared.experienceIntervalSource,
     ...Object.values(prepared.levelExperienceBracketSources ?? {}),
     ...Object.values(prepared.objectiveBountyTurretPairSources ?? {}),
+    ...Object.values(prepared.targetHeroRosterPairSources ?? {}),
   ].filter(Boolean);
   for (const source of sources) {
     checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
@@ -4278,6 +4579,9 @@ function listSavedEvents(directory, batch = false) {
 }
 
 function subjectParticipant(row, lineNumber, eventKey = null) {
+  if (eventKey === TARGET_HERO_ROSTER_PAIR_EVENT_821) {
+    return { value: null, observed: false };
+  }
   if (eventKey === 'face_direction_keyframe_roster_pair_candidates') {
     const value = row.hero_stats_participant_id_candidate;
     if (!Number.isSafeInteger(value) || value < 1 || value > 10) {
@@ -9594,7 +9898,12 @@ async function streamEventQuery(prepared, options, emitLine) {
   const sourceReplayVerification = options.verifySource
     ? (prepared.eventKey === ROSTER_BRIDGE_EVENT_821
       ? prepareRosterBridgeSourceVerification(prepared, options.sourceReplay)
+      : prepared.eventKey === TARGET_HERO_ROSTER_PAIR_EVENT_821
+        ? { kind: 'TARGET_HERO_ROSTER_PAIR' }
       : prepareSourceReplayVerification(prepared, options.sourceReplay)) : null;
+  const targetHeroRosterPairState = prepared.targetHeroRosterPairSources
+    ? await prepareTargetHeroRosterPairRows(prepared, options.verifySource
+      ? (options.sourceReplay ?? prepared.sourcePath ?? '') : null) : null;
   const rosterBridgeState = prepared.rosterBridgeState
     ? { players: prepared.rosterBridgeState.players,
       seen: new Set(), positions: new Set() } : null;
@@ -9653,6 +9962,11 @@ async function streamEventQuery(prepared, options, emitLine) {
         || !LATEST_PARTICIPANT_EVENTS_821.has(prepared.eventKey))) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--latest-per-participant requires a supported exact 16.19.821.7343 participant candidate event.');
+  }
+  if (participant != null
+      && prepared.eventKey === TARGET_HERO_ROSTER_PAIR_EVENT_821) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--participant cannot assign an actor or resolved target to a TargetHero roster-key equality; use --opaque-u32 for the anonymous key.');
   }
   const inventoryPacketEvent = [
     'hero_inventory_packet_candidates',
@@ -10074,6 +10388,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (targetHeroState) {
         targetHeroPacketRow(row, prepared, lineNumber, targetHeroState);
       }
+      targetHeroRosterPairRow(row, prepared, lineNumber,
+        targetHeroRosterPairState);
       if (forceCreateMissileState) {
         forceCreateMissilePacketRow(row, prepared, lineNumber,
           forceCreateMissileState);
@@ -10087,7 +10403,8 @@ async function streamEventQuery(prepared, options, emitLine) {
           setDimensionMissileState);
       }
       if (sourceReplayVerification
-          && sourceReplayVerification.kind !== 'ROSTER_BRIDGE') {
+          && sourceReplayVerification.kind !== 'ROSTER_BRIDGE'
+          && sourceReplayVerification.kind !== 'TARGET_HERO_ROSTER_PAIR') {
         updateSourcePacketHash(sourceReplayVerification.savedHash,
           sourcePacketFieldsFromRef(row.raw_packet_ref,
             sourceReplayVerification.payloadMode));
@@ -10381,6 +10698,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   }
   if (sourceReplayVerification
       && sourceReplayVerification.kind !== 'ROSTER_BRIDGE'
+      && sourceReplayVerification.kind !== 'TARGET_HERO_ROSTER_PAIR'
       && sourceReplayVerification.savedHash.digest('hex')
         !== sourceReplayVerification.sourceDigest) {
     throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
@@ -10433,6 +10751,14 @@ async function streamEventQuery(prepared, options, emitLine) {
           !== prepared.capabilityResult.native_output_sha256)) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
       'Target-hero raw packet count or ordered native input/output SHA-256 differs from capability metadata.');
+  }
+  if (targetHeroRosterPairState
+      && (targetHeroRosterPairState.positions.size !== scannedCount
+        || targetHeroRosterPairState.matchedCount !== scannedCount
+        || targetHeroRosterPairState.actualHash.digest('hex')
+          !== targetHeroRosterPairState.expectedDigest)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'TargetHero roster pair rows differ from the complete native TargetHero and metadata roster source streams.');
   }
   if (forceCreateMissileState
       && (forceCreateMissileState.positions.size !== scannedCount

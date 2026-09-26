@@ -805,6 +805,7 @@ function parseArgs(argv) {
       'item_group_data_broadcast_packet_candidates',
       'cooldown_broadcast_packet_candidates',
       'target_hero_packet_candidates',
+      'target_hero_roster_key_pair_candidates',
       'force_create_missile_packet_candidates',
       'change_missile_target_packet_candidates',
       'set_dimension_missile_packet_candidates',
