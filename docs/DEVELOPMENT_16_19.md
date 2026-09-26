@@ -4,6 +4,16 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **ShowHealthBar saved-source verification (2026-09-26):** The opt-in
+  `query-events --event show_health_bar_packet_candidates --verify-source`
+  now binds exact-821 saved rows to original ROFL packets and runs the
+  existing per-row callback transform, metadata, count, and ordered native
+  input checks even without `--show-health-zero-flag`. A real selected CLI
+  run on `KR_8393821675.rofl` emitted 5,452/5,452 candidate rows. The saved
+  query physically verified all 5,452 packets and emitted one unchanged row
+  with `--limit 1`. Synthetic late time/offset, top-level time/parameter,
+  and packet-ID metadata forgeries fail with zero stdout. This does not rerun
+  the native callback or establish a health or visibility effect.
 - **UnitApplyDamage saved-source verification (2026-09-26):** The opt-in
   `query-events --verify-source` now covers exact-821 0x005f
   `unit_apply_damage_packet_candidates` V1-V6. It checks the original ROFL
@@ -60,8 +70,8 @@ Current progress (older notes below retain their original research context):
 - **Optional saved-row source verification (2026-09-26):** `query-events
   --verify-source` now reopens the original exact-821 ROFL for the packet-local
   NotifyContextualSituation, item-group V1/V2, cooldown broadcast, item-charges,
-  target-hero, ForceCreateMissile, SetDimensionMissile, UnitApplyDamage, and
-  CastSpellAns candidate streams. It checks the full
+  target-hero, ForceCreateMissile, SetDimensionMissile, UnitApplyDamage,
+  ShowHealthBar, and CastSpellAns candidate streams. It checks the full
   Replay build/SHA-256,
   strict packet framing, ordered stream/chunk IDs and offsets, timestamp,
   parameter, payload, and total count before publishing stdout. A single

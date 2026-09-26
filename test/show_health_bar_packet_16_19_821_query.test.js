@@ -11,6 +11,8 @@ const test = require('node:test');
 const { SHOW_HEALTH_BAR_PACKET_CANDIDATE_PROFILE_821: profile,
   decodeShowHealthBarPayload821 } = require(
   '../src/decoders/rofl_16_19_821_show_health_bar_packet_candidate');
+const { bindSavedPacketArtifactToPhysicalReplay } =
+  require('./helpers/physical_saved_packet_replay');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const EVENT = 'show_health_bar_packet_candidates';
@@ -175,6 +177,54 @@ test('query-events filters exact 821 callback zero flags and preserves JSONL', (
     '--raw-param', '0x40004009');
   assert.equal(zero.status, 0, zero.stderr);
   assert.equal(zero.stdout, `${lines[2]}\n`);
+});
+
+test('ShowHealthBar source verification checks every physical packet after limit', (t) => {
+  const { directory } = fixture(t, [row(0), row(1, '4b')]);
+  const physical = bindSavedPacketArtifactToPhysicalReplay(directory);
+  const verified = command(directory, '--verify-source', '--limit', '1');
+  assert.equal(verified.status, 0, verified.stderr);
+  const summary = JSON.parse(verified.stderr);
+  assert.equal(summary.source_provenance_status, 'SOURCE_REPLAY_VERIFIED');
+  assert.equal(summary.scanned_count, 2);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(verified.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+
+  const forged = structuredClone(physical.rows);
+  forged[1].replay_time_ms += 1;
+  forged[1].raw_packet_ref.replay_time_ms = forged[1].replay_time_ms;
+  forged[1].raw_packet_ref.chunk_file_offset += 1;
+  forged[1].raw_packet_ref.decompressed_block_offset += 1;
+  forged[1].raw_packet_ref.decompressed_payload_offset += 1;
+  fs.writeFileSync(physical.eventPath, `${forged.map(JSON.stringify).join('\n')}\n`);
+  const rejected = command(directory, '--verify-source', '--limit', '1');
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'SOURCE_PROVENANCE_MISMATCH');
+  assert.equal(rejected.stdout, '');
+});
+
+test('ShowHealthBar source check pins top-level fields and packet ID without value filter', (t) => {
+  const { directory } = fixture(t, [row(0), row(1, '4b')]);
+  const physical = bindSavedPacketArtifactToPhysicalReplay(directory);
+  for (const field of ['replay_time_ms', 'raw_param']) {
+    const forged = structuredClone(physical.rows);
+    forged[1][field] = field === 'replay_time_ms'
+      ? physical.rows[0].replay_time_ms : forged[1][field] + 1;
+    fs.writeFileSync(physical.eventPath,
+      `${forged.map(JSON.stringify).join('\n')}\n`);
+    const rejected = command(directory, '--verify-source',
+      '--from-ms', '1000', '--to-ms', '1000', '--limit', '1');
+    assert.equal(rejected.status, 2, rejected.stderr);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(rejected.stdout, '');
+  }
+  fs.writeFileSync(physical.eventPath,
+    `${physical.rows.map(JSON.stringify).join('\n')}\n`);
+  changeResult(directory, (result) => { result.input_packet_id = 0x0166; });
+  const rejected = command(directory, '--verify-source', '--limit', '1');
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+  assert.equal(rejected.stdout, '');
 });
 
 test('query-events distinguishes checked zero matches from unavailable capability', (t) => {

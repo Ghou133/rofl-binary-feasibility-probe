@@ -189,6 +189,7 @@ const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
 const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
   'cast_spell_ans_packet_candidates',
+  'show_health_bar_packet_candidates',
   'notify_contextual_situation_packet_candidates',
   'item_group_data_broadcast_packet_candidates',
   'cooldown_broadcast_packet_candidates',
@@ -1075,6 +1076,9 @@ function prepareSourceReplayVerification(prepared, sourceReplay) {
   }
   if (prepared.eventKey === 'cast_spell_ans_packet_candidates') {
     prepareCastSpellAnsSourceVerification(prepared);
+  }
+  if (prepared.eventKey === 'show_health_bar_packet_candidates') {
+    prepareShowHealthBarZeroFlag(prepared);
   }
   const filename = sourceReplay ?? prepared.sourcePath;
   if (typeof filename !== 'string' || filename.trim() === '') {
@@ -9361,7 +9365,9 @@ async function streamEventQuery(prepared, options, emitLine) {
     ? crypto.createHash('sha256') : null;
   const circularPacketPositions = new Set();
   const circularShapeCounts = { empty1: 0, record24: 0 };
-  const showHealthState = showHealthZeroFlag == null ? null : {
+  const showHealthState = showHealthZeroFlag == null
+      && !(sourceReplayVerification
+        && prepared.eventKey === 'show_health_bar_packet_candidates') ? null : {
     positions: new Set(), previousChunkIndex: -1, previousBlockOffset: -1,
     observedPayloadCounts: { '4a': 0, '4b': 0 },
     nativeInputHash: crypto.createHash('sha256'),
@@ -9687,7 +9693,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (packetRecordCount != null) {
         circularShapeCounts[circularRecordCount === 0 ? 'empty1' : 'record24'] += 1;
       }
-      const showHealthFlag = showHealthZeroFlag == null ? null
+      const showHealthFlag = !showHealthState ? null
         : showHealthBarZeroFlag(row, prepared, lineNumber, showHealthState);
       const childId = childEventId == null ? null
         : candidateChildEventId(row, prepared.eventKey, lineNumber);
@@ -9915,7 +9921,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       'Circular movement restriction row shapes differ from capability metadata.',
       { observed_shape_counts: circularShapeCounts });
   }
-  if (showHealthZeroFlag != null
+  if (showHealthState
       && (!isDeepStrictEqual(showHealthState.observedPayloadCounts,
         prepared.capabilityResult.observed_payload_counts)
         || showHealthState.nativeInputHash.digest('hex')
