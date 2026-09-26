@@ -1009,7 +1009,7 @@ node src/cli.js ward-events "D:\Data\ward_events.jsonl" `
 | `npm run test:16-19` | 当前 16.19 候选解码、独立能力和 CLI/API 合成测试；不等于真实回放验证 |
 | `npm run test:16-19-revive-ally` | OnReviveAlly 候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
 | `npm run test:16-19-first-blood-assist` | OnFirstBloodAssist 子包候选、同长度异类对照及 CLI/API 合成测试；真实回放另用精确镜像运行 |
-| `npm run test:16-19-objective-steal` | 两种精确 821 子包标记、失败状态及 CLI/API 合成测试；真实回放另用精确镜像运行 |
+| `npm run test:16-19-objective-steal` | 两种精确 821 子包标记、失败状态及 CLI/API 合成测试；设置 `ROFL_821_RUNTIME_IMAGE` 和 `ROFL_821_REPLAY_DIR` 后运行两份原始回放的原生正例与负例，否则三项私有输入测试明确跳过 |
 | `npm run test:16-19-turret-die` | OnTurretDie 候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
 | `npm run test:16-19-turret-first-blood` | OnTurretFirstBlood 候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
 | `npm run test:16-19-hq-kill` | OnHQKill 包级候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |

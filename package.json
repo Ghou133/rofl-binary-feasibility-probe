@@ -103,7 +103,7 @@
     "test:16-19-assist-native": "node --test test/assist_native_child_16_19_821.test.js",
     "test:16-19-revive-ally": "node --test test/revive_ally_native_16_19_821.test.js test/revive_ally_packet_16_19_821_candidate.test.js test/revive_ally_16_19_821_integration.test.js",
     "test:16-19-first-blood-assist": "node --test test/first_blood_assist_event_packet_16_19_821_candidate.test.js test/first_blood_assist_16_19_821_integration.test.js test/first_blood_assist_native_16_19_821.test.js test/first_blood_assist_16_19_821_query.test.js",
-    "test:16-19-objective-steal": "node --test test/objective_steal_event_packet_16_19_821.test.js",
+    "test:16-19-objective-steal": "node --test test/objective_steal_event_packet_16_19_821.test.js test/objective_steal_native_16_19_821.test.js",
     "test:16-19-turret-die": "node --test test/turret_die_native_16_19_821.test.js test/turret_die_event_packet_16_19_821_candidate.test.js test/turret_die_16_19_821_integration.test.js",
     "test:16-19-turret-first-blood": "node --test test/turret_first_blood_native_16_19_821.test.js test/turret_first_blood_event_packet_16_19_821_candidate.test.js test/turret_first_blood_16_19_821_integration.test.js",
     "test:16-19-hq-kill": "node --test test/hq_kill_native_16_19_821.test.js test/hq_kill_event_packet_16_19_821_candidate.test.js test/hq_kill_16_19_821_integration.test.js test/hq_kill_16_19_821_query.test.js",

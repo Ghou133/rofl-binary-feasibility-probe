@@ -17,8 +17,11 @@ Current progress (older notes below retain their original research context):
   `0x00be`, respectively). `KR_8392938200` had no 133-byte parent and
   returned `PROFILE_UNAVAILABLE` with zero framing errors; its CLI exit
   code was 1 for that unavailable status. Focused synthetic route/API/CLI
-  tests passed 4/4. The earlier exact-image census found only these two
-  133-byte parents among 11 supplied KR Replays; the new CLI route was
+  tests passed 4/4. With the pinned image and two original Replays, three
+  native tests passed for both positive packets, a same-length foreign
+  child, truncated input, and a wrong image. Without private inputs,
+  these three native tests explicitly skip. The earlier exact-image census
+  found only these two 133-byte parents among 11 supplied KR Replays; the new CLI route was
   run on the two positive Replays and one absent control, not all 11.
   The image labels and packet presence do not prove an actual steal,
   objective state change, actor, target, or gameplay effect. Local outputs
