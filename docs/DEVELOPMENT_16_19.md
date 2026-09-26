@@ -33,6 +33,18 @@ Current progress (older notes below retain their original research context):
   2,280 ms with repeated walks versus 1,882 ms with the shared token; the
   API already collects the token, whose standalone creation took 154 ms in
   that measurement. This changes validation work, not candidate semantics.
+- **OnFirstBloodAssist packet marker:** The exact 821 image names OnEvent
+  child `0x0017` at name-table entry RVA `0x1ef76c8`. The new selected
+  `first_blood_assist_event_packet` CLI/API route requires the pinned image,
+  fully consumes each game-stream `0x040a` length-16 parent, and retains the
+  anonymous eight-byte child blob, its digest, and the original packet ref.
+  A real 11-Replay selected-only batch had zero framing errors: eight
+  `CANDIDATE` Replays with nine target packets, three
+  `PROFILE_UNAVAILABLE` Replays, and three same-length native child
+  `0x002c` exclusions. CLI batch status was `PARTIAL` because those three
+  Replays have no target child. The image label and packet-local bytes do not
+  prove an effective first blood, an assist, a participant role, or a game
+  effect. Raw inputs and local batch output remain outside Git.
 - **UnitApplyDamage anonymous callback u32 v4:** The exact-821 native
   deserializer writes an anonymous u32 to callback object offset `+0x10`.
   The first header selector determines whether its four payload bytes pass

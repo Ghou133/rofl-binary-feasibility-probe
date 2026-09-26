@@ -66,6 +66,7 @@
 | `16.19.821.7343 --events on_shutdown_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x00e8` 子包，保留 OnShutdown 镜像名表标签、匿名 `+0x04/+0x58/+0x5c` 整数和原始包来源 | 仅写入 `on_shutdown_event_packet_candidates`，状态为 `CANDIDATE`；不推断实际 shutdown 效果、对象角色或状态变化 |
 | `16.19.821.7343 --events resurrect_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x002d` 子包，保留 OnResurrect 镜像名表标签、匿名原生子包 `+0x04/+0x08` 整数和原始包来源 | 有此包形状的回放写入 `resurrect_event_packet_candidates`，状态为 `CANDIDATE`；无此形状的回放报告 `PROFILE_UNAVAILABLE`；不推断实际复活、对象角色或状态变化 |
 | `16.19.821.7343 --events revive_ally_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x002c` 子包，保留 OnReviveAlly 镜像名表标签、匿名原生子包 `+0x04` 整数及原始包来源 | 有目标包时写入 `revive_ally_event_packet_candidates`，状态为 `CANDIDATE`；无目标包时报告 `PROFILE_UNAVAILABLE`；同长度异类子事件保留为排除证据，不推断实际复活、对象角色或状态变化 |
+| `16.19.821.7343 --events first_blood_assist_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR game-stream `0x040a` 的 `0x0017` 子包，保留 OnFirstBloodAssist 镜像名表标签、匿名 8 字节子包和原始来源 | 只写入 `first_blood_assist_event_packet_candidates`，状态为 `CANDIDATE`；无目标包为 `PROFILE_UNAVAILABLE`，同长度 `0x002c` 排除；不推断实际首杀、助攻或参与者 |
 | `16.19.821.7343 --events turret_plate_event_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0107` 子包，保留 OnTurretPlateDestroyed 镜像名表标签、匿名原生子包 `+0x04` 整数和原始包来源 | 仅写入 `turret_plate_event_packet_candidates`，状态为 `CANDIDATE`；排除同长度其他子事件，不推断镀层破坏、建筑、参与者或状态变化 |
 | `16.19.821.7343 --events objective_bounty_claimed_packet --runtime-image PATH` | 精确 821 镜像完整反序列化 KR `0x040a` 的 `0x0113` 子包，保留 OnObjectiveBountyClaimed 镜像名表标签、匿名八字节子包及 `blob_u32_0x04`、原始包来源 | 有目标包时写入 `objective_bounty_claimed_packet_candidates`，状态为 `CANDIDATE`；无目标包时报告 `PROFILE_UNAVAILABLE` 并保留同长度异类包引用；不推断实际悬赏发放、对象、行动者、队伍或状态变化 |
 | `16.19.821.7343 --events objective_bounty_claimed_packet,turret_plate_event_packet,turret_die_event_packet --runtime-image PATH` | 在三个独立候选包源均可用时，验证同回放、chunk、毫秒的 `plate < die < claim` 顺序与三个匿名原生整数相等，并保留三个原始包引用 | 另写入 `objective_bounty_turret_pair_candidates` 和关联汇总；未匹配 claim 留在原包流并计入拒绝原因，不推断悬赏发放、建筑或参与者身份 |
@@ -249,6 +250,10 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-on-revive-ally-packets"
 node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
+  --events first_blood_assist_event_packet `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-on-first-blood-assist-packets"
+node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
   --events turret_plate_event_packet `
   --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
   --event-jsonl-only --out-dir "work\16-19-821-turret-plate-event-packets"
@@ -351,6 +356,12 @@ OnShutdown 只是镜像中的事件标签，未确认游戏内 shutdown 效果�
 11 份 KR 821 回放仅 1 份有 3 个经精确镜像原生完整消费的 `0x002c` 子包；
 9 个同为 16 字节的异类子事件保留为排除对照，另外 10 份回放报告 `PROFILE_UNAVAILABLE`。
 镜像名表中的 OnReviveAlly 不证明实际复活、发起者、接收者或状态变化。
+
+`first_blood_assist_event_packet` 仅报告独立的包标记、匿名原生子包和来源。
+11 份 KR 821 回放中，8 份有 9 个原生完整消费的 `0x0017` 子包，
+3 个同长度 `0x002c` 子包被原生身份校验排除；另 3 份回放为
+`PROFILE_UNAVAILABLE`。镜像名表中的 OnFirstBloodAssist 不证明实际首杀、
+助攻归属或游戏效果。
 
 `turret_plate_event_packet` 只报告 `0x0107` 子包的匿名当包字段和来源。
 11 份 KR 821 回放中观察到 657 个目标子包；同为 17 字节的其他子事件 4964 个作为排除对照，
@@ -978,6 +989,7 @@ node src/cli.js ward-events "D:\Data\ward_events.jsonl" `
 | `npm test` / `npm run test:public` | portable、维护及 16.19 合成解码/CLI 测试；不需要私有回放 |
 | `npm run test:16-19` | 当前 16.19 候选解码、独立能力和 CLI/API 合成测试；不等于真实回放验证 |
 | `npm run test:16-19-revive-ally` | OnReviveAlly 候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
+| `npm run test:16-19-first-blood-assist` | OnFirstBloodAssist 子包候选、同长度异类对照及 CLI/API 合成测试；真实回放另用精确镜像运行 |
 | `npm run test:16-19-turret-die` | OnTurretDie 候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
 | `npm run test:16-19-turret-first-blood` | OnTurretFirstBlood 候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
 | `npm run test:16-19-hq-kill` | OnHQKill 包级候选解码及 CLI/API 合成测试；有本机精确镜像与原始包输入时另运行真实包原生验证，否则该输入专属检查明确跳过 |
