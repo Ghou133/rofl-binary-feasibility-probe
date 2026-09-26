@@ -2,8 +2,11 @@
 
 const fs = require('node:fs');
 const crypto = require('node:crypto');
+const os = require('node:os');
 const path = require('node:path');
 const readline = require('node:readline');
+const { once } = require('node:events');
+const { finished } = require('node:stream/promises');
 const { isDeepStrictEqual } = require('node:util');
 const { parseReplayFile, walkBlocks } = require('./rofl');
 const { decodeSemanticReplay } = require('./semantic_api');
@@ -11728,7 +11731,74 @@ function validateFilters(options) {
   }
 }
 
+async function stageVerifiedRows(produce, emitLine) {
+  const prefix = `rofl-source-verified-${process.pid}-`;
+  const temporaryRoot = path.resolve(os.tmpdir());
+  const directory = await fs.promises.mkdtemp(path.join(temporaryRoot, prefix));
+  const filename = path.join(directory, 'selected.jsonl');
+  let writer = null;
+  let writerFinished = null;
+  let operationError = null;
+  try {
+    writer = fs.createWriteStream(filename, { flags: 'wx' });
+    writerFinished = finished(writer);
+    // Attach a rejection handler immediately; the producer may fail before
+    // the writer is explicitly awaited.
+    writerFinished.catch(() => {});
+    const summary = await produce(async (line) => {
+      if (!writer.write(line)) await once(writer, 'drain');
+    });
+    writer.end();
+    await writerFinished;
+    const reader = fs.createReadStream(filename, { encoding: 'utf8' });
+    const readerFinished = finished(reader);
+    readerFinished.catch(() => {});
+    let pending = '';
+    try {
+      for await (const chunk of reader) {
+        pending += chunk;
+        let newline;
+        while ((newline = pending.indexOf('\n')) !== -1) {
+          await emitLine(pending.slice(0, newline + 1));
+          pending = pending.slice(newline + 1);
+        }
+      }
+      if (pending) await emitLine(pending);
+    } finally {
+      reader.destroy();
+      await readerFinished.catch(() => {});
+    }
+    return summary;
+  } catch (error) {
+    operationError = error;
+    throw error;
+  } finally {
+    if (writer && !writer.destroyed) writer.destroy();
+    if (writerFinished) await writerFinished.catch(() => {});
+    try {
+      const resolved = path.resolve(directory);
+      if (path.dirname(resolved) !== temporaryRoot
+          || !path.basename(resolved).startsWith(prefix)) {
+        throw new Error('Unsafe verified query spool cleanup target');
+      }
+      await fs.promises.rm(resolved, { recursive: true, force: true,
+        maxRetries: 5, retryDelay: 50 });
+    } catch (cleanupError) {
+      if (!operationError) throw cleanupError;
+    }
+  }
+}
+
 async function streamEventQuery(prepared, options, emitLine) {
+  if (options.verifySource) {
+    return stageVerifiedRows(
+      (stageLine) => streamEventQueryUnstaged(prepared, options, stageLine),
+      emitLine);
+  }
+  return streamEventQueryUnstaged(prepared, options, emitLine);
+}
+
+async function streamEventQueryUnstaged(prepared, options, emitLine) {
   validateFilters(options);
   if (options.sourceReplay != null && !options.verifySource) {
     throw new EventQueryError('INVALID_FILTER',
@@ -13214,6 +13284,15 @@ async function streamEventQuery(prepared, options, emitLine) {
 }
 
 async function streamBatchEventQuery(prepared, options, emitLine) {
+  if (options.verifySource) {
+    return stageVerifiedRows(
+      (stageLine) => streamBatchEventQueryUnstaged(prepared, options, stageLine),
+      emitLine);
+  }
+  return streamBatchEventQueryUnstaged(prepared, options, emitLine);
+}
+
+async function streamBatchEventQueryUnstaged(prepared, options, emitLine) {
   validateFilters(options);
   if (options.sourceReplay != null) {
     throw new EventQueryError('UNSUPPORTED_SOURCE_REPLAY_OVERRIDE',
@@ -13302,7 +13381,8 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     let summary;
     try {
       // Scan each complete JSONL, including after the global output limit.
-      summary = await streamEventQuery(replay.prepared, { ...options, limit: null },
+      summary = await streamEventQueryUnstaged(replay.prepared,
+        { ...options, limit: null },
         async (line) => {
           if (options.limit == null || emittedCount < options.limit) {
             await emitLine(line);

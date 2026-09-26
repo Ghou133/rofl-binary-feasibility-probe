@@ -22,6 +22,9 @@ const BUILD = '16.19.821.7343';
 const CAPABILITY = 'set_spell_level_packet';
 const EVENT = 'set_spell_level_packet_candidates';
 const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+const spoolPrefix = `rofl-source-verified-${process.pid}-`;
+const spoolDirectories = () => fs.readdirSync(os.tmpdir())
+  .filter((name) => name.startsWith(spoolPrefix)).sort();
 
 function packet(payloadHex, rawParam, timeMs) {
   const payload = Buffer.from(payloadHex, 'hex');
@@ -143,9 +146,65 @@ function fixture(t, packetProfile = 'v2') {
   return { root, directory, image, source, rows, files, rewrite, native };
 }
 
+function addSecondReplay(f) {
+  const source = path.join(f.root, 'later.rofl');
+  const generated = replayFromChunks([{
+    stream: 1, body: Buffer.concat([
+      packet('fa', 0x400000c4, 1000),
+      packet('c37b', 0x400000c5, 1100),
+      packet('4a', 0x400000c6, 1200),
+    ]),
+  }], BUILD);
+  fs.writeFileSync(source, generated.buffer);
+  const replay = parseReplayFile(source);
+  const decoded = decodeSemanticReplay(replay, {
+    capabilities: [CAPABILITY], runtimeImagePath: f.image,
+    setSpellLevelProfile: 'v2',
+  });
+  const result = decoded.capability_results[CAPABILITY];
+  assert.equal(result.status, 'CANDIDATE', result.error);
+  const rows = decoded.events[EVENT];
+  assert.equal(rows.length, 3);
+  const relative = 'replays/later';
+  const directory = path.join(f.root, 'replays', 'later');
+  fs.mkdirSync(directory);
+  const semantic = {
+    replay_version: BUILD, replay_sha256: replay.source_sha256,
+    container_status: 'PASS', status: 'CANDIDATE',
+    api_status: 'EXPERIMENTAL_CANDIDATE',
+    requested_capabilities: [CAPABILITY],
+    capability_results: { [CAPABILITY]: result },
+  };
+  const analysis = {
+    patch: '16.19', replay_version: BUILD, replay_sha256: replay.source_sha256,
+    source_path: source, event_storage: 'JSONL_ONLY', events: null,
+    event_counts: { [EVENT]: rows.length },
+    event_jsonl_files: { [EVENT]: `${EVENT}.jsonl` },
+    semantic: { status: 'CANDIDATE', requested_capabilities: [CAPABILITY],
+      capability_results: { [CAPABILITY]: result } },
+  };
+  const files = {
+    'semantic_run.json': JSON.stringify(semantic),
+    'replay_analysis.json': JSON.stringify(analysis),
+    [`${EVENT}.jsonl`]: `${rows.map(JSON.stringify).join('\n')}\n`,
+  };
+  const manifestPath = path.join(f.root, 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.replay_inputs.push({ artifact_directory: relative,
+    sha256: replay.source_sha256, version: BUILD });
+  for (const [filename, content] of Object.entries(files)) {
+    fs.writeFileSync(path.join(directory, filename), content);
+    manifest.output_hashes_excluding_manifest[`${relative}/${filename}`] =
+      sha(content);
+  }
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  return { directory, rows, files, manifestPath, manifest, relative };
+}
+
 test('V2 standalone source check re-decodes every row before limit and accepts same-byte relocation', async (t) => {
   const f = fixture(t);
   const prepared = prepareEventQuery(f.directory, EVENT);
+  const before = spoolDirectories();
   const selected = [];
   const summary = await streamEventQuery(prepared,
     { verifySource: true, runtimeImage: f.image, limit: 1 },
@@ -162,11 +221,13 @@ test('V2 standalone source check re-decodes every row before limit and accepts s
       sourceReplay: relocated, limit: 1 }, async () => {});
   assert.equal(moved.source_provenance_status, 'SOURCE_REPLAY_VERIFIED');
   assert.equal(f.native.mock.callCount(), 3);
+  assert.deepEqual(spoolDirectories(), before);
 });
 
 test('V2 standalone batch source check verifies all rows under a global limit', async (t) => {
   const f = fixture(t);
   const prepared = prepareBatchEventQuery(f.root, EVENT);
+  const before = spoolDirectories();
   const output = [];
   const summary = await streamBatchEventQuery(prepared,
     { verifySource: true, runtimeImage: f.image, limit: 1 },
@@ -175,6 +236,18 @@ test('V2 standalone batch source check verifies all rows under a global limit', 
   assert.equal(summary.source_provenance_status, 'SOURCE_REPLAY_VERIFIED');
   assert.equal(summary.scanned_count, 3);
   assert.equal(summary.emitted_count, 1);
+  assert.deepEqual(spoolDirectories(), before);
+});
+
+test('verified callback failure still removes its temporary spool', async (t) => {
+  const f = fixture(t);
+  const prepared = prepareEventQuery(f.directory, EVENT);
+  const before = spoolDirectories();
+  await assert.rejects(streamEventQuery(prepared,
+    { verifySource: true, runtimeImage: f.image, limit: 1 },
+    async () => { throw new Error('consumer rejected output'); }),
+  /consumer rejected output/);
+  assert.deepEqual(spoolDirectories(), before);
 });
 
 test('V2 standalone source check rejects late saved-row forgery after limit', async (t) => {
@@ -185,9 +258,62 @@ test('V2 standalone source check rejects late saved-row forgery after limit', as
   f.files[`${EVENT}.jsonl`] = `${forged.map(JSON.stringify).join('\n')}\n`;
   f.rewrite();
   const prepared = prepareEventQuery(f.directory, EVENT);
+  const before = spoolDirectories();
+  const emitted = [];
   await assert.rejects(streamEventQuery(prepared,
-    { verifySource: true, runtimeImage: f.image, limit: 1 }, async () => {}),
+    { verifySource: true, runtimeImage: f.image, limit: 1 },
+    async (line) => emitted.push(line)),
   { code: 'SOURCE_PROVENANCE_MISMATCH', details: { line_number: 3 } });
+  assert.deepEqual(emitted, []);
+  assert.deepEqual(spoolDirectories(), before);
+});
+
+test('spool cleanup failure preserves a late source provenance error', async (t) => {
+  const f = fixture(t);
+  const forged = structuredClone(f.rows);
+  forged[2].replay_time_ms += 100;
+  f.files[`${EVENT}.jsonl`] = `${forged.map(JSON.stringify).join('\n')}\n`;
+  f.rewrite();
+  const prepared = prepareEventQuery(f.directory, EVENT);
+  const before = spoolDirectories();
+  const originalRm = fs.promises.rm.bind(fs.promises);
+  const rmMock = t.mock.method(fs.promises, 'rm', async (target, options) => {
+    await originalRm(target, options);
+    if (path.basename(target).startsWith(spoolPrefix)) {
+      throw new Error('simulated cleanup failure');
+    }
+  });
+  try {
+    await assert.rejects(streamEventQuery(prepared,
+      { verifySource: true, runtimeImage: f.image, limit: 1 },
+      async () => {}),
+    { code: 'SOURCE_PROVENANCE_MISMATCH', details: { line_number: 3 } });
+  } finally {
+    rmMock.mock.restore();
+  }
+  assert.deepEqual(spoolDirectories(), before);
+});
+
+test('batch source check with a forged later Replay never calls the output callback', async (t) => {
+  const f = fixture(t);
+  const later = addSecondReplay(f);
+  const forged = structuredClone(later.rows);
+  forged[2].replay_time_ms += 100;
+  forged[2].raw_packet_ref.replay_time_ms += 100;
+  const changed = `${forged.map(JSON.stringify).join('\n')}\n`;
+  fs.writeFileSync(path.join(later.directory, `${EVENT}.jsonl`), changed);
+  later.manifest.output_hashes_excluding_manifest[
+    `${later.relative}/${EVENT}.jsonl`] = sha(changed);
+  fs.writeFileSync(later.manifestPath, JSON.stringify(later.manifest));
+  const prepared = prepareBatchEventQuery(f.root, EVENT);
+  const before = spoolDirectories();
+  const emitted = [];
+  await assert.rejects(streamBatchEventQuery(prepared,
+    { verifySource: true, runtimeImage: f.image, limit: 1 },
+    async (line) => emitted.push(line)),
+  { code: 'SOURCE_PROVENANCE_MISMATCH', details: { line_number: 3 } });
+  assert.deepEqual(emitted, []);
+  assert.deepEqual(spoolDirectories(), before);
 });
 
 test('V2 standalone source check rejects forged metadata and different ROFL identity', async (t) => {
@@ -223,8 +349,13 @@ test('V2 standalone source check requires an explicit runtime image', async (t) 
 test('V1 saved query remains available without source verification', async (t) => {
   const f = fixture(t, 'v1');
   const prepared = prepareEventQuery(f.directory, EVENT);
-  const unverified = await streamEventQuery(prepared, {}, async () => {});
+  const before = spoolDirectories();
+  const emitted = [];
+  const unverified = await streamEventQuery(prepared, {},
+    async (line) => emitted.push(JSON.parse(line)));
   assert.equal(unverified.source_provenance_status, 'SAVED_ONLY_UNVERIFIED');
+  assert.deepEqual(emitted, f.rows);
+  assert.deepEqual(spoolDirectories(), before);
   await assert.rejects(streamEventQuery(prepared,
     { verifySource: true, runtimeImage: f.image }, async () => {}),
   { code: 'UNSUPPORTED_SOURCE_VERIFICATION' });
