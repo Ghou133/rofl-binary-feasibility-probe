@@ -13,8 +13,55 @@ function writeJson(filePath, value) {
 
 function writeJsonl(filePath, rows) {
   ensureDir(path.dirname(filePath));
-  const text = rows.length === 0 ? '' : `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`;
-  fs.writeFileSync(filePath, text, 'utf8');
+  // Keep serialization bounded even when a selected Replay capability emits
+  // hundreds of megabytes of candidate rows. Publish only a complete file.
+  const maxChunkBytes = 1024 * 1024;
+  const temporary = path.join(path.dirname(filePath),
+    `.rofl-jsonl-${process.pid}-${crypto.randomBytes(8).toString('hex')}.tmp`);
+  let descriptor;
+  try {
+    descriptor = fs.openSync(temporary, 'wx');
+    let parts = [];
+    let partBytes = 0;
+    const writeBytes = (bytes) => {
+      let offset = 0;
+      while (offset < bytes.length) {
+        const written = fs.writeSync(descriptor, bytes, offset,
+          Math.min(maxChunkBytes, bytes.length - offset));
+        if (written <= 0) throw new Error('JSONL output write made no progress');
+        offset += written;
+      }
+    };
+    const flush = () => {
+      if (partBytes === 0) return;
+      writeBytes(Buffer.from(parts.join(''), 'utf8'));
+      parts = [];
+      partBytes = 0;
+    };
+    for (const row of rows) {
+      // Array.join used to turn sparse/undefined entries into blank lines.
+      const line = `${JSON.stringify(row) ?? ''}\n`;
+      const lineBytes = Buffer.byteLength(line, 'utf8');
+      if (lineBytes > maxChunkBytes) {
+        flush();
+        writeBytes(Buffer.from(line, 'utf8'));
+      } else {
+        if (partBytes + lineBytes > maxChunkBytes) flush();
+        parts.push(line);
+        partBytes += lineBytes;
+      }
+    }
+    flush();
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    fs.renameSync(temporary, filePath);
+  } catch (error) {
+    if (descriptor !== undefined) {
+      try { fs.closeSync(descriptor); } catch { /* Preserve the first error. */ }
+    }
+    try { fs.rmSync(temporary, { force: true }); } catch { /* Preserve the first error. */ }
+    throw error;
+  }
 }
 
 function csvCell(value) {
