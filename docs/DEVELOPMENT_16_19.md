@@ -4,6 +4,30 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **ChangeMissileTarget 0x040c packet-local comparison key (opt-in candidate):**
+  The pinned KR `16.19.821.7343` image registers
+  `PKT_S2C_ChangeMissileTarget_s` on `MissileClient` through factory case
+  `0xf0b2cf`, constructor `0xea4f10`, deserializer `0x10e8e30`, and callback
+  `0x997c80`. Strict framing of the 11 original KR Replays found 13,125
+  game packets in seven Replays, with four route-absent Replays. All 13,125
+  packets passed exact native deserialization, full consumption, and object
+  identity checks across 13 observed length/prefix shapes. The callback
+  transforms packet object `+0x1c` into a u32 key before comparing it with
+  live receiver state. Each shape reached that pre-comparison point with a
+  synthetic receiver; one-byte truncations and appends failed the full route
+  gate. [The native gate](CHANGE_MISSILE_TARGET_821_NATIVE_GATE.json) records
+  the exact image and callback hashes, source hashes, shape counts, and
+  negative controls. CLI `--events change_missile_target_packet
+  --runtime-image IMAGE --event-jsonl-only` and API
+  `capabilities: ['change_missile_target_packet']` are explicit opt-ins.
+  One original Replay emitted 176/176 candidate rows with zero framing
+  errors; saved `query-events --event change_missile_target_packet_candidates
+  --verify-source --limit 1` checked all 176 rows against that original ROFL
+  and emitted one unchanged row. A route-absent original Replay returned
+  `PROFILE_UNAVAILABLE`. Query rows remain `CANDIDATE`; live receiver match,
+  missile identity, owner, target, actual target change, effect, and
+  causality remain `UNKNOWN`. Original ROFLs, image, and complete CLI output
+  remain local and ignored.
 - **ShowHealthBar saved-source verification (2026-09-26):** The opt-in
   `query-events --event show_health_bar_packet_candidates --verify-source`
   now binds exact-821 saved rows to original ROFL packets and runs the
