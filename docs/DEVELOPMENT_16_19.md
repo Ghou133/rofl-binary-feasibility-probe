@@ -349,7 +349,17 @@ Current progress (older notes below retain their original research context):
   verified all 63,496 original packets, matched 4,136 rows, and emitted
   one original row. A synthetic physical-ROFL test forged a later packet's
   time and offsets; query exited `SOURCE_PROVENANCE_MISMATCH` with zero
-  stdout. Focused saved-query tests passed 21/21 after this extension.
+  stdout. Source verification now also checks CastSpellAns profile metadata,
+  the pinned packet ID, and every row's top-level time/parameter against its
+  packet reference even when no nested-field filter is supplied. Later
+  top-level time or parameter forgeries fail with `INVALID_EVENT_ROW` and
+  zero stdout under `--from-ms --to-ms --limit 1`; a profile packet-ID forgery fails
+  `CAPABILITY_METADATA_MISMATCH`. Historical V3 source verification and its
+  nested-field unavailability remain distinct. The real no-nested-filter
+  `--verify-source --from-ms 1000 --limit 1` query validated all 63,496
+  packets across the 11 original Replays and emitted one original row.
+  Focused saved-query tests passed 24/24 after this correction, including
+  unfiltered physical-source checks for each V3 through V8 profile.
 - **Damage identity stop-loss:** In saved V5 output for the 11 KR Replays,
   anonymous `+0x18` `RAW_READER` occurred in 11/1,035 death-coincident
   victim-key packets and 823/62,860 first-lookup roster pairs. Conditional

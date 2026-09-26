@@ -1073,6 +1073,9 @@ function prepareSourceReplayVerification(prepared, sourceReplay) {
       '--verify-source supports only the registered exact-821 packet-local candidate streams.',
       { event_key: prepared.eventKey });
   }
+  if (prepared.eventKey === 'cast_spell_ans_packet_candidates') {
+    prepareCastSpellAnsSourceVerification(prepared);
+  }
   const filename = sourceReplay ?? prepared.sourcePath;
   if (typeof filename !== 'string' || filename.trim() === '') {
     throw new EventQueryError('MISSING_SOURCE_REPLAY',
@@ -4105,6 +4108,66 @@ function prepareCastSpellAnsNestedBits(prepared) {
       || result.input_count !== result.event_count) {
     throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
       'CastSpellAns nested callback bit metadata differs from its exact-build profile.');
+  }
+}
+
+function prepareCastSpellAnsSourceVerification(prepared) {
+  const result = prepared.capabilityResult;
+  const v3Id = CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821.id
+    .replace(/-v4$/, '-v3');
+  if (result?.profile_id !== v3Id) {
+    prepareCastSpellAnsNestedBits(prepared);
+    return;
+  }
+  const profile = CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821;
+  if (prepared.capabilityStatus !== 'CANDIDATE'
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || result.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS'
+      || result.input_count !== result.event_count) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'CastSpellAns source verification metadata differs from its exact-build profile.');
+  }
+}
+
+function castSpellAnsSourceRowV3(row, prepared, lineNumber) {
+  const invalid = () => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid CastSpellAns v3 packet reference at JSONL line ${lineNumber}.`,
+      { line_number: lineNumber });
+  };
+  const profile = CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821;
+  const ref = row.raw_packet_ref;
+  if (row.event_type !== 'NPC_CAST_SPELL_ANS_PACKET_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id.replace(/-v4$/, '-v3')
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS'
+      || !Number.isInteger(row.opaque_i32_0x14c)
+      || row.opaque_i32_0x14c < -0x80000000
+      || row.opaque_i32_0x14c > 0x7fffffff
+      || !Number.isSafeInteger(row.raw_param) || row.raw_param <= 0
+      || row.raw_param > 0xffffffff || !ref
+      || ref.source_path !== (prepared.sourcePath ?? null)
+      || ref.replay_sha256 !== prepared.replaySha
+      || ref.chunk_stream !== 'game_chunk' && ref.chunk_stream !== 'keyframe'
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== profile.replay_block_packet_id
+      || ref.replay_time_ms !== row.replay_time_ms
+      || !Number.isSafeInteger(ref.payload_length) || ref.payload_length < 97
+      || ref.payload_length > 189 || ref.raw_param !== row.raw_param
+      || !REPLAY_SHA.test(ref.raw_payload_sha256 ?? '')) {
+    invalid();
   }
 }
 
@@ -9439,6 +9502,18 @@ async function streamEventQuery(prepared, options, emitLine) {
           `Event JSONL line ${lineNumber} has a different Replay SHA-256.`,
           { line_number: lineNumber });
       }
+      let sourceCastNestedFields = null;
+      if (sourceReplayVerification
+          && prepared.eventKey === 'cast_spell_ans_packet_candidates') {
+        if (prepared.capabilityResult.profile_id
+            === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821.id
+              .replace(/-v4$/, '-v3')) {
+          castSpellAnsSourceRowV3(row, prepared, lineNumber);
+        } else {
+          sourceCastNestedFields = castSpellAnsNestedBits(row, prepared,
+            lineNumber, castNestedBitsPacketPositions);
+        }
+      }
       exactNamedKillPacketRow(row, prepared, lineNumber,
         associationPacketPositions);
       exactBlobPacketRow(row, prepared, lineNumber,
@@ -9581,8 +9656,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       const nestedFields = castNestedBits == null && castNestedU32 == null
         && castNestedU32At4c == null && castNestedF32AtA0 == null
         && castNestedU32At28 == null ? null
-        : castSpellAnsNestedBits(row, prepared, lineNumber,
-          castNestedBitsPacketPositions);
+        : sourceCastNestedFields ?? castSpellAnsNestedBits(row, prepared,
+          lineNumber, castNestedBitsPacketPositions);
       if (castNestedBits != null) castNestedBitsCheckedCount += 1;
       if (castNestedU32 != null) castNestedU32CheckedCount += 1;
       if (castNestedU32At4c != null) castNestedU32At4cCheckedCount += 1;

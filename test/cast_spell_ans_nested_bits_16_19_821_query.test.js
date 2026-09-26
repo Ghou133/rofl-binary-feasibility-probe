@@ -717,6 +717,91 @@ test('V8 source check binds every saved packet ref to physical ROFL after limit'
   assert.equal(rejected.stdout, '');
 });
 
+test('V8 source check rejects later top-level time or parameter drift without a nested filter', (t) => {
+  const payloads = [Buffer.alloc(129, 0x44), Buffer.alloc(129, 0x55)];
+  const rows = [rowV8(0, '9194b8fb'), rowV8(1, '7cef92cb')];
+  rows.forEach((entry, index) => {
+    entry.raw_packet_ref.raw_payload_sha256 = crypto.createHash('sha256')
+      .update(payloads[index]).digest('hex');
+  });
+  const { directory } = fixture(t, rows, { fieldProfile: v8Profile });
+  const physical = bindSavedPacketArtifactToPhysicalReplay(directory, { payloads });
+  const args = ['--verify-source', '--from-ms', '1000',
+    '--to-ms', '1000', '--limit', '1'];
+  const valid = command(directory, ...args);
+  assert.equal(valid.status, 0, valid.stderr);
+  assert.equal(JSON.parse(valid.stderr).source_provenance_status,
+    'SOURCE_REPLAY_VERIFIED');
+  assert.equal(JSON.parse(valid.stderr).matched_count, 1);
+  assert.equal(valid.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+
+  for (const field of ['replay_time_ms', 'raw_param']) {
+    const forged = structuredClone(physical.rows);
+    forged[1][field] = field === 'replay_time_ms'
+      ? physical.rows[0].replay_time_ms : forged[1][field] + 1;
+    fs.writeFileSync(physical.eventPath,
+      `${forged.map(JSON.stringify).join('\n')}\n`);
+    const rejected = command(directory, ...args);
+    assert.equal(rejected.status, 2, rejected.stderr);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(rejected.stdout, '');
+  }
+
+  fs.writeFileSync(physical.eventPath,
+    `${physical.rows.map(JSON.stringify).join('\n')}\n`);
+  const semanticPath = path.join(directory, 'semantic_run.json');
+  const semantic = JSON.parse(fs.readFileSync(semanticPath, 'utf8'));
+  semantic.capability_results[CAPABILITY].input_packet_id = 0x01db;
+  fs.writeFileSync(semanticPath, JSON.stringify(semantic));
+  const rejectedProfile = command(directory, ...args);
+  assert.equal(rejectedProfile.status, 2, rejectedProfile.stderr);
+  assert.equal(JSON.parse(rejectedProfile.stderr).code,
+    'CAPABILITY_METADATA_MISMATCH');
+  assert.equal(rejectedProfile.stdout, '');
+});
+
+test('historical V3 CastSpellAns remains physically source-verifiable', (t) => {
+  const payload = Buffer.alloc(129, 0x66);
+  const old = row(0);
+  delete old.raw_nested_bits_0x24_hex;
+  delete old.opaque_nested_bits_0x24;
+  old.build_profile = profile.id.replace(/-v4$/, '-v3');
+  old.raw_packet_ref.raw_payload_sha256 = crypto.createHash('sha256')
+    .update(payload).digest('hex');
+  const { directory } = fixture(t, [old], { profileId: old.build_profile });
+  const physical = bindSavedPacketArtifactToPhysicalReplay(directory,
+    { payloads: [payload] });
+  const verified = command(directory, '--verify-source', '--opaque-i32', '0');
+  assert.equal(verified.status, 0, verified.stderr);
+  assert.equal(JSON.parse(verified.stderr).source_provenance_status,
+    'SOURCE_REPLAY_VERIFIED');
+  assert.equal(verified.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+  const unavailable = command(directory, '--cast-nested-bits', '0');
+  assert.equal(unavailable.status, 2, unavailable.stderr);
+  assert.equal(JSON.parse(unavailable.stderr).code, 'CAST_NESTED_BITS_UNAVAILABLE');
+});
+
+test('V4 through V8 CastSpellAns remain source-verifiable without field filters', (t) => {
+  for (const [fieldProfile, entry] of [
+    [profile, row(0)],
+    [v5Profile, rowV5(0, 'cee352e7')],
+    [v6Profile, rowV6(0, '7525f20b')],
+    [v7Profile, rowV7(0, '5858c8d6')],
+    [v8Profile, rowV8(0, '9194b8fb')],
+  ]) {
+    const payload = Buffer.alloc(129, fieldProfile.id.charCodeAt(
+      fieldProfile.id.length - 1));
+    entry.raw_packet_ref.raw_payload_sha256 = crypto.createHash('sha256')
+      .update(payload).digest('hex');
+    const { directory } = fixture(t, [entry], { fieldProfile });
+    bindSavedPacketArtifactToPhysicalReplay(directory, { payloads: [payload] });
+    const verified = command(directory, '--verify-source', '--limit', '1');
+    assert.equal(verified.status, 0, `${fieldProfile.id}: ${verified.stderr}`);
+    assert.equal(JSON.parse(verified.stderr).source_provenance_status,
+      'SOURCE_REPLAY_VERIFIED');
+  }
+});
+
 test('batch V8 lookup-key query counts V7 unavailable separately', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-cast-u32-28-batch-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
