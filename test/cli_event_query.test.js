@@ -869,6 +869,10 @@ test('query-events rejects unsafe or corrupt batch artifacts and removes partial
   assert.equal(corrupt.status, 2);
   assert.equal(JSON.parse(corrupt.stderr).code, 'INVALID_EVENT_ROW');
   assert.equal(fs.existsSync(output), false);
+  const stdoutCorrupt = run(batch.root, '--event', EVENT, '--limit', '1');
+  assert.equal(stdoutCorrupt.status, 2);
+  assert.equal(JSON.parse(stdoutCorrupt.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(stdoutCorrupt.stdout, '');
 
   rewriteJson(batch.manifestPath, (manifest) => {
     manifest.replay_inputs[1].artifact_directory = 'replays/../outside';

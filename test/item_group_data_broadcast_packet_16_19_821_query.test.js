@@ -152,6 +152,17 @@ test('later forged native output is detected after limit with no partial output'
   assert.equal(fs.existsSync(output), false);
 });
 
+test('stdout stays empty when a later native output fails integrity', (t) => {
+  const f = fixture(t);
+  const forged = structuredClone(f.rows);
+  forged[1].native_protected_lookup_bytes_hex = PACKETS[0][1];
+  forged[1].native_callback_lookup_key_u32 = PACKETS[0][2];
+  fs.writeFileSync(f.eventPath, `${forged.map(JSON.stringify).join('\n')}\n`);
+  const selected = query(f.dir, '--limit', '1');
+  assert.equal(errorCode(selected), 'EVENT_COUNT_MISMATCH');
+  assert.equal(selected.stdout, '');
+});
+
 test('raw payload and capability promotion forgeries fail closed', (t) => {
   const f = fixture(t);
   const forged = structuredClone(f.rows);

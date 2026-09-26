@@ -71,6 +71,16 @@ Current progress (older notes below retain their original research context):
   unrequested capabilities; batch mode checks manifest hashes. Real V7
   CastSpellAns and multi-event V5 damage batches each listed 11 KR 821
   Replays. The listing does not scan JSONL rows and says so in its output.
+- **Saved query stdout integrity:** `query-events` now stages selected stdout
+  lines in a temporary file and releases them only after every source row and
+  digest validates, including rows after `--limit` and later batch Replays.
+  Before the fix, corrupting only line 124,080 of a copied original 821
+  item-group JSONL produced `INVALID_EVENT_ROW` but had already sent the
+  first 1,407-byte row to stdout. The same real negative control now exits 2
+  with zero stdout bytes; the valid query still scans all 124,080 rows,
+  matches 330 and emits one unchanged row. The copied negative artifact and
+  both command outcomes remain under ignored
+  `artifacts/16_19_development/item_group_stdout_probe_20260926/`.
 - **CastSpellAns nested anonymous f32 at packet +0xa0 (opt-in V7):** The
   exact 821 deserializer at RVA `0x10bd7d4..0x10bd991` writes protected
   nested `+0x90` bytes; the callback at RVA `0x8d76da..0x8d7710` converts

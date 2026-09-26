@@ -3,6 +3,7 @@
 const childProcess = require('node:child_process');
 const { once } = require('node:events');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { finished } = require('node:stream/promises');
 const { rawAnchorChainStatus, renderAcceptanceReport } = require('./cli_report');
@@ -3299,6 +3300,9 @@ async function runQueryEventsCommand(parsed) {
   let outputPath = null;
   let writer = process.stdout;
   let createdOutput = false;
+  let stagedStdoutDirectory = null;
+  let stagedStdoutPath = null;
+  let createdStaging = false;
   try {
     const artifactDirectory = path.resolve(positionals[0]);
     const batch = fs.existsSync(path.join(artifactDirectory, 'manifest.json'));
@@ -3351,6 +3355,15 @@ async function runQueryEventsCommand(parsed) {
       }
       writer = handle.createWriteStream();
       createdOutput = true;
+    } else {
+      // A later invalid JSONL row or digest must not leave a partial stdout
+      // result. Spool only selected rows, then publish them after validation.
+      stagedStdoutDirectory = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'rofl-query-'));
+      stagedStdoutPath = path.join(stagedStdoutDirectory, 'selected.jsonl');
+      const handle = await fs.promises.open(stagedStdoutPath, 'wx');
+      writer = handle.createWriteStream();
+      createdStaging = true;
     }
     const filters = {
       fromMs: options.fromMs,
@@ -3395,17 +3408,24 @@ async function runQueryEventsCommand(parsed) {
     const summary = batch
       ? await streamBatchEventQuery(prepared, filters, emitLine)
       : await streamEventQuery(prepared, filters, emitLine);
-    if (createdOutput) {
+    if (createdOutput || createdStaging) {
       writer.end();
       await finished(writer);
+    }
+    if (createdStaging) {
+      for await (const chunk of fs.createReadStream(stagedStdoutPath)) {
+        if (!process.stdout.write(chunk)) await once(process.stdout, 'drain');
+      }
     }
     summary.output = outputPath ?? '-';
     (outputPath ? process.stdout : process.stderr).write(`${JSON.stringify(summary)}\n`);
     return 0;
   } catch (error) {
-    if (createdOutput) {
+    if (createdOutput || createdStaging) {
       writer.destroy();
       await finished(writer).catch(() => {});
+    }
+    if (createdOutput) {
       await fs.promises.rm(outputPath, { force: true });
     }
     if (error instanceof EventQueryError) {
@@ -3414,6 +3434,13 @@ async function runQueryEventsCommand(parsed) {
       return 2;
     }
     throw error;
+  } finally {
+    if (stagedStdoutPath) {
+      await fs.promises.rm(stagedStdoutPath, { force: true });
+    }
+    if (stagedStdoutDirectory) {
+      await fs.promises.rmdir(stagedStdoutDirectory);
+    }
   }
 }
 
