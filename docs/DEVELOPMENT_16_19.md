@@ -4,6 +4,25 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **CastSpellAns nested anonymous u32 at packet +0x4c (opt-in packet V6):**
+  The pinned `16.19.821.7343` image callback RVA `0x8d7860..0x8d78cb`
+  reads nested `+0x3c` (packet object `+0x4c`), converts four protected
+  bytes with the table at RVA `0x1b41db0`, and writes the word to temporary
+  `+0xac`. The nested deserializer writes the inverse protected bytes at
+  RVA `0x10bb405..0x10bb744` with table RVA `0x1badb60` (SHA-256
+  `ae15d606869d66dc47309b26cb489e01bf841e9dd57d540683e2dc7f5e394588`);
+  both transforms invert each other for all 256 byte values. The callback
+  transform SHA-256 is
+  `ad5ff48a6d097a43b6880bcafd30d0f8ef7f30f3988c049e1add1261f626eb4c`.
+  Opt-in `castPacketProfile: 'v6'` retains every V5 field and adds
+  `raw_u32_0x4c_hex` and `opaque_u32_0x4c`. V4 remains the default; V5
+  retains its historical profile identity. Three original KR Replays
+  produced 5,980/5,980, 5,713/5,713 and 5,561/5,561 V6 candidates,
+  17,254/17,254 combined, with exact image `MATCHED_USED` and zero decode
+  failures. Four fixed game/keyframe packet anchors match protected bytes
+  and decoded words; one-byte truncate and append controls fail full native
+  consumption. The word is anonymous: no caster, spell, target, action or
+  gameplay effect is inferred.
 - **CastSpellAns nested anonymous u32 at +0x1c (opt-in packet V5):** The
   pinned `16.19.821.7343` image callback RVA `0x8d77ed..0x8d785a` reads
   nested `+0x0c` (packet object `+0x1c`), converts its protected bytes with

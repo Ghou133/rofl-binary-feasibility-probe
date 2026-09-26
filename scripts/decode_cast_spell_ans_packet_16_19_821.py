@@ -29,6 +29,9 @@ CALLBACK_TABLE_RVA = 0x01ab62d0
 CALLBACK_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b'
 NESTED_U32_CALLBACK_TABLE_RVA = 0x01b41db0
 NESTED_U32_TRANSFORM_SHA256 = '5b858c9ef8d1393d05d867112316c3344ff777044719d839ad8cd64867d7f537'
+NESTED_U32_0X4C_TRANSFORM_SHA256 = 'ad5ff48a6d097a43b6880bcafd30d0f8ef7f30f3988c049e1add1261f626eb4c'
+NESTED_U32_0X4C_INVERSE_TABLE_RVA = 0x01badb60
+NESTED_U32_0X4C_INVERSE_TABLE_SHA256 = 'ae15d606869d66dc47309b26cb489e01bf841e9dd57d540683e2dc7f5e394588'
 NESTED_FLOAT_INVERSE_SHA256 = 'cce644f3775d31b6be55e5abc79ed029298be5110b8f81be8957bd3b066019f5'
 NESTED_BYTE_INVERSE_SHA256 = 'b5d220967c423848c278651d068786e3aaedf4994c6d30dd1d3d0c8fe6892516'
 PROFILE = {'constructor_rva': 0x00e9da90, 'deserialize_rva': 0x010df350,
@@ -165,8 +168,37 @@ def nested_u32_transform(table):
     return transform
 
 
+def nested_u32_at_4c_transform(table, inverse_table):
+    # The exact 821 callback at RVA 0x8d7860..0x8d78cb reads nested +0x3c
+    # (packet object +0x4c) and writes the converted word to temporary +0xac.
+    # The nested deserializer protects that word at RVA 0x10bb405..0x10bb744
+    # using the inverse table at RVA 0x1badb60. No gameplay role is assigned.
+    def decode(byte):
+        value = swap(byte)
+        value = swap((~value) & 0xff)
+        value = swap((value + 0x30) & 0xff)
+        return table[value]
+
+    transform = bytes(decode(byte) for byte in range(256))
+    if (len(set(transform)) != 256 or hashlib.sha256(transform).hexdigest()
+            != NESTED_U32_0X4C_TRANSFORM_SHA256):
+        raise ValueError('cast nested +0x4c u32 callback transform differs')
+
+    def encode(byte):
+        value = swap(inverse_table[byte])
+        value = swap((value - 0x30) & 0xff)
+        return swap((~value) & 0xff)
+
+    if (len(inverse_table) != 256 or hashlib.sha256(inverse_table).hexdigest()
+            != NESTED_U32_0X4C_INVERSE_TABLE_SHA256
+            or any(decode(encode(byte)) != byte or encode(decode(byte)) != byte
+                   for byte in range(256))):
+        raise ValueError('cast nested +0x4c deserializer inverse differs')
+    return transform
+
+
 def decode_packet(emulator, context, raw_param, payload, table,
-                  nested_u32_table=None):
+                  nested_u32_table=None, nested_u32_at_4c_table=None):
     context['raw_param'] = raw_param
     native = emulator.decode(payload, PROFILE)
     return_al = native['deserialize_return_al']
@@ -218,6 +250,11 @@ def decode_packet(emulator, context, raw_param, payload, table,
         result['raw_u32_0x1c_hex'] = raw_u32.hex()
         result['opaque_u32_0x1c'] = struct.unpack(
             '<I', raw_u32.translate(nested_u32_table))[0]
+    if nested_u32_at_4c_table is not None:
+        raw_u32_at_4c = obj[0x4c:0x50]
+        result['raw_u32_0x4c_hex'] = raw_u32_at_4c.hex()
+        result['opaque_u32_0x4c'] = struct.unpack(
+            '<I', raw_u32_at_4c.translate(nested_u32_at_4c_table))[0]
     return result
 
 
@@ -226,6 +263,8 @@ def main():
     parser.add_argument('--image', type=Path, required=True)
     parser.add_argument('--nested-u32-0x1c', action='store_true',
                         help='opt in to the anonymous nested callback u32')
+    parser.add_argument('--nested-u32-0x4c', action='store_true',
+                        help='opt in to the anonymous nested callback +0x4c u32')
     options = parser.parse_args()
     digest = None
     try:
@@ -238,12 +277,19 @@ def main():
         if len(table) != 256 or table_sha != CALLBACK_TABLE_SHA256:
             raise ValueError('cast callback transform table differs')
         nested_u32_table = None
-        if options.nested_u32_0x1c:
+        nested_u32_at_4c_table = None
+        if options.nested_u32_0x1c or options.nested_u32_0x4c:
             callback_copy = image[NESTED_U32_CALLBACK_TABLE_RVA:
                                   NESTED_U32_CALLBACK_TABLE_RVA + 256]
             if callback_copy != table:
                 raise ValueError('cast nested u32 callback table differs')
+        if options.nested_u32_0x1c:
             nested_u32_table = nested_u32_transform(callback_copy)
+        if options.nested_u32_0x4c:
+            inverse_copy = image[NESTED_U32_0X4C_INVERSE_TABLE_RVA:
+                                 NESTED_U32_0X4C_INVERSE_TABLE_RVA + 256]
+            nested_u32_at_4c_table = nested_u32_at_4c_transform(
+                callback_copy, inverse_copy)
         emulator, context = make_emulator(image)
         results = []
         for index, packet in enumerate(packets):
@@ -258,7 +304,7 @@ def main():
                        'raw_payload_sha256': hashlib.sha256(payload).hexdigest()}
             try:
                 row = decode_packet(emulator, context, raw_param, payload, table,
-                                    nested_u32_table)
+                                    nested_u32_table, nested_u32_at_4c_table)
                 if row['status'] != 'DECODED':
                     emulator, context = make_emulator(image)
             except Exception as exc:
@@ -273,6 +319,8 @@ def main():
                    'results': results}
         if nested_u32_table is not None:
             output['nested_u32_transform_sha256'] = NESTED_U32_TRANSFORM_SHA256
+        if nested_u32_at_4c_table is not None:
+            output['nested_u32_0x4c_transform_sha256'] = NESTED_U32_0X4C_TRANSFORM_SHA256
         json.dump(output, sys.stdout, separators=(',', ':'))
         sys.stdout.write('\n')
         return 0
