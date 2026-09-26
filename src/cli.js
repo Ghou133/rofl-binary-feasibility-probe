@@ -243,6 +243,9 @@ key, and compares +0x2c to the decoded die-source key. It does not select a
 fatal packet or establish damage actor, source, target, or effect.
 face_direction_keyframe_roster_pair pairs canonical keyframe FaceDirection packets
 with same-keyframe HeroStats roster candidates; the roster label does not identify the packet actor.
+hero_roster_metadata_bridge joins ten canonical HeroStats roster keys to Replay
+metadata champion/team/role only when observed death, source-kill and assist
+counts uniquely match all ten metadata K/D/A rows. Packet actors remain unknown.
 Inspect reads the container and packet framing without a runtime image.
 Capabilities reads the container/build registry and checks selected dependencies
 without packet framing or semantic decode.
@@ -1274,6 +1277,13 @@ function parseOne1619(replay, options, started) {
   if (options.semantic !== false && Array.isArray(options.events)
       && options.events.includes('face_direction_keyframe_roster_pair')) {
     for (const source of ['face_direction_packet', 'hero_minions_killed_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('hero_roster_metadata_bridge')) {
+    for (const source of ['hero_death', 'hero_assist', 'hero_deaths_snapshot',
+      'hero_champion_kills_snapshot', 'hero_assists_snapshot']) {
       if (!selected821.includes(source)) selected821.push(source);
     }
   }
@@ -2685,6 +2695,15 @@ function capabilityQuery(replay, options = {}) {
           ].map(([field, assessment]) => ({ field, status: assessment.status,
             error: assessment.error ?? assessment.missing_input ?? null })) }
         : profile.game_version === '16.19.821.7343'
+          && capability === 'hero_roster_metadata_bridge'
+          ? { required_fields: [
+            ['NUM_DEATHS', assessHeroDeathTail821(replay)],
+            ['CHAMPIONS_KILLED', assessHeroChampionKillsSnapshotTail821(replay)],
+            ['ASSISTS', assessHeroAssistsSnapshotTail821(replay)],
+          ].map(([field, assessment]) => ({ field, status: assessment.status,
+            error: assessment.error ?? assessment.missing_input ?? null })),
+          metadata_fields: ['SKIN', 'TEAM', 'INDIVIDUAL_POSITION or TEAM_POSITION'] }
+        : profile.game_version === '16.19.821.7343'
           && Object.hasOwn(DAMAGE_PROFILES_821, capability)
           ? { required_fields: [
             ...DAMAGE_PROFILES_821[capability].fields.map((field) => field.replay_tail_field),
@@ -2882,6 +2901,12 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_assists_snapshot') {
         validationPending.push('KR keyframe 0x0089 structure, raw byte 1178, and pinned 821 runtime byte transform',
           'monotone snapshots and ten ASSISTS tails');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_roster_metadata_bridge') {
+        validationPending.push('five exact-build death, assist and K/D/A keyframe candidate outcomes',
+          'unique ten-way observed event K/D/A match to complete Replay metadata champion/team/role rows',
+          'matching latest 0x0089 roster references; per-packet actors remain UNKNOWN');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_missions_minions_killed_snapshot') {
@@ -3351,6 +3376,7 @@ function capabilityQuery(replay, options = {}) {
             hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
             hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
             hero_assists_snapshot: 'hero_assists_snapshot_candidates',
+            hero_roster_metadata_bridge: 'hero_roster_metadata_bridge_candidates',
             hero_missions_minions_killed_snapshot:
               'hero_missions_minions_killed_snapshot_candidates',
             hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',

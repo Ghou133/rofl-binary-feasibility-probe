@@ -121,6 +121,8 @@ const heroDeathDamageLookupKeyCooccurrence1619821 =
   require('./decoders/rofl_16_19_821_hero_death_damage_lookup_key_cooccurrence_candidate');
 const faceDirectionKeyframeRosterPair1619821 =
   require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
+const heroRosterMetadataBridge1619821 =
+  require('./decoders/rofl_16_19_821_roster_metadata_bridge_candidate');
 const damageFloatCandidate1619821 =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
 const timeStatsCandidate1619821 =
@@ -568,6 +570,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_deaths_snapshot: 0x0089,
       hero_champion_kills_snapshot: 0x0089,
       hero_assists_snapshot: 0x0089,
+      hero_roster_metadata_bridge: 0x0089,
       hero_missions_minions_killed_snapshot: 0x0089,
       hero_ward_stats_snapshot: 0x0089,
       hero_missions_cannon_minions_killed_snapshot: 0x0089,
@@ -651,6 +654,8 @@ const BUILD_PROFILES = deepFreeze({
         heroStatsCandidate1619821.HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE,
       hero_assists_snapshot:
         heroStatsCandidate1619821.HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE,
+      hero_roster_metadata_bridge:
+        heroRosterMetadataBridge1619821.HERO_ROSTER_METADATA_BRIDGE_821_PROFILE,
       hero_missions_minions_killed_snapshot:
         heroStatsCandidate1619821.HERO_MISSIONS_MINIONS_KILLED_SNAPSHOT_821_CANDIDATE_PROFILE,
       hero_ward_stats_snapshot:
@@ -795,6 +800,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_deaths_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_KEYFRAME_TAIL_CORRELATION',
       hero_champion_kills_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_MIRRORED_KEYFRAME_TAIL_CORRELATION',
       hero_assists_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_KEYFRAME_TAIL_CORRELATION',
+      hero_roster_metadata_bridge:
+        heroRosterMetadataBridge1619821.HERO_ROSTER_METADATA_BRIDGE_821_PROFILE.evidence_status,
       hero_missions_minions_killed_snapshot:
         'CANDIDATE_821_RUNTIME_TWO_BYTE_MISSIONS_TAIL_CORRELATION',
       hero_ward_stats_snapshot: 'CANDIDATE_821_RUNTIME_WARD_COUNT_BYTES_AND_TAILS',
@@ -931,6 +938,7 @@ const BUILD_PROFILES = deepFreeze({
         'exact 821 native 0x0089 carrier and vector byte transform at mirrored raw bytes 434/1186; kill-count semantic label candidate only',
       keyframe_assists_snapshot:
         'exact 821 native 0x0089 carrier and vector byte transform at raw byte 1178; assist-count semantic label candidate only',
+      hero_roster_metadata_bridge: 'unique per-Replay ten-way match of exact-821 observed death, source-kill and assist counts to ROFL metadata K/D/A; champion/team/role are metadata facts, raw-key association candidate and packet actor unknown',
       keyframe_missions_minions_killed_snapshot:
         'exact 821 runtime byte transform at 0x0089 raw bytes 374/373; Missions_MinionsKilled tail correlation only, distinct from MINIONS_KILLED',
       keyframe_ward_stats_snapshot:
@@ -1005,6 +1013,7 @@ const BUILD_PROFILES = deepFreeze({
     candidate_capabilities: [
       'hero_death', 'hero_assist', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
+      'hero_roster_metadata_bridge',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
       'hero_minions_killed_snapshot',

@@ -153,6 +153,8 @@ const { associateHeroDeathDamageLookupKeyCooccurrence821 } =
   require('./decoders/rofl_16_19_821_hero_death_damage_lookup_key_cooccurrence_candidate');
 const { associateFaceDirectionKeyframeRosterPairs821 } =
   require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
+const { associateHeroRosterMetadataBridge821 } =
+  require('./decoders/rofl_16_19_821_roster_metadata_bridge_candidate');
 const { RUNTIME_IMAGE_SHA256: RUNTIME_IMAGE_SHA256_821 } =
   require('./decoders/rofl_16_19_821_runtime_bytes');
 const { decodeHeroDamageSnapshotCandidates821 } =
@@ -2569,6 +2571,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
     hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
     hero_assists_snapshot: 'hero_assists_snapshot_candidates',
+    hero_roster_metadata_bridge: 'hero_roster_metadata_bridge_candidates',
     hero_missions_minions_killed_snapshot: 'hero_missions_minions_killed_snapshot_candidates',
     hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
     hero_missions_cannon_minions_killed_snapshot:
@@ -2713,6 +2716,7 @@ function decode1619821(replay, profile, options = {}) {
     'set_dimension_missile_packet',
   ]);
   const facePairSelected = capabilities.includes('face_direction_keyframe_roster_pair');
+  const rosterMetadataSelected = capabilities.includes('hero_roster_metadata_bridge');
   const damageKeyPairSelected = capabilities.includes('unit_apply_damage_roster_key_pair');
   const damageLookupPairSelected = capabilities.includes(
     'unit_apply_damage_lookup_roster_key_pair');
@@ -2722,6 +2726,8 @@ function decode1619821(replay, profile, options = {}) {
     'hero_death_damage_lookup_key_cooccurrence');
   const supported = [...new Set([
     ...capabilities.filter((capability) => sharedScanCapabilities.has(capability)),
+    ...(rosterMetadataSelected ? ['hero_death', 'hero_assist',
+      'hero_deaths_snapshot', 'hero_champion_kills_snapshot', 'hero_assists_snapshot'] : []),
     ...(facePairSelected ? ['face_direction_packet', 'hero_minions_killed_snapshot'] : []),
     ...(deathDamageLookupSelected ? ['hero_death'] : []),
     ...(damageKeyPairSelected || damageLookupPairSelected || damageLookup2cPairSelected
@@ -2745,7 +2751,12 @@ function decode1619821(replay, profile, options = {}) {
     if (decodedSources.has(capability)) return decodedSources.get(capability);
     let outcome;
     try {
-      if (capability === 'face_direction_keyframe_roster_pair') {
+      if (capability === 'hero_roster_metadata_bridge') {
+        outcome = associateHeroRosterMetadataBridge821(replay, Object.fromEntries([
+          'hero_death', 'hero_assist', 'hero_deaths_snapshot',
+          'hero_champion_kills_snapshot', 'hero_assists_snapshot',
+        ].map((name) => [name, decodeCapability(name)])));
+      } else if (capability === 'face_direction_keyframe_roster_pair') {
         outcome = associateFaceDirectionKeyframeRosterPairs821(replay, {
           faceDirectionPacketOutcome: decodeCapability('face_direction_packet'),
           minionsKilledSnapshotOutcome: decodeCapability('hero_minions_killed_snapshot'),
@@ -2849,7 +2860,8 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'unit_apply_damage_lookup_roster_key_pair'
         || capability === 'unit_apply_damage_lookup2c_roster_key_pair'
         || capability === 'hero_death_damage_lookup_key_cooccurrence'
-        || capability === 'face_direction_keyframe_roster_pair') {
+        || capability === 'face_direction_keyframe_roster_pair'
+        || capability === 'hero_roster_metadata_bridge') {
       result.runtime_image_status ??= options.runtimeImagePath
         ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
       result.runtime_image_used ??= false;
@@ -2867,9 +2879,11 @@ function decode1619821(replay, profile, options = {}) {
   const usable = results.filter((result) => result.status === 'CANDIDATE');
   const failed = results.filter((result) => result.status !== 'CANDIDATE');
   const uniqueDecodedInputCounts = new Map();
-  if (facePairSelected || damageKeyPairSelected || damageLookupPairSelected
+  if (rosterMetadataSelected || facePairSelected || damageKeyPairSelected || damageLookupPairSelected
       || damageLookup2cPairSelected || deathDamageLookupSelected) {
     for (const dependency of [
+      ...(rosterMetadataSelected ? ['hero_death', 'hero_assist',
+        'hero_deaths_snapshot', 'hero_champion_kills_snapshot', 'hero_assists_snapshot'] : []),
       ...(facePairSelected ? ['face_direction_packet'] : []),
       ...(deathDamageLookupSelected ? ['hero_death'] : []),
       ...(damageKeyPairSelected || damageLookupPairSelected || damageLookup2cPairSelected
@@ -2886,7 +2900,8 @@ function decode1619821(replay, profile, options = {}) {
   }
   for (const [capability, result] of Object.entries(capabilityResults)) {
     if (result.status !== 'CANDIDATE') continue;
-    if (capability === 'face_direction_keyframe_roster_pair'
+    if (capability === 'hero_roster_metadata_bridge'
+        || capability === 'face_direction_keyframe_roster_pair'
         || capability === 'unit_apply_damage_roster_key_pair'
         || capability === 'unit_apply_damage_lookup_roster_key_pair'
         || capability === 'unit_apply_damage_lookup2c_roster_key_pair'
