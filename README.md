@@ -740,6 +740,8 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 
 16.19 `decode` 或 `batch` 使用 `--events` 时，可额外指定 `--event-jsonl-only` 减少大量事件的重复输出。此模式仍写入每项事件的完整 JSONL、`semantic_run.json` 和各报告；`replay_analysis.json` 中的 `events` 为 `null`，同时记录 `event_storage: "JSONL_ONLY"`、`event_jsonl_files` 相对路径与 `event_counts`，不生成重复的 `events.json`。输出 manifest 只散列实际生成的文件。默认模式保持原有三份事件输出；此选项不适用于 `inspect`、旧版回放或未指定 `--events` 的调用。
 
+精确 `16.19.821.7343` 的 `batch --events ... --event-jsonl-only` 可选 `--jobs 2`，同时处理最多两场回放；`--jobs 1` 是同一精确 build 的串行比较入口，省略该选项时保持原有批处理路径。每场回放独立写入 JSONL，只把不含事件数组的摘要交给批量报告；报告和 manifest 仍按输入排序，失败场次单独记录。此选项不接受其他 build 或其他 CLI 模式。两个原生解码任务会同时占用 CPU 和运行时镜像内存，实际耗时依机器及所选能力而变。
+
 `query-events` 也可直接读取 `batch` 或 `decode` 的输出根目录，包括只含一场回放的根目录。从 `manifest.json` 逐场校验回放身份、目录清单和每场元数据及所查 JSONL 的 SHA-256，再把匹配行原样输出；单场产物还可传入 `replays/<回放名>` 目录。`--limit` 作用于整批输出，仍会检查所有可用场次的完整行数。汇总列出每场 `COMPLETE` 或 `UNAVAILABLE` 和原有能力状态；部分场次缺少包形状时返回 `PARTIAL`，不会把缺失当作零命中。全部场次不可查询时命令失败，已创建的输出文件会清理。
 
 精确 821 的 NotifyContextualSituation、item-group V1/V2、cooldown broadcast、item-charges、target-hero、ForceCreateMissile、SetDimensionMissile、UnitApplyDamage、ShowHealthBar 和 CastSpellAns 包候选可加 `--verify-source`，重新读取原始 ROFL 并核对完整 build/SHA-256、严格分帧和逐包时间、偏移、参数及载荷。SetDimensionMissile 与 UnitApplyDamage 还会核对每行字段及保存的有序原生摘要；ShowHealthBar 会核对行字段、回调字节变换及有序原生输入摘要；CastSpellAns 会核对行与原始包引用，但 V8 字段没有有序原生输出摘要。单场原文件搬移后可用 `--source-replay "PATH"` 指定同字节副本；批量查询使用各场保存的来源路径。缺源、错源或不一致会失败且不会输出部分行；其他事件形状明确拒绝此选项。离线查询的 `source_provenance_status` 为 `SAVED_ONLY_UNVERIFIED`，原始回放核对通过后为 `SOURCE_REPLAY_VERIFIED`；此校验不重新运行原生回调解码。

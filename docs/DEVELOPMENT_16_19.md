@@ -14,6 +14,24 @@ Current progress (older notes below retain their original research context):
   with `--limit 1`. Synthetic late time/offset, top-level time/parameter,
   and packet-ID metadata forgeries fail with zero stdout. This does not rerun
   the native callback or establish a health or visibility effect.
+- **Opt-in exact-821 batch concurrency (2026-09-26):** `batch --events ...
+  --event-jsonl-only --jobs 2` uses at most two isolated Replay workers. Each
+  worker writes its own candidate JSONL and returns only its saved analysis
+  without event arrays; the parent retains input order, per-Replay failures,
+  and the ordinary batch manifest. The default batch path is unchanged.
+  On two original KR `16.19.821.7343` Replays with the same
+  `unit_apply_damage_packet` selection and exact runtime image, one Windows
+  host measured 20.542 s with `--jobs 1` and 12.965 s with `--jobs 2`.
+  Both runs returned `CANDIDATE`, 3,481,428 framed blocks, zero framing
+  errors, and identical candidate JSONL SHA-256 for the 64,824 and 57,939
+  rows. A single 11-Replay `--jobs 2` confirmation took 61.732 s, returned
+  `CANDIDATE` with 18,235,209 framed blocks, zero errors, and all 628,909
+  candidate rows byte-identical to the earlier saved serial V5 artifact;
+  per-Replay order, counts, and actual file hashes matched. That older
+  artifact was generated at commit `d911f819`, so it is a parity reference,
+  not a same-commit timing baseline. These timings are one-host observations,
+  not cross-platform speed claims. Inputs, outputs, and logs stay ignored under
+  `artifacts/16_19_development/batch_jobs_821_benchmark_20260926/`.
 - **UnitApplyDamage saved-source verification (2026-09-26):** The opt-in
   `query-events --verify-source` now covers exact-821 0x005f
   `unit_apply_damage_packet_candidates` V1-V6. It checks the original ROFL
