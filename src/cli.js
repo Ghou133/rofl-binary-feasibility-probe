@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { finished } = require('node:stream/promises');
+const { Worker } = require('node:worker_threads');
 const { rawAnchorChainStatus, renderAcceptanceReport } = require('./cli_report');
 const { resolveBuildProfile } = require('./build_registry');
 const {
@@ -74,7 +75,9 @@ const {
   analyzeReplay,
 } = require('./analysis');
 const {
+  HEADER_PREFIX_SIZE,
   RoflError,
+  parseHeader,
   parseReplayFile,
   sha256,
 } = require('./rofl');
@@ -113,6 +116,7 @@ const { EventQueryError, prepareEventQuery, prepareBatchEventQuery,
   streamEventQuery, streamBatchEventQuery, listSavedEvents } = require('./event_query');
 
 const REPOSITORY_ROOT = path.resolve(__dirname, '..');
+const BATCH_JOBS_BUILD = '16.19.821.7343';
 const TEST_COMMAND = 'node --test test/*.test.js';
 const COMMANDS = new Set(['inspect', 'decode', 'analyze', 'batch', 'validate', 'ward-events', 'capabilities', 'query-events']);
 const INVENTORY_GAME_COMPARISON_LABELS_821 = Object.freeze([
@@ -259,6 +263,7 @@ Options:
   --item-group-packet-v2        Opt into exact 821 item-group conditional callback byte candidate (decode/batch)
   --damage-packet-v6            Opt into exact 821 UnitApplyDamage +0x1c u32 packet/association candidates (decode/batch)
   --event-jsonl-only            Store 16.19 event rows only in JSONL (decode/batch with --events)
+  --jobs <1|2>                  Exact-821 batch with --events and --event-jsonl-only (default: 1)
   --event <key>                 Exact 16.19 candidate JSONL key (query-events)
   --list-events                 List saved 16.19 candidate keys and declared counts (query-events)
   --verify-source               Check supported exact-821 packet rows against the original ROFL
@@ -359,6 +364,7 @@ function parseArgs(argv) {
     verifySource: false,
     sourceReplay: null,
     eventJsonlOnly: false,
+    jobs: null,
     participant: null,
     killerParticipant: null,
     assistingParticipant: null,
@@ -549,6 +555,10 @@ function parseArgs(argv) {
       else if (key === 'decoder-image') options.decoderImage = value;
       else if (key === 'runtime-image') options.runtimeImage = value;
       else if (key === 'events') options.events = parseEventNames(value);
+      else if (key === 'jobs') {
+        if (!/^[12]$/.test(value)) throw new Error('--jobs must be 1 or 2');
+        options.jobs = Number(value);
+      }
       else if (command === 'query-events' && key === 'event') options.event = value;
       else if (command === 'query-events' && key === 'source-replay') options.sourceReplay = value;
       else if (key === 'python') options.python = value;
@@ -619,6 +629,10 @@ function parseArgs(argv) {
   }
   if (options.eventJsonlOnly && (!['decode', 'batch'].includes(command) || !options.events)) {
     throw new Error('--event-jsonl-only requires decode or batch with --events');
+  }
+  if (options.jobs !== null && (command !== 'batch' || !options.events
+      || !options.eventJsonlOnly)) {
+    throw new Error('--jobs requires batch with --events and --event-jsonl-only');
   }
   if (options.damagePacketV6 && (!['decode', 'batch'].includes(command)
       || !options.events?.some((capability) => [
@@ -1611,6 +1625,38 @@ function parseOne(filePath, options) {
   }
 }
 
+function quickReplayVersion(filePath) {
+  const bytes = Buffer.alloc(HEADER_PREFIX_SIZE + 64);
+  let descriptor;
+  try {
+    descriptor = fs.openSync(filePath, 'r');
+    const length = fs.readSync(descriptor, bytes, 0, bytes.length, 0);
+    return parseHeader(bytes.subarray(0, length)).version;
+  } catch {
+    // The ordinary parser retains the precise missing-file or malformed-header error.
+    return null;
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+  }
+}
+
+function parseOneExact821Batch(filePath, options) {
+  const version = quickReplayVersion(filePath);
+  if (version !== null && version !== BATCH_JOBS_BUILD) {
+    return {
+      ok: false,
+      source_path: path.resolve(filePath),
+      error: {
+        code: 'UNSUPPORTED_OUTPUT_MODE',
+        message: `--jobs supports only exact ${BATCH_JOBS_BUILD}; received ${version}.`,
+        details: { replay_version: version },
+        name: 'Error',
+      },
+    };
+  }
+  return parseOne(filePath, options);
+}
+
 function gameIdFromFilePath(filePath) {
   return /(?:^|[-_])([0-9]+)\.rofl$/i.exec(path.basename(filePath))?.[1] ?? null;
 }
@@ -1745,6 +1791,23 @@ function replayDirectoryNames(analyses) {
     throw new Error('Replay output directory identities are not unique');
   }
   return names;
+}
+
+function parallelReplayDirectoryNames(files) {
+  const names = replayDirectoryNames(files.map((source_path) => ({ source_path })));
+  if (process.platform !== 'win32') return names;
+  const counts = new Map();
+  for (const name of names) {
+    const folded = name.toLowerCase();
+    counts.set(folded, (counts.get(folded) ?? 0) + 1);
+  }
+  const isolated = names.map((name, index) => counts.get(name.toLowerCase()) > 1
+    ? `${safeStem(files[index])}-${sha256(Buffer.from(path.resolve(files[index]).toLowerCase()))}`
+    : name);
+  if (new Set(isolated.map((name) => name.toLowerCase())).size !== isolated.length) {
+    throw new Error('Replay paths cannot be isolated into unique worker artifact directories');
+  }
+  return isolated;
 }
 
 function writePerReplayArtifacts(analysis, rootDir, replayDirName, options = {}) {
@@ -1983,8 +2046,10 @@ function buildAcceptanceSummary(results, beforeHashes, afterHashes, testSummary,
     && !testRunFailed
     && upstream.unchanged;
   let status = successful.length === 0
-    ? failed.some((result) => result.error.code === 'UNSUPPORTED_OUTPUT_MODE')
-      ? 'UNSUPPORTED_OUTPUT_MODE' : 'NEED_USER_FILE'
+    ? failed.some((result) => result.error.code === 'WORKER_FAILED')
+      ? 'VALIDATION_FAILED'
+      : failed.some((result) => result.error.code === 'UNSUPPORTED_OUTPUT_MODE')
+        ? 'UNSUPPORTED_OUTPUT_MODE' : 'NEED_USER_FILE'
     : validationClean && allSemanticReady && allV2Ready
       ? 'RESEARCH_READY_V2_COMPLETE'
       : validationClean && allSemanticReady
@@ -2250,10 +2315,39 @@ function buildReviewerManifest(summary, rootDir, results, args, options = {}) {
 async function writeRunArtifacts(results, rootDir, beforeHashes, afterHashes, args, testSummary = null, detailsDir = null, options = {}) {
   ensureDir(rootDir);
   const successful = results.filter((result) => result.ok);
-  const replayDirNames = replayDirectoryNames(successful.map((result) => result.analysis));
-  for (const [index, result] of successful.entries()) {
-    result.analysis.artifact_directory = path.posix.join('replays', replayDirNames[index]);
-    writePerReplayArtifacts(result.analysis, rootDir, replayDirNames[index], options);
+  if (options.prewrittenReplayArtifacts) {
+    const replayRoot = path.resolve(rootDir, 'replays');
+    for (const result of successful) {
+      const relative = result.analysis.artifact_directory;
+      const replayDir = path.resolve(rootDir, relative ?? '');
+      if (path.dirname(replayDir) !== replayRoot) {
+        throw new Error('Worker reported a Replay artifact directory outside this run');
+      }
+      const saved = JSON.parse(fs.readFileSync(path.join(replayDir, 'replay_analysis.json'), 'utf8'));
+      if (saved.replay_sha256 !== result.analysis.replay_sha256
+          || saved.source_path !== result.analysis.source_path
+          || saved.replay_version !== BATCH_JOBS_BUILD
+          || saved.event_storage !== 'JSONL_ONLY'
+          || saved.events !== null) {
+        throw new Error('Worker Replay artifact identity or JSONL storage differs');
+      }
+      if (!fs.statSync(path.join(replayDir, 'semantic_run.json')).isFile()
+          || !saved.event_jsonl_files || typeof saved.event_jsonl_files !== 'object') {
+        throw new Error('Worker Replay artifact is missing semantic or event metadata');
+      }
+      for (const [name, filename] of Object.entries(saved.event_jsonl_files)) {
+        if (filename !== `${name}.jsonl`
+            || !fs.statSync(path.join(replayDir, filename)).isFile()) {
+          throw new Error(`Worker Replay event artifact is missing: ${name}`);
+        }
+      }
+    }
+  } else {
+    const replayDirNames = replayDirectoryNames(successful.map((result) => result.analysis));
+    for (const [index, result] of successful.entries()) {
+      result.analysis.artifact_directory = path.posix.join('replays', replayDirNames[index]);
+      writePerReplayArtifacts(result.analysis, rootDir, replayDirNames[index], options);
+    }
   }
 
   const inventories = successful.map((result) => inventoryFromAnalysis(result.analysis));
@@ -3582,6 +3676,76 @@ async function runQueryEventsCommand(parsed) {
   }
 }
 
+function failedBatchWorker(filePath, message, details = null) {
+  return {
+    ok: false,
+    source_path: path.resolve(filePath),
+    error: { code: 'WORKER_FAILED', message, details, name: 'Error' },
+  };
+}
+
+function runOneBatchWorker(filePath, options, rootDir, replayDirName, workerScript) {
+  return new Promise((resolve) => {
+    let worker;
+    try {
+      worker = new Worker(workerScript, {
+        workerData: { filePath, options, rootDir, replayDirName },
+      });
+    } catch (error) {
+      resolve(failedBatchWorker(filePath, `Replay worker could not start: ${error.message}`));
+      return;
+    }
+    let reported = null;
+    let workerError = null;
+    worker.on('message', (value) => { reported = value; });
+    worker.on('error', (error) => { workerError = error; });
+    worker.on('exit', (code) => {
+      if (code !== 0 || workerError) {
+        resolve(failedBatchWorker(filePath,
+          `Replay worker exited ${code}: ${workerError?.message ?? 'no completed result'}`,
+          { worker_exit_code: code }));
+      } else if (!reported || typeof reported !== 'object'
+          || typeof reported.ok !== 'boolean'
+          || (reported.ok && (reported.analysis?.events !== null
+            || reported.analysis?.artifact_directory !== path.posix.join('replays', replayDirName)))
+          || (!reported.ok && (!reported.error || reported.source_path !== path.resolve(filePath)))) {
+        resolve(failedBatchWorker(filePath, 'Replay worker returned an invalid compact result'));
+      } else {
+        resolve(reported);
+      }
+    });
+  });
+}
+
+async function runBatchWorkers(files, options, rootDir, jobs = 2,
+  workerScript = path.join(__dirname, 'batch_worker.js')) {
+  const replayDirNames = parallelReplayDirectoryNames(files);
+  const results = new Array(files.length);
+  let next = 0;
+  async function runLane() {
+    while (next < files.length) {
+      const index = next++;
+      const name = replayDirNames[index];
+      const result = await runOneBatchWorker(files[index], options, rootDir, name, workerScript);
+      if (!result.ok) {
+        const replayDir = path.join(rootDir, 'replays', name);
+        if (fs.existsSync(replayDir)) {
+          const relative = path.posix.join('failed_replays', `${index + 1}-${name}`);
+          const preserved = path.join(rootDir, relative);
+          ensureDir(path.dirname(preserved));
+          fs.renameSync(replayDir, preserved);
+          result.error.details = {
+            ...(result.error.details ?? {}), partial_artifact_directory: relative,
+          };
+        }
+      }
+      results[index] = result;
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(jobs, files.length) }, runLane));
+  return results;
+}
+
 async function main(argv = process.argv.slice(2)) {
   const parsed = parseArgs(argv);
   if (parsed.options.help || parsed.command === 'help') {
@@ -3597,13 +3761,18 @@ async function main(argv = process.argv.slice(2)) {
   if (files.length === 0) throw new Error('No .rofl files found in the supplied input.');
   const beforeHashes = await hashFiles(DEFAULT_UPSTREAM_PATHS);
   const parseOptions = { ...parsed.options, semantic: parsed.command !== 'inspect' };
-  const results = files.map((filePath) => parseOne(filePath, parseOptions));
+  const parallel = parsed.options.jobs === 2;
+  const workerOutputRoot = parallel ? reserveOutputDirectory(parsed.options.outDir) : null;
+  const results = parallel
+    ? await runBatchWorkers(files, parseOptions, workerOutputRoot)
+    : files.map((filePath) => parsed.options.jobs === 1
+      ? parseOneExact821Batch(filePath, parseOptions) : parseOne(filePath, parseOptions));
   const testSummary = parsed.command === 'validate' ? runTestSuite() : null;
   const afterHashes = await hashFiles(DEFAULT_UPSTREAM_PATHS);
   const validationDetailsDir = parsed.command === 'validate' && parsed.options.detailsDir
     ? path.resolve(parsed.options.detailsDir)
     : null;
-  const outDir = reserveOutputDirectory(parsed.options.outDir);
+  const outDir = workerOutputRoot ?? reserveOutputDirectory(parsed.options.outDir);
   const summary = await writeRunArtifacts(
     results,
     outDir,
@@ -3612,7 +3781,7 @@ async function main(argv = process.argv.slice(2)) {
     argv,
     testSummary,
     validationDetailsDir,
-    parsed.options,
+    { ...parsed.options, prewrittenReplayArtifacts: parallel },
   );
   for (const result of results) {
     if (result.ok) {
@@ -3652,6 +3821,9 @@ module.exports = {
   runWardEventsCommand,
   readWardRowsFromReplay,
   parseOne,
+  parseOneExact821Batch,
+  writePerReplayArtifacts,
+  runBatchWorkers,
   v2InputsForReplay,
   inventoryFromAnalysis,
   buildAcceptanceSummary,
