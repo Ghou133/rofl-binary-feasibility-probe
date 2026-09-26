@@ -139,6 +139,8 @@ const { decodeTargetHeroPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_target_hero_packet_candidate');
 const { decodeForceCreateMissilePacketCandidates821 } =
   require('./decoders/rofl_16_19_821_force_create_missile_packet_candidate');
+const { decodeChangeMissileTargetPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_change_missile_target_packet_candidate');
 const { decodeSetDimensionMissilePacketCandidates821 } =
   require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
 const { associateUnitApplyDamageRosterKeys821 } =
@@ -2546,6 +2548,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    change_missile_target_packet: (input, collected) =>
+      decodeChangeMissileTargetPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     set_dimension_missile_packet: (input, collected) =>
       decodeSetDimensionMissilePacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2630,6 +2638,7 @@ function decode1619821(replay, profile, options = {}) {
     item_charges_packet: 'item_charges_packet_candidates',
     target_hero_packet: 'target_hero_packet_candidates',
     force_create_missile_packet: 'force_create_missile_packet_candidates',
+    change_missile_target_packet: 'change_missile_target_packet_candidates',
     set_dimension_missile_packet: 'set_dimension_missile_packet_candidates',
     unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
     unit_apply_damage_lookup_roster_key_pair:
@@ -2700,6 +2709,7 @@ function decode1619821(replay, profile, options = {}) {
     'item_charges_packet',
     'target_hero_packet',
     'force_create_missile_packet',
+    'change_missile_target_packet',
     'set_dimension_missile_packet',
   ]);
   const facePairSelected = capabilities.includes('face_direction_keyframe_roster_pair');
@@ -2833,6 +2843,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'item_charges_packet'
         || capability === 'target_hero_packet'
         || capability === 'force_create_missile_packet'
+        || capability === 'change_missile_target_packet'
         || capability === 'set_dimension_missile_packet'
         || capability === 'unit_apply_damage_roster_key_pair'
         || capability === 'unit_apply_damage_lookup_roster_key_pair'

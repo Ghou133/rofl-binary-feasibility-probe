@@ -58,6 +58,7 @@ const CAPABILITIES = new Set([
   'item_charges_packet',
   'target_hero_packet',
   'force_create_missile_packet',
+  'change_missile_target_packet',
   'set_dimension_missile_packet',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
@@ -103,6 +104,7 @@ const MAX_COOLDOWN_BROADCAST_PACKET_ROWS = 40_000;
 const MAX_ITEM_CHARGES_PACKET_ROWS = 10_000;
 const MAX_TARGET_HERO_PACKET_ROWS = 40_000;
 const MAX_FORCE_CREATE_MISSILE_PACKET_ROWS = 40_000;
+const MAX_CHANGE_MISSILE_TARGET_PACKET_ROWS = 20_000;
 const MAX_SET_DIMENSION_MISSILE_PACKET_ROWS = 40_000;
 const SCAN_SOURCE = new WeakMap();
 
@@ -186,6 +188,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     item_charges_packet: [],
     target_hero_packet: [],
     force_create_missile_packet: [],
+    change_missile_target_packet: [],
     set_dimension_missile_packet: [],
     hero_deaths_snapshot: heroStatsRows,
     hero_champion_kills_snapshot: heroStatsRows,
@@ -282,6 +285,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let itemChargesPacketCount = 0;
   let targetHeroPacketCount = 0;
   let forceCreateMissilePacketCount = 0;
+  let changeMissileTargetPacketCount = 0;
   let setDimensionMissilePacketCount = 0;
   let finished = false;
   // Capability selection is fixed for this walk. Cache the packet-route
@@ -332,6 +336,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsItemCharges = selected.has('item_charges_packet');
   const selectsTargetHero = selected.has('target_hero_packet');
   const selectsForceCreateMissile = selected.has('force_create_missile_packet');
+  const selectsChangeMissileTarget = selected.has('change_missile_target_packet');
   const selectsSetDimensionMissile = selected.has('set_dimension_missile_packet');
   const selectsHeroLevelState = selected.has('hero_level_state');
   return Object.freeze({
@@ -642,6 +647,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
           rows.force_create_missile_packet.push(copyRow(block, chunk));
         }
       }
+      if (selectsChangeMissileTarget && block.packet_id === 0x040c) {
+        changeMissileTargetPacketCount += 1;
+        if (rows.change_missile_target_packet.length
+            < MAX_CHANGE_MISSILE_TARGET_PACKET_ROWS) {
+          rows.change_missile_target_packet.push(copyRow(block, chunk));
+        }
+      }
       if (selectsSetDimensionMissile && block.packet_id === 0x008a) {
         setDimensionMissilePacketCount += 1;
         if (rows.set_dimension_missile_packet.length
@@ -714,6 +726,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         itemChargesPacketCount,
         targetHeroPacketCount,
         forceCreateMissilePacketCount,
+        changeMissileTargetPacketCount,
         setDimensionMissilePacketCount,
         error: token.error,
       });
@@ -1054,6 +1067,13 @@ function rowsFor821Capability(replay, token, capability) {
       && bound.forceCreateMissilePacketCount > MAX_FORCE_CREATE_MISSILE_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.forceCreateMissilePacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'change_missile_target_packet'
+      && bound.changeMissileTargetPacketCount > MAX_CHANGE_MISSILE_TARGET_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.changeMissileTargetPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }

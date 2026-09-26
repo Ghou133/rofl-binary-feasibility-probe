@@ -213,6 +213,9 @@ receiver-dependent call; resolved target object, actor, state and effect are unk
 force_create_missile_packet emits an exact-821 game packet-local callback
 comparison u32 witnessed before a synthetic receiver comparison; live receiver,
 missile identity, owner, target, creation, effect and causality are unknown.
+change_missile_target_packet emits an exact-821 game packet-local callback
+comparison u32 before consulting live receiver state; receiver match, missile
+identity, owner, resolved target, target change and effect are unknown.
 set_dimension_missile_packet emits an exact-821 game packet-local callback u8
 before the receiver method; receiver state, missile identity, owner, target,
 dimension change, effect and causality are unknown.
@@ -785,6 +788,7 @@ function parseArgs(argv) {
       'cooldown_broadcast_packet_candidates',
       'target_hero_packet_candidates',
       'force_create_missile_packet_candidates',
+      'change_missile_target_packet_candidates',
       'set_dimension_missile_packet_candidates',
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
@@ -1262,6 +1266,7 @@ function parseOne1619(replay, options, started) {
       'item_charges_packet',
       'target_hero_packet',
       'force_create_missile_packet',
+      'change_missile_target_packet',
       'set_dimension_missile_packet',
       'unit_apply_damage_packet',
       'show_health_bar_packet',
@@ -2636,6 +2641,7 @@ function capabilityQuery(replay, options = {}) {
              || capability === 'item_charges_packet'
              || capability === 'target_hero_packet'
              || capability === 'force_create_missile_packet'
+             || capability === 'change_missile_target_packet'
              || capability === 'set_dimension_missile_packet'
             || capability === 'unit_apply_damage_packet'
             || capability === 'show_health_bar_packet'
@@ -3154,6 +3160,11 @@ function capabilityQuery(replay, options = {}) {
           'packet-local comparison u32 under synthetic receiver; live receiver, missile identity, owner, target, creation, effect and causality remain unknown');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'change_missile_target_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full 0x040c packet consumption',
+          'packet-local comparison u32 before live receiver comparison; receiver match, missile identity, owner, resolved target, target change and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'set_dimension_missile_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native full 0x008a packet consumption',
           'packet-local callback u8 before receiver method; receiver state, missile identity, owner, target, dimension change, effect and causality remain unknown');
@@ -3405,6 +3416,8 @@ function capabilityQuery(replay, options = {}) {
               'target_hero_packet_candidates',
             force_create_missile_packet:
               'force_create_missile_packet_candidates',
+            change_missile_target_packet:
+              'change_missile_target_packet_candidates',
             set_dimension_missile_packet:
               'set_dimension_missile_packet_candidates',
             unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
