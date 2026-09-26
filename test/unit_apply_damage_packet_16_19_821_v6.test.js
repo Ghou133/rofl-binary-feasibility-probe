@@ -8,6 +8,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const { parseReplayFile } = require('../src/rofl');
+const { decodeSemanticReplay } = require('../src/semantic_api');
 const { replayFromChunks } = require('./helpers/synthetic_replay');
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: activeV5,
@@ -97,6 +98,26 @@ test('821 packet V6 keeps V5 output intact and binds two original native rows',
     ]);
     assert.equal(out.events[0].semantic_effect_status, 'UNKNOWN');
     assert.equal(out.events[1].confidence, 'CANDIDATE');
+  });
+
+test('821 semantic API selects packet V6 only when requested',
+  { skip: !HAS_IMAGE && 'ROFL_821_RUNTIME_IMAGE exact mapped image is unavailable' }, () => {
+    const options = { capabilities: ['unit_apply_damage_packet'],
+      runtimeImagePath: IMAGE };
+    const historical = decodeSemanticReplay(fixture(), options);
+    const selected = decodeSemanticReplay(fixture(), {
+      ...options, damagePacketProfile: 'v6',
+    });
+    assert.equal(historical.capability_results.unit_apply_damage_packet.profile_id,
+      v5Id);
+    assert.equal(selected.status, 'EXPERIMENTAL_CANDIDATE');
+    assert.equal(selected.capability_results.unit_apply_damage_packet.profile_id,
+      v6.id);
+    assert.equal(selected.events.unit_apply_damage_packet_candidates.length, 2);
+    assert.equal(selected.events.unit_apply_damage_packet_candidates[0]
+      .native_callback_u32_0x1c_candidate, 0);
+    assert.equal(selected.events.unit_apply_damage_packet_candidates[1]
+      .native_callback_u32_0x1c_candidate, 1073742954);
   });
 
 test('821 packet V6 rejects wrong image, unconsumed packet, and selector 6',
