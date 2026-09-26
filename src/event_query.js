@@ -188,6 +188,7 @@ const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
   'item_charges_packet_candidates',
   'target_hero_packet_candidates',
   'force_create_missile_packet_candidates',
+  'unit_apply_damage_packet_candidates',
 ]);
 const CIRCULAR_MOVEMENT_RESTRICTION_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
@@ -9016,12 +9017,18 @@ async function streamEventQuery(prepared, options, emitLine) {
     || damageLookupKey2c != null;
   const damagePacketCheck = damageCallbackF32Available || damageLookupKeysRequested
     || damageCallbackU32At10 != null || damageCallbackF32At18Raw
-    || damageCallbackU32At1c != null;
+    || damageCallbackU32At1c != null
+    || (sourceReplayVerification
+      && prepared.eventKey === 'unit_apply_damage_packet_candidates');
   if (damageCallbackU32At1c != null) prepareUnitApplyDamageU32At1c(prepared);
   if (damageCallbackF32At18Raw) prepareUnitApplyDamageF32At18Raw(prepared);
   if (damageCallbackU32At10 != null) prepareUnitApplyDamageCallbackU32At10(prepared);
   if (damageLookupKeysRequested) prepareUnitApplyDamageLookupKeys(prepared);
-  else if (damageCallbackF32Available) prepareUnitApplyDamageCallbackF32(prepared);
+  else if (damageCallbackF32Available
+      || (sourceReplayVerification
+        && prepared.eventKey === 'unit_apply_damage_packet_candidates')) {
+    prepareUnitApplyDamageCallbackF32(prepared);
+  }
   if (packetRecordCount != null) {
     prepareCircularMovementRestrictionRecordCount(prepared);
   }

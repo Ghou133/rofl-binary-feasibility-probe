@@ -25,6 +25,8 @@ const {
   isObservedShape,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 const { prepareEventQuery, streamEventQuery } = require('../src/event_query');
+const { bindSavedPacketArtifactToPhysicalReplay } =
+  require('./helpers/physical_saved_packet_replay');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const EVENT = 'unit_apply_damage_packet_candidates';
@@ -339,6 +341,50 @@ function fixture(t, rows, options = {}) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return { root, ...writeReplay(root, 'synthetic', rows, options) };
 }
+
+test('source verification checks every physical v6 damage row without a damage filter', (t) => {
+  const f = fixture(t, [v6Row(0), v6Row(1, RAW_U32_1C_PACKET)]);
+  const physical = bindSavedPacketArtifactToPhysicalReplay(f.directory);
+  const verified = command(f.directory, '--verify-source', '--limit', '1');
+  assert.equal(verified.status, 0, verified.stderr);
+  assert.equal(verified.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+  const summary = JSON.parse(verified.stderr);
+  assert.equal(summary.scanned_count, 2);
+  assert.equal(summary.source_provenance_status, 'SOURCE_REPLAY_VERIFIED');
+
+  const changedPosition = structuredClone(physical.rows);
+  changedPosition[1].replay_time_ms += 1;
+  changedPosition[1].raw_packet_ref.replay_time_ms += 1;
+  changedPosition[1].raw_packet_ref.chunk_file_offset += 1;
+  changedPosition[1].raw_packet_ref.decompressed_block_offset += 1;
+  changedPosition[1].raw_packet_ref.decompressed_payload_offset += 1;
+  fs.writeFileSync(physical.eventPath,
+    `${changedPosition.map(JSON.stringify).join('\n')}\n`);
+  const rejectedPosition = command(f.directory, '--verify-source', '--limit', '1');
+  assert.equal(rejectedPosition.status, 2, rejectedPosition.stderr);
+  assert.equal(JSON.parse(rejectedPosition.stderr).code,
+    'SOURCE_PROVENANCE_MISMATCH');
+  assert.equal(rejectedPosition.stdout, '');
+
+  const changedCallback = structuredClone(physical.rows);
+  changedCallback[1].native_callback_u32_0x1c_source = 'CONSTANT_0';
+  fs.writeFileSync(physical.eventPath,
+    `${changedCallback.map(JSON.stringify).join('\n')}\n`);
+  const rejectedCallback = command(f.directory, '--verify-source', '--limit', '1');
+  assert.equal(rejectedCallback.status, 2, rejectedCallback.stderr);
+  assert.equal(JSON.parse(rejectedCallback.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(rejectedCallback.stdout, '');
+});
+
+test('source verification accepts the earlier exact-821 damage row profile', (t) => {
+  const f = fixture(t, [row(0), row(1, OTHER_PACKET)]);
+  const physical = bindSavedPacketArtifactToPhysicalReplay(f.directory);
+  const verified = command(f.directory, '--verify-source', '--limit', '1');
+  assert.equal(verified.status, 0, verified.stderr);
+  assert.equal(verified.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+  assert.equal(JSON.parse(verified.stderr).source_provenance_status,
+    'SOURCE_REPLAY_VERIFIED');
+});
 
 test('query-events selects only native-matched anonymous float rows and preserves JSONL', (t) => {
   const { directory, lines } = fixture(t,
