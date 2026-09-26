@@ -4,6 +4,27 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **NotifyContextualSituation packet string (opt-in candidate):** Exact
+  `16.19.821.7343` route `0x0113` is distinct from the `0x040a` OnEvent
+  child `0x0113`. The pinned image factory/constructor/deserializer are at
+  RVAs `0xf01897`/`0xeb3b50`/`0x102d520`; the callback at `0x2c9820`
+  passes the object's string pointer to `0x228610`. The exact-image native
+  witness checks full packet consumption, heap pointer/length/capacity/NUL
+  bounds and strict UTF-8 for each packet. CLI `--events
+  notify_contextual_situation_packet` and API output remain `CANDIDATE`.
+  On 11 original KR 821 Replays, 37,229/37,229 packet-local strings were
+  emitted with exact image `MATCHED_USED`, zero framing errors and seven
+  observed string values. Saved `query-events --event
+  notify_contextual_situation_packet_candidates --contextual-situation
+  RecallCancel --limit 1` validated all 37,229 rows, matched 522 and
+  emitted one original row. These names do not establish a Recall action,
+  actor, team or gameplay effect. The six observed packet lengths and
+  seven observed strings are fail-closed scope gates, not a substitute for
+  native per-packet decoding. Image, Replays and outputs remain outside Git.
+  Focused decoder and query tests passed 11/11 with the exact local inputs.
+  Public `npm test` passed with 1,150 Node passes, 78 declared skips and
+  19 Python unittest passes; skipped private-input cases were not promoted
+  to real-Replay evidence.
 - **Saved event discovery:** `query-events DIR --list-events` lists actual
   saved candidate keys and per-Replay exact build, capability status and
   declared count. It distinguishes saved zero rows, unavailable and

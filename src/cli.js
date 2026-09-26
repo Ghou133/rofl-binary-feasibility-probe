@@ -191,6 +191,8 @@ face_direction_packet emits exact-821 packet-local direction-vector candidates;
 its raw param does not identify an actor, and the packet does not establish position or path.
 circular_movement_restriction_packet emits exact-821 packet-local anonymous fields;
 it does not establish an actor, world position, hero path, or effective restriction.
+notify_contextual_situation_packet emits an exact-821 packet-local UTF-8 string candidate;
+it does not establish an actor, Recall action, or gameplay effect.
 unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
 packet-local selectors or a bounded anonymous float candidate; these do not
@@ -249,6 +251,7 @@ Options:
   --killer-participant <1..10>  Candidate killer in exact-821 death, assist or episode rows
   --assisting-participant <1..10>  Member of exact-821 assist or episode candidate list
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
+  --contextual-situation <text>  Exact UTF-8 contextual situation string on an 821 packet candidate
   --item-id <uint32|0xhex>     Exact 821 inventory record item ID, including saved associations
   --previous-item-id <uint32|0xhex>  Previous endpoint item ID in an exact-821 keyframe interval difference
   --slot <0..9>                Exact observed 821 inventory record slot, including saved associations
@@ -330,6 +333,7 @@ function parseArgs(argv) {
     killerParticipant: null,
     assistingParticipant: null,
     rawParam: null,
+    contextualSituation: null,
     itemId: null,
     previousItemId: null,
     slot: null,
@@ -505,6 +509,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'killer-participant') options.killerParticipant = queryInteger(value, key);
       else if (command === 'query-events' && key === 'assisting-participant') options.assistingParticipant = queryInteger(value, key);
       else if (command === 'query-events' && key === 'raw-param') options.rawParam = queryRawParam(value);
+      else if (command === 'query-events' && key === 'contextual-situation') options.contextualSituation = value;
       else if (command === 'query-events' && key === 'item-id') options.itemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'previous-item-id') options.previousItemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'slot') options.slot = queryInteger(value, key, true);
@@ -599,7 +604,7 @@ function parseArgs(argv) {
     }
     if (options.listEvents) {
       const filterKeys = ['fromMs', 'toMs', 'participant', 'killerParticipant',
-        'assistingParticipant', 'rawParam', 'itemId', 'previousItemId', 'slot',
+        'assistingParticipant', 'rawParam', 'contextualSituation', 'itemId', 'previousItemId', 'slot',
         'opaqueU32', 'opaquePair', 'opaqueI32', 'castNestedBits', 'castNestedU32',
         'castNestedU32At4c', 'castNestedF32AtA0', 'spellTimerReceiverSlot',
         'spellLevelReceiverIndex',
@@ -628,6 +633,10 @@ function parseArgs(argv) {
           || !['hero_assist_candidates', 'hero_death_episode_candidates']
             .includes(options.event))) {
       throw new Error('--assisting-participant requires hero_assist_candidates or hero_death_episode_candidates and 1..10');
+    }
+    if (options.contextualSituation !== null
+        && options.event !== 'notify_contextual_situation_packet_candidates') {
+      throw new Error('--contextual-situation requires notify_contextual_situation_packet_candidates');
     }
     if (options.dieSourceKey2cMatch !== null
         && !['has', 'none', 'unavailable'].includes(options.dieSourceKey2cMatch)) {
@@ -1138,6 +1147,7 @@ function parseOne1619(replay, options, started) {
       'increment_minion_kills_packet',
       'face_direction_packet',
       'circular_movement_restriction_packet',
+      'notify_contextual_situation_packet',
       'unit_apply_damage_packet',
       'show_health_bar_packet',
     ].includes(name)))] : [];
@@ -2422,6 +2432,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'increment_minion_kills_packet'
             || capability === 'face_direction_packet'
             || capability === 'circular_movement_restriction_packet'
+            || capability === 'notify_contextual_situation_packet'
             || capability === 'unit_apply_damage_packet'
             || capability === 'show_health_bar_packet'
             || capability === 'unit_apply_damage_roster_key_pair'
@@ -2909,6 +2920,11 @@ function capabilityQuery(replay, options = {}) {
           'callback-transformed packet-local lookup key and raw packet provenance; no proven lookup success, participant, minion, last hit, or CS delta');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'notify_contextual_situation_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full packet consumption',
+          'packet-local UTF-8 contextual situation string and raw packet provenance; no actor, Recall action, or gameplay-effect inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'face_direction_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and bounded 0x038e packet shape validation',
           'packet-local unit-vector and optional scalar candidates with raw provenance; no actor, world position, path or direction effect');
@@ -3144,6 +3160,8 @@ function capabilityQuery(replay, options = {}) {
             face_direction_packet: 'face_direction_packet_candidates',
             circular_movement_restriction_packet:
               'circular_movement_restriction_packet_candidates',
+            notify_contextual_situation_packet:
+              'notify_contextual_situation_packet_candidates',
             unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
             show_health_bar_packet: 'show_health_bar_packet_candidates',
             unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
@@ -3329,6 +3347,7 @@ async function runQueryEventsCommand(parsed) {
       killerParticipant: options.killerParticipant,
       assistingParticipant: options.assistingParticipant,
       rawParam: options.rawParam,
+      contextualSituation: options.contextualSituation,
       itemId: options.itemId,
       previousItemId: options.previousItemId,
       slot: options.slot,

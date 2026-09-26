@@ -209,6 +209,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'circular_movement_restriction_packet',
       'unit_apply_damage_packet',
       'show_health_bar_packet',
+      'notify_contextual_situation_packet',
       'unit_apply_damage_roster_key_pair',
       'unit_apply_damage_lookup_roster_key_pair',
       'unit_apply_damage_lookup2c_roster_key_pair',
@@ -228,6 +229,10 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'EXACT_IMAGE_REQUIRED');
   assert.equal(queried.circular_movement_restriction_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.notify_contextual_situation_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.notify_contextual_situation_packet.output,
+    'notify_contextual_situation_packet_candidates');
   assert.equal(queried.circular_movement_restriction_packet.output,
     'circular_movement_restriction_packet_candidates');
   assert.equal(queried.unit_apply_damage_packet.runtime_image_requirement,

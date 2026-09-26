@@ -233,7 +233,8 @@ function decodeNotifyContextualSituationPacketCandidates821(replay, {
   if (Buffer.byteLength(nativeRequest) > 8 * 1024 * 1024) {
     return fail('UNSUPPORTED', '0x0113 native witness request exceeds 8 MiB', {
       input_count: observedCount, scanned_block_count: scannedBlockCount,
-      runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+      runtime_image_status: 'MATCHED_PRECHECKED', runtime_image_used: false,
+      native_witness_status: 'NOT_RUN',
     });
   }
   const python = pythonExecutable || process.env.PYTHON || 'python';
@@ -252,7 +253,8 @@ function decodeNotifyContextualSituationPacketCandidates821(replay, {
     return fail(missingPython ? 'MISSING_INPUT' : 'DECODE_FAILED',
       `0x0113 native witness unavailable or failed: ${detail}`, {
         input_count: observedCount, scanned_block_count: scannedBlockCount,
-        runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+        runtime_image_status: missingPython ? 'MATCHED_PRECHECKED' : 'MATCHED_USED',
+        runtime_image_used: !missingPython,
         native_witness_status: missingPython ? 'UNAVAILABLE' : 'FAILED',
         ...(missingPython ? { missing_input: 'python_unicorn' } : {}),
       });

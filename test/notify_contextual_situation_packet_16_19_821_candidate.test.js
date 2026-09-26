@@ -99,6 +99,20 @@ test('exact native witness rejects trailing bytes and a wrong runtime image',
     assert.equal(wrongImage.events, null);
   });
 
+test('missing Python leaves a matched image prechecked but unused',
+  { skip: !IMAGE || !fs.existsSync(IMAGE) ? 'exact 821 runtime image unavailable' : false }, () => {
+    const result = decode(fixture(), {
+      runtimeImagePath: IMAGE,
+      pythonExecutable: path.join(__dirname, 'no-such-821-python-executable'),
+    });
+    assert.equal(result.status, 'MISSING_INPUT');
+    assert.equal(result.missing_input, 'python_unicorn');
+    assert.equal(result.runtime_image_status, 'MATCHED_PRECHECKED');
+    assert.equal(result.runtime_image_used, false);
+    assert.equal(result.native_witness_status, 'UNAVAILABLE');
+    assert.equal(result.events, null);
+  });
+
 test('native helper returns an ordered packet string witness',
   { skip: !IMAGE || !fs.existsSync(IMAGE) ? 'exact 821 runtime image unavailable' : false }, () => {
     const helper = path.resolve(__dirname, '..', 'scripts',
