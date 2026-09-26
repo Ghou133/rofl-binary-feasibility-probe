@@ -891,6 +891,14 @@ Current progress (older notes below retain their original research context):
   63:515. Native controls for 6, 62 and 64 reached no receiver call and
   fail closed in V2. V1 remains the default; no Buff or spell identity,
   owner, timer effect or lifecycle is inferred.
+- **Completed V2 CLI/API and saved query:** `--spell-timer-packet-v2` and
+  `setSpellTimerProfile: 'v2'` select the native witness; V1 remains the
+  default. The real CLI batch on the 11 original KR 821 Replays wrote 5,481
+  candidate JSONL rows, with 11/11 `CANDIDATE` and zero framing errors, to
+  ignored `artifacts/16_19_development/spell_timer_v2_11_replay_20260926/`.
+  `query-events --spell-timer-receiver-slot 63 --limit 1` validated all
+  5,481 saved rows and matched 515; the limit emitted one row. V1 artifacts
+  explicitly report receiver unavailable. Focused Node tests passed 16/16.
 
 - **Completed candidate:** Exact KR 821 `0x0194` BuffUpdateNumCounter and
   `0x02d9` BuffUpdateCount are selectable CLI/API packet candidates with

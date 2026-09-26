@@ -78,6 +78,12 @@ const { SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_821,
   decodeSetSpellLevelU32At10FromRaw821,
   decodeSetSpellLevelU32At14FromRaw821 } =
   require('./decoders/rofl_16_19_821_set_spell_level_packet_candidate');
+const { SET_SPELL_TIMER_FROM_BUFF_PACKET_CANDIDATE_PROFILE_821,
+  SET_SPELL_TIMER_FROM_BUFF_PACKET_CANDIDATE_PROFILE_V2_821,
+  SET_SPELL_TIMER_FROM_BUFF_V2_EVENT_FIELD_CONFIDENCE_821,
+  decodeSetSpellTimerRawFields821,
+  decodeSetSpellTimerU8At20FromRaw821 } =
+  require('./decoders/rofl_16_19_821_set_spell_timer_from_buff_packet_candidate');
 const { CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE_PROFILE_821,
   decodeCircularMovementRestrictionPayload821 } =
   require('./decoders/rofl_16_19_821_circular_movement_restriction_packet_candidate');
@@ -3154,6 +3160,160 @@ function setSpellLevelCallbackFields(row, prepared, lineNumber, packetPositions)
     invalid('native receiver selection or clamped scalar differs');
   }
   return { slot, scalar };
+}
+
+function prepareSetSpellTimerReceiverSlot(prepared) {
+  const profile = SET_SPELL_TIMER_FROM_BUFF_PACKET_CANDIDATE_PROFILE_V2_821;
+  if (prepared.eventKey !== 'set_spell_timer_from_buff_packet_candidates'
+      || prepared.replayVersion !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      'SetSpellTimerFromBuff receiver-slot filtering requires an exact 16.19.821.7343 packet candidate event.');
+  }
+  const result = prepared.capabilityResult;
+  if (result?.profile_id === SET_SPELL_TIMER_FROM_BUFF_PACKET_CANDIDATE_PROFILE_821.id) {
+    throw new EventQueryError('SPELL_TIMER_RECEIVER_UNAVAILABLE',
+      'This SetSpellTimerFromBuff artifact predates the native receiver callback field.',
+      { spell_timer_receiver_checked_count: 0,
+        spell_timer_receiver_unavailable_count: prepared.declaredCount,
+        capability_status: prepared.capabilityStatus });
+  }
+  const analysisResult = prepared[PREPARED_REPLAY_METADATA]?.analysis?.semantic
+    ?.capability_results?.[profile.capability];
+  if (prepared.capabilityStatus !== 'CANDIDATE'
+      || result?.profile_id !== profile.id
+      || result.status !== 'CANDIDATE'
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || !isDeepStrictEqual(result.evidence_callback_table_sha256,
+        profile.evidence_callback_table_sha256)
+      || result.evidence_callback_rva !== profile.evidence_callback_rva
+      || result.evidence_receiver_lookup_rva
+        !== profile.evidence_receiver_lookup_rva
+      || result.evidence_receiver_call_rva !== profile.evidence_receiver_call_rva
+      || result.evidence_callback_region_sha256
+        !== profile.evidence_callback_region_sha256
+      || result.evidence_receiver_lookup_region_sha256
+        !== profile.evidence_receiver_lookup_region_sha256
+      || result.evidence_callback_witness_mode
+        !== profile.evidence_callback_witness_mode
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || result.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS'
+      || !isCount(result.input_count) || result.input_count === 0
+      || result.input_count > 10_000
+      || result.event_count !== result.input_count
+      || result.event_count !== prepared.declaredCount
+      || !isCount(result.scanned_block_count)
+      || result.scanned_block_count < result.input_count
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(result.event_field_confidence,
+        SET_SPELL_TIMER_FROM_BUFF_V2_EVENT_FIELD_CONFIDENCE_821)
+      || !isDeepStrictEqual(analysisResult, result)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'SetSpellTimerFromBuff native receiver metadata differs from its exact-build V2 profile.');
+  }
+}
+
+const SET_SPELL_TIMER_V2_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param', 'opaque_u8_0x10', 'opaque_u8_0x11',
+  'opaque_f32_0x14', 'opaque_u32_0x18', 'opaque_u32_0x1c',
+  'opaque_u8_0x20', 'raw_object_u8_0x10_hex', 'raw_object_u8_0x11_hex',
+  'raw_object_f32_0x14_hex', 'raw_object_u32_0x18_hex',
+  'raw_object_u32_0x1c_hex', 'raw_object_u8_0x20_hex',
+  'native_receiver_slot_candidate', 'native_receiver_selection_path',
+  'native_receiver_forwarded_fields_witnessed', 'confidence',
+  'semantic_status', 'raw_packet_ref',
+]);
+const SET_SPELL_TIMER_V2_REF_FIELDS_821 = new Set([
+  'source_path', 'replay_sha256', 'chunk_index', 'chunk_id', 'chunk_stream',
+  'chunk_file_offset', 'decompressed_block_offset',
+  'decompressed_payload_offset', 'packet_id', 'replay_time_ms',
+  'payload_length', 'raw_param', 'raw_payload_sha256',
+]);
+const SET_SPELL_TIMER_PAYLOAD_LENGTHS_821 = new Set([7, 8, 10, 11, 12]);
+
+function setSpellTimerReceiverSlot(row, prepared, lineNumber, packetPositions) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid SetSpellTimerFromBuff receiver callback fields at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const profile = SET_SPELL_TIMER_FROM_BUFF_PACKET_CANDIDATE_PROFILE_V2_821;
+  const ref = row.raw_packet_ref;
+  const fields = Object.keys(row);
+  const refFields = ref && typeof ref === 'object' && !Array.isArray(ref)
+    ? Object.keys(ref) : [];
+  if (fields.length !== SET_SPELL_TIMER_V2_ROW_FIELDS_821.size
+      || fields.some((field) => !SET_SPELL_TIMER_V2_ROW_FIELDS_821.has(field))
+      || refFields.length !== SET_SPELL_TIMER_V2_REF_FIELDS_821.size
+      || refFields.some((field) => !SET_SPELL_TIMER_V2_REF_FIELDS_821.has(field))
+      || row.event_type !== 'SET_SPELL_TIMER_FROM_BUFF_PACKET_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS'
+      || !Number.isSafeInteger(row.raw_param) || row.raw_param <= 0
+      || row.raw_param > 0xffffffff
+      || ref.source_path !== (prepared.sourcePath ?? null)
+      || ref.replay_sha256 !== prepared.replaySha
+      || ref.chunk_stream !== 'game_chunk'
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== profile.replay_block_packet_id
+      || ref.replay_time_ms !== row.replay_time_ms
+      || !SET_SPELL_TIMER_PAYLOAD_LENGTHS_821.has(ref.payload_length)
+      || ref.raw_param !== row.raw_param
+      || !REPLAY_SHA.test(ref.raw_payload_sha256 ?? '')) {
+    invalid('candidate profile or raw packet reference differs');
+  }
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (packetPositions.has(position)) invalid('raw packet reference occurs twice');
+  packetPositions.add(position);
+  for (const [field, raw] of [
+    ['opaque_u8_0x10', 'raw_object_u8_0x10_hex'],
+    ['opaque_u8_0x11', 'raw_object_u8_0x11_hex'],
+    ['opaque_u8_0x20', 'raw_object_u8_0x20_hex'],
+  ]) {
+    if (!Number.isSafeInteger(row[field]) || row[field] < 0 || row[field] > 255
+        || typeof row[raw] !== 'string' || !/^[0-9a-f]{2}$/.test(row[raw])) {
+      invalid(`invalid ${field} or protected byte`);
+    }
+  }
+  if (!Number.isFinite(row.opaque_f32_0x14)
+      || typeof row.raw_object_f32_0x14_hex !== 'string'
+      || !/^[0-9a-f]{8}$/.test(row.raw_object_f32_0x14_hex)
+      || !Number.isSafeInteger(row.opaque_u32_0x18)
+      || row.opaque_u32_0x18 < 0 || row.opaque_u32_0x18 > 0xffffffff
+      || !Number.isSafeInteger(row.opaque_u32_0x1c)
+      || row.opaque_u32_0x1c < 0 || row.opaque_u32_0x1c > 0xffffffff
+      || typeof row.raw_object_u32_0x18_hex !== 'string'
+      || !/^[0-9a-f]{8}$/.test(row.raw_object_u32_0x18_hex)
+      || typeof row.raw_object_u32_0x1c_hex !== 'string'
+      || !/^[0-9a-f]{8}$/.test(row.raw_object_u32_0x1c_hex)) {
+    invalid('invalid forwarded anonymous fields or protected bytes');
+  }
+  const rawFields = decodeSetSpellTimerRawFields821(row);
+  if (!rawFields || Object.entries(rawFields).some(([field, value]) =>
+    row[field] !== value)) {
+    invalid('protected raw words differ from the pinned 821 callback transforms');
+  }
+  const slot = decodeSetSpellTimerU8At20FromRaw821(row.raw_object_u8_0x20_hex);
+  if (slot !== row.opaque_u8_0x20
+      || !([0, 1, 2, 3, 4, 5, 63].includes(slot))
+      || row.native_receiver_slot_candidate !== slot
+      || row.native_receiver_selection_path
+        !== (slot === 63 ? 'INDEX_63' : 'INDEX_0_TO_5')
+      || row.native_receiver_forwarded_fields_witnessed !== true) {
+    invalid('native receiver selection or forwarded field witness differs');
+  }
+  return slot;
 }
 
 function validUnitApplyDamageRosterRef(ref, replaySha, sourcePath, packetId,
@@ -7514,6 +7674,7 @@ function validateFilters(options) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, castNestedU32 = null, castNestedU32At4c = null,
+    spellTimerReceiverSlot = null,
     spellLevelReceiverIndex = null, spellLevelClampedScalar = null,
     damageCallbackF32Available = false,
     damageCallbackF32At18Raw = false,
@@ -7569,6 +7730,7 @@ function validateFilters(options) {
     ['castNestedBits', castNestedBits, 0, 0xff],
     ['castNestedU32', castNestedU32, 0, 0xffffffff],
     ['castNestedU32At4c', castNestedU32At4c, 0, 0xffffffff],
+    ['spellTimerReceiverSlot', spellTimerReceiverSlot, 0, 63],
     ['spellLevelReceiverIndex', spellLevelReceiverIndex, 0, 63],
     ['spellLevelClampedScalar', spellLevelClampedScalar, 0, 6],
     ['packetRecordCount', packetRecordCount, 0, 1],
@@ -7580,6 +7742,11 @@ function validateFilters(options) {
     if (value != null && (!Number.isSafeInteger(value) || value < minimum || value > maximum)) {
       throw new EventQueryError('INVALID_FILTER', `Invalid ${name} query filter.`);
     }
+  }
+  if (spellTimerReceiverSlot != null && spellTimerReceiverSlot > 5
+      && spellTimerReceiverSlot !== 63) {
+    throw new EventQueryError('INVALID_FILTER',
+      'SetSpellTimerFromBuff receiver slot must be 0..5 or 63.');
   }
   if (opaquePair != null && (!opaquePair || typeof opaquePair !== 'object'
       || !Number.isSafeInteger(opaquePair.u32) || opaquePair.u32 < 0
@@ -7599,6 +7766,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, castNestedU32 = null, castNestedU32At4c = null,
+    spellTimerReceiverSlot = null,
     spellLevelReceiverIndex = null, spellLevelClampedScalar = null,
     damageCallbackF32Available = false,
     damageCallbackF32At18Raw = false,
@@ -7711,6 +7879,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   if (castNestedBits != null) prepareCastSpellAnsNestedBits(prepared);
   if (castNestedU32 != null) prepareCastSpellAnsNestedU32(prepared);
   if (castNestedU32At4c != null) prepareCastSpellAnsNestedU32At4c(prepared);
+  if (spellTimerReceiverSlot != null) prepareSetSpellTimerReceiverSlot(prepared);
   const spellLevelCallbackRequested = spellLevelReceiverIndex != null
     || spellLevelClampedScalar != null;
   if (spellLevelCallbackRequested) prepareSetSpellLevelCallbackFields(prepared);
@@ -7769,6 +7938,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   let castNestedBitsCheckedCount = 0;
   let castNestedU32CheckedCount = 0;
   let castNestedU32At4cCheckedCount = 0;
+  let spellTimerReceiverCheckedCount = 0;
+  const spellTimerPacketPositions = new Set();
   let spellLevelCallbackCheckedCount = 0;
   const spellLevelPacketPositions = new Set();
   const castNestedBitsPacketPositions = new Set();
@@ -8016,6 +8187,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (castNestedBits != null) castNestedBitsCheckedCount += 1;
       if (castNestedU32 != null) castNestedU32CheckedCount += 1;
       if (castNestedU32At4c != null) castNestedU32At4cCheckedCount += 1;
+      const timerReceiverSlot = spellTimerReceiverSlot != null
+        ? setSpellTimerReceiverSlot(row, prepared, lineNumber,
+          spellTimerPacketPositions) : null;
+      if (spellTimerReceiverSlot != null) spellTimerReceiverCheckedCount += 1;
       const spellLevelCallback = spellLevelCallbackRequested
         ? setSpellLevelCallbackFields(row, prepared, lineNumber,
           spellLevelPacketPositions) : null;
@@ -8112,6 +8287,8 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (castNestedU32 != null && nestedFields.u32 !== castNestedU32)
           || (castNestedU32At4c != null
             && nestedFields.u32At4c !== castNestedU32At4c)
+          || (spellTimerReceiverSlot != null
+            && timerReceiverSlot !== spellTimerReceiverSlot)
           || (spellLevelReceiverIndex != null
             && spellLevelCallback.slot !== spellLevelReceiverIndex)
           || (spellLevelClampedScalar != null
@@ -8491,6 +8668,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       cast_nested_u32_0x4c_checked_count: castNestedU32At4cCheckedCount,
       cast_nested_u32_0x4c_unavailable_count: 0,
     }),
+    ...(spellTimerReceiverSlot == null ? {} : {
+      spell_timer_receiver_checked_count: spellTimerReceiverCheckedCount,
+      spell_timer_receiver_unavailable_count: 0,
+    }),
     ...(spellLevelCallbackRequested ? {
       spell_level_callback_checked_count: spellLevelCallbackCheckedCount,
       spell_level_callback_unavailable_count: 0,
@@ -8551,6 +8732,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       ...(castNestedU32 == null ? {} : { cast_nested_u32: castNestedU32 }),
       ...(castNestedU32At4c == null ? {}
         : { cast_nested_u32_0x4c: castNestedU32At4c }),
+      ...(spellTimerReceiverSlot == null ? {}
+        : { spell_timer_receiver_slot: spellTimerReceiverSlot }),
       ...(spellLevelReceiverIndex == null ? {}
         : { spell_level_receiver_index: spellLevelReceiverIndex }),
       ...(spellLevelClampedScalar == null ? {}
@@ -8624,6 +8807,8 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   let castNestedU32UnavailableCount = 0;
   let castNestedU32At4cCheckedCount = 0;
   let castNestedU32At4cUnavailableCount = 0;
+  let spellTimerReceiverCheckedCount = 0;
+  let spellTimerReceiverUnavailableCount = 0;
   let spellLevelCallbackCheckedCount = 0;
   let spellLevelCallbackUnavailableCount = 0;
   let damageCallbackF32CheckedCount = 0;
@@ -8669,6 +8854,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
             'OPAQUE_I32_UNAVAILABLE', 'CAST_NESTED_BITS_UNAVAILABLE',
             'CAST_NESTED_U32_UNAVAILABLE',
             'CAST_NESTED_U32_0X4C_UNAVAILABLE',
+            'SPELL_TIMER_RECEIVER_UNAVAILABLE',
             'SPELL_LEVEL_CALLBACK_UNAVAILABLE',
             'CHILD_EVENT_ID_UNAVAILABLE'].includes(error.code)) {
         throw error;
@@ -8684,6 +8870,10 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       if (error.code === 'CAST_NESTED_U32_0X4C_UNAVAILABLE') {
         castNestedU32At4cUnavailableCount +=
           error.details.cast_nested_u32_0x4c_unavailable_count;
+      }
+      if (error.code === 'SPELL_TIMER_RECEIVER_UNAVAILABLE') {
+        spellTimerReceiverUnavailableCount +=
+          error.details.spell_timer_receiver_unavailable_count;
       }
       if (error.code === 'SPELL_LEVEL_CALLBACK_UNAVAILABLE') {
         spellLevelCallbackUnavailableCount +=
@@ -8702,6 +8892,9 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     }
     if (options.castNestedU32At4c != null) {
       castNestedU32At4cCheckedCount += summary.cast_nested_u32_0x4c_checked_count;
+    }
+    if (options.spellTimerReceiverSlot != null) {
+      spellTimerReceiverCheckedCount += summary.spell_timer_receiver_checked_count;
     }
     if (options.spellLevelReceiverIndex != null
         || options.spellLevelClampedScalar != null) {
@@ -8757,6 +8950,11 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         cast_nested_u32_0x4c_checked_count:
           summary.cast_nested_u32_0x4c_checked_count,
         cast_nested_u32_0x4c_unavailable_count: 0,
+      }),
+      ...(options.spellTimerReceiverSlot == null ? {} : {
+        spell_timer_receiver_checked_count:
+          summary.spell_timer_receiver_checked_count,
+        spell_timer_receiver_unavailable_count: 0,
       }),
       ...(options.spellLevelReceiverIndex == null
           && options.spellLevelClampedScalar == null ? {} : {
@@ -8843,6 +9041,14 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       cast_nested_u32_0x4c_unavailable_replay_count:
         replayResults.filter((replay) =>
           replay.code === 'CAST_NESTED_U32_0X4C_UNAVAILABLE').length,
+    }),
+    ...(options.spellTimerReceiverSlot == null ? {} : {
+      spell_timer_receiver_checked_count: spellTimerReceiverCheckedCount,
+      spell_timer_receiver_unavailable_count:
+        spellTimerReceiverUnavailableCount,
+      spell_timer_receiver_unavailable_replay_count:
+        replayResults.filter((replay) =>
+          replay.code === 'SPELL_TIMER_RECEIVER_UNAVAILABLE').length,
     }),
     ...(options.spellLevelReceiverIndex == null
         && options.spellLevelClampedScalar == null ? {} : {

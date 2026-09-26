@@ -95,6 +95,7 @@
 | `16.19.821.7343 --events npc_buff_update_count_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x02d9` BuffUpdateCount 包，保留五个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_update_count_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 名称、归属、计数含义或生命周期 |
 | `16.19.821.7343 --events npc_buff_replace_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x01ad` BuffReplace 包，保留四个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_replace_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 替换、名称、归属或生命周期 |
 | `16.19.821.7343 --events set_spell_timer_from_buff_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x00fd` SetSpellTimerFromBuff 包，保留六个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `set_spell_timer_from_buff_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff、法术身份或实际计时效果 |
+| `16.19.821.7343 --events set_spell_timer_from_buff_packet --spell-timer-packet-v2 --runtime-image PATH` | 显式执行精确 821 原生回调，在 V1 匿名字段外记录合成接收器见证的表槽位候选 `0..5` 或 `63` 和选择路径 | V1 仍为默认；V2 只输出 `CANDIDATE`，不确认真实接收器、法术身份或计时效果；API 用 `setSpellTimerProfile: 'v2'` 选择 |
 | `16.19.821.7343 --events set_spell_level_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x025d` SetSpellLevel 包，保留两个按对象偏移命名的匿名回调整数、受保护原始字节与包来源 | 仅写入 `set_spell_level_packet_candidates`，状态为 `CANDIDATE`；不推断法术身份、等级、归属或实际效果 |
 | `16.19.821.7343 --events set_spell_level_packet --spell-level-packet-v2 --runtime-image PATH` | 显式运行原生回调与合成接收器写入见证，在 V1 匿名字段之外添加接收器表索引候选、回退来源、0..6 截断标量候选及正值标志写入 | V1 仍为默认；V2 只输出 `CANDIDATE`，合成表索引不识别真实法术或实际等级变化；API 用 `setSpellLevelProfile: 'v2'` 显式选择 |
 | `16.19.820.7193 --events hero_death_timer` | HN 路由的计时 float、同刻 Hero_Die 和后续复活时间相互校验时，输出候选计时秒数 | 仅写入 `hero_death_timer_candidates`；该 profile 仅用于 820 HN 路由，821 KR 使用独立精确版本的候选 profile；不产生确认的死亡或重生事件 |
@@ -523,6 +524,10 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 `query-events --event set_spell_timer_from_buff_packet_candidates --opaque-u32 VALUE`
 可按匿名 `opaque_u32_0x18` 或 `opaque_u32_0x1c` 精确筛选，输出仍保留完整候选行。
 外层 `raw_param`、匿名浮点和字节均不参与匹配；字段缺失与已检查的零命中分别报告。
+显式加入 `--spell-timer-packet-v2` 后，可以对保存的 V2 候选执行
+`query-events OUTPUT_DIR --event set_spell_timer_from_buff_packet_candidates --spell-timer-receiver-slot 63`。
+筛选会重新核对精确镜像见证元数据、原始字节变换和每行来源；旧版 V1 输出报告
+`SPELL_TIMER_RECEIVER_UNAVAILABLE`。槽位来自合成接收器表，不证明游戏内计时变化。
 
 821 的 SetSpellLevel 可独立选择
 `--events set_spell_level_packet --runtime-image PATH`，输出

@@ -175,6 +175,8 @@ candidate; the default CastSpellAns packet profile remains v4.
 --cast-packet-v6 also records a second exact-821 nested anonymous u32;
 both newer CastSpellAns packet profiles require explicit selection.
 set_spell_timer_from_buff_packet emits an exact-821 packet-local opaque candidate.
+--spell-timer-packet-v2 adds an exact-821 native callback receiver-slot
+candidate while preserving the default packet profile.
 set_spell_level_packet emits an exact-821 packet-local opaque candidate.
 --spell-level-packet-v2 adds exact-821 native callback receiver selection
 and clamped scalar candidates while preserving the default packet profile.
@@ -226,6 +228,7 @@ Options:
   --events <name[,name...]>     Select 16.19 semantic capabilities to decode
   --cast-packet-v5              Opt into exact 821 CastSpellAns nested anonymous u32 candidates (decode/batch)
   --cast-packet-v6              Opt into exact 821 CastSpellAns two nested anonymous u32 candidates (decode/batch)
+  --spell-timer-packet-v2       Opt into exact 821 SetSpellTimerFromBuff native receiver callback candidates (decode/batch)
   --spell-level-packet-v2       Opt into exact 821 SetSpellLevel callback receiver/scalar candidates (decode/batch)
   --damage-packet-v6            Opt into exact 821 UnitApplyDamage +0x1c u32 packet/association candidates (decode/batch)
   --event-jsonl-only            Store 16.19 event rows only in JSONL (decode/batch with --events)
@@ -253,6 +256,7 @@ Options:
   --cast-nested-bits <0..255|0xhex>  Exact decoded 821 CastSpellAns nested callback bits
   --cast-nested-u32 <uint32|0xhex>   Exact decoded 821 CastSpellAns V5 nested anonymous u32
   --cast-nested-u32-0x4c <uint32|0xhex>  Exact decoded 821 CastSpellAns V6 second nested anonymous u32
+  --spell-timer-receiver-slot <0..5|63|0xhex>  Exact 821 SetSpellTimerFromBuff V2 native receiver table slot candidate
   --spell-level-receiver-index <0..63|0xhex>  Exact 821 SetSpellLevel V2 native receiver table index candidate
   --spell-level-clamped-scalar <0..6|0xhex>  Exact 821 SetSpellLevel V2 native clamped scalar candidate
   --damage-callback-f32-available  Exact 821 UnitApplyDamage rows with a native-matched anonymous +0x20 f32
@@ -329,6 +333,7 @@ function parseArgs(argv) {
     castNestedBits: null,
     castNestedU32: null,
     castNestedU32At4c: null,
+    spellTimerReceiverSlot: null,
     spellLevelReceiverIndex: null,
     spellLevelClampedScalar: null,
     damageCallbackF32Available: false,
@@ -337,6 +342,7 @@ function parseArgs(argv) {
     damageCallbackF32At18Raw: false,
     castPacketV5: false,
     castPacketV6: false,
+    spellTimerPacketV2: false,
     spellLevelPacketV2: false,
     damagePacketV6: false,
     damageLookupKey24: null,
@@ -407,6 +413,10 @@ function parseArgs(argv) {
     }
     if (token === '--spell-level-packet-v2') {
       options.spellLevelPacketV2 = true;
+      continue;
+    }
+    if (token === '--spell-timer-packet-v2') {
+      options.spellTimerPacketV2 = true;
       continue;
     }
     if (command === 'query-events' && token === '--latest-per-participant') {
@@ -489,6 +499,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'cast-nested-bits') options.castNestedBits = queryByte(value, key);
       else if (command === 'query-events' && key === 'cast-nested-u32') options.castNestedU32 = queryUint32(value, key);
       else if (command === 'query-events' && key === 'cast-nested-u32-0x4c') options.castNestedU32At4c = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'spell-timer-receiver-slot') options.spellTimerReceiverSlot = queryUint32(value, key);
       else if (command === 'query-events' && key === 'spell-level-receiver-index') options.spellLevelReceiverIndex = queryUint32(value, key);
       else if (command === 'query-events' && key === 'spell-level-clamped-scalar') options.spellLevelClampedScalar = queryUint32(value, key);
       else if (command === 'query-events' && key === 'damage-callback-u32-0x10') options.damageCallbackU32At10 = queryUint32(value, key);
@@ -552,6 +563,10 @@ function parseArgs(argv) {
   if (options.spellLevelPacketV2 && (!['decode', 'batch'].includes(command)
       || !options.events?.includes('set_spell_level_packet'))) {
     throw new Error('--spell-level-packet-v2 requires decode or batch with exact-821 set_spell_level_packet in --events');
+  }
+  if (options.spellTimerPacketV2 && (!['decode', 'batch'].includes(command)
+      || !options.events?.includes('set_spell_timer_from_buff_packet'))) {
+    throw new Error('--spell-timer-packet-v2 requires decode or batch with exact-821 set_spell_timer_from_buff_packet in --events');
   }
   if (command === 'ward-events') {
     positionals.push(...options.inputs);
@@ -674,6 +689,10 @@ function parseArgs(argv) {
         || options.spellLevelClampedScalar !== null)
         && options.event !== 'set_spell_level_packet_candidates') {
       throw new Error('--spell-level-receiver-index and --spell-level-clamped-scalar require an 821 set_spell_level_packet_candidates event');
+    }
+    if (options.spellTimerReceiverSlot !== null
+        && options.event !== 'set_spell_timer_from_buff_packet_candidates') {
+      throw new Error('--spell-timer-receiver-slot requires an 821 set_spell_timer_from_buff_packet_candidates event');
     }
     if (options.damageCallbackF32Available
         && options.event !== 'unit_apply_damage_packet_candidates') {
@@ -1167,6 +1186,7 @@ function parseOne1619(replay, options, started) {
           pythonExecutable: options.python ?? undefined,
           castPacketProfile: options.castPacketV6 ? 'v6'
             : options.castPacketV5 ? 'v5' : undefined,
+          setSpellTimerProfile: options.spellTimerPacketV2 ? 'v2' : undefined,
           setSpellLevelProfile: options.spellLevelPacketV2 ? 'v2' : undefined,
           damagePacketProfile: options.damagePacketV6 ? 'v6' : undefined,
         });
@@ -3246,6 +3266,7 @@ async function runQueryEventsCommand(parsed) {
       castNestedBits: options.castNestedBits,
       castNestedU32: options.castNestedU32,
       castNestedU32At4c: options.castNestedU32At4c,
+      spellTimerReceiverSlot: options.spellTimerReceiverSlot,
       spellLevelReceiverIndex: options.spellLevelReceiverIndex,
       spellLevelClampedScalar: options.spellLevelClampedScalar,
       damageCallbackF32Available: options.damageCallbackF32Available,

@@ -16,8 +16,9 @@ const {
 } = require('../src/decoders/rofl_16_19_821_set_spell_timer_from_buff_packet_candidate');
 
 const BUILD = '16.19.821.7343';
-const IMAGE = path.resolve(__dirname, '..', 'artifacts', '16_19_development',
-  'kr_821_runtime_capture', 'LeagueOfLegends_16.19.821.7343.memory.bin');
+const IMAGE = process.env.ROFL_821_RUNTIME_IMAGE || path.resolve(__dirname,
+  '..', 'artifacts', '16_19_development', 'kr_821_runtime_capture',
+  'LeagueOfLegends_16.19.821.7343.memory.bin');
 // KR_8393872512.rofl SHA-256 8c84fa11712e5faf516f0316d34aa9e6dbe542b36e5d1472c294daf2533ae1ef:
 // game stream, chunk 4, block offset 143010, Replay time 55235 ms,
 // raw param 0x400000b4; payload SHA-256 e16d3b69f738c44747d905b13053fd5ab86086eb29aec6476ee5dabb97cbce19.
