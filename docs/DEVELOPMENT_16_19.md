@@ -4,6 +4,23 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **CastSpellAns nested anonymous u32 at +0x1c (opt-in packet V5):** The
+  pinned `16.19.821.7343` image callback RVA `0x8d77ed..0x8d785a` reads
+  nested `+0x0c` (packet object `+0x1c`), converts its protected bytes with
+  the exact table at RVA `0x1b41db0`, and writes the word to temporary
+  `+0xa8`. The derived 256-byte transform SHA-256 is
+  `5b858c9ef8d1393d05d867112316c3344ff777044719d839ad8cd64867d7f537`.
+  V5 adds `raw_u32_0x1c_hex` and `opaque_u32_0x1c` behind direct decoder
+  option `castPacketProfile: 'v5'`; V4 remains the direct decoder default.
+  Original KR Replays `KR_8392938200` and `KR_8393456728` produced
+  11,693/11,693 V5 packet candidates with exact image `MATCHED_USED`, full
+  native payload consumption and zero decode errors. Three fixed original
+  packet anchors cross-check game/keyframe protected bytes and converted
+  values; one-byte truncate and append controls both fail full consumption.
+  Focused tests with local inputs: 14 passed, 0 failed, 0 skipped. The
+  callback's temporary transfer does not prove caster, spell, target, cast
+  success or gameplay effect. CLI/API selection and saved V5 query are the
+  next integration step.
 - **UnitApplyDamage anonymous callback u32 at +0x1c (opt-in V6):** On the
   pinned `16.19.821.7343` mapped image (SHA-256
   `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`),

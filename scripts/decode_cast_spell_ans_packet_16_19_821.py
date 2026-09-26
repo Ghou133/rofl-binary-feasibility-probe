@@ -27,6 +27,8 @@ PACKET_ID = 0x01da
 VTABLE_RVA = 0x01ba8ca0
 CALLBACK_TABLE_RVA = 0x01ab62d0
 CALLBACK_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b'
+NESTED_U32_CALLBACK_TABLE_RVA = 0x01b41db0
+NESTED_U32_TRANSFORM_SHA256 = '5b858c9ef8d1393d05d867112316c3344ff777044719d839ad8cd64867d7f537'
 NESTED_FLOAT_INVERSE_SHA256 = 'cce644f3775d31b6be55e5abc79ed029298be5110b8f81be8957bd3b066019f5'
 NESTED_BYTE_INVERSE_SHA256 = 'b5d220967c423848c278651d068786e3aaedf4994c6d30dd1d3d0c8fe6892516'
 PROFILE = {'constructor_rva': 0x00e9da90, 'deserialize_rva': 0x010df350,
@@ -143,7 +145,28 @@ def decode_nested_bits(encoded):
     return ((((value - 0x54) & 0xff) ^ 0xcc) + 0x48) & 0xff
 
 
-def decode_packet(emulator, context, raw_param, payload, table):
+def rol8(value, count):
+    return ((value << count) | (value >> (8 - count))) & 0xff
+
+
+def nested_u32_transform(table):
+    # The exact 821 callback at RVA 0x8d77ed..0x8d785a reads nested +0x0c
+    # (packet object +0x1c) and writes the converted word to temporary +0xa8.
+    # Its r15-relative lookup is the same 256-byte table copied in the image
+    # at RVA 0x1b41db0. The word is deliberately anonymous.
+    def decode(byte):
+        value = table[rol8(table[byte], 2)]
+        return table[rol8((~((value + 0x48) & 0xff)) & 0xff, 3)]
+
+    transform = bytes(decode(byte) for byte in range(256))
+    if (len(set(transform)) != 256 or hashlib.sha256(transform).hexdigest()
+            != NESTED_U32_TRANSFORM_SHA256):
+        raise ValueError('cast nested u32 callback transform differs')
+    return transform
+
+
+def decode_packet(emulator, context, raw_param, payload, table,
+                  nested_u32_table=None):
     context['raw_param'] = raw_param
     native = emulator.decode(payload, PROFILE)
     return_al = native['deserialize_return_al']
@@ -181,7 +204,7 @@ def decode_packet(emulator, context, raw_param, payload, table):
     opaque_byte = NESTED_BYTE_INVERSE[raw_byte]
     raw_nested_bits = obj[0x24]
     opaque_nested_bits = decode_nested_bits(raw_nested_bits)
-    return {'status': 'DECODED', 'deserialize_return_al': return_al,
+    result = {'status': 'DECODED', 'deserialize_return_al': return_al,
             'bytes_consumed': consumed, 'native_packet_id': PACKET_ID,
             'native_raw_param': raw_param, 'raw_flag_byte_hex': f'{raw_flag:02x}',
             'opaque_flag_0x148': opaque_flag,
@@ -190,11 +213,19 @@ def decode_packet(emulator, context, raw_param, payload, table):
             'raw_nested_bits_0x24_hex': f'{raw_nested_bits:02x}',
             'opaque_nested_bits_0x24': opaque_nested_bits,
             'raw_i32_bytes_hex': raw_i32.hex(), 'opaque_i32_0x14c': opaque_i32}
+    if nested_u32_table is not None:
+        raw_u32 = obj[0x1c:0x20]
+        result['raw_u32_0x1c_hex'] = raw_u32.hex()
+        result['opaque_u32_0x1c'] = struct.unpack(
+            '<I', raw_u32.translate(nested_u32_table))[0]
+    return result
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--image', type=Path, required=True)
+    parser.add_argument('--nested-u32-0x1c', action='store_true',
+                        help='opt in to the anonymous nested callback u32')
     options = parser.parse_args()
     digest = None
     try:
@@ -206,6 +237,13 @@ def main():
         table_sha = hashlib.sha256(table).hexdigest()
         if len(table) != 256 or table_sha != CALLBACK_TABLE_SHA256:
             raise ValueError('cast callback transform table differs')
+        nested_u32_table = None
+        if options.nested_u32_0x1c:
+            callback_copy = image[NESTED_U32_CALLBACK_TABLE_RVA:
+                                  NESTED_U32_CALLBACK_TABLE_RVA + 256]
+            if callback_copy != table:
+                raise ValueError('cast nested u32 callback table differs')
+            nested_u32_table = nested_u32_transform(callback_copy)
         emulator, context = make_emulator(image)
         results = []
         for index, packet in enumerate(packets):
@@ -219,7 +257,8 @@ def main():
             binding = {'input_index': index, 'raw_param': raw_param,
                        'raw_payload_sha256': hashlib.sha256(payload).hexdigest()}
             try:
-                row = decode_packet(emulator, context, raw_param, payload, table)
+                row = decode_packet(emulator, context, raw_param, payload, table,
+                                    nested_u32_table)
                 if row['status'] != 'DECODED':
                     emulator, context = make_emulator(image)
             except Exception as exc:
@@ -227,12 +266,14 @@ def main():
                 emulator, context = make_emulator(image)
             row.update(binding)
             results.append(row)
-        json.dump({'status': 'PASS', 'runtime_image_sha256': digest,
+        output = {'status': 'PASS', 'runtime_image_sha256': digest,
                    'callback_table_sha256': table_sha,
                    'nested_float_inverse_sha256': NESTED_FLOAT_INVERSE_SHA256,
                    'nested_byte_inverse_sha256': NESTED_BYTE_INVERSE_SHA256,
-                   'results': results},
-                  sys.stdout, separators=(',', ':'))
+                   'results': results}
+        if nested_u32_table is not None:
+            output['nested_u32_transform_sha256'] = NESTED_U32_TRANSFORM_SHA256
+        json.dump(output, sys.stdout, separators=(',', ':'))
         sys.stdout.write('\n')
         return 0
     except Exception as exc:

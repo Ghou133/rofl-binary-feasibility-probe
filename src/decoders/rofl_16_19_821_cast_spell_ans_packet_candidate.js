@@ -8,10 +8,12 @@ const path = require('node:path');
 const { walkBlocks } = require('../rofl');
 const { replaySourceError } = require('./replay_source_integrity');
 const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
+const { runtimeByteLookupTable821 } = require('./rofl_16_19_821_runtime_bytes');
 
 const REPLAY_VERSION = '16.19.821.7343';
 const IMAGE_SHA256 = '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325';
 const CALLBACK_TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b';
+const NESTED_U32_TRANSFORM_SHA256 = '5b858c9ef8d1393d05d867112316c3344ff777044719d839ad8cd64867d7f537';
 const NESTED_FLOAT_INVERSE_SHA256 = 'cce644f3775d31b6be55e5abc79ed029298be5110b8f81be8957bd3b066019f5';
 const NESTED_BYTE_INVERSE_SHA256 = 'b5d220967c423848c278651d068786e3aaedf4994c6d30dd1d3d0c8fe6892516';
 const PACKET_ID = 0x01da;
@@ -23,9 +25,13 @@ const MAX_REQUEST_BYTES = 4_000_000;
 const MIN_OBSERVED_PAYLOAD_BYTES = 97;
 const MAX_OBSERVED_PAYLOAD_BYTES = 189;
 const OBSERVED_SELECTORS = new Set([0x05, 0x11, 0x15, 0x17, 0x19, 0x1b]);
+const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V4_ID_821 =
+  'rofl-16.19.821.7343-kr-cast-spell-ans-packet-runtime-candidate-v4';
+const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_ID_821 =
+  'rofl-16.19.821.7343-kr-cast-spell-ans-packet-runtime-candidate-v5';
 
 const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
-  id: 'rofl-16.19.821.7343-kr-cast-spell-ans-packet-runtime-candidate-v4',
+  id: CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V4_ID_821,
   replay_version: REPLAY_VERSION,
   capability: CAPABILITY,
   status: 'CANDIDATE',
@@ -48,6 +54,16 @@ const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
     'The pinned exact-build mapped runtime image and Python Unicorn are required.',
   ]),
 });
+const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821 = Object.freeze({
+  ...CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
+  id: CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_ID_821,
+  evidence_nested_u32_transform_sha256: NESTED_U32_TRANSFORM_SHA256,
+  evidence_scope: '11693/11693 exact 821 CastSpellAns route packets in two original KR Replays natively fully consumed with protected +0x1c callback u32 and raw provenance',
+  known_limits: Object.freeze([
+    ...CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821.known_limits,
+    'The nested +0x0c callback u32 is anonymous; its value proves no caster, spell, target or action.',
+  ]),
+});
 
 function sha256(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
@@ -55,6 +71,10 @@ function sha256(bytes) {
 
 function ror8(value, count) {
   return ((value >>> count) | (value << (8 - count))) & 0xff;
+}
+
+function rol8(value, count) {
+  return ((value << count) | (value >>> (8 - count))) & 0xff;
 }
 
 function swap(value) {
@@ -113,6 +133,25 @@ function decodeNestedBits(rawHex) {
   return ((((value - 0x54) & 0xff) ^ 0xcc) + 0x48) & 0xff;
 }
 
+// The callback at RVA 0x8d77ed..0x8d785a reads nested +0x0c (packet +0x1c)
+// and writes its converted u32 to a temporary object at +0xa8. The image's
+// r15-relative table copy at RVA 0x1b41db0 equals the SHA-gated shared table.
+const NESTED_U32_CALLBACK_TABLE = runtimeByteLookupTable821();
+const NESTED_U32_TRANSFORM = Buffer.from(Array.from({ length: 256 }, (_, byte) => {
+  const looked = NESTED_U32_CALLBACK_TABLE[rol8(NESTED_U32_CALLBACK_TABLE[byte], 2)];
+  return NESTED_U32_CALLBACK_TABLE[rol8((~((looked + 0x48) & 0xff)) & 0xff, 3)];
+}));
+if (new Set(NESTED_U32_TRANSFORM).size !== 256
+    || sha256(NESTED_U32_TRANSFORM) !== NESTED_U32_TRANSFORM_SHA256) {
+  throw new Error('exact 821 CastSpellAns nested u32 transform differs');
+}
+
+function decodeCastSpellAnsNestedU32FromRaw821(rawHex) {
+  if (typeof rawHex !== 'string' || !/^[0-9a-f]{8}$/.test(rawHex)) return null;
+  return Buffer.from(Buffer.from(rawHex, 'hex').map(
+    (byte) => NESTED_U32_TRANSFORM[byte])).readUInt32LE(0);
+}
+
 function packetRef(replay, block, chunk) {
   return {
     source_path: replay.source_path ?? null,
@@ -154,9 +193,11 @@ function collectRows(replay, precollected) {
 }
 
 function decodeCastSpellAnsPacketCandidates821(replay, {
-  runtimeImagePath, pythonExecutable, precollected,
+  runtimeImagePath, pythonExecutable, precollected, castPacketProfile = 'v4',
 } = {}) {
-  const profile = CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821;
+  const useV5 = castPacketProfile === 'v5';
+  const profile = useV5 ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821
+    : CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821;
   const base = {
     profile_id: profile.id,
     input_packet_id: PACKET_ID,
@@ -164,12 +205,16 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
     evidence_callback_table_sha256: CALLBACK_TABLE_SHA256,
     evidence_nested_float_inverse_sha256: NESTED_FLOAT_INVERSE_SHA256,
     evidence_nested_byte_inverse_sha256: NESTED_BYTE_INVERSE_SHA256,
+    ...(useV5 ? { evidence_nested_u32_transform_sha256: NESTED_U32_TRANSFORM_SHA256 } : {}),
   };
   const fail = (status, error, extra = {}) => ({
     ...base, status, input_count: null, event_count: null, events: null,
     runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
     error, ...extra,
   });
+  if (castPacketProfile !== 'v4' && !useV5) {
+    return fail('UNSUPPORTED', 'CastSpellAns packet profile must be v4 or v5');
+  }
   if (replay?.header?.version !== REPLAY_VERSION) {
     return fail('UNSUPPORTED', `cast packet candidate supports only ${REPLAY_VERSION}`);
   }
@@ -251,7 +296,9 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
         runtime_image_used: start > 0,
       });
     }
-    const run = childProcess.spawnSync(python, ['-B', script, '--image', imagePath], {
+    const nativeArgs = ['-B', script, '--image', imagePath];
+    if (useV5) nativeArgs.push('--nested-u32-0x1c');
+    const run = childProcess.spawnSync(python, nativeArgs, {
       input: request, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: 60000,
     });
     if (run.error || run.status !== 0) {
@@ -281,6 +328,7 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
         || decoded.callback_table_sha256 !== CALLBACK_TABLE_SHA256
         || decoded.nested_float_inverse_sha256 !== NESTED_FLOAT_INVERSE_SHA256
         || decoded.nested_byte_inverse_sha256 !== NESTED_BYTE_INVERSE_SHA256
+        || (useV5 && decoded.nested_u32_transform_sha256 !== NESTED_U32_TRANSFORM_SHA256)
         || !Array.isArray(decoded.results) || decoded.results.length !== batch.length) {
       return failed('DECODE_FAILED', 'runtime cast output identity or packet count differs', {
         runtime_image_used: start > 0,
@@ -310,7 +358,13 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
           || !Number.isInteger(row.opaque_u8_0x140)
           || row.opaque_u8_0x140 !== decodeNestedByte(row.raw_u8_0x140_hex)
           || !Number.isInteger(row.opaque_nested_bits_0x24)
-          || row.opaque_nested_bits_0x24 !== decodeNestedBits(row.raw_nested_bits_0x24_hex)) {
+          || row.opaque_nested_bits_0x24 !== decodeNestedBits(row.raw_nested_bits_0x24_hex)
+          || (useV5 && (typeof row.raw_u32_0x1c_hex !== 'string'
+            || !/^[0-9a-f]{8}$/.test(row.raw_u32_0x1c_hex)
+            || !Number.isInteger(row.opaque_u32_0x1c)
+            || row.opaque_u32_0x1c < 0 || row.opaque_u32_0x1c > 0xffffffff
+            || row.opaque_u32_0x1c !== decodeCastSpellAnsNestedU32FromRaw821(
+              row.raw_u32_0x1c_hex)))) {
         return failed('DECODE_FAILED', `runtime cast packet ${start + index} did not fully decode`, {
           runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
           runtime_image_sha256: IMAGE_SHA256, first_failed_packet_ref: ref,
@@ -333,6 +387,8 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
         opaque_u8_0x140: row.opaque_u8_0x140,
         raw_nested_bits_0x24_hex: row.raw_nested_bits_0x24_hex,
         opaque_nested_bits_0x24: row.opaque_nested_bits_0x24,
+        ...(useV5 ? { raw_u32_0x1c_hex: row.raw_u32_0x1c_hex,
+          opaque_u32_0x1c: row.opaque_u32_0x1c } : {}),
         confidence: 'CANDIDATE',
         semantic_status: 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS',
         raw_packet_ref: ref,
@@ -350,7 +406,11 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
 }
 
 module.exports = {
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V4_ID_821,
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_ID_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821,
   decodeNestedBits,
+  decodeCastSpellAnsNestedU32FromRaw821,
   decodeCastSpellAnsPacketCandidates821,
 };

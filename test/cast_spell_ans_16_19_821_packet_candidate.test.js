@@ -12,6 +12,9 @@ const { replayFromChunks } = require('./helpers/synthetic_replay');
 const { collect821Routes } = require('../src/decoders/rofl_16_19_821_scan');
 const {
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821: profile,
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V4_ID_821,
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821: profileV5,
+  decodeCastSpellAnsNestedU32FromRaw821,
   decodeCastSpellAnsPacketCandidates821: decode,
 } = require('../src/decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 
@@ -20,6 +23,7 @@ const IMAGE_SHA256 = '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be
 const TABLE_SHA256 = '328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b';
 const FLOAT_INVERSE_SHA256 = 'cce644f3775d31b6be55e5abc79ed029298be5110b8f81be8957bd3b066019f5';
 const BYTE_INVERSE_SHA256 = 'b5d220967c423848c278651d068786e3aaedf4994c6d30dd1d3d0c8fe6892516';
+const NESTED_U32_TRANSFORM_SHA256 = '5b858c9ef8d1393d05d867112316c3344ff777044719d839ad8cd64867d7f537';
 const PAYLOAD = Buffer.concat([Buffer.from([0x15]), Buffer.alloc(128)]);
 
 function packet(packetId = 0x01da, rawParam = 0x400000ae, payload = PAYLOAD) {
@@ -118,6 +122,59 @@ test('821 CastSpellAns candidate exposes only provenance and opaque packet field
   assert.equal(invoke.mock.callCount(), 1);
 });
 
+test('821 CastSpellAns V5 opt-in adds only exact anonymous nested u32', (t) => {
+  const image = fakeImage(t);
+  const replay = replayWithChunks([{ packets: [packet()] }]);
+  const invoke = t.mock.method(childProcess, 'spawnSync', (_python, args, options) => {
+    assert.ok(args.includes('--nested-u32-0x1c'));
+    const output = nativeResult(JSON.parse(options.input));
+    output.nested_u32_transform_sha256 = NESTED_U32_TRANSFORM_SHA256;
+    output.results[0].raw_u32_0x1c_hex = 'cee352e7';
+    output.results[0].opaque_u32_0x1c = 1531465011;
+    return { status: 0, stderr: '', stdout: JSON.stringify(output) };
+  });
+  assert.equal(profile.id, CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V4_ID_821);
+  assert.equal(decodeCastSpellAnsNestedU32FromRaw821('cee352e7'), 1531465011);
+  assert.equal(decodeCastSpellAnsNestedU32FromRaw821('4f130fd8'), 1233081321);
+  assert.equal(decodeCastSpellAnsNestedU32FromRaw821('cee352e'), null);
+  const result = decode(replay, { runtimeImagePath: image, castPacketProfile: 'v5' });
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.profile_id, profileV5.id);
+  assert.equal(result.evidence_nested_u32_transform_sha256,
+    NESTED_U32_TRANSFORM_SHA256);
+  assert.equal(result.events[0].build_profile, profileV5.id);
+  assert.equal(result.events[0].raw_u32_0x1c_hex, 'cee352e7');
+  assert.equal(result.events[0].opaque_u32_0x1c, 1531465011);
+  assert.equal('caster' in result.events[0], false);
+  assert.equal('spell' in result.events[0], false);
+  assert.equal(invoke.mock.callCount(), 1);
+});
+
+test('821 CastSpellAns V5 rejects mismatched native field and transform atomically', (t) => {
+  const image = fakeImage(t);
+  const replay = replayWithChunks([{ packets: [packet()] }]);
+  let mode = 'wrong-value';
+  const invoke = t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const output = nativeResult(JSON.parse(options.input));
+    output.nested_u32_transform_sha256 = mode === 'wrong-hash'
+      ? '0'.repeat(64) : NESTED_U32_TRANSFORM_SHA256;
+    output.results[0].raw_u32_0x1c_hex = mode === 'wrong-raw'
+      ? 'notbytes' : 'cee352e7';
+    output.results[0].opaque_u32_0x1c = mode === 'wrong-value'
+      ? 1531465012 : 1531465011;
+    return { status: 0, stderr: '', stdout: JSON.stringify(output) };
+  });
+  for (const variant of ['wrong-value', 'wrong-raw', 'wrong-hash']) {
+    mode = variant;
+    const result = decode(replay, { runtimeImagePath: image, castPacketProfile: 'v5' });
+    assert.equal(result.status, 'DECODE_FAILED', variant);
+    assert.equal(result.events, null, variant);
+  }
+  assert.equal(decode(replay, { runtimeImagePath: image,
+    castPacketProfile: 'v6' }).status, 'UNSUPPORTED');
+  assert.equal(invoke.mock.callCount(), 3);
+});
+
 test('821 CastSpellAns rejects malformed nested float without candidate events', (t) => {
   const image = fakeImage(t);
   const replay = replayWithChunks([{ packets: [packet()] }]);
@@ -199,10 +256,12 @@ test('821 CastSpellAns rejects nested callback bits inconsistent with native byt
 });
 
 test('821 native CastSpellAns reads callback bits at the pinned packet offset', (t) => {
-  const image = path.resolve(__dirname, '..', 'artifacts', '16_19_development',
-    'kr_821_runtime_capture', 'LeagueOfLegends_16.19.821.7343.memory.bin');
-  const rowsFile = path.resolve(__dirname, '..', 'artifacts', '16_19_development',
-    'kr_821_cast_probe', 'route_01da_rows.jsonl');
+  const image = process.env.ROFL_821_RUNTIME_IMAGE || path.resolve(__dirname, '..',
+    'artifacts', '16_19_development', 'kr_821_runtime_capture',
+    'LeagueOfLegends_16.19.821.7343.memory.bin');
+  const rowsFile = process.env.ROFL_821_CAST_ROUTE_ROWS || path.resolve(__dirname,
+    '..', 'artifacts', '16_19_development', 'kr_821_cast_probe',
+    'route_01da_rows.jsonl');
   if (!fs.existsSync(image) || !fs.existsSync(rowsFile)) {
     t.skip('exact private 821 image and Replay route rows are unavailable');
     return;
@@ -247,6 +306,74 @@ test('821 native CastSpellAns reads callback bits at the pinned packet offset', 
     assert.equal(decoded.results[index].bytes_consumed, packets[index].payload_hex.length / 2);
     assert.equal(decoded.results[index].raw_nested_bits_0x24_hex, fixtures[index].raw);
     assert.equal(decoded.results[index].opaque_nested_bits_0x24, fixtures[index].value);
+  }
+});
+
+test('821 native CastSpellAns V5 reads +0x1c in original Replay packets', (t) => {
+  const image = process.env.ROFL_821_RUNTIME_IMAGE;
+  const rowsFile = process.env.ROFL_821_CAST_ROUTE_ROWS;
+  const replayDirectory = process.env.ROFL_821_REPLAY_DIRECTORY;
+  if (![image, rowsFile, replayDirectory].every(
+    (filename) => filename && fs.existsSync(filename))) {
+    t.skip('exact private 821 image, original Replays and route rows are unavailable');
+    return;
+  }
+  const fixtures = [
+    { name: 'KR_8392938200.rofl', chunkIndex: 4, blockOffset: 15809,
+      payloadSha256: 'e2f4a80671b5e31143a322256c3dcadec0138140cd053ff31d83443e31756a0a',
+      raw: 'cee352e7', value: 1531465011 },
+    { name: 'KR_8392938200.rofl', chunkIndex: 5, blockOffset: 173877,
+      payloadSha256: '679f7a69772b587f16cf30e0aee3a24f28e80f647b8b19b627accfc75c6f762f',
+      raw: '4f130fd8', value: 1233081321 },
+    { name: 'KR_8393456728.rofl', chunkIndex: 5, blockOffset: 175414,
+      payloadSha256: 'a5da13e28e37419e7b9afa06c07278c407836f21ef3aabca4949cd9b9e34b732',
+      raw: '4f130fd8', value: 1233081321 },
+  ];
+  const found = new Map();
+  for (const line of fs.readFileSync(rowsFile, 'utf8').split(/\r?\n/)) {
+    if (!line) continue;
+    const row = JSON.parse(line);
+    const fixture = fixtures.find((entry) => entry.name === row.name
+      && entry.chunkIndex === row.chunk_index
+      && entry.blockOffset === row.block_offset);
+    if (fixture) found.set(fixture, row);
+  }
+  const packets = fixtures.map((fixture) => {
+    const row = found.get(fixture);
+    assert.ok(row, `missing exact Replay packet ${fixture.name}`);
+    assert.equal(crypto.createHash('sha256').update(
+      fs.readFileSync(path.join(replayDirectory, fixture.name))).digest('hex'),
+    row.replay_sha256);
+    assert.equal(crypto.createHash('sha256').update(Buffer.from(row.payload_hex, 'hex'))
+      .digest('hex'), fixture.payloadSha256);
+    return { raw_param: row.raw_param, payload_hex: row.payload_hex };
+  });
+  const first = Buffer.from(packets[0].payload_hex, 'hex');
+  const controls = [first.subarray(0, -1), Buffer.concat([first, Buffer.from([0])])]
+    .map((payload) => ({ raw_param: packets[0].raw_param,
+      payload_hex: payload.toString('hex') }));
+  const script = path.resolve(__dirname, '..', 'scripts',
+    'decode_cast_spell_ans_packet_16_19_821.py');
+  const run = childProcess.spawnSync(process.env.PYTHON || 'python',
+    ['-B', script, '--image', image, '--nested-u32-0x1c'], {
+      input: JSON.stringify({ replay_version: BUILD, packets: [...packets, ...controls] }),
+      encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 60000,
+    });
+  assert.equal(run.status, 0, run.error?.message || run.stderr);
+  const decoded = JSON.parse(run.stdout);
+  assert.equal(decoded.status, 'PASS');
+  assert.equal(decoded.runtime_image_sha256, IMAGE_SHA256);
+  assert.equal(decoded.nested_u32_transform_sha256, NESTED_U32_TRANSFORM_SHA256);
+  for (const [index, fixture] of fixtures.entries()) {
+    const row = decoded.results[index];
+    assert.equal(row.status, 'DECODED');
+    assert.equal(row.bytes_consumed, packets[index].payload_hex.length / 2);
+    assert.equal(row.raw_u32_0x1c_hex, fixture.raw);
+    assert.equal(row.opaque_u32_0x1c, fixture.value);
+    assert.equal(decodeCastSpellAnsNestedU32FromRaw821(fixture.raw), fixture.value);
+  }
+  for (const row of decoded.results.slice(fixtures.length)) {
+    assert.equal(row.status, 'FAILED');
   }
 });
 
