@@ -1065,25 +1065,31 @@ function quoteCommandArg(value) {
 function discoverReplayFiles(inputs) {
   const files = [];
   const seen = new Set();
+  const addFile = (filePath, stat = null) => {
+    let identity = filePath;
+    if (process.platform === 'win32') {
+      const fileStat = stat ?? fs.statSync(filePath, { bigint: true });
+      identity = fileStat.ino !== 0n
+        ? `${fileStat.dev}:${fileStat.ino}` : filePath.toLowerCase();
+    }
+    if (!seen.has(identity)) {
+      seen.add(identity);
+      files.push(filePath);
+    }
+  };
   const visit = (input) => {
     const resolved = path.resolve(input);
     if (!fs.existsSync(resolved)) throw new Error(`Input does not exist: ${resolved}`);
-    const stat = fs.statSync(resolved);
+    const stat = fs.statSync(resolved, { bigint: true });
     if (stat.isFile()) {
       if (!resolved.toLowerCase().endsWith('.rofl')) throw new Error(`Input is not a .rofl file: ${resolved}`);
-      if (!seen.has(resolved)) {
-        seen.add(resolved);
-        files.push(resolved);
-      }
+      addFile(resolved, stat);
       return;
     }
     for (const entry of fs.readdirSync(resolved, { withFileTypes: true })) {
       const full = path.join(resolved, entry.name);
       if (entry.isDirectory()) visit(full);
-      else if (entry.isFile() && entry.name.toLowerCase().endsWith('.rofl') && !seen.has(full)) {
-        seen.add(full);
-        files.push(full);
-      }
+      else if (entry.isFile() && entry.name.toLowerCase().endsWith('.rofl')) addFile(full);
     }
   };
   for (const input of inputs) visit(input);
@@ -1766,6 +1772,12 @@ function errorToObject(error) {
   };
 }
 
+const MAX_REPLAY_DIRECTORY_COMPONENT = 255;
+
+function replayDirectoryNameWithSuffix(stem, suffix) {
+  return `${stem.slice(0, MAX_REPLAY_DIRECTORY_COMPONENT - suffix.length - 1)}-${suffix}`;
+}
+
 function replayDirectoryNames(analyses) {
   const stems = analyses.map((analysis) => safeStem(analysis.source_path));
   const stemCounts = new Map();
@@ -1778,7 +1790,8 @@ function replayDirectoryNames(analyses) {
     return {
       stem,
       pathHash,
-      name: stemCounts.get(stem) > 1 ? `${stem}-${pathHash.slice(0, 12)}` : stem,
+      name: stemCounts.get(stem) > 1
+        ? replayDirectoryNameWithSuffix(stem, pathHash.slice(0, 12)) : stem,
     };
   });
   const candidateCounts = new Map();
@@ -1786,26 +1799,19 @@ function replayDirectoryNames(analyses) {
     candidateCounts.set(row.name, (candidateCounts.get(row.name) ?? 0) + 1);
   }
   const names = candidates.map((row) => candidateCounts.get(row.name) > 1
-    ? `${row.stem}-${row.pathHash}` : row.name);
-  if (new Set(names).size !== names.length) {
-    throw new Error('Replay output directory identities are not unique');
-  }
-  return names;
-}
-
-function parallelReplayDirectoryNames(files) {
-  const names = replayDirectoryNames(files.map((source_path) => ({ source_path })));
-  if (process.platform !== 'win32') return names;
-  const counts = new Map();
+    ? replayDirectoryNameWithSuffix(row.stem, row.pathHash) : row.name);
+  const outputKey = (name) => process.platform === 'win32' ? name.toLowerCase() : name;
+  const foldedCounts = new Map();
   for (const name of names) {
-    const folded = name.toLowerCase();
-    counts.set(folded, (counts.get(folded) ?? 0) + 1);
+    const key = outputKey(name);
+    foldedCounts.set(key, (foldedCounts.get(key) ?? 0) + 1);
   }
-  const isolated = names.map((name, index) => counts.get(name.toLowerCase()) > 1
-    ? `${safeStem(files[index])}-${sha256(Buffer.from(path.resolve(files[index]).toLowerCase()))}`
+  const isolated = names.map((name, index) => foldedCounts.get(outputKey(name)) > 1
+    ? replayDirectoryNameWithSuffix(stems[index],
+      sha256(Buffer.from(path.resolve(analyses[index].source_path))))
     : name);
-  if (new Set(isolated.map((name) => name.toLowerCase())).size !== isolated.length) {
-    throw new Error('Replay paths cannot be isolated into unique worker artifact directories');
+  if (new Set(isolated.map(outputKey)).size !== isolated.length) {
+    throw new Error('Replay output directory identities are not unique');
   }
   return isolated;
 }
@@ -3719,7 +3725,7 @@ function runOneBatchWorker(filePath, options, rootDir, replayDirName, workerScri
 
 async function runBatchWorkers(files, options, rootDir, jobs = 2,
   workerScript = path.join(__dirname, 'batch_worker.js')) {
-  const replayDirNames = parallelReplayDirectoryNames(files);
+  const replayDirNames = replayDirectoryNames(files.map((source_path) => ({ source_path })));
   const results = new Array(files.length);
   let next = 0;
   async function runLane() {

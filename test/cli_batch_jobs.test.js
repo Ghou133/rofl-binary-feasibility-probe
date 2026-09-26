@@ -131,6 +131,106 @@ test('workers retain distinct directories for equal Replay basenames', (t) => {
   assert.ok(names.every((name) => fs.existsSync(path.join(output, name, 'semantic_run.json'))));
 });
 
+test('dot-only Replay stems stay inside distinct per-Replay directories', (t) => {
+  const root = work(t);
+  const inputs = [
+    replay(root, 'inputs', '..rofl'),
+    replay(root, 'inputs', '...rofl'),
+    replay(root, 'inputs', 'normal.rofl'),
+  ];
+  for (const jobs of [null, 1, 2]) {
+    const output = path.join(root, `output-${jobs ?? 'default'}`);
+    command(['batch', ...inputs, '--events', 'hero_death', '--event-jsonl-only',
+      ...(jobs === null ? [] : ['--jobs', String(jobs)]), '--out-dir', output]);
+    const manifest = readJson(path.join(output, 'manifest.json'));
+    assert.equal(manifest.replay_inputs.length, inputs.length);
+    const directories = manifest.replay_inputs.map((row) => row.artifact_directory);
+    assert.equal(new Set(directories).size, inputs.length);
+    for (const relative of directories) {
+      const resolved = path.resolve(output, relative);
+      assert.equal(path.dirname(resolved), path.resolve(output, 'replays'));
+      assert.ok(fs.existsSync(path.join(resolved, 'replay_analysis.json')));
+    }
+    assert.equal(fs.existsSync(path.join(output, 'replay_analysis.json')), false);
+  }
+});
+
+test('Windows path case aliases identify one Replay in both batch modes', (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('Windows case-insensitive path aliases');
+    return;
+  }
+  const root = work(t);
+  const first = replay(root, 'inputs', 'same.rofl');
+  const alias = path.join(path.dirname(first), 'SAME.ROFL');
+  if (!fs.existsSync(alias)) {
+    t.skip('This directory is case-sensitive');
+    return;
+  }
+  assert.equal(cli.discoverReplayFiles([first, alias]).length, 1);
+  for (const jobs of [1, 2]) {
+    const output = path.join(root, `output-${jobs}`);
+    command(['batch', first, alias, '--events', 'hero_death', '--event-jsonl-only',
+      '--jobs', String(jobs), '--out-dir', output]);
+    const manifest = readJson(path.join(output, 'manifest.json'));
+    assert.deepEqual(manifest.replay_inputs.map((row) => row.path), [first]);
+    assert.ok(fs.existsSync(path.join(output,
+      manifest.replay_inputs[0].artifact_directory, 'replay_analysis.json')));
+  }
+});
+
+test('distinct Windows Replays with case-colliding basenames keep separate artifacts', (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('Windows case-insensitive output directories');
+    return;
+  }
+  const root = work(t);
+  const inputs = [replay(root, 'first', 'same.rofl'),
+    replay(root, 'second', 'SAME.rofl')];
+  for (const jobs of [null, 1, 2]) {
+    const output = path.join(root, `output-${jobs ?? 'default'}`);
+    command(['batch', ...inputs, '--events', 'hero_death', '--event-jsonl-only',
+      ...(jobs === null ? [] : ['--jobs', String(jobs)]), '--out-dir', output]);
+    const manifest = readJson(path.join(output, 'manifest.json'));
+    assert.equal(manifest.replay_inputs.length, inputs.length);
+    const directories = manifest.replay_inputs.map((row) => row.artifact_directory);
+    assert.equal(new Set(directories.map((name) => name.toLowerCase())).size,
+      inputs.length);
+    for (const row of manifest.replay_inputs) {
+      const saved = readJson(path.join(output, row.artifact_directory,
+        'replay_analysis.json'));
+      assert.equal(saved.source_path, row.path);
+    }
+  }
+});
+
+test('Windows long duplicate and case-colliding stems fit output components', (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('Windows output component limit');
+    return;
+  }
+  const root = work(t);
+  const scenarios = [
+    [replay(root, 'duplicate-a', `${'a'.repeat(243)}.rofl`),
+      replay(root, 'duplicate-b', `${'a'.repeat(243)}.rofl`)],
+    [replay(root, 'case-a', `${'b'.repeat(200)}.rofl`),
+      replay(root, 'case-b', `${'B'.repeat(200)}.rofl`)],
+  ];
+  for (const [index, inputs] of scenarios.entries()) {
+    const output = path.join(root, `output-${index}`);
+    command(['batch', ...inputs, '--events', 'hero_death', '--event-jsonl-only',
+      '--jobs', '2', '--out-dir', output]);
+    const manifest = readJson(path.join(output, 'manifest.json'));
+    assert.equal(manifest.replay_inputs.length, inputs.length);
+    const names = manifest.replay_inputs.map((row) =>
+      path.basename(row.artifact_directory));
+    assert.ok(names.every((name) => name.length <= 255));
+    assert.equal(new Set(names.map((name) => name.toLowerCase())).size, inputs.length);
+    assert.ok(manifest.replay_inputs.every((row) => fs.existsSync(path.join(output,
+      row.artifact_directory, 'replay_analysis.json'))));
+  }
+});
+
 test('missing input and worker crash stay failed; partial worker files are retained', async (t) => {
   const root = work(t);
   const options = { ...cli.parseArgs(['batch', 'unused.rofl', '--events', 'hero_death',

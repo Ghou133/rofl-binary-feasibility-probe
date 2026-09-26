@@ -66,7 +66,9 @@ async function hashFiles(paths) {
 }
 
 function safeStem(filePath) {
-  return path.basename(filePath, path.extname(filePath)).replace(/[^A-Za-z0-9._-]+/g, '_');
+  const stem = path.basename(filePath, path.extname(filePath))
+    .replace(/[^A-Za-z0-9._-]+/g, '_');
+  return /^\.*$/.test(stem) ? 'replay' : stem;
 }
 
 function outputHashes(directory, options = {}) {
