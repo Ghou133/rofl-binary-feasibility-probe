@@ -109,7 +109,7 @@ const {
   writeJsonl,
 } = require('./io');
 const { EventQueryError, prepareEventQuery, prepareBatchEventQuery,
-  streamEventQuery, streamBatchEventQuery } = require('./event_query');
+  streamEventQuery, streamBatchEventQuery, listSavedEvents } = require('./event_query');
 
 const REPOSITORY_ROOT = path.resolve(__dirname, '..');
 const TEST_COMMAND = 'node --test test/*.test.js';
@@ -139,6 +139,7 @@ Usage:
   node src/cli.js batch <file.rofl|directory> [more inputs ...] [--out-dir artifacts]
   node src/cli.js validate [file.rofl|directory ...] [--out-dir artifacts]
   node src/cli.js ward-events <rows.json|rows.jsonl|file.rofl> [--out-dir artifacts]
+  node src/cli.js query-events <replay-or-batch-artifact-directory> --list-events
   node src/cli.js query-events <replay-or-batch-artifact-directory> --event <exact-event-key> [filters]
 
 Runtime: Node >=22.15.0 with native Zstd.
@@ -235,6 +236,7 @@ Options:
   --damage-packet-v6            Opt into exact 821 UnitApplyDamage +0x1c u32 packet/association candidates (decode/batch)
   --event-jsonl-only            Store 16.19 event rows only in JSONL (decode/batch with --events)
   --event <key>                 Exact 16.19 candidate JSONL key (query-events)
+  --list-events                 List saved 16.19 candidate keys and declared counts (query-events)
   --json                        Emit only machine-readable JSON (capabilities)
   --python <command>            Python command with Unicorn installed (default: python)
   --details-dir <path>          Validation-only directory for same-game Details matching
@@ -322,6 +324,7 @@ function parseArgs(argv) {
     runtimeImage: null,
     events: null,
     event: null,
+    listEvents: false,
     eventJsonlOnly: false,
     participant: null,
     killerParticipant: null,
@@ -430,6 +433,10 @@ function parseArgs(argv) {
     }
     if (command === 'query-events' && token === '--latest-per-participant') {
       options.latestPerParticipant = true;
+      continue;
+    }
+    if (command === 'query-events' && token === '--list-events') {
+      options.listEvents = true;
       continue;
     }
     if (command === 'query-events' && token === '--endpoint-reversed-pair') {
@@ -587,8 +594,24 @@ function parseArgs(argv) {
     positionals.push(...options.inputs);
   }
   if (command === 'query-events') {
-    if (positionals.length !== 1 || !options.event) {
-      throw new Error('query-events requires one Replay or batch artifact directory and --event');
+    if (positionals.length !== 1 || (!options.event && !options.listEvents)) {
+      throw new Error('query-events requires one Replay or batch artifact directory and --event or --list-events');
+    }
+    if (options.listEvents) {
+      const filterKeys = ['fromMs', 'toMs', 'participant', 'killerParticipant',
+        'assistingParticipant', 'rawParam', 'itemId', 'previousItemId', 'slot',
+        'opaqueU32', 'opaquePair', 'opaqueI32', 'castNestedBits', 'castNestedU32',
+        'castNestedU32At4c', 'spellTimerReceiverSlot', 'spellLevelReceiverIndex',
+        'spellLevelClampedScalar', 'damageCallbackF32Available',
+        'damageCallbackU32At10', 'damageCallbackU32At1c',
+        'damageCallbackF32At18Raw', 'damageLookupKey24', 'damageLookupKey2c',
+        'dieSourceKey2cMatch', 'showHealthZeroFlag', 'packetRecordCount',
+        'levelAfter', 'childEventId', 'latestPerParticipant',
+        'endpointReversedPair', 'comparisonToEndpoints', 'limit'];
+      if (options.event || options.output || filterKeys.some((key) =>
+        options[key] !== null && options[key] !== false)) {
+        throw new Error('--list-events cannot be combined with --event, --output or query filters');
+      }
     }
     if (options.participant !== null && options.participant > 10) {
       throw new Error('--participant must be in 1..10');
@@ -3248,6 +3271,10 @@ async function runQueryEventsCommand(parsed) {
   try {
     const artifactDirectory = path.resolve(positionals[0]);
     const batch = fs.existsSync(path.join(artifactDirectory, 'manifest.json'));
+    if (options.listEvents) {
+      process.stdout.write(`${JSON.stringify(listSavedEvents(artifactDirectory, batch))}\n`);
+      return 0;
+    }
     const prepared = batch
       ? prepareBatchEventQuery(artifactDirectory, options.event)
       : prepareEventQuery(artifactDirectory, options.event);

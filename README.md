@@ -736,6 +736,8 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 
 `query-events` 也可直接读取 `batch` 或 `decode` 的输出根目录，包括只含一场回放的根目录。从 `manifest.json` 逐场校验回放身份、目录清单和每场元数据及所查 JSONL 的 SHA-256，再把匹配行原样输出；单场产物还可传入 `replays/<回放名>` 目录。`--limit` 作用于整批输出，仍会检查所有可用场次的完整行数。汇总列出每场 `COMPLETE` 或 `UNAVAILABLE` 和原有能力状态；部分场次缺少包形状时返回 `PARTIAL`，不会把缺失当作零命中。全部场次不可查询时命令失败，已创建的输出文件会清理。
 
+先运行 `node src/cli.js query-events "work\16-19-821-batch" --list-events` 可得到实际保存的候选事件键、每场精确 build、能力状态和声明行数。`SAVED` 且声明行数为 0 与 `UNAVAILABLE`、`NOT_REQUESTED` 分开显示。目录清单会校验 Replay 元数据；批量目录还核对清单中所列事件文件的 SHA-256。此命令不扫描 JSONL 行，返回的声明行数和文件散列不代表逐行内容已通过 `--event` 查询校验。
+
 ```powershell
 node src/cli.js query-events "work\16-19-821-batch" `
   --event resurrect_event_packet_candidates --limit 20 `

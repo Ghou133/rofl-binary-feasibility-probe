@@ -898,6 +898,19 @@ function sha256File(filename) {
   return digest.digest('hex');
 }
 
+function checkBatchHash(hashes, relative, filename, cache = null) {
+  const expected = hashes[relative];
+  let actual = cache?.get(filename);
+  if (actual === undefined) {
+    actual = sha256File(filename);
+    cache?.set(filename, actual);
+  }
+  if (!REPLAY_SHA.test(expected) || actual !== expected) {
+    throw new EventQueryError('ARTIFACT_HASH_MISMATCH',
+      `Batch manifest SHA-256 differs for ${relative}.`, { filename, relative });
+  }
+}
+
 function isCount(value) {
   return Number.isSafeInteger(value) && value >= 0;
 }
@@ -2298,10 +2311,7 @@ function prepareEventQuery(directory, eventKey) {
     semantic, analysis);
 }
 
-// Secondary streams belong to the same Replay. Reuse its already checked
-// metadata; each source still gets its own capability and JSONL file checks.
-function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
-  semantic, analysis) {
+function assertReplayIdentity(semantic, analysis) {
   const replaySha = semantic.replay_sha256;
   if (!REPLAY_SHA.test(replaySha)
       || !/^16\.19\.[0-9]+\.[0-9]+$/.test(semantic.replay_version)
@@ -2317,6 +2327,14 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
         analysis_replay_sha256: analysis.replay_sha256,
         container_status: semantic.container_status });
   }
+}
+
+// Secondary streams belong to the same Replay. Reuse its already checked
+// metadata; each source still gets its own capability and JSONL file checks.
+function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
+  semantic, analysis) {
+  assertReplayIdentity(semantic, analysis);
+  const replaySha = semantic.replay_sha256;
   const associationConfig = ASSOCIATION_EVENTS_821[eventKey] ?? null;
   const exactPacketProfile = EXACT_PACKET_EVENTS_821[eventKey] ?? null;
   const exactBlobPacketConfig = EXACT_BLOB_PACKET_EVENTS_821[eventKey] ?? null;
@@ -2523,6 +2541,19 @@ function prepareInventoryIntervalSource(prepared) {
   return metadata.inventoryIntervalSource;
 }
 
+function checkPreparedBatchHashes(relative, prepared, checkHash) {
+  checkHash(`${relative}/${prepared.eventKey}.jsonl`, prepared.inputPath);
+  const sources = [
+    ...Object.values(prepared.bracketSources ?? {}),
+    prepared.experienceIntervalSource,
+    ...Object.values(prepared.levelExperienceBracketSources ?? {}),
+    ...Object.values(prepared.objectiveBountyTurretPairSources ?? {}),
+  ].filter(Boolean);
+  for (const source of sources) {
+    checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
+  }
+}
+
 function prepareBatchEventQuery(directory, eventKey) {
   const artifactDirectory = path.resolve(directory);
   const manifest = readArtifactJson(artifactDirectory, 'manifest.json');
@@ -2551,13 +2582,7 @@ function prepareBatchEventQuery(directory, eventKey) {
     throw new EventQueryError('UNSAFE_ARTIFACT', 'Batch Replay directory must be ordinary.',
       { directory: replayRoot });
   }
-  const checkHash = (relative, filename) => {
-    const expected = hashes[relative];
-    if (!REPLAY_SHA.test(expected) || sha256File(filename) !== expected) {
-      throw new EventQueryError('ARTIFACT_HASH_MISMATCH',
-        `Batch manifest SHA-256 differs for ${relative}.`, { filename, relative });
-    }
-  };
+  const checkHash = (relative, filename) => checkBatchHash(hashes, relative, filename);
   const seenDirectories = new Set();
   const seenReplays = new Set();
   const replays = manifest.replay_inputs.map((entry, index) => {
@@ -2594,31 +2619,35 @@ function prepareBatchEventQuery(directory, eventKey) {
     }
     let prepared = null;
     let unavailable = null;
-    try {
-      prepared = prepareEventQuery(replayDirectory, eventKey);
-    } catch (error) {
-      if (!(error instanceof EventQueryError)
-          || !['CAPABILITY_UNAVAILABLE', 'CAPABILITY_NOT_REQUESTED',
-            'ASSOCIATION_UNAVAILABLE', 'UNSUPPORTED_EVENT_BUILD'].includes(error.code)) {
-        throw error;
+    if (eventKey != null) {
+      try {
+        prepared = prepareEventQuery(replayDirectory, eventKey);
+      } catch (error) {
+        if (!(error instanceof EventQueryError)
+            || !['CAPABILITY_UNAVAILABLE', 'CAPABILITY_NOT_REQUESTED',
+              'ASSOCIATION_UNAVAILABLE', 'UNSUPPORTED_EVENT_BUILD'].includes(error.code)) {
+          throw error;
+        }
+        unavailable = { code: error.code, message: error.message,
+          ...error.details };
       }
-      unavailable = { code: error.code, message: error.message,
-        ...error.details };
     }
     // prepareEventQuery already checked both metadata files for available
     // entries. Unavailable entries still need their metadata read and bound.
     let identityMatches;
+    let semantic = null;
+    let analysis = null;
     if (prepared) {
       identityMatches = prepared.replaySha === entry.sha256
         && prepared.replayVersion === entry.version;
     } else {
-      const semantic = readArtifactJson(replayDirectory, 'semantic_run.json');
-      const analysis = readArtifactJson(replayDirectory, 'replay_analysis.json');
+      semantic = readArtifactJson(replayDirectory, 'semantic_run.json');
+      analysis = readArtifactJson(replayDirectory, 'replay_analysis.json');
+      assertReplayIdentity(semantic, analysis);
       identityMatches = semantic.replay_sha256 === entry.sha256
         && analysis.replay_sha256 === entry.sha256
         && semantic.replay_version === entry.version
-        && analysis.replay_version === entry.version
-        && semantic.container_status === 'PASS';
+        && analysis.replay_version === entry.version;
     }
     if (!identityMatches) {
       throw new EventQueryError('ARTIFACT_IDENTITY_MISMATCH',
@@ -2629,30 +2658,10 @@ function prepareBatchEventQuery(directory, eventKey) {
       path.join(replayDirectory, 'semantic_run.json'));
     checkHash(`${relative}/replay_analysis.json`,
       path.join(replayDirectory, 'replay_analysis.json'));
-    if (prepared) {
-      checkHash(`${relative}/${eventKey}.jsonl`, prepared.inputPath);
-      if (prepared.bracketSources) {
-        for (const source of Object.values(prepared.bracketSources)) {
-          checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
-        }
-      }
-      if (prepared.experienceIntervalSource) {
-        const source = prepared.experienceIntervalSource;
-        checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
-      }
-      if (prepared.levelExperienceBracketSources) {
-        for (const source of Object.values(prepared.levelExperienceBracketSources)) {
-          checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
-        }
-      }
-      if (prepared.objectiveBountyTurretPairSources) {
-        for (const source of Object.values(prepared.objectiveBountyTurretPairSources)) {
-          checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
-        }
-      }
-    }
+    if (prepared) checkPreparedBatchHashes(relative, prepared, checkHash);
     return { relative, replayDirectory, replaySha: entry.sha256,
-      replayVersion: entry.version, prepared, unavailable };
+      replayVersion: entry.version, prepared, unavailable,
+      ...(eventKey == null ? { semantic, analysis } : {}) };
   });
   const physical = fs.readdirSync(replayRoot, { withFileTypes: true });
   if (physical.some((entry) => !entry.isDirectory() || entry.isSymbolicLink())
@@ -2670,6 +2679,87 @@ function prepareBatchEventQuery(directory, eventKey) {
       'Manifest Replay entries differ from the batch output hash inventory.');
   }
   return { artifactDirectory, eventKey, replays, outputHashes: hashes };
+}
+
+function savedEventKeys(analysis) {
+  const counts = analysis.event_counts;
+  if (!counts || typeof counts !== 'object' || Array.isArray(counts)) {
+    throw new EventQueryError('INVALID_METADATA',
+      'replay_analysis.json must contain an event_counts object.');
+  }
+  return Object.keys(counts).filter((key) => EVENT_KEY.test(key));
+}
+
+function unsavedCapabilityResults(semantic) {
+  return (semantic.requested_capabilities ?? [])
+    .filter((capability) => !['CANDIDATE', 'PASS']
+      .includes(semantic.capability_results?.[capability]?.status))
+    .map((capability) => ({ capability,
+      capability_status: semantic.capability_results?.[capability]?.status ?? 'UNAVAILABLE' }));
+}
+
+function listSavedEvents(directory, batch = false) {
+  const artifactDirectory = path.resolve(directory);
+  const preparedBatch = batch ? prepareBatchEventQuery(artifactDirectory, null) : null;
+  const replayDocuments = batch ? preparedBatch.replays : [{
+    relative: '.', replayDirectory: artifactDirectory,
+    semantic: readArtifactJson(artifactDirectory, 'semantic_run.json'),
+    analysis: readArtifactJson(artifactDirectory, 'replay_analysis.json'),
+  }];
+  const eventKeys = new Set();
+  for (const replay of replayDocuments) {
+    assertReplayIdentity(replay.semantic, replay.analysis);
+    for (const key of savedEventKeys(replay.analysis)) eventKeys.add(key);
+  }
+  const sortedKeys = [...eventKeys].sort();
+  const hashCache = new Map();
+  const replayResults = replayDocuments.map((replay) => {
+    const events = [];
+    const keysHere = new Set(savedEventKeys(replay.analysis));
+    for (const eventKey of sortedKeys) {
+      if (keysHere.has(eventKey)) {
+        const prepared = prepareEventQueryFromDocuments(replay.replayDirectory,
+          eventKey, replay.semantic, replay.analysis);
+        if (batch) {
+          checkPreparedBatchHashes(replay.relative, prepared,
+            (relative, filename) => checkBatchHash(preparedBatch.outputHashes,
+              relative, filename, hashCache));
+        }
+        events.push({ event_key: eventKey, status: 'SAVED',
+          declared_event_count: prepared.declaredCount,
+          capability_status: prepared.capabilityStatus });
+        continue;
+      }
+      try {
+        prepareEventQueryFromDocuments(replay.replayDirectory, eventKey,
+          replay.semantic, replay.analysis);
+        throw new EventQueryError('INVALID_METADATA',
+          `${eventKey} was prepared but is absent from event_counts.`);
+      } catch (error) {
+        if (!(error instanceof EventQueryError)
+            || !['CAPABILITY_UNAVAILABLE', 'CAPABILITY_NOT_REQUESTED',
+              'ASSOCIATION_UNAVAILABLE', 'UNSUPPORTED_EVENT_BUILD'].includes(error.code)) {
+          throw error;
+        }
+        events.push({ event_key: eventKey,
+          status: error.code === 'CAPABILITY_NOT_REQUESTED' ? 'NOT_REQUESTED'
+            : error.code === 'UNSUPPORTED_EVENT_BUILD' ? 'UNSUPPORTED_BUILD'
+              : 'UNAVAILABLE',
+          declared_event_count: null, code: error.code,
+          capability_status: error.details.capability_status ?? null });
+      }
+    }
+    return { artifact_directory: replay.relative,
+      replay_sha256: replay.semantic.replay_sha256,
+      replay_version: replay.semantic.replay_version,
+      events, unavailable_capabilities: unsavedCapabilityResults(replay.semantic) };
+  });
+  return { schema_version: 1, command: 'query-events', mode: 'LIST_EVENTS',
+    status: 'COMPLETE', artifact_directory: artifactDirectory,
+    replay_count: replayResults.length, event_keys: sortedKeys,
+    validation_scope: batch ? 'METADATA_AND_SELECTED_MANIFEST_HASHES'
+      : 'METADATA_AND_FILE_PRESENCE',
+    event_rows_scanned: false, replay_results: replayResults };
 }
 
 function subjectParticipant(row, lineNumber, eventKey = null) {
@@ -9208,4 +9298,4 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
 }
 
 module.exports = { EventQueryError, prepareEventQuery, prepareBatchEventQuery,
-  streamEventQuery, streamBatchEventQuery };
+  streamEventQuery, streamBatchEventQuery, listSavedEvents };
