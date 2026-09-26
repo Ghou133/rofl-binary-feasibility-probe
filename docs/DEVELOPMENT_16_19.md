@@ -4,6 +4,31 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **SetItemCharges packet callback arguments (opt-in candidate):** The exact
+  KR `16.19.821.7343` route `0x0437` is registered as
+  `PKT_S2C_SetItemCharges_s` for `HeroInventoryClient` in the pinned runtime
+  image. Factory case `0xf0bb2a`, constructor `0xebda80`, deserializer
+  `0x1041380`, and callback `0x350250` are bound to image SHA-256
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`.
+  Strict framing of 11 original KR Replays found 40,439 game-chunk packets
+  with payload lengths 1, 2, 3, or 4 and zero framing errors. All 40,439
+  packets natively returned AL=1 with full consumption and matching object
+  identity. The native callback's `0x2af490` selector range check executed;
+  the witness captured a u8 selector and u16 value at `0x350310` before
+  the receiver method. Eight cross-Replay representative truncations and
+  eight appends were rejected by the full-consumption gate. The bounded
+  CLI/API decoder and saved query verify separate ordered input/output
+  hashes; per-Replay hashes and shape counts are in
+  [the sanitized native gate summary](ITEM_CHARGES_821_NATIVE_GATE.json).
+  One real CLI run emitted 4,600/4,600 candidate rows in one native batch,
+  matched both independent hashes, and had zero framing errors. A saved
+  selector-zero query validated all 4,600 rows after `--limit 1`, matched
+  631, and emitted one unchanged row; valid unobserved selector `6` matched
+  zero. Selector values observed were `0`, `1`, `2`, `3`, `4`, `5`, and `8`;
+  the u16 argument ranged from 0 to 1,111. The receiver method was not
+  executed: actual item identity, charges, slot, owner, receiver state and
+  gameplay effect remain `UNKNOWN`. Original Replays, image, and full JSONL
+  stay ignored outside Git. Focused exact-image Node tests passed 9/9.
 - **SetItemGroupData_Broadcast conditional callback byte (opt-in V2 candidate):**
   `--item-group-packet-v2` or API `itemGroupPacketProfile: 'v2'` retains the
   exact `0x013f` V1 packet route and lookup key, then adds the native object's
