@@ -31,6 +31,8 @@ const paramsHealPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_params_heal_packet_candidate');
 const shieldingParamsPacketPairCandidate1619821 =
   require('./decoders/rofl_16_19_821_shielding_params_packet_pair_candidate');
+const shieldingParamsRosterKeyPair1619821 =
+  require('./decoders/rofl_16_19_821_shielding_params_roster_key_pair_candidate');
 const stealthEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_stealth_event_packet_candidate');
 const championDieEventPacketCandidate1619821 =
@@ -601,6 +603,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_inventory_set_item_packet: 0x002d,
       params_heal_packet: 0x040a,
       shielding_params_packet_pair: 0x040a,
+      shielding_params_roster_key_pair: 0x040a,
       stealth_event_packet: 0x040a,
       champion_die_event_packet: 0x040a,
       champion_kill_event_packet: 0x040a,
@@ -707,6 +710,8 @@ const BUILD_PROFILES = deepFreeze({
         paramsHealPacketCandidate1619821.PARAMS_HEAL_PACKET_CANDIDATE_PROFILE_821,
       shielding_params_packet_pair:
         shieldingParamsPacketPairCandidate1619821.SHIELDING_PARAMS_PACKET_PAIR_821_PROFILE,
+      shielding_params_roster_key_pair:
+        shieldingParamsRosterKeyPair1619821.SHIELDING_PARAMS_ROSTER_KEY_PAIR_821_PROFILE,
       stealth_event_packet:
         stealthEventPacketCandidate1619821.STEALTH_EVENT_PACKET_CANDIDATE_PROFILE_821,
       champion_die_event_packet:
@@ -848,6 +853,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_NATIVE_ON_EVENT_PARAMS_HEAL_REPORTED_FLOAT',
       shielding_params_packet_pair:
         'CANDIDATE_821_NATIVE_ON_EVENT_SHIELDING_PARAMS_PAIRED_REPORTS',
+      shielding_params_roster_key_pair:
+        shieldingParamsRosterKeyPair1619821.SHIELDING_PARAMS_ROSTER_KEY_PAIR_821_PROFILE.evidence_status,
       stealth_event_packet:
         'CANDIDATE_821_NATIVE_ON_EVENT_STEALTH_NAMED_PACKET_FIELDS',
       champion_die_event_packet:
@@ -977,6 +984,7 @@ const BUILD_PROFILES = deepFreeze({
       inventory_set_item_packet: 'exact 821 native 0x002d SetItem nested slot/item transform; observed slot 8 only and six item-definition keys; no purchase, sale, replacement, or between-packet state inference',
       params_heal_packet: 'exact 821 native 0x040a OnEvent packet and registered child 0x004b ParamsHeal; handler reads reported f32 at child +0x18; two u32 fields remain anonymous, with no effective-heal, caster, or target inference',
       shielding_params_packet_pair: 'exact 821 native 0x040a OnEvent child 0x00ef/0x00f0 registration and one-to-one packet-local blob pairing; callback reads anonymous fields, while raw f32 at child +0x10 is opaque; no shield generation, absorption, actor, or target inference',
+      shielding_params_roster_key_pair: 'exact 821 native 0x040a ShieldingParams child +0x08/+0x0c u32 values separately compared by full equality to the same-Replay complete ten-key 0x0089 HeroStats roster; unmatched values retained; field roles and shield effects unknown',
       stealth_event_packet: 'exact 821 native 0x040a OnEvent child 0x0101/0x0102 registrations and event-name table; callback reads anonymous child +0x04 u32; no participant, visibility, or transition lifecycle inference',
       champion_die_event_packet: 'exact 821 native 0x040a OnEvent child 0x0004 ParamsDie registration and OnChampionDie name table; callback reads anonymous child +0x04 u32; no effective death, actor, or state transition inference',
       champion_kill_event_packet: 'exact 821 native 0x040a OnEvent child 0x0007 ParamsChampionKill registration and OnChampionKill name table; callback reads anonymous child +0x04/+0x58/+0x5c u32; no effective kill, actor, or state transition inference',
@@ -1048,6 +1056,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_inventory_set_item_packet',
       'params_heal_packet',
       'shielding_params_packet_pair',
+      'shielding_params_roster_key_pair',
       'stealth_event_packet',
       'champion_die_event_packet',
       'champion_kill_event_packet',

@@ -193,6 +193,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_inventory_set_item_packet',
       'params_heal_packet',
       'shielding_params_packet_pair',
+      'shielding_params_roster_key_pair',
       'stealth_event_packet',
       'champion_die_event_packet',
       'champion_kill_event_packet',
@@ -247,6 +248,10 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'EXACT_IMAGE_REQUIRED');
   assert.equal(queried.target_hero_roster_key_pair.output,
     'target_hero_roster_key_pair_candidates');
+  assert.equal(queried.shielding_params_roster_key_pair.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.shielding_params_roster_key_pair.output,
+    'shielding_params_roster_key_pair_candidates');
   assert.equal(queried.change_missile_target_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
   assert.equal(queried.set_dimension_missile_packet.runtime_image_requirement,

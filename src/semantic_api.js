@@ -56,6 +56,8 @@ const { decodeParamsHealPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_params_heal_packet_candidate');
 const { decodeShieldingParamsPacketPairCandidates821 } =
   require('./decoders/rofl_16_19_821_shielding_params_packet_pair_candidate');
+const { associateShieldingParamsRosterKeys821 } =
+  require('./decoders/rofl_16_19_821_shielding_params_roster_key_pair_candidate');
 const { decodeStealthEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_stealth_event_packet_candidate');
 const { decodeChampionDieEventPacketCandidates821 } =
@@ -2216,6 +2218,12 @@ function decode1619821(replay, profile, options = {}) {
       if (!capabilities.includes(source)) capabilities.push(source);
     }
   }
+  if (capabilities.includes('shielding_params_roster_key_pair')) {
+    for (const source of ['shielding_params_packet_pair',
+      'hero_roster_metadata_bridge']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
   const castPacketProfile = options.castPacketProfile ?? 'v4';
   if (!['v4', 'v5', 'v6', 'v7', 'v8', 'v9'].includes(castPacketProfile)) {
     throw new TypeError('exact 821 CastSpellAns packet profile must be v4, v5, v6, v7, v8 or v9');
@@ -2622,6 +2630,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_inventory_set_item_packet: 'hero_inventory_set_item_packet_candidates',
     params_heal_packet: 'params_heal_packet_candidates',
     shielding_params_packet_pair: 'shielding_params_packet_pair_candidates',
+    shielding_params_roster_key_pair: 'shielding_params_roster_key_pair_candidates',
     stealth_event_packet: 'stealth_event_packet_candidates',
     champion_die_event_packet: 'champion_die_event_packet_candidates',
     champion_kill_event_packet: 'champion_kill_event_packet_candidates',
@@ -2785,6 +2794,13 @@ function decode1619821(replay, profile, options = {}) {
           heroRosterMetadataBridgeOutcome:
             decodeCapability('hero_roster_metadata_bridge'),
         });
+      } else if (capability === 'shielding_params_roster_key_pair') {
+        outcome = associateShieldingParamsRosterKeys821(replay, {
+          shieldingParamsPacketPairOutcome:
+            decodeCapability('shielding_params_packet_pair'),
+          heroRosterMetadataBridgeOutcome:
+            decodeCapability('hero_roster_metadata_bridge'),
+        });
       } else if (capability === 'face_direction_keyframe_roster_pair') {
         outcome = associateFaceDirectionKeyframeRosterPairs821(replay, {
           faceDirectionPacketOutcome: decodeCapability('face_direction_packet'),
@@ -2846,6 +2862,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'hero_inventory_set_item_packet'
         || capability === 'params_heal_packet'
         || capability === 'shielding_params_packet_pair'
+        || capability === 'shielding_params_roster_key_pair'
         || capability === 'stealth_event_packet'
         || capability === 'champion_die_event_packet'
         || capability === 'champion_kill_event_packet'
@@ -2933,6 +2950,7 @@ function decode1619821(replay, profile, options = {}) {
     if (result.status !== 'CANDIDATE') continue;
     if (capability === 'hero_roster_metadata_bridge'
         || capability === 'target_hero_roster_key_pair'
+        || capability === 'shielding_params_roster_key_pair'
         || capability === 'face_direction_keyframe_roster_pair'
         || capability === 'unit_apply_damage_roster_key_pair'
         || capability === 'unit_apply_damage_lookup_roster_key_pair'

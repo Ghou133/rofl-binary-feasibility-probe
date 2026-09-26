@@ -213,6 +213,9 @@ receiver-dependent call; resolved target object, actor, state and effect are unk
 target_hero_roster_key_pair matches nonzero callback u32 values to the ten
 candidate HeroStats roster keys and Replay metadata labels. It does not prove
 live lookup success, packet actor, resolved target, target state or effect.
+shielding_params_roster_key_pair separately matches two anonymous ShieldingParams
+child u32 fields to the ten candidate HeroStats roster keys. Unmatched fields
+remain visible; field roles and actual shield effects are unknown.
 force_create_missile_packet emits an exact-821 game packet-local callback
 comparison u32 witnessed before a synthetic receiver comparison; live receiver,
 missile identity, owner, target, creation, effect and causality are unknown.
@@ -1316,6 +1319,14 @@ function parseOne1619(replay, options, started) {
     }
   }
   if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('shielding_params_roster_key_pair')) {
+    for (const source of ['shielding_params_packet_pair', 'hero_death',
+      'hero_assist', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+      'hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
       && options.events.some((name) => [
         'unit_apply_damage_roster_key_pair',
         'unit_apply_damage_lookup_roster_key_pair',
@@ -1368,9 +1379,12 @@ function parseOne1619(replay, options, started) {
       : `${analysis.block_errors.length} packet framing/decompression error(s) prevent semantic decoding.`,
   };
   if (options.semantic !== false) {
-    const requested = options.events?.includes('target_hero_roster_key_pair')
-      ? [...new Set([...options.events, 'target_hero_packet',
-        'hero_roster_metadata_bridge'])] : options.events ?? [];
+    const requested = [...new Set([...(options.events ?? []),
+      ...(options.events?.includes('target_hero_roster_key_pair')
+        ? ['target_hero_packet', 'hero_roster_metadata_bridge'] : []),
+      ...(options.events?.includes('shielding_params_roster_key_pair')
+        ? ['shielding_params_packet_pair', 'hero_roster_metadata_bridge'] : []),
+    ])];
     let decoded = null;
     if (analysis.block_errors.length > 0) {
       analysis.decoder.status = 'FRAMING_FAILED';
@@ -2640,6 +2654,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'hero_inventory_set_item_packet'
             || capability === 'params_heal_packet'
             || capability === 'shielding_params_packet_pair'
+            || capability === 'shielding_params_roster_key_pair'
             || capability === 'stealth_event_packet'
             || capability === 'champion_die_event_packet'
             || capability === 'champion_kill_event_packet'
@@ -2729,7 +2744,8 @@ function capabilityQuery(replay, options = {}) {
             error: assessment.error ?? assessment.missing_input ?? null })) }
         : profile.game_version === '16.19.821.7343'
           && (capability === 'hero_roster_metadata_bridge'
-            || capability === 'target_hero_roster_key_pair')
+            || capability === 'target_hero_roster_key_pair'
+            || capability === 'shielding_params_roster_key_pair')
           ? { required_fields: [
             ['NUM_DEATHS', assessHeroDeathTail821(replay)],
             ['CHAMPIONS_KILLED', assessHeroChampionKillsSnapshotTail821(replay)],
@@ -3012,6 +3028,11 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'shielding_params_packet_pair') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x00ef/0x00f0 packet consumption',
           'paired ShieldingParams blobs and anonymous fields; no shield generation, absorption, actor, or target inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'shielding_params_roster_key_pair') {
+        validationPending.push('complete exact 821 native ShieldingParams pair and ten-key HeroStats metadata-bridge outcomes',
+          'full-u32 field-to-roster equality only; unmatched fields retained; child field roles and shield effects unknown');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'stealth_event_packet') {
@@ -3440,6 +3461,8 @@ function capabilityQuery(replay, options = {}) {
             hero_inventory_set_item_packet: 'hero_inventory_set_item_packet_candidates',
             params_heal_packet: 'params_heal_packet_candidates',
             shielding_params_packet_pair: 'shielding_params_packet_pair_candidates',
+            shielding_params_roster_key_pair:
+              'shielding_params_roster_key_pair_candidates',
             stealth_event_packet: 'stealth_event_packet_candidates',
             champion_die_event_packet: 'champion_die_event_packet_candidates',
             champion_kill_event_packet: 'champion_kill_event_packet_candidates',
