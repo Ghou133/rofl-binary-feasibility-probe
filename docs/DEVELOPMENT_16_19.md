@@ -4,6 +4,24 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **TargetHero callback key to roster (opt-in candidate):** On exact
+  `16.19.821.7343`, select `--events target_hero_roster_key_pair
+  --runtime-image IMAGE --event-jsonl-only` or API capability
+  `target_hero_roster_key_pair`. The pair reuses the complete native
+  `target_hero_packet` and ten-key `hero_roster_metadata_bridge` outcomes;
+  both source JSONL streams are saved with a CLI pair-only request. The
+  11-Replay `--jobs 2` CLI pair batch returned 11/11 `CANDIDATE` and zero
+  framing errors, with 62,219 native game `0x0265` rows:
+  30,874 zero callback keys and 31,345 nonzero keys. Every nonzero full u32
+  equals one of the ten canonical `0x0089` HeroStats raw keys in its Replay;
+  zero is counted but never labeled; all 31,345 nonzero rows paired and no
+  unexpected key appeared. Each Replay saved the target, roster and pair
+  JSONL streams. The pair preserves the original
+  `0x0265` and latest `0x0089` packet refs, plus direct metadata champion,
+  team and role labels. The roster-to-metadata link remains `CANDIDATE`;
+  live receiver lookup, source actor, resolved target, target state and
+  gameplay effect remain `UNKNOWN`. Unexpected nonzero keys or incomplete
+  source outcomes fail the entire pair with no partial rows.
 - **HeroStats roster to Replay metadata (opt-in candidate):** Select
   `--events hero_roster_metadata_bridge --event-jsonl-only` on exact
   `16.19.821.7343`, or request API capability

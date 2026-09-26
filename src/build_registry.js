@@ -105,6 +105,8 @@ const itemChargesPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_item_charges_packet_candidate');
 const targetHeroPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_target_hero_packet_candidate');
+const targetHeroRosterKeyPair1619821 =
+  require('./decoders/rofl_16_19_821_target_hero_roster_key_pair_candidate');
 const forceCreateMissilePacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_force_create_missile_packet_candidate');
 const changeMissileTargetPacketCandidate1619821 =
@@ -634,6 +636,7 @@ const BUILD_PROFILES = deepFreeze({
       cooldown_broadcast_packet: 0x039d,
       item_charges_packet: 0x0437,
       target_hero_packet: 0x0265,
+      target_hero_roster_key_pair: 0x0265,
       force_create_missile_packet: 0x0087,
       change_missile_target_packet: 0x040c,
       set_dimension_missile_packet: 0x008a,
@@ -775,6 +778,8 @@ const BUILD_PROFILES = deepFreeze({
         itemChargesPacketCandidate1619821.ITEM_CHARGES_PACKET_CANDIDATE_PROFILE_821,
       target_hero_packet:
         targetHeroPacketCandidate1619821.TARGET_HERO_PACKET_CANDIDATE_PROFILE_821,
+      target_hero_roster_key_pair:
+        targetHeroRosterKeyPair1619821.TARGET_HERO_ROSTER_KEY_PAIR_821_PROFILE,
       force_create_missile_packet:
         forceCreateMissilePacketCandidate1619821.FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821,
       change_missile_target_packet:
@@ -909,6 +914,8 @@ const BUILD_PROFILES = deepFreeze({
         itemChargesPacketCandidate1619821.ITEM_CHARGES_PACKET_CANDIDATE_PROFILE_821.evidence_status,
       target_hero_packet:
         'CANDIDATE_EXACT_821_NATIVE_TARGET_HERO_CALLBACK_KEY',
+      target_hero_roster_key_pair:
+        targetHeroRosterKeyPair1619821.TARGET_HERO_ROSTER_KEY_PAIR_821_PROFILE.evidence_status,
       force_create_missile_packet:
         forceCreateMissilePacketCandidate1619821.FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821.evidence_status,
       change_missile_target_packet:
@@ -1000,6 +1007,7 @@ const BUILD_PROFILES = deepFreeze({
       cooldown_broadcast_packet: 'exact 821 game/keyframe route 0x039d PKT_CHAR_SetCooldown_Broadcast_s native callback lookup key from object +0x10; no proven cooldown state, slot, actor, target, receiver lookup result or effect',
       item_charges_packet: 'exact 821 game route 0x0437 PKT_S2C_SetItemCharges_s native callback u8/u16 arguments before receiver method; no proven item identity, charges, slot, owner, receiver state or effect',
       target_hero_packet: 'exact 821 game route 0x0265 PKT_AI_TargetHeroS2C_s native callback u32 from object +0x10 before receiver-dependent call; no proven source actor, resolved target object, target state, or effect',
+      target_hero_roster_key_pair: 'nonzero exact 821 native 0x0265 callback u32 matched by full equality to one of ten candidate 0x0089 HeroStats roster keys; champion/team/role are direct Replay metadata labels but live lookup, actor, target and effect remain unknown',
       force_create_missile_packet: 'exact 821 game route 0x0087 PKT_S2C_ForceCreateMissile_s packet-local native callback comparison u32 from object +0x10 before synthetic receiver comparison; live receiver, missile identity, owner, target, creation, effect and causality unknown',
       change_missile_target_packet: 'exact 821 game route 0x040c PKT_S2C_ChangeMissileTarget_s packet-local native callback comparison u32 from object +0x1c before live receiver comparison; receiver match, missile identity, owner, resolved target, target change, effect and causality unknown',
       set_dimension_missile_packet: 'exact 821 game route 0x008a PKT_SetDimensionMissile_s packet-local callback u8 from object +0x14 before receiver method; live receiver, missile identity, owner, target, actual dimension change, effect and causality unknown',
@@ -1067,6 +1075,7 @@ const BUILD_PROFILES = deepFreeze({
       'cooldown_broadcast_packet',
       'item_charges_packet',
       'target_hero_packet',
+      'target_hero_roster_key_pair',
       'force_create_missile_packet',
       'change_missile_target_packet',
       'set_dimension_missile_packet',

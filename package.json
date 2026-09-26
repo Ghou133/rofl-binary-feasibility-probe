@@ -126,7 +126,7 @@
     "test:16-19-item-group": "node --test test/item_group_data_broadcast_packet_16_19_821_candidate.test.js test/item_group_data_broadcast_packet_16_19_821_query.test.js",
     "test:16-19-cooldown-broadcast": "node --test test/cooldown_broadcast_packet_16_19_821_candidate.test.js test/cooldown_broadcast_packet_16_19_821_query.test.js",
     "test:16-19-item-charges": "node --test test/item_charges_packet_16_19_821_candidate.test.js test/item_charges_packet_16_19_821_query.test.js",
-    "test:16-19-target-hero": "node --test test/target_hero_packet_16_19_821_candidate.test.js test/target_hero_packet_16_19_821_query.test.js",
+    "test:16-19-target-hero": "node --test test/target_hero_packet_16_19_821_candidate.test.js test/target_hero_packet_16_19_821_query.test.js test/target_hero_roster_key_pair_16_19_821.test.js",
     "test:16-19-force-create-missile": "node --test test/force_create_missile_packet_16_19_821_candidate.test.js test/force_create_missile_packet_16_19_821_query.test.js",
     "test:16-19-change-missile-target": "node --test test/change_missile_target_packet_16_19_821_candidate.test.js test/change_missile_target_packet_16_19_821_query.test.js",
     "test:16-19-roster-bridge": "node --test test/hero_roster_metadata_bridge_16_19_821.test.js",

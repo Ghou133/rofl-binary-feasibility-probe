@@ -210,6 +210,9 @@ item_charges_packet emits exact-821 packet-local callback arguments before recei
 it does not establish item identity, charge state, slot, owner, or effect.
 target_hero_packet emits an exact-821 game packet callback u32 before a
 receiver-dependent call; resolved target object, actor, state and effect are unknown.
+target_hero_roster_key_pair matches nonzero callback u32 values to the ten
+candidate HeroStats roster keys and Replay metadata labels. It does not prove
+live lookup success, packet actor, resolved target, target state or effect.
 force_create_missile_packet emits an exact-821 game packet-local callback
 comparison u32 witnessed before a synthetic receiver comparison; live receiver,
 missile identity, owner, target, creation, effect and causality are unknown.
@@ -1300,6 +1303,14 @@ function parseOne1619(replay, options, started) {
     }
   }
   if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('target_hero_roster_key_pair')) {
+    for (const source of ['target_hero_packet', 'hero_death', 'hero_assist',
+      'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+      'hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
       && options.events.some((name) => [
         'unit_apply_damage_roster_key_pair',
         'unit_apply_damage_lookup_roster_key_pair',
@@ -1352,7 +1363,9 @@ function parseOne1619(replay, options, started) {
       : `${analysis.block_errors.length} packet framing/decompression error(s) prevent semantic decoding.`,
   };
   if (options.semantic !== false) {
-    const requested = options.events ?? [];
+    const requested = options.events?.includes('target_hero_roster_key_pair')
+      ? [...new Set([...options.events, 'target_hero_packet',
+        'hero_roster_metadata_bridge'])] : options.events ?? [];
     let decoded = null;
     if (analysis.block_errors.length > 0) {
       analysis.decoder.status = 'FRAMING_FAILED';
@@ -2663,6 +2676,7 @@ function capabilityQuery(replay, options = {}) {
              || capability === 'cooldown_broadcast_packet'
              || capability === 'item_charges_packet'
              || capability === 'target_hero_packet'
+             || capability === 'target_hero_roster_key_pair'
              || capability === 'force_create_missile_packet'
              || capability === 'change_missile_target_packet'
              || capability === 'set_dimension_missile_packet'
@@ -2708,7 +2722,8 @@ function capabilityQuery(replay, options = {}) {
           ].map(([field, assessment]) => ({ field, status: assessment.status,
             error: assessment.error ?? assessment.missing_input ?? null })) }
         : profile.game_version === '16.19.821.7343'
-          && capability === 'hero_roster_metadata_bridge'
+          && (capability === 'hero_roster_metadata_bridge'
+            || capability === 'target_hero_roster_key_pair')
           ? { required_fields: [
             ['NUM_DEATHS', assessHeroDeathTail821(replay)],
             ['CHAMPIONS_KILLED', assessHeroChampionKillsSnapshotTail821(replay)],
@@ -3193,6 +3208,11 @@ function capabilityQuery(replay, options = {}) {
           'packet-local callback u32; resolved target object, source actor, receiver state and effect remain unknown');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'target_hero_roster_key_pair') {
+        validationPending.push('complete exact-821 native 0x0265 callback-key and ten-key HeroStats metadata-bridge outcomes',
+          'nonzero full-u32 roster-key equality only; live lookup, source actor, resolved target and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'force_create_missile_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native full 0x0087 packet consumption',
           'packet-local comparison u32 under synthetic receiver; live receiver, missile identity, owner, target, creation, effect and causality remain unknown');
@@ -3453,6 +3473,8 @@ function capabilityQuery(replay, options = {}) {
             item_charges_packet: 'item_charges_packet_candidates',
             target_hero_packet:
               'target_hero_packet_candidates',
+            target_hero_roster_key_pair:
+              'target_hero_roster_key_pair_candidates',
             force_create_missile_packet:
               'force_create_missile_packet_candidates',
             change_missile_target_packet:

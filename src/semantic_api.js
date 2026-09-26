@@ -137,6 +137,8 @@ const { decodeItemChargesPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_item_charges_packet_candidate');
 const { decodeTargetHeroPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_target_hero_packet_candidate');
+const { associateTargetHeroRosterKeyPair821 } =
+  require('./decoders/rofl_16_19_821_target_hero_roster_key_pair_candidate');
 const { decodeForceCreateMissilePacketCandidates821 } =
   require('./decoders/rofl_16_19_821_force_create_missile_packet_candidate');
 const { decodeChangeMissileTargetPacketCandidates821 } =
@@ -2207,6 +2209,11 @@ function decode1619821(replay, profile, options = {}) {
     throw new TypeError('16.19 capabilities must be an array of nonempty names');
   }
   const capabilities = [...new Set(requested)];
+  if (capabilities.includes('target_hero_roster_key_pair')) {
+    for (const source of ['target_hero_packet', 'hero_roster_metadata_bridge']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
   const castPacketProfile = options.castPacketProfile ?? 'v4';
   if (!['v4', 'v5', 'v6', 'v7', 'v8', 'v9'].includes(castPacketProfile)) {
     throw new TypeError('exact 821 CastSpellAns packet profile must be v4, v5, v6, v7, v8 or v9');
@@ -2645,6 +2652,7 @@ function decode1619821(replay, profile, options = {}) {
     cooldown_broadcast_packet: 'cooldown_broadcast_packet_candidates',
     item_charges_packet: 'item_charges_packet_candidates',
     target_hero_packet: 'target_hero_packet_candidates',
+    target_hero_roster_key_pair: 'target_hero_roster_key_pair_candidates',
     force_create_missile_packet: 'force_create_missile_packet_candidates',
     change_missile_target_packet: 'change_missile_target_packet_candidates',
     set_dimension_missile_packet: 'set_dimension_missile_packet_candidates',
@@ -2761,6 +2769,12 @@ function decode1619821(replay, profile, options = {}) {
           'hero_death', 'hero_assist', 'hero_deaths_snapshot',
           'hero_champion_kills_snapshot', 'hero_assists_snapshot',
         ].map((name) => [name, decodeCapability(name)])));
+      } else if (capability === 'target_hero_roster_key_pair') {
+        outcome = associateTargetHeroRosterKeyPair821(replay, {
+          targetHeroPacketOutcome: decodeCapability('target_hero_packet'),
+          heroRosterMetadataBridgeOutcome:
+            decodeCapability('hero_roster_metadata_bridge'),
+        });
       } else if (capability === 'face_direction_keyframe_roster_pair') {
         outcome = associateFaceDirectionKeyframeRosterPairs821(replay, {
           faceDirectionPacketOutcome: decodeCapability('face_direction_packet'),
@@ -2858,6 +2872,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'cooldown_broadcast_packet'
         || capability === 'item_charges_packet'
         || capability === 'target_hero_packet'
+        || capability === 'target_hero_roster_key_pair'
         || capability === 'force_create_missile_packet'
         || capability === 'change_missile_target_packet'
         || capability === 'set_dimension_missile_packet'
@@ -2906,6 +2921,7 @@ function decode1619821(replay, profile, options = {}) {
   for (const [capability, result] of Object.entries(capabilityResults)) {
     if (result.status !== 'CANDIDATE') continue;
     if (capability === 'hero_roster_metadata_bridge'
+        || capability === 'target_hero_roster_key_pair'
         || capability === 'face_direction_keyframe_roster_pair'
         || capability === 'unit_apply_damage_roster_key_pair'
         || capability === 'unit_apply_damage_lookup_roster_key_pair'
