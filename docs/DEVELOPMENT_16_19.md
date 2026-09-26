@@ -2532,6 +2532,15 @@ Current progress (older notes below retain their original research context):
   this route. Actual visibility, actor, ward and map meaning remain unknown.
   Counts, packet references and the failed native probe are retained under
   ignored `artifacts/16_19_development/visibility_021b_821/`.
+- **821 ChangeSlotSpellData route stop-loss:** Strict framing across the 11
+  exact-build KR Replays found 107,059 packets at numeric route `0x049c` over
+  38 observed payload lengths. In a read-only pinned-image survey, two
+  representatives per length yielded full native consumption for 62/76;
+  representatives from seven lengths reached an emulator invalid-instruction
+  error. This is an incomplete native witness, not proof that those Replay
+  packets are invalid. No field or event is emitted. The unsupported native
+  path and all observed lengths need a full-consumption witness before this
+  route can be added.
 - **821 HeroStats route correction:** The exact image registers
   `PKT_S2C_HeroStats_s` and its factory constructor at numeric ID `0x0089`.
   An earlier probe on two real 1,263-byte KR keyframe payloads consumed only
