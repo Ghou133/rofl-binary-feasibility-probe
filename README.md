@@ -889,6 +889,7 @@ V8 可用 `--cast-packet-v8` 显式生成，保留 V7 字段。保存结果用
 `query-events --event cast_spell_ans_packet_candidates --cast-nested-u32-0x28 VALUE`
 筛选匿名无符号整数。查询会扫描并复核包括 `--limit` 后的全部行，核对精确 build、固定镜像摘要、原始受保护字节和变换；V3 至 V7 产物明确报告该字段不可用。
 `callback_tree_lookup_status` 保持 `UNKNOWN`，数值频次不能用于识别角色或技能。
+加 `--verify-source` 可再逐包核对原始 ROFL 的完整文件 SHA、build、包顺序、位置、时间、参数及载荷 SHA，含 `--limit` 后的行；它不重跑原生解码，也不证明树查询是否命中。
 
 对 821 移动限制包的保存结果，可用 `--packet-record-count 1` 找出单记录包，或用 `0` 查看空记录包：
 

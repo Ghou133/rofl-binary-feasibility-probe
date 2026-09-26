@@ -18,6 +18,8 @@ const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821: profile,
   decodeCastSpellAnsNestedF32AtA0FromRaw821,
   decodeCastSpellAnsNestedU32At28FromRaw821 } =
   require('../src/decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
+const { bindSavedPacketArtifactToPhysicalReplay } =
+  require('./helpers/physical_saved_packet_replay');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const EVENT = 'cast_spell_ans_packet_candidates';
@@ -679,6 +681,40 @@ test('V8 lookup-key query rejects metadata drift and a forged later row without 
     assert.equal(rejected.stdout, '');
     assert.equal(fs.existsSync(output), false);
   }
+});
+
+test('V8 source check binds every saved packet ref to physical ROFL after limit', (t) => {
+  // Physical-source validation is independent of the synthetic native fields.
+  const payloads = [Buffer.alloc(129, 0x11), Buffer.alloc(129, 0x22),
+    Buffer.alloc(129, 0x33)];
+  const rows = [rowV8(0, '9194b8fb'), rowV8(1, '7cef92cb'),
+    rowV8(2, '09a09cbb')];
+  rows.forEach((entry, index) => {
+    entry.raw_packet_ref.raw_payload_sha256 = crypto.createHash('sha256')
+      .update(payloads[index]).digest('hex');
+  });
+  const { directory } = fixture(t, rows, { fieldProfile: v8Profile });
+  const physical = bindSavedPacketArtifactToPhysicalReplay(directory, { payloads });
+  const verified = command(directory, '--cast-nested-u32-0x28', '137424977',
+    '--verify-source', '--limit', '1');
+  assert.equal(verified.status, 0, verified.stderr);
+  assert.equal(JSON.parse(verified.stderr).source_provenance_status,
+    'SOURCE_REPLAY_VERIFIED');
+  assert.equal(verified.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+
+  const forged = structuredClone(physical.rows);
+  forged[2].replay_time_ms += 1;
+  forged[2].raw_packet_ref.replay_time_ms = forged[2].replay_time_ms;
+  forged[2].raw_packet_ref.chunk_file_offset += 1;
+  forged[2].raw_packet_ref.decompressed_block_offset += 1;
+  forged[2].raw_packet_ref.decompressed_payload_offset += 1;
+  fs.writeFileSync(physical.eventPath,
+    `${forged.map(JSON.stringify).join('\n')}\n`);
+  const rejected = command(directory, '--cast-nested-u32-0x28', '137424977',
+    '--verify-source', '--limit', '1');
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'SOURCE_PROVENANCE_MISMATCH');
+  assert.equal(rejected.stdout, '');
 });
 
 test('batch V8 lookup-key query counts V7 unavailable separately', (t) => {

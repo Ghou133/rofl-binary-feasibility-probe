@@ -184,6 +184,7 @@ const { FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821,
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
 const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
+  'cast_spell_ans_packet_candidates',
   'notify_contextual_situation_packet_candidates',
   'item_group_data_broadcast_packet_candidates',
   'cooldown_broadcast_packet_candidates',
@@ -1026,20 +1027,22 @@ function checkBatchHash(hashes, relative, filename, cache = null) {
   }
 }
 
-// The saved native digests cover packet parameters, payloads and callback values,
-// not Replay positions or timestamps. This opt-in witness binds those fields to
-// the original, independently hashed ROFL without rerunning the native decoder.
-function sourcePacketFieldsFromBlock(block, chunk) {
+// This opt-in witness binds saved packet refs to the independently hashed
+// original ROFL. CastSpellAns saves payload SHA-256 rather than payload hex;
+// its source check is physical provenance only, not a native-output digest.
+function sourcePacketFieldsFromBlock(block, chunk, payloadMode = 'hex') {
   return [chunk.index, chunk.chunk_id, chunk.stream, chunk.offset,
     block.offset, block.payload_offset, block.packet_id, block.timestamp_ms,
-    block.payload_length, block.param >>> 0, block.payload.toString('hex')];
+    block.payload_length, block.param >>> 0, payloadMode === 'sha256'
+      ? crypto.createHash('sha256').update(block.payload).digest('hex')
+      : block.payload.toString('hex')];
 }
 
-function sourcePacketFieldsFromRef(ref) {
+function sourcePacketFieldsFromRef(ref, payloadMode = 'hex') {
   return [ref.chunk_index, ref.chunk_id, ref.chunk_stream, ref.chunk_file_offset,
     ref.decompressed_block_offset, ref.decompressed_payload_offset,
     ref.packet_id, ref.replay_time_ms, ref.payload_length, ref.raw_param,
-    ref.raw_payload_hex];
+    payloadMode === 'sha256' ? ref.raw_payload_sha256 : ref.raw_payload_hex];
 }
 
 function updateSourcePacketHash(hash, fields) {
@@ -1079,11 +1082,14 @@ function prepareSourceReplayVerification(prepared, sourceReplay) {
         observed_replay_sha256: replay.source_sha256 });
   }
   const sourceHash = crypto.createHash('sha256');
+  const payloadMode = prepared.eventKey === 'cast_spell_ans_packet_candidates'
+    ? 'sha256' : 'hex';
   let sourcePacketCount = 0;
   try {
     walkBlocks(replay, (block, chunk) => {
       if (block.packet_id !== prepared.capabilityResult.input_packet_id) return;
-      updateSourcePacketHash(sourceHash, sourcePacketFieldsFromBlock(block, chunk));
+      updateSourcePacketHash(sourceHash,
+        sourcePacketFieldsFromBlock(block, chunk, payloadMode));
       sourcePacketCount += 1;
     }, { strict: true });
   } catch (error) {
@@ -1098,7 +1104,7 @@ function prepareSourceReplayVerification(prepared, sourceReplay) {
         saved_event_count: prepared.declaredCount });
   }
   return { sourcePacketCount, sourceDigest: sourceHash.digest('hex'),
-    savedHash: crypto.createHash('sha256') };
+    savedHash: crypto.createHash('sha256'), payloadMode };
 }
 
 function isCount(value) {
@@ -9334,7 +9340,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       }
       if (sourceReplayVerification) {
         updateSourcePacketHash(sourceReplayVerification.savedHash,
-          sourcePacketFieldsFromRef(row.raw_packet_ref));
+          sourcePacketFieldsFromRef(row.raw_packet_ref,
+            sourceReplayVerification.payloadMode));
       }
       faceDirectionRosterPairRow(row, prepared, lineNumber, faceRosterPairState);
       unitApplyDamageRosterKeyRow(row, prepared, lineNumber,

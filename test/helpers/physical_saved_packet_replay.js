@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const { parseReplayFile, walkBlocks } = require('../../src/rofl');
 const { replayFromChunks } = require('./synthetic_replay');
@@ -8,7 +9,7 @@ const { replayFromChunks } = require('./synthetic_replay');
 // Give existing saved-query fixtures a physical, exact-build ROFL. The fixture
 // keeps its original native input/output bytes; only Replay identity and packet
 // positions are replaced with values obtained through the production framer.
-function bindSavedPacketArtifactToPhysicalReplay(directory) {
+function bindSavedPacketArtifactToPhysicalReplay(directory, { payloads = null } = {}) {
   const semanticPath = path.join(directory, 'semantic_run.json');
   const analysisPath = path.join(directory, 'replay_analysis.json');
   const semantic = JSON.parse(fs.readFileSync(semanticPath, 'utf8'));
@@ -16,8 +17,15 @@ function bindSavedPacketArtifactToPhysicalReplay(directory) {
   const [eventKey] = Object.keys(analysis.event_counts);
   const eventPath = path.join(directory, `${eventKey}.jsonl`);
   const rows = fs.readFileSync(eventPath, 'utf8').trimEnd().split('\n').map(JSON.parse);
-  const chunks = rows.map((row) => {
-    const payload = Buffer.from(row.raw_packet_ref.raw_payload_hex, 'hex');
+  const chunks = rows.map((row, index) => {
+    const payload = payloads == null
+      ? Buffer.from(row.raw_packet_ref.raw_payload_hex, 'hex')
+      : payloads[index];
+    if (!Buffer.isBuffer(payload)
+        || (payloads != null && crypto.createHash('sha256')
+          .update(payload).digest('hex') !== row.raw_packet_ref.raw_payload_sha256)) {
+      throw new Error('synthetic source payload differs from the saved fixture');
+    }
     const header = Buffer.alloc(12);
     header[0] = 0x10;
     header.writeFloatLE(row.replay_time_ms / 1000, 1);

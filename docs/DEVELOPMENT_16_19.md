@@ -311,6 +311,17 @@ Current progress (older notes below retain their original research context):
   the captured module does not contain the live receiver heap. The native
   packet witness includes the raw and decoded `+0x28` values per packet;
   there is no ordered native-output digest for these rows.
+  Opt-in saved-query `--verify-source` binds every CastSpellAns packet ref
+  to the independently hashed original ROFL by exact build, Replay SHA,
+  packet order/count, stream, offsets, time, parameter and payload SHA-256.
+  It validates all saved rows after `--limit` before emitting stdout. This
+  physical provenance check does not rerun the native decoder or bind the
+  saved V8 key to an ordered native-output digest. A real 11-Replay V8
+  `--cast-nested-u32-0x28 190941627 --limit 1 --verify-source` query
+  verified all 63,496 original packets, matched 4,136 rows, and emitted
+  one original row. A synthetic physical-ROFL test forged a later packet's
+  time and offsets; query exited `SOURCE_PROVENANCE_MISMATCH` with zero
+  stdout. Focused saved-query tests passed 21/21 after this extension.
 - **Damage identity stop-loss:** In saved V5 output for the 11 KR Replays,
   anonymous `+0x18` `RAW_READER` occurred in 11/1,035 death-coincident
   victim-key packets and 823/62,860 first-lookup roster pairs. Conditional
