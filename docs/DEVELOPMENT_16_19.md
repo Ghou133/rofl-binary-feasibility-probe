@@ -4,6 +4,20 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **UnitApplyDamage saved-source verification (2026-09-26):** The opt-in
+  `query-events --verify-source` now covers exact-821 0x005f
+  `unit_apply_damage_packet_candidates` V1-V6. It checks the original ROFL
+  identity, every physical packet position/time/parameter/payload and the
+  existing per-row field, transform, count, and ordered native-input witness
+  even without a damage filter. One original KR Replay verified 64,824/64,824
+  V6 rows and emitted one unchanged row with `--limit 1`. A copy with only
+  the last saved row's time and offsets changed failed
+  `SOURCE_PROVENANCE_MISMATCH` with zero stdout bytes. Eleven original KR
+  Replays contain 628,909 strict-framed 0x005f packets, all in game chunks;
+  this count is a source inventory, not a new native V6 gate. The original
+  Replay, image, and full saved rows remain local and ignored. This source
+  check does not rerun native callback code or establish actual damage
+  effects.
 - **Integrated 821 provenance and 0x0087 validation (2026-09-26):** After
   merging the opt-in ForceCreateMissile candidate with saved-query source
   verification, `npm test` passed 1,166 of 1,288 Node tests across 42 groups,
@@ -18,7 +32,7 @@ Current progress (older notes below retain their original research context):
 - **Optional saved-row source verification (2026-09-26):** `query-events
   --verify-source` now reopens the original exact-821 ROFL for the packet-local
   NotifyContextualSituation, item-group V1/V2, cooldown broadcast, item-charges,
-  target-hero, and ForceCreateMissile candidate streams. It checks the full
+  target-hero, ForceCreateMissile, and UnitApplyDamage candidate streams. It checks the full
   Replay build/SHA-256,
   strict packet framing, ordered stream/chunk IDs and offsets, timestamp,
   parameter, payload, and total count before publishing stdout. A single
