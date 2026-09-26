@@ -1,0 +1,184 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const test = require('node:test');
+
+const { TARGET_HERO_PACKET_CANDIDATE_PROFILE_821: profile } =
+  require('../src/decoders/rofl_16_19_821_target_hero_packet_candidate');
+
+const CLI = path.resolve(__dirname, '../src/cli.js');
+const CAPABILITY = 'target_hero_packet';
+const EVENT = 'target_hero_packet_candidates';
+const SOURCE_PATH = 'synthetic.rofl';
+const REPLAY_SHA = 'a'.repeat(64);
+const PACKETS = [
+  ['33', '35353535', 0],
+  ['37c68e', 'c63535f3', 0x400000b0],
+];
+
+function sha256(bytes) { return crypto.createHash('sha256').update(bytes).digest('hex'); }
+
+function row(index) {
+  const [hex, protectedHex, lookupKey] = PACKETS[index];
+  const time = 1000 + index;
+  const rawParam = 0x400000b5;
+  return {
+    event_type: 'TARGET_HERO_PACKET_CANDIDATE',
+    game_version: profile.replay_version, patch: '16.19',
+    build_profile: profile.id, replay_sha256: REPLAY_SHA,
+    replay_time_ms: time, raw_param: rawParam,
+    packet_name_candidate: profile.packet_name,
+    native_protected_lookup_bytes_hex: protectedHex,
+    native_callback_lookup_key_u32: lookupKey,
+    native_receiver_call_status: 'NOT_EXECUTED',
+    source_actor_status: 'UNKNOWN', target_object_status: 'UNKNOWN',
+    target_state_status: 'UNKNOWN',
+    semantic_effect_status: 'UNKNOWN',
+    confidence: 'CANDIDATE', semantic_status: profile.evidence_status,
+    raw_packet_ref: {
+      source_path: SOURCE_PATH, replay_sha256: REPLAY_SHA,
+      chunk_index: index, chunk_id: index + 1, chunk_stream: 'game_chunk',
+      chunk_file_offset: 100 + index, decompressed_block_offset: 20 + index * 30,
+      decompressed_payload_offset: 29 + index * 30,
+      packet_id: profile.replay_block_packet_id, replay_time_ms: time,
+      payload_length: hex.length / 2, raw_param: rawParam,
+      raw_payload_hex: hex, raw_payload_sha256: sha256(Buffer.from(hex, 'hex')),
+    },
+  };
+}
+
+function hashes(rows) {
+  const input = crypto.createHash('sha256');
+  const output = crypto.createHash('sha256');
+  for (const item of rows) {
+    const payload = Buffer.from(item.raw_packet_ref.raw_payload_hex, 'hex');
+    const header = Buffer.alloc(8);
+    header.writeUInt32LE(item.raw_param, 0);
+    header.writeUInt32LE(payload.length, 4);
+    input.update(header).update(payload);
+    const key = Buffer.alloc(4);
+    key.writeUInt32LE(item.native_callback_lookup_key_u32);
+    output.update(Buffer.from(item.native_protected_lookup_bytes_hex, 'hex'))
+      .update(key);
+  }
+  return [input.digest('hex'), output.digest('hex')];
+}
+
+function fixture(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-target-hero-query-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const dir = path.join(root, 'replays', 'sample');
+  fs.mkdirSync(dir, { recursive: true });
+  const rows = [row(0), row(1)];
+  const [nativeInput, nativeOutput] = hashes(rows);
+  const result = {
+    profile_id: profile.id, input_packet_id: profile.replay_block_packet_id,
+    evidence_status: profile.evidence_status,
+    evidence_runtime_image_sha256: profile.evidence_runtime_image_sha256,
+    status: 'CANDIDATE', input_count: 2, event_count: 2, scanned_block_count: 2,
+    known_limits: [...profile.known_limits],
+    event_field_confidence: {
+      replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
+      native_callback_lookup_key_u32: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+    },
+    native_witness_status: 'FULLY_CONSUMED_ALL', native_full_success_count: 2,
+    native_batch_count: 1, native_input_sha256: nativeInput,
+    native_output_sha256: nativeOutput, runtime_image_status: 'MATCHED_USED',
+    runtime_image_used: true,
+    runtime_image_sha256: profile.evidence_runtime_image_sha256,
+  };
+  const semantic = {
+    replay_version: profile.replay_version, replay_sha256: REPLAY_SHA,
+    container_status: 'PASS', status: 'CANDIDATE',
+    api_status: 'EXPERIMENTAL_CANDIDATE', requested_capabilities: [CAPABILITY],
+    capability_results: { [CAPABILITY]: result },
+  };
+  const analysis = {
+    patch: '16.19', replay_version: profile.replay_version,
+    replay_sha256: REPLAY_SHA, source_path: SOURCE_PATH,
+    event_storage: 'JSONL_ONLY', event_counts: { [EVENT]: 2 },
+    event_jsonl_files: { [EVENT]: `${EVENT}.jsonl` }, events: null,
+    semantic: { status: 'CANDIDATE', requested_capabilities: [CAPABILITY],
+      capability_results: { [CAPABILITY]: result } },
+  };
+  const semanticPath = path.join(dir, 'semantic_run.json');
+  const analysisPath = path.join(dir, 'replay_analysis.json');
+  const eventPath = path.join(dir, `${EVENT}.jsonl`);
+  fs.writeFileSync(semanticPath, JSON.stringify(semantic));
+  fs.writeFileSync(analysisPath, JSON.stringify(analysis));
+  fs.writeFileSync(eventPath, `${rows.map(JSON.stringify).join('\n')}\n`);
+  return { root, dir, rows, semantic, analysis, semanticPath, analysisPath,
+    eventPath };
+}
+
+function query(dir, ...args) {
+  return spawnSync(process.execPath,
+    [CLI, 'query-events', dir, '--event', EVENT, ...args], { encoding: 'utf8' });
+}
+
+function errorCode(run) {
+  assert.equal(run.status, 2, run.stderr);
+  return JSON.parse(run.stderr).code;
+}
+
+test('saved target-hero callback query validates all rows and emits original JSONL', (t) => {
+  const f = fixture(t);
+  const selected = query(f.dir, '--opaque-u32', '0', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${JSON.stringify(f.rows[0])}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.query_status, 'COMPLETE');
+  assert.equal(summary.scanned_count, 2);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.rows_unmodified, true);
+  assert.equal(errorCode(query(f.dir, '--participant', '1')),
+    'PARTICIPANT_UNAVAILABLE');
+});
+
+test('later forged native output is detected after limit with no partial output', (t) => {
+  const f = fixture(t);
+  const forged = structuredClone(f.rows);
+  forged[1].native_protected_lookup_bytes_hex = PACKETS[0][1];
+  forged[1].native_callback_lookup_key_u32 = PACKETS[0][2];
+  fs.writeFileSync(f.eventPath, `${forged.map(JSON.stringify).join('\n')}\n`);
+  const output = path.join(f.root, 'selected.jsonl');
+  assert.equal(errorCode(query(f.dir, '--limit', '1', '--output', output)),
+    'EVENT_COUNT_MISMATCH');
+  assert.equal(fs.existsSync(output), false);
+});
+
+test('stdout stays empty when a later native output fails integrity', (t) => {
+  const f = fixture(t);
+  const forged = structuredClone(f.rows);
+  forged[1].native_protected_lookup_bytes_hex = PACKETS[0][1];
+  forged[1].native_callback_lookup_key_u32 = PACKETS[0][2];
+  fs.writeFileSync(f.eventPath, `${forged.map(JSON.stringify).join('\n')}\n`);
+  const selected = query(f.dir, '--limit', '1');
+  assert.equal(errorCode(selected), 'EVENT_COUNT_MISMATCH');
+  assert.equal(selected.stdout, '');
+});
+
+test('raw payload and capability promotion forgeries fail closed', (t) => {
+  const f = fixture(t);
+  const forged = structuredClone(f.rows);
+  forged[1].raw_packet_ref.raw_payload_hex = PACKETS[0][0];
+  forged[1].raw_packet_ref.raw_payload_sha256 = sha256(Buffer.from(PACKETS[0][0], 'hex'));
+  forged[1].raw_packet_ref.payload_length = 1;
+  fs.writeFileSync(f.eventPath, `${forged.map(JSON.stringify).join('\n')}\n`);
+  assert.equal(errorCode(query(f.dir, '--limit', '1')), 'EVENT_COUNT_MISMATCH');
+  fs.writeFileSync(f.eventPath, `${f.rows.map(JSON.stringify).join('\n')}\n`);
+  for (const status of ['PASS', 'PROMOTED']) {
+    const semantic = structuredClone(f.semantic);
+    const analysis = structuredClone(f.analysis);
+    semantic.capability_results[CAPABILITY].status = status;
+    analysis.semantic.capability_results[CAPABILITY].status = status;
+    fs.writeFileSync(f.semanticPath, JSON.stringify(semantic));
+    fs.writeFileSync(f.analysisPath, JSON.stringify(analysis));
+    assert.equal(errorCode(query(f.dir)), 'CAPABILITY_METADATA_MISMATCH');
+  }
+});

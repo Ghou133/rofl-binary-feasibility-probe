@@ -101,6 +101,8 @@ const itemGroupDataBroadcastPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_item_group_data_broadcast_packet_candidate');
 const cooldownBroadcastPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_cooldown_broadcast_packet_candidate');
+const targetHeroPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_target_hero_packet_candidate');
 const unitApplyDamageRosterKeyPair1619821 =
   require('./decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const unitApplyDamageLookupRosterKeyPair1619821 =
@@ -619,6 +621,7 @@ const BUILD_PROFILES = deepFreeze({
       notify_contextual_situation_packet: 0x0113,
       item_group_data_broadcast_packet: 0x013f,
       cooldown_broadcast_packet: 0x039d,
+      target_hero_packet: 0x0265,
       unit_apply_damage_roster_key_pair: 0x005f,
       unit_apply_damage_lookup_roster_key_pair: 0x005f,
       unit_apply_damage_lookup2c_roster_key_pair: 0x005f,
@@ -751,6 +754,8 @@ const BUILD_PROFILES = deepFreeze({
         itemGroupDataBroadcastPacketCandidate1619821.ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
       cooldown_broadcast_packet:
         cooldownBroadcastPacketCandidate1619821.COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
+      target_hero_packet:
+        targetHeroPacketCandidate1619821.TARGET_HERO_PACKET_CANDIDATE_PROFILE_821,
       unit_apply_damage_roster_key_pair:
         unitApplyDamageRosterKeyPair1619821.UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
       unit_apply_damage_lookup_roster_key_pair:
@@ -873,6 +878,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_EXACT_821_NATIVE_ITEM_GROUP_LOOKUP_KEY',
       cooldown_broadcast_packet:
         'CANDIDATE_EXACT_821_NATIVE_COOLDOWN_LOOKUP_KEY',
+      target_hero_packet:
+        'CANDIDATE_EXACT_821_NATIVE_TARGET_HERO_CALLBACK_KEY',
       unit_apply_damage_roster_key_pair:
         unitApplyDamageRosterKeyPair1619821.UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE.evidence_status,
       unit_apply_damage_lookup_roster_key_pair:
@@ -955,6 +962,7 @@ const BUILD_PROFILES = deepFreeze({
       notify_contextual_situation_packet: 'exact 821 packet route 0x0113 NotifyContextualSituation native string at object +0x10, distinct from OnEvent child 0x0113; no proven action, receiver, actor, team, or gameplay effect',
       item_group_data_broadcast_packet: 'exact 821 keyframe route 0x013f SetItemGroupData_Broadcast native callback lookup key at object +0x20; no proven group identity, item, slot, owner, transaction, inventory state or effect',
       cooldown_broadcast_packet: 'exact 821 game/keyframe route 0x039d PKT_CHAR_SetCooldown_Broadcast_s native callback lookup key from object +0x10; no proven cooldown state, slot, actor, target, receiver lookup result or effect',
+      target_hero_packet: 'exact 821 game route 0x0265 PKT_AI_TargetHeroS2C_s native callback u32 from object +0x10 before receiver-dependent call; no proven source actor, resolved target object, target state, or effect',
       unit_apply_damage_roster_key_pair: 'full 0x005f raw-param equality with the exact 821 ten-member HeroStats roster key, retaining both packet refs; candidate participant label only, with +0x100 aliases and actor/source/target/effect unknown',
       unit_apply_damage_lookup_roster_key_pair: 'native +0x24 callback lookup key equality with the exact 821 ten-member HeroStats roster key, retaining raw key relation and both packet refs; candidate roster label only, with lookup success and actor/source/target/effect unknown',
       unit_apply_damage_lookup2c_roster_key_pair: 'native +0x2c callback lookup key equality with the exact 821 ten-member HeroStats roster key, retaining both packet refs; candidate roster label only, with lookup success and actor/source/target/effect unknown',
@@ -1016,6 +1024,7 @@ const BUILD_PROFILES = deepFreeze({
       'notify_contextual_situation_packet',
       'item_group_data_broadcast_packet',
       'cooldown_broadcast_packet',
+      'target_hero_packet',
       'unit_apply_damage_roster_key_pair',
       'unit_apply_damage_lookup_roster_key_pair',
       'unit_apply_damage_lookup2c_roster_key_pair',

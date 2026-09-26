@@ -202,6 +202,8 @@ cooldown_broadcast_packet emits an exact-821 game/keyframe callback lookup key;
 it does not establish cooldown state, slot identity, actor, target, or effect.
 item_charges_packet emits exact-821 packet-local callback arguments before receiver state;
 it does not establish item identity, charge state, slot, owner, or effect.
+target_hero_packet emits an exact-821 game packet callback u32 before a
+receiver-dependent call; resolved target object, actor, state and effect are unknown.
 unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
 packet-local selectors or a bounded anonymous float candidate; these do not
@@ -724,6 +726,7 @@ function parseArgs(argv) {
       'set_spell_level_packet_candidates',
       'item_group_data_broadcast_packet_candidates',
       'cooldown_broadcast_packet_candidates',
+      'target_hero_packet_candidates',
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
       'champion_multiple_kill_event_packet_candidates',
@@ -1188,6 +1191,7 @@ function parseOne1619(replay, options, started) {
       'item_group_data_broadcast_packet',
       'cooldown_broadcast_packet',
       'item_charges_packet',
+      'target_hero_packet',
       'unit_apply_damage_packet',
       'show_health_bar_packet',
     ].includes(name)))] : [];
@@ -2477,6 +2481,7 @@ function capabilityQuery(replay, options = {}) {
              || capability === 'item_group_data_broadcast_packet'
              || capability === 'cooldown_broadcast_packet'
              || capability === 'item_charges_packet'
+             || capability === 'target_hero_packet'
             || capability === 'unit_apply_damage_packet'
             || capability === 'show_health_bar_packet'
             || capability === 'unit_apply_damage_roster_key_pair'
@@ -2984,6 +2989,11 @@ function capabilityQuery(replay, options = {}) {
           'packet-local callback selector/value before receiver method; item identity, charges, slot, owner and effect remain unknown');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'target_hero_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full 0x0265 packet consumption',
+          'packet-local callback u32; resolved target object, source actor, receiver state and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'face_direction_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and bounded 0x038e packet shape validation',
           'packet-local unit-vector and optional scalar candidates with raw provenance; no actor, world position, path or direction effect');
@@ -3226,6 +3236,8 @@ function capabilityQuery(replay, options = {}) {
             cooldown_broadcast_packet:
               'cooldown_broadcast_packet_candidates',
             item_charges_packet: 'item_charges_packet_candidates',
+            target_hero_packet:
+              'target_hero_packet_candidates',
             unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
             show_health_bar_packet: 'show_health_bar_packet_candidates',
             unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
