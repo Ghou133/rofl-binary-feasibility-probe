@@ -220,6 +220,9 @@ live lookup success, packet actor, resolved target, target state or effect.
 shielding_params_roster_key_pair separately matches two anonymous ShieldingParams
 child u32 fields to the ten candidate HeroStats roster keys. Unmatched fields
 remain visible; field roles and actual shield effects are unknown.
+params_heal_roster_key_pair separately matches two anonymous ParamsHeal child
+u32 fields to the ten candidate HeroStats roster keys. All reports remain
+visible; field roles and effective healing are unknown.
 force_create_missile_packet emits an exact-821 game packet-local callback
 comparison u32 witnessed before a synthetic receiver comparison; live receiver,
 missile identity, owner, target, creation, effect and causality are unknown.
@@ -1357,6 +1360,14 @@ function parseOne1619(replay, options, started) {
     }
   }
   if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('params_heal_roster_key_pair')) {
+    for (const source of ['params_heal_packet', 'hero_death', 'hero_assist',
+      'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+      'hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
       && options.events.includes('anonymous_029c_roster_key_pair')) {
     for (const source of ['anonymous_029c_packet', 'hero_death', 'hero_assist',
       'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
@@ -1426,6 +1437,8 @@ function parseOne1619(replay, options, started) {
         ? ['set_spell_level_packet', 'hero_roster_metadata_bridge'] : []),
       ...(options.events?.includes('shielding_params_roster_key_pair')
         ? ['shielding_params_packet_pair', 'hero_roster_metadata_bridge'] : []),
+      ...(options.events?.includes('params_heal_roster_key_pair')
+        ? ['params_heal_packet', 'hero_roster_metadata_bridge'] : []),
       ...(options.events?.includes('anonymous_029c_roster_key_pair')
         ? ['anonymous_029c_packet', 'hero_roster_metadata_bridge'] : []),
     ])];
@@ -2697,6 +2710,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'hero_inventory_broadcast_packet'
             || capability === 'hero_inventory_set_item_packet'
             || capability === 'params_heal_packet'
+            || capability === 'params_heal_roster_key_pair'
             || capability === 'shielding_params_packet_pair'
             || capability === 'shielding_params_roster_key_pair'
             || capability === 'stealth_event_packet'
@@ -2791,6 +2805,7 @@ function capabilityQuery(replay, options = {}) {
             error: assessment.error ?? assessment.missing_input ?? null })) }
         : profile.game_version === '16.19.821.7343'
           && (capability === 'hero_roster_metadata_bridge'
+            || capability === 'params_heal_roster_key_pair'
             || capability === 'target_hero_roster_key_pair'
             || capability === 'set_spell_level_roster_key_pair'
             || capability === 'shielding_params_roster_key_pair'
@@ -3072,6 +3087,11 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'params_heal_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x004b ParamsHeal packet consumption',
           'handler-read reported float and anonymous u32 fields; no effective-heal, caster, or target inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'params_heal_roster_key_pair') {
+        validationPending.push('complete exact 821 native ParamsHeal report and ten-key HeroStats metadata-bridge outcomes',
+          'independent full-u32 field-to-roster equality only; unmatched reports retained; field roles and effective healing unknown');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'shielding_params_packet_pair') {
@@ -3524,6 +3544,7 @@ function capabilityQuery(replay, options = {}) {
             hero_inventory_broadcast_packet: 'hero_inventory_broadcast_packet_candidates',
             hero_inventory_set_item_packet: 'hero_inventory_set_item_packet_candidates',
             params_heal_packet: 'params_heal_packet_candidates',
+            params_heal_roster_key_pair: 'params_heal_roster_key_pair_candidates',
             shielding_params_packet_pair: 'shielding_params_packet_pair_candidates',
             shielding_params_roster_key_pair:
               'shielding_params_roster_key_pair_candidates',

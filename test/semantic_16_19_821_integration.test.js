@@ -158,6 +158,8 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     assert.equal(resolveCapability(BUILD, capability).status, 'CANDIDATE');
   }
   assert.equal(resolveCapability(BUILD, 'hero_level_state').status, 'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'params_heal_roster_key_pair').status,
+    'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_death_timer').status, 'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'force_create_missile_packet').status,
     'CANDIDATE');
@@ -198,6 +200,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_level_state', 'hero_inventory_packet', 'hero_inventory_broadcast_packet',
       'hero_inventory_set_item_packet',
       'params_heal_packet',
+      'params_heal_roster_key_pair',
       'shielding_params_packet_pair',
       'shielding_params_roster_key_pair',
       'stealth_event_packet',

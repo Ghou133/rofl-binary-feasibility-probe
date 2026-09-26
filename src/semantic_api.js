@@ -54,6 +54,8 @@ const { decodeHeroInventorySetItemPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_set_item_packet_candidate');
 const { decodeParamsHealPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_params_heal_packet_candidate');
+const { associateParamsHealRosterKeys821 } =
+  require('./decoders/rofl_16_19_821_params_heal_roster_key_pair_candidate');
 const { decodeShieldingParamsPacketPairCandidates821 } =
   require('./decoders/rofl_16_19_821_shielding_params_packet_pair_candidate');
 const { associateShieldingParamsRosterKeys821 } =
@@ -2241,6 +2243,11 @@ function decode1619821(replay, profile, options = {}) {
       if (!capabilities.includes(source)) capabilities.push(source);
     }
   }
+  if (capabilities.includes('params_heal_roster_key_pair')) {
+    for (const source of ['params_heal_packet', 'hero_roster_metadata_bridge']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
   if (capabilities.includes('anonymous_029c_roster_key_pair')) {
     for (const source of ['anonymous_029c_packet', 'hero_roster_metadata_bridge']) {
       if (!capabilities.includes(source)) capabilities.push(source);
@@ -2656,6 +2663,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_inventory_broadcast_packet: 'hero_inventory_broadcast_packet_candidates',
     hero_inventory_set_item_packet: 'hero_inventory_set_item_packet_candidates',
     params_heal_packet: 'params_heal_packet_candidates',
+    params_heal_roster_key_pair: 'params_heal_roster_key_pair_candidates',
     shielding_params_packet_pair: 'shielding_params_packet_pair_candidates',
     shielding_params_roster_key_pair: 'shielding_params_roster_key_pair_candidates',
     stealth_event_packet: 'stealth_event_packet_candidates',
@@ -2844,6 +2852,12 @@ function decode1619821(replay, profile, options = {}) {
           heroRosterMetadataBridgeOutcome:
             decodeCapability('hero_roster_metadata_bridge'),
         });
+      } else if (capability === 'params_heal_roster_key_pair') {
+        outcome = associateParamsHealRosterKeys821(replay, {
+          paramsHealPacketOutcome: decodeCapability('params_heal_packet'),
+          heroRosterMetadataBridgeOutcome:
+            decodeCapability('hero_roster_metadata_bridge'),
+        });
       } else if (capability === 'anonymous_029c_roster_key_pair') {
         outcome = associateAnonymous029cRosterKeyPair821(replay, {
           anonymous029cPacketOutcome: decodeCapability('anonymous_029c_packet'),
@@ -2910,6 +2924,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'hero_inventory_broadcast_packet'
         || capability === 'hero_inventory_set_item_packet'
         || capability === 'params_heal_packet'
+        || capability === 'params_heal_roster_key_pair'
         || capability === 'shielding_params_packet_pair'
         || capability === 'shielding_params_roster_key_pair'
         || capability === 'stealth_event_packet'
@@ -3003,6 +3018,7 @@ function decode1619821(replay, profile, options = {}) {
     if (result.status !== 'CANDIDATE') continue;
     if (capability === 'hero_roster_metadata_bridge'
         || capability === 'missile_key_cooccurrence'
+        || capability === 'params_heal_roster_key_pair'
         || capability === 'target_hero_roster_key_pair'
         || capability === 'set_spell_level_roster_key_pair'
         || capability === 'shielding_params_roster_key_pair'

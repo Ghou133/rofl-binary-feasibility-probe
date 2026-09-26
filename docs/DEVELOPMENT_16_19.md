@@ -35,6 +35,21 @@ Current progress (older notes below retain their original research context):
   ownership, effects and causality remain `UNKNOWN`. The 11-Replay source
   streams and selected pair outputs remain ignored local artifacts.
 
+- **ParamsHeal fields to roster keys (opt-in candidate):** Exact-821
+  `--events params_heal_roster_key_pair --runtime-image IMAGE
+  --event-jsonl-only` and the API capability compare child `+0x04` and
+  `+0x14` u32 values independently, by full equality with the same-Replay
+  ten-key HeroStats roster. The 11 original KR Replays returned 11/11
+  `CANDIDATE` and retained all 70,698 native reports: `+0x04` matched
+  62,517, `+0x14` matched 62,550, both matched 62,517, neither matched
+  8,148, and only `+0x14` matched 33. The fields differed in 612 reports;
+  zero and roster-key `+0x100` aliases were not observed. Every report keeps
+  its source packet ref, including nonroster and asymmetric reports. Field
+  roles, packet actor, and effective healing remain `UNKNOWN`. The complete
+  native ParamsHeal source stream also passed physical source verification
+  for all 70,698 reports in these 11 Replays. The pair has no saved-query
+  interface yet.
+
 - **Bounded output hashing:** Batch manifest hashing now opens at most eight
   output streams at once and waits for each stream to close before reusing
   its slot. On an existing 11-Replay artifact with 86 files (1,357.8 MiB),

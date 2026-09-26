@@ -29,6 +29,8 @@ const inventorySetItemPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_inventory_set_item_packet_candidate');
 const paramsHealPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_params_heal_packet_candidate');
+const paramsHealRosterKeyPair1619821 =
+  require('./decoders/rofl_16_19_821_params_heal_roster_key_pair_candidate');
 const shieldingParamsPacketPairCandidate1619821 =
   require('./decoders/rofl_16_19_821_shielding_params_packet_pair_candidate');
 const shieldingParamsRosterKeyPair1619821 =
@@ -608,6 +610,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_inventory_broadcast_packet: 0x0357,
       hero_inventory_set_item_packet: 0x002d,
       params_heal_packet: 0x040a,
+      params_heal_roster_key_pair: 0x040a,
       shielding_params_packet_pair: 0x040a,
       shielding_params_roster_key_pair: 0x040a,
       stealth_event_packet: 0x040a,
@@ -717,6 +720,8 @@ const BUILD_PROFILES = deepFreeze({
         inventorySetItemPacketCandidate1619821.HERO_INVENTORY_SET_ITEM_PACKET_CANDIDATE_PROFILE_821,
       params_heal_packet:
         paramsHealPacketCandidate1619821.PARAMS_HEAL_PACKET_CANDIDATE_PROFILE_821,
+      params_heal_roster_key_pair:
+        paramsHealRosterKeyPair1619821.PARAMS_HEAL_ROSTER_KEY_PAIR_821_PROFILE,
       shielding_params_packet_pair:
         shieldingParamsPacketPairCandidate1619821.SHIELDING_PARAMS_PACKET_PAIR_821_PROFILE,
       shielding_params_roster_key_pair:
@@ -866,6 +871,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_NATIVE_SET_ITEM_SLOT_ITEM_PACKET_FIELDS',
       params_heal_packet:
         'CANDIDATE_821_NATIVE_ON_EVENT_PARAMS_HEAL_REPORTED_FLOAT',
+      params_heal_roster_key_pair:
+        paramsHealRosterKeyPair1619821.PARAMS_HEAL_ROSTER_KEY_PAIR_821_PROFILE.evidence_status,
       shielding_params_packet_pair:
         'CANDIDATE_821_NATIVE_ON_EVENT_SHIELDING_PARAMS_PAIRED_REPORTS',
       shielding_params_roster_key_pair:
@@ -1004,6 +1011,7 @@ const BUILD_PROFILES = deepFreeze({
       inventory_broadcast_packet: 'exact 821 native 0x0357 SetInventory_Broadcast record vector and slot/item transforms; shared exact-image callback resets slots 0–9 then applies packet records; raw zero item values and omitted slots remain distinct, with no between-packet state or transaction inference',
       inventory_set_item_packet: 'exact 821 native 0x002d SetItem nested slot/item transform; observed slot 8 only and six item-definition keys; no purchase, sale, replacement, or between-packet state inference',
       params_heal_packet: 'exact 821 native 0x040a OnEvent packet and registered child 0x004b ParamsHeal; handler reads reported f32 at child +0x18; two u32 fields remain anonymous, with no effective-heal, caster, or target inference',
+      params_heal_roster_key_pair: 'exact 821 native ParamsHeal child +0x04/+0x14 u32 values independently compared by full equality to the same-Replay complete ten-key HeroStats roster; all reports and nonmatches retained; field roles and effective healing unknown',
       shielding_params_packet_pair: 'exact 821 native 0x040a OnEvent child 0x00ef/0x00f0 registration and one-to-one packet-local blob pairing; callback reads anonymous fields, while raw f32 at child +0x10 is opaque; no shield generation, absorption, actor, or target inference',
       shielding_params_roster_key_pair: 'exact 821 native 0x040a ShieldingParams child +0x08/+0x0c u32 values separately compared by full equality to the same-Replay complete ten-key 0x0089 HeroStats roster; unmatched values retained; field roles and shield effects unknown',
       stealth_event_packet: 'exact 821 native 0x040a OnEvent child 0x0101/0x0102 registrations and event-name table; callback reads anonymous child +0x04 u32; no participant, visibility, or transition lifecycle inference',
@@ -1079,6 +1087,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_inventory_broadcast_packet',
       'hero_inventory_set_item_packet',
       'params_heal_packet',
+      'params_heal_roster_key_pair',
       'shielding_params_packet_pair',
       'shielding_params_roster_key_pair',
       'stealth_event_packet',
