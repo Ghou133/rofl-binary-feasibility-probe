@@ -18,6 +18,34 @@ Current progress (older notes below retain their original research context):
   Replay, image, and full saved rows remain local and ignored. This source
   check does not rerun native callback code or establish actual damage
   effects.
+- **SetDimensionMissile 0x008a packet-local callback byte (opt-in candidate):**
+  The pinned KR `16.19.821.7343` image registers
+  `PKT_SetDimensionMissile_s` on `MissileClient` through factory case
+  `0xeffc77`, constructor `0xeccbe0`, deserializer `0x111f960`, and
+  callback `0x998520`. Strict framing of all 11 original KR Replays found
+  218,764 game `0x008a` packets in 60 observed length/prefix shapes. Every
+  packet natively returned success with full consumption and matching object
+  identity; the callback transformed object byte `+0x14` to a packet-local
+  u8 before the receiver method. The two observed protected-byte/argument
+  pairs were `d5/0` and `a7/6`. The exact image, callback code and table,
+  per-Replay source/input/output hashes, counts, and negative controls are
+  recorded in [the native gate](SET_DIMENSION_MISSILE_821_NATIVE_GATE.json).
+  All 60 representative truncations and appends failed the full route gate.
+  Six of 11 sampled `0x0087` payloads also passed this deserializer, so
+  the decoder requires the `0x008a` framing ID; payload shape alone is
+  insufficient. `decode --events set_dimension_missile_packet
+  --runtime-image IMAGE --event-jsonl-only` and API
+  `capabilities: ['set_dimension_missile_packet']` are explicit opt-ins.
+  One original Replay emitted 14,572/14,572 candidate rows in two native
+  batches with both ordered digests matching the independent native gate.
+  Saved `query-events --event set_dimension_missile_packet_candidates
+  --verify-source --limit 1` validated all 14,572 rows against the original
+  ROFL and emitted one unchanged row. A later saved-row time/offset forgery
+  failed source verification with zero output; ordered native digests are
+  still checked after `--limit`. Live receiver state, missile identity,
+  owner, target, actual dimension change, gameplay effect and causality
+  remain `UNKNOWN`. Original ROFLs, runtime image, and complete JSONL output
+  remain local and ignored.
 - **Integrated 821 provenance and 0x0087 validation (2026-09-26):** After
   merging the opt-in ForceCreateMissile candidate with saved-query source
   verification, `npm test` passed 1,166 of 1,288 Node tests across 42 groups,
