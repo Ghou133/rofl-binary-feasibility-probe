@@ -1317,6 +1317,14 @@ Current progress (older notes below retain their original research context):
   route and decoder remain separate. All 11 supplied KR Replays returned
   `CANDIDATE`: 346,098/346,098 native packets fully consumed, with zero
   framing errors and exact agreement with independently counted raw routes.
+- **821 BuffAdd2 batch sizing:** The original `KR_8392938200` Replay has
+  34,527 selected packets. A bounded 40,000-packet/8 MB native request now
+  handles them in one launch; the 50,000-packet Replay limit and per-packet
+  native checks remain. Before/after CLI JSONL files both contain 34,527 rows
+  and have identical SHA-256
+  `5ee4516fe702196a0e262053e93bd663eab85f10b905c7eccebae3d75ece4f50`.
+  A local same-input native A/B measured 2,016 ms for two launches versus
+  1,885 ms for one; this is a bounded single-Replay measurement.
 - **Current:** Building versus turret labels, CastSpellAns field meanings, and
   all per-action interpretations remain candidate or unknown; no public
   capability was promoted.
