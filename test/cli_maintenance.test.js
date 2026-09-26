@@ -568,7 +568,11 @@ test('821 CastSpellAns V5 CLI switch forwards an explicit decode option', (t) =>
     'cast_spell_ans_packet', '--cast-packet-v6']);
   assert.equal(next.options.castPacketV6, true);
   assert.equal(cli.parseOne(input, { ...next.options, semantic: true }).ok, true);
-  assert.deepEqual(seen, ['v5', undefined, 'v6']);
+  const newest = cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v7']);
+  assert.equal(newest.options.castPacketV7, true);
+  assert.equal(cli.parseOne(input, { ...newest.options, semantic: true }).ok, true);
+  assert.deepEqual(seen, ['v5', undefined, 'v6', 'v7']);
   assert.equal(cli.parseArgs(['batch', input, '--events',
     'cast_spell_ans_packet', '--cast-packet-v5']).options.castPacketV5, true);
   assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v5']),
@@ -583,6 +587,25 @@ test('821 CastSpellAns V5 CLI switch forwards an explicit decode option', (t) =>
   /mutually exclusive/);
   assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v6']),
     /--cast-packet-v6 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v7']),
+    /--cast-packet-v7 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v6', '--cast-packet-v7']),
+  /mutually exclusive/);
+  const query = cli.parseArgs(['query-events', input, '--event',
+    'cast_spell_ans_packet_candidates', '--cast-nested-f32-0xa0', '1.25']);
+  assert.equal(query.options.castNestedF32AtA0, 1.25);
+  const rounded = cli.parseArgs(['query-events', input, '--event',
+    'cast_spell_ans_packet_candidates', '--cast-nested-f32-0xa0', '1.1395']);
+  assert.equal(rounded.options.castNestedF32AtA0, 1.1395000219345093);
+  for (const invalid of ['NaN', 'Infinity', '1e400']) {
+    assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+      'cast_spell_ans_packet_candidates', '--cast-nested-f32-0xa0', invalid]),
+    /finite decimal number/);
+  }
+  assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+    'set_spell_level_packet_candidates', '--cast-nested-f32-0xa0', '1.25']),
+  /--cast-nested-f32-0xa0 requires/);
 });
 
 test('821 SetSpellLevel V2 CLI switch forwards an explicit decode option', (t) => {

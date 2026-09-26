@@ -2190,8 +2190,8 @@ function decode1619821(replay, profile, options = {}) {
   }
   const capabilities = [...new Set(requested)];
   const castPacketProfile = options.castPacketProfile ?? 'v4';
-  if (!['v4', 'v5', 'v6'].includes(castPacketProfile)) {
-    throw new TypeError('exact 821 CastSpellAns packet profile must be v4, v5 or v6');
+  if (!['v4', 'v5', 'v6', 'v7'].includes(castPacketProfile)) {
+    throw new TypeError('exact 821 CastSpellAns packet profile must be v4, v5, v6 or v7');
   }
   const setSpellLevelProfile = options.setSpellLevelProfile ?? 'v1';
   if (setSpellLevelProfile !== 'v1' && setSpellLevelProfile !== 'v2') {

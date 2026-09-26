@@ -4,6 +4,29 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **CastSpellAns nested anonymous f32 at packet +0xa0 (opt-in V7):** The
+  exact 821 deserializer at RVA `0x10bd7d4..0x10bd991` writes protected
+  nested `+0x90` bytes; the callback at RVA `0x8d76da..0x8d7710` converts
+  them directly to temporary `+0x9c`. The 256-byte transforms are pinned by
+  SHA-256 and inverse controls. V7 keeps V5/V6 fields and V4 remains the
+  default. The real CLI batch on all 11 original KR 821 Replays wrote
+  63,496/63,496 candidate rows, 11/11 `CANDIDATE`, exact image
+  `MATCHED_USED`, and zero framing errors to ignored
+  `artifacts/16_19_development/cast_v7_11_replay_20260926/`.
+  Saved `--cast-nested-f32-0xa0 1.1395 --limit 1` validated all 63,496
+  rows, matched one, and emitted that original row. A separate query found
+  63,452 values equal to `1.0`; the other 44 remain anonymous. Native
+  truncate/append and exact-image controls passed. The adjacent nested
+  `+0x8c` word passes through a runtime-tree helper at RVA `0x57cc00`;
+  the captured module has no receiver heap, so it was not emitted.
+  Focused decoder/native tests passed 21/21, saved-query tests 17/17, and
+  CLI option tests 30/30 with the supplied exact inputs.
+- **Damage identity stop-loss:** In saved V5 output for the 11 KR Replays,
+  anonymous `+0x18` `RAW_READER` occurred in 11/1,035 death-coincident
+  victim-key packets and 823/62,860 first-lookup roster pairs. Conditional
+  callback lookup/cast results and a packet-linked state change remain
+  unobserved; this branch cannot identify a fatal packet, target or effect.
+  Source artifacts are the ignored `combat_v5_associations_11_821` batch.
 - **CastSpellAns nested anonymous u32 at packet +0x4c (opt-in packet V6):**
   The pinned `16.19.821.7343` image callback RVA `0x8d7860..0x8d78cb`
   reads nested `+0x3c` (packet object `+0x4c`), converts four protected

@@ -69,8 +69,10 @@ const { LOOKUP_TABLE_SHA256, decodeRuntimeCountByte } =
 const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821,
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821,
   decodeNestedBits, decodeCastSpellAnsNestedU32FromRaw821,
-  decodeCastSpellAnsNestedU32At4cFromRaw821 } =
+  decodeCastSpellAnsNestedU32At4cFromRaw821,
+  decodeCastSpellAnsNestedF32AtA0FromRaw821 } =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const { SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_821,
   SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_821,
@@ -2870,6 +2872,9 @@ function castSpellAnsOpaqueI32(row, lineNumber) {
 function prepareCastSpellAnsNestedBits(prepared) {
   const result = prepared.capabilityResult;
   const profile = result?.profile_id
+      === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821.id
+    ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821
+    : result?.profile_id
       === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821.id
     ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821
     : result?.profile_id === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821.id
@@ -2903,9 +2908,15 @@ function prepareCastSpellAnsNestedBits(prepared) {
       || (profile !== CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821
         && result.evidence_nested_u32_transform_sha256
           !== profile.evidence_nested_u32_transform_sha256)
-      || (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821
+      || ([CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821,
+        CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821].includes(profile)
         && result.evidence_nested_u32_0x4c_transform_sha256
           !== profile.evidence_nested_u32_0x4c_transform_sha256)
+      || (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821
+        && (result.evidence_nested_f32_0xa0_transform_sha256
+          !== profile.evidence_nested_f32_0xa0_transform_sha256
+          || result.evidence_nested_f32_0xa0_inverse_sha256
+            !== profile.evidence_nested_f32_0xa0_inverse_sha256))
       || result.runtime_image_status !== 'MATCHED_USED'
       || result.runtime_image_used !== true
       || result.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS'
@@ -2955,6 +2966,29 @@ function prepareCastSpellAnsNestedU32At4c(prepared) {
   prepareCastSpellAnsNestedBits(prepared);
 }
 
+function prepareCastSpellAnsNestedF32AtA0(prepared) {
+  const profile = CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821;
+  if (prepared.eventKey !== 'cast_spell_ans_packet_candidates'
+      || prepared.replayVersion !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--cast-nested-f32-0xa0 requires an exact 16.19.821.7343 CastSpellAns packet candidate event.');
+  }
+  if (prepared.capabilityResult?.profile_id !== profile.id) {
+    const older = [CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821.id,
+      CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821.id.replace(/-v4$/, '-v3'),
+      CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821.id,
+      CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821.id];
+    if (older.includes(prepared.capabilityResult?.profile_id)) {
+      throw new EventQueryError('CAST_NESTED_F32_0XA0_UNAVAILABLE',
+        'This CastSpellAns artifact predates the nested +0xa0 callback f32 field.',
+        { cast_nested_f32_0xa0_checked_count: 0,
+          cast_nested_f32_0xa0_unavailable_count: prepared.declaredCount,
+          capability_status: prepared.capabilityStatus });
+    }
+  }
+  prepareCastSpellAnsNestedBits(prepared);
+}
+
 function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
   const invalid = (reason) => {
     throw new EventQueryError('INVALID_EVENT_ROW',
@@ -2962,7 +2996,9 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
       { line_number: lineNumber });
   };
   const profileId = prepared.capabilityResult.profile_id;
-  const profile = profileId === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821.id
+  const profile = profileId === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821.id
+    ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821
+    : profileId === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821.id
     ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821
     : profileId === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821.id
       ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821
@@ -3010,7 +3046,8 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
         || nestedU32 !== decodeCastSpellAnsNestedU32FromRaw821(rawU32)) {
       invalid('raw nested u32 and decoded value differ from the pinned 821 transform');
     }
-    if (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821) {
+    if ([CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821,
+      CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821].includes(profile)) {
       const rawAt4c = row.raw_u32_0x4c_hex;
       const valueAt4c = row.opaque_u32_0x4c;
       if (typeof rawAt4c !== 'string' || !/^[0-9a-f]{8}$/.test(rawAt4c)
@@ -3019,11 +3056,24 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
           || valueAt4c !== decodeCastSpellAnsNestedU32At4cFromRaw821(rawAt4c)) {
         invalid('raw +0x4c u32 and decoded value differ from the pinned 821 transform');
       }
-      return { bits: value, u32: nestedU32, u32At4c: valueAt4c };
+      if (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821) {
+        const rawAtA0 = row.raw_f32_0xa0_bytes_hex;
+        const valueAtA0 = row.opaque_f32_0xa0;
+        if (typeof rawAtA0 !== 'string' || !/^[0-9a-f]{8}$/.test(rawAtA0)
+            || !Number.isFinite(valueAtA0)
+            || valueAtA0 !== decodeCastSpellAnsNestedF32AtA0FromRaw821(
+              rawAtA0)) {
+          invalid('raw +0xa0 f32 and decoded value differ from the pinned 821 transform');
+        }
+        return { bits: value, u32: nestedU32, u32At4c: valueAt4c,
+          f32AtA0: valueAtA0 };
+      }
+      return { bits: value, u32: nestedU32, u32At4c: valueAt4c,
+        f32AtA0: null };
     }
-    return { bits: value, u32: nestedU32, u32At4c: null };
+    return { bits: value, u32: nestedU32, u32At4c: null, f32AtA0: null };
   }
-  return { bits: value, u32: null, u32At4c: null };
+  return { bits: value, u32: null, u32At4c: null, f32AtA0: null };
 }
 
 function prepareSetSpellLevelCallbackFields(prepared) {
@@ -7674,6 +7724,7 @@ function validateFilters(options) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, castNestedU32 = null, castNestedU32At4c = null,
+    castNestedF32AtA0 = null,
     spellTimerReceiverSlot = null,
     spellLevelReceiverIndex = null, spellLevelClampedScalar = null,
     damageCallbackF32Available = false,
@@ -7743,6 +7794,10 @@ function validateFilters(options) {
       throw new EventQueryError('INVALID_FILTER', `Invalid ${name} query filter.`);
     }
   }
+  if (castNestedF32AtA0 != null && !Number.isFinite(castNestedF32AtA0)) {
+    throw new EventQueryError('INVALID_FILTER',
+      'CastSpellAns nested +0xa0 f32 filter must be finite.');
+  }
   if (spellTimerReceiverSlot != null && spellTimerReceiverSlot > 5
       && spellTimerReceiverSlot !== 63) {
     throw new EventQueryError('INVALID_FILTER',
@@ -7766,6 +7821,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, castNestedU32 = null, castNestedU32At4c = null,
+    castNestedF32AtA0 = null,
     spellTimerReceiverSlot = null,
     spellLevelReceiverIndex = null, spellLevelClampedScalar = null,
     damageCallbackF32Available = false,
@@ -7879,6 +7935,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   if (castNestedBits != null) prepareCastSpellAnsNestedBits(prepared);
   if (castNestedU32 != null) prepareCastSpellAnsNestedU32(prepared);
   if (castNestedU32At4c != null) prepareCastSpellAnsNestedU32At4c(prepared);
+  if (castNestedF32AtA0 != null) prepareCastSpellAnsNestedF32AtA0(prepared);
   if (spellTimerReceiverSlot != null) prepareSetSpellTimerReceiverSlot(prepared);
   const spellLevelCallbackRequested = spellLevelReceiverIndex != null
     || spellLevelClampedScalar != null;
@@ -7938,6 +7995,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   let castNestedBitsCheckedCount = 0;
   let castNestedU32CheckedCount = 0;
   let castNestedU32At4cCheckedCount = 0;
+  let castNestedF32AtA0CheckedCount = 0;
   let spellTimerReceiverCheckedCount = 0;
   const spellTimerPacketPositions = new Set();
   let spellLevelCallbackCheckedCount = 0;
@@ -8181,12 +8239,13 @@ async function streamEventQuery(prepared, options, emitLine) {
       const opaqueI32Field = opaqueI32 == null ? null
         : castSpellAnsOpaqueI32(row, lineNumber);
       const nestedFields = castNestedBits == null && castNestedU32 == null
-        && castNestedU32At4c == null ? null
+        && castNestedU32At4c == null && castNestedF32AtA0 == null ? null
         : castSpellAnsNestedBits(row, prepared, lineNumber,
           castNestedBitsPacketPositions);
       if (castNestedBits != null) castNestedBitsCheckedCount += 1;
       if (castNestedU32 != null) castNestedU32CheckedCount += 1;
       if (castNestedU32At4c != null) castNestedU32At4cCheckedCount += 1;
+      if (castNestedF32AtA0 != null) castNestedF32AtA0CheckedCount += 1;
       const timerReceiverSlot = spellTimerReceiverSlot != null
         ? setSpellTimerReceiverSlot(row, prepared, lineNumber,
           spellTimerPacketPositions) : null;
@@ -8287,6 +8346,8 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (castNestedU32 != null && nestedFields.u32 !== castNestedU32)
           || (castNestedU32At4c != null
             && nestedFields.u32At4c !== castNestedU32At4c)
+          || (castNestedF32AtA0 != null
+            && nestedFields.f32AtA0 !== castNestedF32AtA0)
           || (spellTimerReceiverSlot != null
             && timerReceiverSlot !== spellTimerReceiverSlot)
           || (spellLevelReceiverIndex != null
@@ -8668,6 +8729,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       cast_nested_u32_0x4c_checked_count: castNestedU32At4cCheckedCount,
       cast_nested_u32_0x4c_unavailable_count: 0,
     }),
+    ...(castNestedF32AtA0 == null ? {} : {
+      cast_nested_f32_0xa0_checked_count: castNestedF32AtA0CheckedCount,
+      cast_nested_f32_0xa0_unavailable_count: 0,
+    }),
     ...(spellTimerReceiverSlot == null ? {} : {
       spell_timer_receiver_checked_count: spellTimerReceiverCheckedCount,
       spell_timer_receiver_unavailable_count: 0,
@@ -8732,6 +8797,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       ...(castNestedU32 == null ? {} : { cast_nested_u32: castNestedU32 }),
       ...(castNestedU32At4c == null ? {}
         : { cast_nested_u32_0x4c: castNestedU32At4c }),
+      ...(castNestedF32AtA0 == null ? {}
+        : { cast_nested_f32_0xa0: castNestedF32AtA0 }),
       ...(spellTimerReceiverSlot == null ? {}
         : { spell_timer_receiver_slot: spellTimerReceiverSlot }),
       ...(spellLevelReceiverIndex == null ? {}
@@ -8807,6 +8874,8 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   let castNestedU32UnavailableCount = 0;
   let castNestedU32At4cCheckedCount = 0;
   let castNestedU32At4cUnavailableCount = 0;
+  let castNestedF32AtA0CheckedCount = 0;
+  let castNestedF32AtA0UnavailableCount = 0;
   let spellTimerReceiverCheckedCount = 0;
   let spellTimerReceiverUnavailableCount = 0;
   let spellLevelCallbackCheckedCount = 0;
@@ -8854,6 +8923,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
             'OPAQUE_I32_UNAVAILABLE', 'CAST_NESTED_BITS_UNAVAILABLE',
             'CAST_NESTED_U32_UNAVAILABLE',
             'CAST_NESTED_U32_0X4C_UNAVAILABLE',
+            'CAST_NESTED_F32_0XA0_UNAVAILABLE',
             'SPELL_TIMER_RECEIVER_UNAVAILABLE',
             'SPELL_LEVEL_CALLBACK_UNAVAILABLE',
             'CHILD_EVENT_ID_UNAVAILABLE'].includes(error.code)) {
@@ -8870,6 +8940,10 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       if (error.code === 'CAST_NESTED_U32_0X4C_UNAVAILABLE') {
         castNestedU32At4cUnavailableCount +=
           error.details.cast_nested_u32_0x4c_unavailable_count;
+      }
+      if (error.code === 'CAST_NESTED_F32_0XA0_UNAVAILABLE') {
+        castNestedF32AtA0UnavailableCount +=
+          error.details.cast_nested_f32_0xa0_unavailable_count;
       }
       if (error.code === 'SPELL_TIMER_RECEIVER_UNAVAILABLE') {
         spellTimerReceiverUnavailableCount +=
@@ -8892,6 +8966,9 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     }
     if (options.castNestedU32At4c != null) {
       castNestedU32At4cCheckedCount += summary.cast_nested_u32_0x4c_checked_count;
+    }
+    if (options.castNestedF32AtA0 != null) {
+      castNestedF32AtA0CheckedCount += summary.cast_nested_f32_0xa0_checked_count;
     }
     if (options.spellTimerReceiverSlot != null) {
       spellTimerReceiverCheckedCount += summary.spell_timer_receiver_checked_count;
@@ -8950,6 +9027,11 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         cast_nested_u32_0x4c_checked_count:
           summary.cast_nested_u32_0x4c_checked_count,
         cast_nested_u32_0x4c_unavailable_count: 0,
+      }),
+      ...(options.castNestedF32AtA0 == null ? {} : {
+        cast_nested_f32_0xa0_checked_count:
+          summary.cast_nested_f32_0xa0_checked_count,
+        cast_nested_f32_0xa0_unavailable_count: 0,
       }),
       ...(options.spellTimerReceiverSlot == null ? {} : {
         spell_timer_receiver_checked_count:
@@ -9041,6 +9123,14 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       cast_nested_u32_0x4c_unavailable_replay_count:
         replayResults.filter((replay) =>
           replay.code === 'CAST_NESTED_U32_0X4C_UNAVAILABLE').length,
+    }),
+    ...(options.castNestedF32AtA0 == null ? {} : {
+      cast_nested_f32_0xa0_checked_count: castNestedF32AtA0CheckedCount,
+      cast_nested_f32_0xa0_unavailable_count:
+        castNestedF32AtA0UnavailableCount,
+      cast_nested_f32_0xa0_unavailable_replay_count:
+        replayResults.filter((replay) =>
+          replay.code === 'CAST_NESTED_F32_0XA0_UNAVAILABLE').length,
     }),
     ...(options.spellTimerReceiverSlot == null ? {} : {
       spell_timer_receiver_checked_count: spellTimerReceiverCheckedCount,
