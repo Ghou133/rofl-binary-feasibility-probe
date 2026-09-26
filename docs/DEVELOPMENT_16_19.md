@@ -4,7 +4,7 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
-- **UnitApplyDamage anonymous callback u32 at +0x1c (staged V6):** On the
+- **UnitApplyDamage anonymous callback u32 at +0x1c (opt-in V6):** On the
   pinned `16.19.821.7343` mapped image (SHA-256
   `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`),
   the callback reads object `+0x1c` at RVA `0x2ce2f8`, decodes its four
@@ -15,8 +15,8 @@ Current progress (older notes below retain their original research context):
   checks every final four-byte write, callback transform, native raw-reader
   call and exact variable-length raw span. The exact `0xe81ec0` reader
   rederives the value from the protected two- or three-byte raw span;
-  V5 remains the active CLI/API
-  and saved-query profile. Original KR Replays `KR_8392938200` and
+  V5 remains the default CLI/API profile and historical saved-query identity.
+  Original KR Replays `KR_8392938200` and
   `KR_8393872512` yielded 125,182/125,182 fully consumed packets and
   +0x1c full writes. The first had 61,535 constant-zero and 3,289
   raw-reader rows (472 two-byte, 2,817 three-byte spans); the second had
@@ -24,9 +24,14 @@ Current progress (older notes below retain their original research context):
   native raw reader branches in the first Replay; selector 0 wrote zero.
   Selector 6 has a static constant-`0xffffffff` branch in the image but
   occurred in none of the 11 supplied KR Replays and is rejected by V6.
-  V6 is packet-local and is not a selected CLI/API or saved-query capability
-  until the four damage associations and saved V5 validation migrate with
-  explicit historical profile IDs. The u32 has no proven actor, type,
+  V6 is selected through CLI `--damage-packet-v6` or API
+  `damagePacketProfile: 'v6'`. One original Replay produced 64,824 packet
+  candidates and four V4 association candidate counts of 5,254, 6,888,
+  19,142 and 71 through the CLI, with zero framing errors. Saved V6 packet
+  queries validate the anonymous `+0x1c` u32 and its raw provenance;
+  all four saved V4 association queries completed full scans of those
+  original-Replay outputs. Historical V5/V3 identities remain available.
+  The u32 has no proven actor, type,
   amount, source, target, or gameplay-effect meaning.
 - **Objective-steal OnEvent packet markers (isolated development branch):**
   The exact 821 image names `0x040a` child `0x00be`
