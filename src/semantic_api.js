@@ -129,6 +129,8 @@ const { decodeShowHealthBarPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_show_health_bar_packet_candidate');
 const { decodeNotifyContextualSituationPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_notify_contextual_situation_packet_candidate');
+const { decodeItemGroupDataBroadcastPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_item_group_data_broadcast_packet_candidate');
 const { associateUnitApplyDamageRosterKeys821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const { associateUnitApplyDamageLookupRosterKeys821 } =
@@ -2499,6 +2501,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    item_group_data_broadcast_packet: (input, collected) =>
+      decodeItemGroupDataBroadcastPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -2572,6 +2580,7 @@ function decode1619821(replay, profile, options = {}) {
     unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
     show_health_bar_packet: 'show_health_bar_packet_candidates',
     notify_contextual_situation_packet: 'notify_contextual_situation_packet_candidates',
+    item_group_data_broadcast_packet: 'item_group_data_broadcast_packet_candidates',
     unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
     unit_apply_damage_lookup_roster_key_pair:
       'unit_apply_damage_lookup_roster_key_candidates',
@@ -2636,6 +2645,7 @@ function decode1619821(replay, profile, options = {}) {
     'unit_apply_damage_packet',
     'show_health_bar_packet',
     'notify_contextual_situation_packet',
+    'item_group_data_broadcast_packet',
   ]);
   const facePairSelected = capabilities.includes('face_direction_keyframe_roster_pair');
   const damageKeyPairSelected = capabilities.includes('unit_apply_damage_roster_key_pair');
@@ -2763,6 +2773,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'unit_apply_damage_packet'
         || capability === 'show_health_bar_packet'
         || capability === 'notify_contextual_situation_packet'
+        || capability === 'item_group_data_broadcast_packet'
         || capability === 'unit_apply_damage_roster_key_pair'
         || capability === 'unit_apply_damage_lookup_roster_key_pair'
         || capability === 'unit_apply_damage_lookup2c_roster_key_pair'

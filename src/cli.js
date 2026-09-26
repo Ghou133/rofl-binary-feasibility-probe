@@ -193,6 +193,8 @@ circular_movement_restriction_packet emits exact-821 packet-local anonymous fiel
 it does not establish an actor, world position, hero path, or effective restriction.
 notify_contextual_situation_packet emits an exact-821 packet-local UTF-8 string candidate;
 it does not establish an actor, Recall action, or gameplay effect.
+item_group_data_broadcast_packet emits an exact-821 keyframe callback lookup key;
+it does not establish an item, group identity, owner, slot, or inventory state.
 unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
 packet-local selectors or a bounded anonymous float candidate; these do not
@@ -693,6 +695,7 @@ function parseArgs(argv) {
       'npc_buff_replace_packet_candidates',
       'set_spell_timer_from_buff_packet_candidates',
       'set_spell_level_packet_candidates',
+      'item_group_data_broadcast_packet_candidates',
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
       'champion_multiple_kill_event_packet_candidates',
@@ -1148,6 +1151,7 @@ function parseOne1619(replay, options, started) {
       'face_direction_packet',
       'circular_movement_restriction_packet',
       'notify_contextual_situation_packet',
+      'item_group_data_broadcast_packet',
       'unit_apply_damage_packet',
       'show_health_bar_packet',
     ].includes(name)))] : [];
@@ -2433,6 +2437,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'face_direction_packet'
             || capability === 'circular_movement_restriction_packet'
             || capability === 'notify_contextual_situation_packet'
+            || capability === 'item_group_data_broadcast_packet'
             || capability === 'unit_apply_damage_packet'
             || capability === 'show_health_bar_packet'
             || capability === 'unit_apply_damage_roster_key_pair'
@@ -2925,6 +2930,11 @@ function capabilityQuery(replay, options = {}) {
           'packet-local UTF-8 contextual situation string and raw packet provenance; no actor, Recall action, or gameplay-effect inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'item_group_data_broadcast_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full packet consumption',
+          'packet-local callback lookup key; live receiver lookup, group identity and inventory effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'face_direction_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and bounded 0x038e packet shape validation',
           'packet-local unit-vector and optional scalar candidates with raw provenance; no actor, world position, path or direction effect');
@@ -3162,6 +3172,8 @@ function capabilityQuery(replay, options = {}) {
               'circular_movement_restriction_packet_candidates',
             notify_contextual_situation_packet:
               'notify_contextual_situation_packet_candidates',
+            item_group_data_broadcast_packet:
+              'item_group_data_broadcast_packet_candidates',
             unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
             show_health_bar_packet: 'show_health_bar_packet_candidates',
             unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',

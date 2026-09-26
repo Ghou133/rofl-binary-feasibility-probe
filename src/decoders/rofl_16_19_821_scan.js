@@ -53,6 +53,7 @@ const CAPABILITIES = new Set([
   'unit_apply_damage_packet',
   'show_health_bar_packet',
   'notify_contextual_situation_packet',
+  'item_group_data_broadcast_packet',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
 const RESPAWN_ROUTES = new Set([0x0048, 0x018d]);
@@ -92,6 +93,7 @@ const MAX_CIRCULAR_MOVEMENT_RESTRICTION_PACKET_ROWS = 12_000;
 const MAX_UNIT_APPLY_DAMAGE_PACKET_ROWS = 100_000;
 const MAX_SHOW_HEALTH_BAR_PACKET_ROWS = 100_000;
 const MAX_NOTIFY_CONTEXTUAL_SITUATION_PACKET_ROWS = 8_000;
+const MAX_ITEM_GROUP_DATA_BROADCAST_PACKET_ROWS = 150_000;
 const SCAN_SOURCE = new WeakMap();
 
 function copyRow(block, chunk) {
@@ -169,6 +171,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
     unit_apply_damage_packet: [],
     show_health_bar_packet: [],
     notify_contextual_situation_packet: [],
+    item_group_data_broadcast_packet: [],
     hero_deaths_snapshot: heroStatsRows,
     hero_champion_kills_snapshot: heroStatsRows,
     hero_assists_snapshot: heroStatsRows,
@@ -259,6 +262,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let unitApplyDamagePacketCount = 0;
   let showHealthBarPacketCount = 0;
   let notifyContextualSituationPacketCount = 0;
+  let itemGroupDataBroadcastPacketCount = 0;
   let finished = false;
   // Capability selection is fixed for this walk. Cache the packet-route
   // decisions instead of probing the Set for every framed block.
@@ -303,6 +307,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsUnitApplyDamage = selected.has('unit_apply_damage_packet');
   const selectsShowHealthBar = selected.has('show_health_bar_packet');
   const selectsNotifyContextualSituation = selected.has('notify_contextual_situation_packet');
+  const selectsItemGroupDataBroadcast = selected.has('item_group_data_broadcast_packet');
   const selectsHeroLevelState = selected.has('hero_level_state');
   return Object.freeze({
     observe(block, chunk) {
@@ -579,6 +584,13 @@ function create821ScanCollector(replay, selectedCapabilities) {
           rows.notify_contextual_situation_packet.push(copyRow(block, chunk));
         }
       }
+      if (selectsItemGroupDataBroadcast && block.packet_id === 0x013f) {
+        itemGroupDataBroadcastPacketCount += 1;
+        if (rows.item_group_data_broadcast_packet.length
+            < MAX_ITEM_GROUP_DATA_BROADCAST_PACKET_ROWS) {
+          rows.item_group_data_broadcast_packet.push(copyRow(block, chunk));
+        }
+      }
       if (selectsHeroStats && (chunk.stream_tag === 2 || chunk.stream_tag === 3)
           && block.packet_id === 0x0089) {
         heroStatsRows.push(copyRow(block, chunk));
@@ -639,6 +651,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         unitApplyDamagePacketCount,
         showHealthBarPacketCount,
         notifyContextualSituationPacketCount,
+        itemGroupDataBroadcastPacketCount,
         error: token.error,
       });
       return token;
@@ -941,6 +954,14 @@ function rowsFor821Capability(replay, token, capability) {
         > MAX_NOTIFY_CONTEXTUAL_SITUATION_PACKET_ROWS) {
     return {
       observed_packet_count_minimum: bound.notifyContextualSituationPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'item_group_data_broadcast_packet'
+      && bound.itemGroupDataBroadcastPacketCount
+        > MAX_ITEM_GROUP_DATA_BROADCAST_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.itemGroupDataBroadcastPacketCount,
       scanned_block_count: bound.blockCount,
     };
   }
