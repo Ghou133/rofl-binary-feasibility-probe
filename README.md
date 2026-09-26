@@ -77,6 +77,7 @@
 | `16.19.821.7343 --events hq_kill_event_packet --runtime-image PATH` | 精确 821 镜像按 SHA-256 校验并完整反序列化 KR `0x040a` 的 `0x0046` 子包，保留 OnHQKill 镜像名表标签、匿名 108 字节原生子包内容及 SHA-256、原始包来源 | 仅写入 `hq_kill_event_packet_candidates`，状态为 `CANDIDATE`；同长度异类子事件作为排除证据，不推断实际主基地毁坏、胜者、行动者或状态变化 |
 | `16.19.821.7343 --events turret_die_event_packet,turret_first_blood_event_packet --runtime-image PATH` | 两类子包分别通过精确镜像校验后，检查 `0x003d` 是否在同一 chunk、同一毫秒中位于唯一较早的 `0x003b` 之后，中间没有其他 `0x040a` OnEvent 包；重新核对回放原始包来源 | 成功时另写入 `turret_first_blood_die_pair_candidates` 和 `candidate_associations.turret_first_blood_die_pair`，均为包级 `CANDIDATE`；不推断实际首座防御塔死亡、建筑或参与者身份 |
 | `16.19.821.7343 --events cast_spell_ans_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x01da` CastSpellAns 包，输出原始包来源、两个回调变换后的不透明字段，以及嵌套对象 `+0xe0` 的受保护浮点与 `+0x24/+0x140` 的受保护字节候选值和原始字节；11 份回放共 63,496 包 | 仅写入 `cast_spell_ans_packet_candidates`；不声称一次成功施法，也不推断技能、槽位、施法者、目标或这些字段的游戏含义；镜像按完整 SHA-256 校验 |
+| `16.19.821.7343 --events cast_spell_ans_packet --cast-packet-v5 --runtime-image PATH` | 显式选择 CastSpellAns V5，在原有候选字段外保留嵌套对象的受保护原始四字节 `raw_u32_0x1c_hex` 和回调变换后的匿名 `opaque_u32_0x1c`；两份原始 KR 回放分别有 5,980/5,980、5,713/5,713 个包通过原生完整消费 | V4 仍是默认 profile；V5 只写入 `cast_spell_ans_packet_candidates` 的 `CANDIDATE` 行，不确认施法者、技能、目标、施法成功或游戏效果；API 用 `castPacketProfile: 'v5'` 显式选择 |
 | `16.19.821.7343 --events direct_input_movement_turn_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x00ba` DirectInputMovementDriverServerTurnData 包，输出三个回调变换后的匿名 f32 字段与原始包来源 | 仅写入 `direct_input_movement_turn_packet_candidates`，状态为 `CANDIDATE`；不将字段标为世界坐标、英雄路径或参与者位置；仅接受已观察到的 13 字节 `0x85` 形状 |
 | `16.19.821.7343 --events set_movement_driver_packet --runtime-image PATH` | 精确 821 镜像原生完整消费 KR `0x0335` SetMovementDriver 包，输出回调变换后的匿名分发字节和原始包来源 | 仅写入 `set_movement_driver_packet_candidates`，状态为 `CANDIDATE`；不声称驱动状态已改变，也不推断位置、路径或参与者；仅接受两种已观察到的包形状 |
 | `16.19.821.7343 --events face_direction_packet --runtime-image PATH` | 对 KR `0x038e` 已观察到的 13/17 字节包形状使用精确 821 镜像，输出包内向量、可选标量候选值和原始包来源 | 仅写入 `face_direction_packet_candidates`，状态为 `CANDIDATE`；不据原始参数认定行动者，不推断世界位置、路径或方向效果；其他 build 与未观察到的形状明确拒绝 |
@@ -385,6 +386,9 @@ node src/cli.js query-events "work\16-19-821-first-blood-assist" `
 `0x00be` 是 OnKillDragonSteal 镜像标签，`0x00d6` 是 OnKillWormSteal。
 查询校验精确 build、镜像来源、两个子包计数、匿名 124 字节 blob 哈希和
 原始包引用；不重新运行原生解码，也不解释游戏效果。
+精确镜像中两种子事件的共同回调 RVA `0x2ce720` 接收的类型化对象尚无法与
+这 124 字节 blob 对齐；两份原始包的原生测试 3/3 通过，但没有据此提升任何
+子对象字段，blob 内偏移仍保持匿名。
 
 ```powershell
 node src/cli.js query-events "work\16-19-821-objective-steal" `
@@ -828,6 +832,21 @@ node src/cli.js query-events "work\16-19-821-cast\replays\KR_example" `
 `--opaque-i32` 只接受十进制有符号 int32（含 `0` 和负数），只匹配当包的 `opaque_i32_0x14c`，不赋予技能、槽位或施法者含义。JSONL 行原样输出；汇总中的 `opaque_i32_unavailable_count` 区分字段缺失与已检查后的零命中，已出现但无效的字段会使查询失败。
 
 嵌套对象 `+0x24` 的不透明回调字节可以用 `--cast-nested-bits 8` 或 `--cast-nested-bits 0x8` 精确筛选（范围 0..255）。保存结果查询会先核对精确 821 profile、镜像及回调摘要、原始包引用与字节变换；旧版 v3 CastSpellAns 产物报告该字段不可用，已检查但未匹配则返回零命中。字段数值不指代技能、槽位、角色或施法结果。
+
+显式使用 `--cast-packet-v5` 生成的保存结果可按匿名 `opaque_u32_0x1c` 查询；
+`--cast-nested-u32` 接受十进制或 `0x` 十六进制 uint32，按完整精确 build、
+V5 profile、镜像与变换摘要、原始包引用及受保护原始四字节校验全部行，
+然后原样输出匹配的 JSONL 行。V3/V4 产物会明确报告该字段不可用，
+已检查但未匹配则是零命中，数值不指代施法者、技能、目标或效果。
+
+```powershell
+node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
+  --events cast_spell_ans_packet --cast-packet-v5 `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-cast-v5"
+node src/cli.js query-events "work\16-19-821-cast-v5\replays\KR_example" `
+  --event cast_spell_ans_packet_candidates --cast-nested-u32 0 --limit 20
+```
 
 对 821 移动限制包的保存结果，可用 `--packet-record-count 1` 找出单记录包，或用 `0` 查看空记录包：
 

@@ -10,17 +10,22 @@ Current progress (older notes below retain their original research context):
   the exact table at RVA `0x1b41db0`, and writes the word to temporary
   `+0xa8`. The derived 256-byte transform SHA-256 is
   `5b858c9ef8d1393d05d867112316c3344ff777044719d839ad8cd64867d7f537`.
-  V5 adds `raw_u32_0x1c_hex` and `opaque_u32_0x1c` behind direct decoder
-  option `castPacketProfile: 'v5'`; V4 remains the direct decoder default.
+  V5 adds `raw_u32_0x1c_hex` and `opaque_u32_0x1c` behind CLI
+  `--cast-packet-v5` or API `castPacketProfile: 'v5'`; V4 remains the
+  default and saved V4 output retains its historical profile identity.
   Original KR Replays `KR_8392938200` and `KR_8393456728` produced
-  11,693/11,693 V5 packet candidates with exact image `MATCHED_USED`, full
-  native payload consumption and zero decode errors. Three fixed original
+  5,980/5,980 and 5,713/5,713 V5 packet candidates respectively,
+  11,693/11,693 combined, with exact image `MATCHED_USED`, full native
+  payload consumption and zero decode errors. Three fixed original
   packet anchors cross-check game/keyframe protected bytes and converted
   values; one-byte truncate and append controls both fail full consumption.
-  Focused tests with local inputs: 14 passed, 0 failed, 0 skipped. The
-  callback's temporary transfer does not prove caster, spell, target, cast
-  success or gameplay effect. CLI/API selection and saved V5 query are the
-  next integration step.
+  Focused tests with local inputs: 14 passed, 0 failed, 0 skipped. Saved
+  V5 `cast_spell_ans_packet_candidates` rows can be filtered with
+  `query-events --cast-nested-u32` (decimal or hexadecimal uint32); the
+  query validates the full exact-build metadata, raw packet reference,
+  protected four bytes and transform before filtering. V3/V4 artifacts
+  report this field unavailable. The callback's temporary transfer does
+  not prove caster, spell, target, cast success or gameplay effect.
 - **UnitApplyDamage anonymous callback u32 at +0x1c (opt-in V6):** On the
   pinned `16.19.821.7343` mapped image (SHA-256
   `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`),
@@ -72,6 +77,14 @@ Current progress (older notes below retain their original research context):
   The image labels and packet presence do not prove an actual steal,
   objective state change, actor, target, or gameplay effect. Local outputs
   remain ignored under `artifacts/16_19_development/objective_steal_real_821/`.
+  A bounded child-field check found that both IDs register the same callback
+  RVA `0x2ce720`, but its typed argument cannot be equated with the native
+  124-byte child buffer: treating that buffer as the argument would make its
+  `+0x08` word a noncanonical pointer on both original packets. The two
+  positive parents still fully consume 133 bytes, and the exact-image native
+  tests pass 3/3 (0 skipped), including foreign-child, truncation and wrong
+  image controls. No additional child field was promoted; the blob remains
+  opaque pending an exact-build child conversion or callback-argument trace.
 - **UnitApplyDamage anonymous callback f32 v5:** The pinned 821 native
   deserializer writes callback object `+0x18` from a protected raw f32 reader
   for header selector 0/2/3/6, or constant zero for selector 5. The output
