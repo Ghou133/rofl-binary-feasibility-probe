@@ -158,8 +158,10 @@ const { NOTIFY_CONTEXTUAL_SITUATION_PACKET_CANDIDATE_PROFILE_821,
   NOTIFY_CONTEXTUAL_SITUATION_OBSERVED_LENGTHS_821 } =
   require('./decoders/rofl_16_19_821_notify_contextual_situation_packet_candidate');
 const { ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
+  ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821,
   ITEM_GROUP_DATA_BROADCAST_OBSERVED_SHAPES_821,
-  decodeProtectedLookupU32 } =
+  ITEM_GROUP_DATA_BROADCAST_OBSERVED_CALLBACK_U8_VALUES_821,
+  decodeProtectedLookupU32, decodeProtectedCallbackU8 } =
   require('./decoders/rofl_16_19_821_item_group_data_broadcast_packet_candidate');
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
@@ -225,6 +227,12 @@ const ITEM_GROUP_DATA_BROADCAST_ROW_FIELDS_821 = new Set([
   'item_identity_status', 'owner_status', 'participant_status',
   'inventory_state_change_status', 'semantic_effect_status', 'confidence',
   'semantic_status', 'raw_packet_ref',
+]);
+const ITEM_GROUP_DATA_BROADCAST_V2_ROW_FIELDS_821 = new Set([
+  ...ITEM_GROUP_DATA_BROADCAST_ROW_FIELDS_821,
+  'native_protected_callback_u8_hex',
+  'native_callback_u8_if_lookup_hit_candidate',
+  'native_conditional_callback_witness',
 ]);
 const ITEM_GROUP_DATA_BROADCAST_REF_FIELDS_821 =
   NOTIFY_CONTEXTUAL_SITUATION_REF_FIELDS_821;
@@ -1345,7 +1353,10 @@ function notifyContextualSituationPacketRow(row, prepared, lineNumber, state) {
 }
 
 function prepareItemGroupDataBroadcastPacketEvent(semantic, analysis, eventKey, result) {
-  const profile = ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821;
+  const v2 = result?.profile_id
+    === ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id;
+  const profile = v2 ? ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821
+    : ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821;
   if (semantic.replay_version !== profile.replay_version) {
     throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
       `${eventKey} requires exact build ${profile.replay_version}.`);
@@ -1372,7 +1383,15 @@ function prepareItemGroupDataBroadcastPacketEvent(semantic, analysis, eventKey, 
       || !isDeepStrictEqual(result.event_field_confidence, {
         replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
         native_callback_lookup_key_u32: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+        ...(v2 ? {
+          native_protected_callback_u8_hex: 'CANDIDATE_EXACT_RUNTIME_FIELD',
+          native_callback_u8_if_lookup_hit_candidate:
+            'CANDIDATE_EXACT_RUNTIME_SYNTHETIC_LOOKUP_HIT',
+        } : {}),
       })
+      || (v2 && result.native_conditional_callback_witness
+        !== 'SYNTHETIC_LOOKUP_HIT')
+      || (!v2 && Object.hasOwn(result, 'native_conditional_callback_witness'))
       || result.native_witness_status !== 'FULLY_CONSUMED_ALL'
       || result.native_full_success_count !== result.event_count
       || result.native_batch_count !== Math.ceil(result.event_count / 10_000)
@@ -1391,15 +1410,19 @@ function itemGroupDataBroadcastPacketRow(row, prepared, lineNumber, state) {
     throw new EventQueryError('INVALID_EVENT_ROW',
       `Invalid item-group packet row at JSONL line ${lineNumber}: ${reason}.`);
   };
-  const profile = ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821;
+  const v2 = state.v2;
+  const profile = v2 ? ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821
+    : ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821;
+  const expectedFields = v2 ? ITEM_GROUP_DATA_BROADCAST_V2_ROW_FIELDS_821
+    : ITEM_GROUP_DATA_BROADCAST_ROW_FIELDS_821;
   const ref = row.raw_packet_ref;
   const rowFields = Object.keys(row);
   const refFields = ref && typeof ref === 'object' && !Array.isArray(ref)
     ? Object.keys(ref) : [];
   const payloadHex = ref?.raw_payload_hex;
   const protectedHex = row.native_protected_lookup_bytes_hex;
-  if (rowFields.length !== ITEM_GROUP_DATA_BROADCAST_ROW_FIELDS_821.size
-      || rowFields.some((field) => !ITEM_GROUP_DATA_BROADCAST_ROW_FIELDS_821.has(field))
+  if (rowFields.length !== expectedFields.size
+      || rowFields.some((field) => !expectedFields.has(field))
       || refFields.length !== ITEM_GROUP_DATA_BROADCAST_REF_FIELDS_821.size
       || refFields.some((field) => !ITEM_GROUP_DATA_BROADCAST_REF_FIELDS_821.has(field))
       || row.event_type !== 'ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE'
@@ -1421,6 +1444,12 @@ function itemGroupDataBroadcastPacketRow(row, prepared, lineNumber, state) {
       || row.raw_param > 0x400000b7
       || !/^[0-9a-f]{8}$/.test(protectedHex ?? '')
       || row.native_callback_lookup_key_u32 !== decodeProtectedLookupU32(protectedHex)
+      || (v2 && (row.native_conditional_callback_witness
+        !== 'SYNTHETIC_LOOKUP_HIT'
+        || !ITEM_GROUP_DATA_BROADCAST_OBSERVED_CALLBACK_U8_VALUES_821
+          .has(row.native_callback_u8_if_lookup_hit_candidate)
+        || row.native_callback_u8_if_lookup_hit_candidate
+          !== decodeProtectedCallbackU8(row.native_protected_callback_u8_hex)))
       || ref?.source_path !== prepared.sourcePath
       || ref.replay_sha256 !== prepared.replaySha
       || ref.chunk_stream !== 'keyframe'
@@ -1457,6 +1486,10 @@ function itemGroupDataBroadcastPacketRow(row, prepared, lineNumber, state) {
   const key = Buffer.alloc(4);
   key.writeUInt32LE(row.native_callback_lookup_key_u32);
   state.nativeOutputHash.update(Buffer.from(protectedHex, 'hex')).update(key);
+  if (v2) {
+    state.nativeOutputHash.update(Buffer.from(row.native_protected_callback_u8_hex,
+      'hex')).update(Buffer.from([row.native_callback_u8_if_lookup_hit_candidate]));
+  }
 }
 
 function prepareFaceDirectionRosterPairEvent(semantic, analysis, eventKey, result) {
@@ -8094,7 +8127,8 @@ function validateFilters(options) {
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     contextualSituation = null,
     itemId = null, previousItemId = null, slot = null,
-    opaqueU32 = null, opaquePair = null, opaqueI32 = null,
+    opaqueU32 = null, itemGroupCallbackU8 = null,
+    opaquePair = null, opaqueI32 = null,
     castNestedBits = null, castNestedU32 = null, castNestedU32At4c = null,
     castNestedF32AtA0 = null,
     spellTimerReceiverSlot = null,
@@ -8153,6 +8187,7 @@ function validateFilters(options) {
     ['previousItemId', previousItemId, 0, 0xffffffff],
     ['slot', slot, 0, 9],
     ['opaqueU32', opaqueU32, 0, 0xffffffff],
+    ['itemGroupCallbackU8', itemGroupCallbackU8, 0, 0xff],
     ['opaqueI32', opaqueI32, -0x80000000, 0x7fffffff],
     ['castNestedBits', castNestedBits, 0, 0xff],
     ['castNestedU32', castNestedU32, 0, 0xffffffff],
@@ -8196,7 +8231,8 @@ async function streamEventQuery(prepared, options, emitLine) {
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     contextualSituation = null,
     itemId = null, previousItemId = null, slot = null,
-    opaqueU32 = null, opaquePair = null, opaqueI32 = null,
+    opaqueU32 = null, itemGroupCallbackU8 = null,
+    opaquePair = null, opaqueI32 = null,
     castNestedBits = null, castNestedU32 = null, castNestedU32At4c = null,
     castNestedF32AtA0 = null,
     spellTimerReceiverSlot = null,
@@ -8300,6 +8336,15 @@ async function streamEventQuery(prepared, options, emitLine) {
       '--previous-item-id requires exact 16.19.821.7343 inventory keyframe interval difference candidates.');
   }
   const opaqueU32Fields = OPAQUE_U32_FIELDS_821[prepared.eventKey] ?? null;
+  if (itemGroupCallbackU8 != null
+      && (prepared.eventKey !== 'item_group_data_broadcast_packet_candidates'
+        || prepared.replayVersion !== '16.19.821.7343'
+        || prepared.capabilityStatus !== 'CANDIDATE'
+        || prepared.capabilityResult.profile_id
+          !== ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id)) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--item-group-callback-u8 requires exact-821 item-group V2 candidates.');
+  }
   if (opaqueU32 != null && (!opaqueU32Fields
       || prepared.replayVersion !== '16.19.821.7343')) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
@@ -8423,7 +8468,9 @@ async function streamEventQuery(prepared, options, emitLine) {
   const itemGroupDataBroadcastState = prepared.eventKey
     === 'item_group_data_broadcast_packet_candidates'
     ? { positions: new Set(), nativeInputHash: crypto.createHash('sha256'),
-      nativeOutputHash: crypto.createHash('sha256') } : null;
+      nativeOutputHash: crypto.createHash('sha256'),
+      v2: prepared.capabilityResult.profile_id
+        === ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id } : null;
   const firstBloodAssistPacketPositions = prepared.eventKey
     === 'first_blood_assist_event_packet_candidates'
     ? new Set(prepared.capabilityResult.excluded_same_length_foreign_packet_refs
@@ -8741,6 +8788,9 @@ async function streamEventQuery(prepared, options, emitLine) {
               : !inventoryRecordRow.records_candidate.some((record) =>
                 record.item_id_candidate === itemId && record.slot_candidate === slot)))
           || (opaqueU32 != null && !opaqueValues.values.includes(opaqueU32))
+          || (itemGroupCallbackU8 != null
+            && row.native_callback_u8_if_lookup_hit_candidate
+              !== itemGroupCallbackU8)
           || (opaquePair != null && (!pairValue.available
             || pairValue.u32 !== opaquePair.u32 || pairValue.u8 !== opaquePair.u8))
           || (opaqueI32 != null && opaqueI32Field.value !== opaqueI32)
@@ -9213,6 +9263,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       ...(previousItemId == null ? {} : { previous_item_id: previousItemId }),
       ...(slot == null ? {} : { slot }),
       ...(opaqueU32 == null ? {} : { opaque_u32: opaqueU32 }),
+      ...(itemGroupCallbackU8 == null ? {}
+        : { item_group_callback_u8: itemGroupCallbackU8 }),
       ...(opaquePair == null ? {} : { opaque_pair: opaquePair }),
       ...(opaqueI32 == null ? {} : { opaque_i32: opaqueI32 }),
       ...(castNestedBits == null ? {} : { cast_nested_bits: castNestedBits }),

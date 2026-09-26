@@ -8,15 +8,20 @@ const test = require('node:test');
 
 const { replayFromChunks } = require('./helpers/synthetic_replay');
 const { decodeSemanticReplay } = require('../src/semantic_api');
+const { parseArgs } = require('../src/cli');
 const {
   ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821: profile,
+  ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821: profileV2,
   decodeItemGroupDataBroadcastPacketCandidates821: decode,
   decodeProtectedLookupU32,
+  decodeProtectedCallbackU8,
 } = require('../src/decoders/rofl_16_19_821_item_group_data_broadcast_packet_candidate');
 
 const IMAGE = process.env.ROFL_821_RUNTIME_IMAGE;
 const FIRST = '1e567825e7f836';
 const SECOND = '1e5670099d3d48';
+const PAIR_ONE = '1e5672c257c166';
+const PAIR_ZERO = '1e5076c257c166';
 
 function packet(hex, timeMs = 1000, id = 0x013f, param = 0x400000ae) {
   const payload = Buffer.from(hex, 'hex');
@@ -33,12 +38,14 @@ function fixture({ version = profile.replay_version, stream = 2,
   return replayFromChunks([{ stream, body: Buffer.concat(packets) }], version);
 }
 
-function outputHash(rows) {
+function outputHash(rows, v2 = false) {
   const hash = crypto.createHash('sha256');
   for (const row of rows) {
     const key = Buffer.alloc(4);
     key.writeUInt32LE(row.native_callback_lookup_key_u32);
     hash.update(Buffer.from(row.native_protected_lookup_bytes_hex, 'hex')).update(key);
+    if (v2) hash.update(Buffer.from(row.native_protected_callback_u8_hex, 'hex'))
+      .update(Buffer.from([row.native_callback_u8_if_lookup_hit_candidate]));
   }
   return hash.digest('hex');
 }
@@ -102,3 +109,43 @@ test('wrong image never emits candidate rows', () => {
   assert.equal(result.status, 'MISSING_INPUT');
   assert.equal(result.events, null);
 });
+
+test('V2 requires explicit CLI and API selection while V1 row shape stays unchanged',
+  { skip: !IMAGE || !fs.existsSync(IMAGE) ? 'exact 821 image unavailable' : false }, () => {
+    const replay = fixture({ packets: [packet(PAIR_ONE), packet(PAIR_ZERO, 1100)] });
+    const v1 = decode(replay, { runtimeImagePath: IMAGE });
+    assert.equal(v1.profile_id, profile.id);
+    assert.equal('native_protected_callback_u8_hex' in v1.events[0], false);
+    const v2 = decode(replay, { runtimeImagePath: IMAGE,
+      itemGroupPacketProfile: 'v2' });
+    assert.equal(v2.status, 'CANDIDATE', v2.error);
+    assert.equal(v2.profile_id, profileV2.id);
+    assert.equal(v2.native_conditional_callback_witness, 'SYNTHETIC_LOOKUP_HIT');
+    assert.equal(v2.native_output_sha256, outputHash(v2.events, true));
+    assert.deepEqual(v2.events.map((row) => row.native_callback_lookup_key_u32),
+      [90922051, 90922051]);
+    assert.deepEqual(v2.events.map((row) => row.native_protected_callback_u8_hex),
+      ['44', 'c4']);
+    assert.deepEqual(v2.events.map((row) =>
+      row.native_callback_u8_if_lookup_hit_candidate), [1, 0]);
+    assert.equal(decodeProtectedCallbackU8('44'), 1);
+    assert.equal(decodeProtectedCallbackU8('c4'), 0);
+    for (const row of v2.events) {
+      assert.equal(row.native_conditional_callback_witness, 'SYNTHETIC_LOOKUP_HIT');
+      assert.equal(row.native_receiver_lookup_status, 'NOT_OBSERVED');
+      for (const field of ['group_identity_status', 'item_identity_status',
+        'owner_status', 'participant_status', 'inventory_state_change_status',
+        'semantic_effect_status']) assert.equal(row[field], 'UNKNOWN');
+    }
+    const api = decodeSemanticReplay(replay, { capabilities: [profile.capability],
+      runtimeImagePath: IMAGE, itemGroupPacketProfile: 'v2' });
+    assert.equal(api.capability_results[profile.capability].profile_id, profileV2.id);
+    assert.throws(() => decodeSemanticReplay(replay, {
+      capabilities: [profile.capability], itemGroupPacketProfile: 'v3',
+    }), /must be v1 or v2/);
+    const parsed = parseArgs(['decode', 'sample.rofl', '--events', profile.capability,
+      '--item-group-packet-v2']);
+    assert.equal(parsed.options.itemGroupPacketV2, true);
+    assert.throws(() => parseArgs(['decode', 'sample.rofl', '--item-group-packet-v2']),
+      /requires decode or batch/);
+  });

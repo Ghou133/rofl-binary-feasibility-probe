@@ -196,6 +196,8 @@ notify_contextual_situation_packet emits an exact-821 packet-local UTF-8 string 
 it does not establish an actor, Recall action, or gameplay effect.
 item_group_data_broadcast_packet emits an exact-821 keyframe callback lookup key;
 it does not establish an item, group identity, owner, slot, or inventory state.
+--item-group-packet-v2 adds the protected +0x1c byte and a conditional native
+callback byte witnessed with a synthetic lookup hit; actual receiver state is unknown.
 unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
 packet-local selectors or a bounded anonymous float candidate; these do not
@@ -238,6 +240,7 @@ Options:
   --cast-packet-v7              Opt into exact 821 CastSpellAns nested anonymous f32 candidate (decode/batch)
   --spell-timer-packet-v2       Opt into exact 821 SetSpellTimerFromBuff native receiver callback candidates (decode/batch)
   --spell-level-packet-v2       Opt into exact 821 SetSpellLevel callback receiver/scalar candidates (decode/batch)
+  --item-group-packet-v2        Opt into exact 821 item-group conditional callback byte candidate (decode/batch)
   --damage-packet-v6            Opt into exact 821 UnitApplyDamage +0x1c u32 packet/association candidates (decode/batch)
   --event-jsonl-only            Store 16.19 event rows only in JSONL (decode/batch with --events)
   --event <key>                 Exact 16.19 candidate JSONL key (query-events)
@@ -261,6 +264,7 @@ Options:
   Interval differences: --item-id is the CURRENT item ID on a changed slot (zero valid).
                         Previous/current item IDs and --slot must match the SAME changed slot.
   --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
+  --item-group-callback-u8 <0..255|0xhex>  Exact 821 item-group V2 conditional callback byte candidate
   --opaque-pair <u32:u8>      Exact anonymous 821 Buff Add/Remove/Update pair
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
   --cast-nested-bits <0..255|0xhex>  Exact decoded 821 CastSpellAns nested callback bits
@@ -341,6 +345,7 @@ function parseArgs(argv) {
     previousItemId: null,
     slot: null,
     opaqueU32: null,
+    itemGroupCallbackU8: null,
     opaquePair: null,
     opaqueI32: null,
     castNestedBits: null,
@@ -359,6 +364,7 @@ function parseArgs(argv) {
     castPacketV7: false,
     spellTimerPacketV2: false,
     spellLevelPacketV2: false,
+    itemGroupPacketV2: false,
     damagePacketV6: false,
     damageLookupKey24: null,
     damageLookupKey2c: null,
@@ -432,6 +438,10 @@ function parseArgs(argv) {
     }
     if (token === '--spell-level-packet-v2') {
       options.spellLevelPacketV2 = true;
+      continue;
+    }
+    if (token === '--item-group-packet-v2') {
+      options.itemGroupPacketV2 = true;
       continue;
     }
     if (token === '--spell-timer-packet-v2') {
@@ -518,6 +528,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'slot') options.slot = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'comparison-to-endpoints') options.comparisonToEndpoints = value;
       else if (command === 'query-events' && key === 'opaque-u32') options.opaqueU32 = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'item-group-callback-u8') options.itemGroupCallbackU8 = queryByte(value, key);
       else if (command === 'query-events' && key === 'opaque-pair') options.opaquePair = queryOpaquePair(value);
       else if (command === 'query-events' && key === 'opaque-i32') options.opaqueI32 = queryInt32(value, key);
       else if (command === 'query-events' && key === 'cast-nested-bits') options.castNestedBits = queryByte(value, key);
@@ -594,6 +605,10 @@ function parseArgs(argv) {
       || !options.events?.includes('set_spell_level_packet'))) {
     throw new Error('--spell-level-packet-v2 requires decode or batch with exact-821 set_spell_level_packet in --events');
   }
+  if (options.itemGroupPacketV2 && (!['decode', 'batch'].includes(command)
+      || !options.events?.includes('item_group_data_broadcast_packet'))) {
+    throw new Error('--item-group-packet-v2 requires decode or batch with exact-821 item_group_data_broadcast_packet in --events');
+  }
   if (options.spellTimerPacketV2 && (!['decode', 'batch'].includes(command)
       || !options.events?.includes('set_spell_timer_from_buff_packet'))) {
     throw new Error('--spell-timer-packet-v2 requires decode or batch with exact-821 set_spell_timer_from_buff_packet in --events');
@@ -608,7 +623,7 @@ function parseArgs(argv) {
     if (options.listEvents) {
       const filterKeys = ['fromMs', 'toMs', 'participant', 'killerParticipant',
         'assistingParticipant', 'rawParam', 'contextualSituation', 'itemId', 'previousItemId', 'slot',
-        'opaqueU32', 'opaquePair', 'opaqueI32', 'castNestedBits', 'castNestedU32',
+        'opaqueU32', 'itemGroupCallbackU8', 'opaquePair', 'opaqueI32', 'castNestedBits', 'castNestedU32',
         'castNestedU32At4c', 'castNestedF32AtA0', 'spellTimerReceiverSlot',
         'spellLevelReceiverIndex',
         'spellLevelClampedScalar', 'damageCallbackF32Available',
@@ -1260,6 +1275,7 @@ function parseOne1619(replay, options, started) {
               : options.castPacketV5 ? 'v5' : undefined,
           setSpellTimerProfile: options.spellTimerPacketV2 ? 'v2' : undefined,
           setSpellLevelProfile: options.spellLevelPacketV2 ? 'v2' : undefined,
+          itemGroupPacketProfile: options.itemGroupPacketV2 ? 'v2' : undefined,
           damagePacketProfile: options.damagePacketV6 ? 'v6' : undefined,
         });
       } catch (error) {
@@ -3377,6 +3393,7 @@ async function runQueryEventsCommand(parsed) {
       previousItemId: options.previousItemId,
       slot: options.slot,
       opaqueU32: options.opaqueU32,
+      itemGroupCallbackU8: options.itemGroupCallbackU8,
       opaquePair: options.opaquePair,
       opaqueI32: options.opaqueI32,
       castNestedBits: options.castNestedBits,

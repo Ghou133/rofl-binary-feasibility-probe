@@ -15,6 +15,11 @@ const PACKET_ID = 0x013f;
 const IMAGE_SIZE = 48_488_448;
 const IMAGE_SHA256 = '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325';
 const EVIDENCE_STATUS = 'CANDIDATE_EXACT_821_NATIVE_ITEM_GROUP_LOOKUP_KEY';
+const EVIDENCE_STATUS_V2 = 'CANDIDATE_EXACT_821_NATIVE_ITEM_GROUP_CONDITIONAL_CALLBACK_U8';
+const CALLBACK_U8_TRANSFORM_SHA256 = 'e873bba9de4a01e403384753f498087e5fe9f6b287796d11e344338655eed0de';
+const CALLBACK_U8_REGION_SHA256 = '964a7f21b799113b58cc610ac8ab74b525b3563c5d7b6c580553bb154286bbd7';
+const NESTED_U8_REGION_SHA256 = '7772f71ed5f57892d6e5278b490a0143aebad028509d393c096d899a6108ed28';
+const OBSERVED_CALLBACK_U8_VALUES = new Set([0, 1, 2, 3, 99, 255]);
 const MAX_PACKETS = 150_000;
 const MAX_NATIVE_BATCH = 10_000;
 const OBSERVED_SHAPES = new Set([
@@ -55,6 +60,25 @@ function decodeProtectedLookupU32(rawHex) {
   return decoded.readUInt32LE(0);
 }
 
+function ror8(value, count) {
+  return ((value >>> count) | (value << (8 - count))) & 0xff;
+}
+
+function decodeProtectedCallbackU8(rawHex) {
+  if (typeof rawHex !== 'string' || !/^[0-9a-f]{2}$/.test(rawHex)) return null;
+  let value = (parseInt(rawHex, 16) - 0x71) & 0xff;
+  value = ror8(value, 5) ^ 0x6b;
+  value = ror8((value - 0x75) & 0xff, 2);
+  return (value - 0x1f) & 0xff;
+}
+
+const callbackU8Table = Buffer.from(Array.from({ length: 256 }, (_, index) =>
+  decodeProtectedCallbackU8(index.toString(16).padStart(2, '0'))));
+if (sha256(callbackU8Table) !== CALLBACK_U8_TRANSFORM_SHA256
+    || new Set(callbackU8Table).size !== 256) {
+  throw new Error('exact 821 conditional callback u8 transform differs');
+}
+
 const ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
   id: 'rofl-16.19.821.7343-kr-item-group-data-broadcast-packet-candidate-v1',
   replay_version: BUILD,
@@ -77,6 +101,20 @@ const ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
     'The native callback lookup key is packet-local; its lookup is forced to miss because the captured module lacks live receiver state.',
     'The packet name does not identify a group, item, slot, owner, transaction, inventory state, or gameplay effect.',
     'Only exact KR 821 keyframe packets in the 15 observed length/selector shapes and ten raw parameter values are accepted.',
+  ]),
+});
+const ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821 = Object.freeze({
+  ...ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
+  id: 'rofl-16.19.821.7343-kr-item-group-data-broadcast-packet-candidate-v2',
+  evidence_status: EVIDENCE_STATUS_V2,
+  evidence_callback_u8_transform_sha256: CALLBACK_U8_TRANSFORM_SHA256,
+  evidence_callback_u8_region_sha256: CALLBACK_U8_REGION_SHA256,
+  evidence_nested_u8_region_sha256: NESTED_U8_REGION_SHA256,
+  evidence_scope: 'Exact 821 native reader and conditional callback witness on 1604 distinct payloads from 11 KR Replays; synthetic lookup hit only; six observed callback byte values',
+  known_limits: Object.freeze([
+    ...ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821.known_limits,
+    'The +0x1c protected byte and conditional callback value were witnessed with synthetic lookup hits; real lookup success and receiver state are unknown.',
+    'The conditional callback byte remains anonymous and is limited to the six observed KR values 0, 1, 2, 3, 99, and 255.',
   ]),
 });
 
@@ -136,29 +174,39 @@ function hashInput(rows) {
   return hash.digest('hex');
 }
 
-function updateOutputHash(hash, nativeRow) {
+function updateOutputHash(hash, nativeRow, v2 = false) {
   const key = Buffer.alloc(4);
   key.writeUInt32LE(nativeRow.native_callback_lookup_key_u32);
   hash.update(Buffer.from(nativeRow.native_protected_lookup_bytes_hex, 'hex')).update(key);
+  if (v2) {
+    hash.update(Buffer.from(nativeRow.native_protected_callback_u8_hex, 'hex'));
+    hash.update(Buffer.from([nativeRow.native_callback_u8_if_lookup_hit_candidate]));
+  }
 }
 
-function validRow(nativeRow, block) {
+function validRow(nativeRow, block, v2 = false) {
   return nativeRow && /^[0-9a-f]{8}$/.test(nativeRow.native_protected_lookup_bytes_hex)
     && Number.isInteger(nativeRow.native_callback_lookup_key_u32)
     && nativeRow.native_callback_lookup_key_u32 >= 0
     && nativeRow.native_callback_lookup_key_u32 <= 0xffffffff
     && nativeRow.native_callback_lookup_key_u32
       === decodeProtectedLookupU32(nativeRow.native_protected_lookup_bytes_hex)
+    && (!v2 || (/^[0-9a-f]{2}$/.test(nativeRow.native_protected_callback_u8_hex)
+      && OBSERVED_CALLBACK_U8_VALUES.has(nativeRow.native_callback_u8_if_lookup_hit_candidate)
+      && nativeRow.native_callback_u8_if_lookup_hit_candidate
+        === decodeProtectedCallbackU8(nativeRow.native_protected_callback_u8_hex)))
     && nativeRow.raw_payload_sha256 === sha256(block.payload);
 }
 
 function decodeItemGroupDataBroadcastPacketCandidates821(replay, {
-  runtimeImagePath, pythonExecutable, precollected,
+  runtimeImagePath, pythonExecutable, precollected, itemGroupPacketProfile = 'v1',
 } = {}) {
-  const profile = ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821;
+  const v2 = itemGroupPacketProfile === 'v2';
+  const profile = v2 ? ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821
+    : ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821;
   const base = {
     profile_id: profile.id, input_packet_id: PACKET_ID,
-    evidence_status: EVIDENCE_STATUS,
+    evidence_status: profile.evidence_status,
     evidence_runtime_image_sha256: IMAGE_SHA256,
   };
   const fail = (status, error, extra = {}) => ({
@@ -166,6 +214,9 @@ function decodeItemGroupDataBroadcastPacketCandidates821(replay, {
     runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
     error, ...extra,
   });
+  if (!['v1', 'v2'].includes(itemGroupPacketProfile)) {
+    return fail('UNSUPPORTED', 'item-group packet profile must be v1 or v2');
+  }
   if (replay?.header?.version !== BUILD) {
     return fail('UNSUPPORTED', `item-group packet candidate supports only ${BUILD}`);
   }
@@ -249,6 +300,7 @@ function decodeItemGroupDataBroadcastPacketCandidates821(replay, {
     const batch = rows.slice(start, start + MAX_NATIVE_BATCH);
     const request = JSON.stringify({ replay_version: BUILD, packet_id: PACKET_ID,
       stream_tag: 2,
+      ...(v2 ? { profile_version: 'v2' } : {}),
       packets: batch.map(({ block }) => [block.param >>> 0, block.payload.toString('hex')]) });
     if (Buffer.byteLength(request) > 512 * 1024) {
       return fail('UNSUPPORTED', 'item-group native witness batch exceeds 512 KiB', {
@@ -258,7 +310,8 @@ function decodeItemGroupDataBroadcastPacketCandidates821(replay, {
       });
     }
     const run = childProcess.spawnSync(python,
-      ['-B', script, '--image', path.resolve(runtimeImagePath)], {
+      ['-B', script, '--image', path.resolve(runtimeImagePath),
+        ...(v2 ? ['--profile', 'v2'] : [])], {
         input: request, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
         timeout: 120_000, windowsHide: true,
       });
@@ -300,15 +353,15 @@ function decodeItemGroupDataBroadcastPacketCandidates821(replay, {
     for (let index = 0; index < batch.length; index += 1) {
       const { block, chunk } = batch[index];
       const nativeRow = native.rows[index];
-      if (!validRow(nativeRow, block)) {
+      if (!validRow(nativeRow, block, v2)) {
         return fail('DECODE_FAILED', `native row ${start + index} differs from packet`, {
           input_count: observedCount, scanned_block_count: scannedBlockCount,
           runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
           first_failed_packet_ref: packetRef(replay, block, chunk),
         });
       }
-      updateOutputHash(batchOutputHash, nativeRow);
-      updateOutputHash(outputHash, nativeRow);
+      updateOutputHash(batchOutputHash, nativeRow, v2);
+      updateOutputHash(outputHash, nativeRow, v2);
       events.push({
         event_type: 'ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE',
         game_version: BUILD, patch: '16.19', build_profile: profile.id,
@@ -317,12 +370,18 @@ function decodeItemGroupDataBroadcastPacketCandidates821(replay, {
         packet_name_candidate: profile.packet_name,
         native_protected_lookup_bytes_hex: nativeRow.native_protected_lookup_bytes_hex,
         native_callback_lookup_key_u32: nativeRow.native_callback_lookup_key_u32,
+        ...(v2 ? {
+          native_protected_callback_u8_hex: nativeRow.native_protected_callback_u8_hex,
+          native_callback_u8_if_lookup_hit_candidate:
+            nativeRow.native_callback_u8_if_lookup_hit_candidate,
+          native_conditional_callback_witness: 'SYNTHETIC_LOOKUP_HIT',
+        } : {}),
         native_receiver_lookup_status: 'NOT_OBSERVED',
         group_identity_status: 'UNKNOWN', item_identity_status: 'UNKNOWN',
         owner_status: 'UNKNOWN', participant_status: 'UNKNOWN',
         inventory_state_change_status: 'UNKNOWN',
         semantic_effect_status: 'UNKNOWN', confidence: 'CANDIDATE',
-        semantic_status: EVIDENCE_STATUS,
+        semantic_status: profile.evidence_status,
         raw_packet_ref: packetRef(replay, block, chunk),
       });
     }
@@ -340,7 +399,13 @@ function decodeItemGroupDataBroadcastPacketCandidates821(replay, {
     event_field_confidence: {
       replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
       native_callback_lookup_key_u32: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+      ...(v2 ? {
+        native_protected_callback_u8_hex: 'CANDIDATE_EXACT_RUNTIME_FIELD',
+        native_callback_u8_if_lookup_hit_candidate:
+          'CANDIDATE_EXACT_RUNTIME_SYNTHETIC_LOOKUP_HIT',
+      } : {}),
     },
+    ...(v2 ? { native_conditional_callback_witness: 'SYNTHETIC_LOOKUP_HIT' } : {}),
     native_witness_status: 'FULLY_CONSUMED_ALL',
     native_full_success_count: events.length, native_batch_count: nativeRuns,
     native_input_sha256: allInputHash,
@@ -352,7 +417,11 @@ function decodeItemGroupDataBroadcastPacketCandidates821(replay, {
 
 module.exports = {
   ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
+  ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821,
   ITEM_GROUP_DATA_BROADCAST_OBSERVED_SHAPES_821: OBSERVED_SHAPES,
+  ITEM_GROUP_DATA_BROADCAST_OBSERVED_CALLBACK_U8_VALUES_821:
+    OBSERVED_CALLBACK_U8_VALUES,
   decodeProtectedLookupU32,
+  decodeProtectedCallbackU8,
   decodeItemGroupDataBroadcastPacketCandidates821,
 };

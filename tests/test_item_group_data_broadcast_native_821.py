@@ -81,6 +81,36 @@ class ItemGroupNativeTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'wrong size'):
             item_group.read_image(Path(__file__))
 
+    def test_v2_all_observed_shapes_have_synthetic_conditional_write(self):
+        item_group.validate_v2_image(self.image)
+        emulator, context, captured = item_group.make_native_v2(self.image)
+        values = set()
+        for payload_hex, raw_param in SAMPLES:
+            payload = bytes.fromhex(payload_hex)
+            result = item_group.decode_one(emulator, context, captured,
+                                           self.transform, raw_param, payload, 'v2')
+            value = result['native_callback_u8_if_lookup_hit_candidate']
+            self.assertEqual(value, item_group.callback_u8_transform(
+                int(result['native_protected_callback_u8_hex'], 16)))
+            values.add(value)
+            for malformed in (payload[:-1], payload + b'\x00'):
+                with self.assertRaisesRegex(ValueError, 'fully consume'):
+                    item_group.decode_one(emulator, context, captured,
+                                          self.transform, raw_param, malformed, 'v2')
+        self.assertEqual(values, {0, 1, 2, 3, 99, 255})
+
+    def test_v2_equal_lookup_key_has_distinct_conditional_byte(self):
+        emulator, context, captured = item_group.make_native_v2(self.image)
+        rows = [item_group.decode_one(emulator, context, captured, self.transform,
+                                      0x400000ae, bytes.fromhex(payload), 'v2')
+                for payload in ('1e5672c257c166', '1e5076c257c166')]
+        self.assertEqual([row['native_callback_lookup_key_u32'] for row in rows],
+                         [90922051, 90922051])
+        self.assertEqual([row['native_protected_callback_u8_hex'] for row in rows],
+                         ['44', 'c4'])
+        self.assertEqual([row['native_callback_u8_if_lookup_hit_candidate']
+                          for row in rows], [1, 0])
+
 
 if __name__ == '__main__':
     unittest.main()
