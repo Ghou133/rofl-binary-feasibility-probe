@@ -223,6 +223,7 @@ const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
   'hero_total_units_healed_snapshot_candidates',
   'target_hero_roster_key_pair_candidates',
   'shielding_params_roster_key_pair_candidates',
+  'set_spell_level_packet_candidates',
   'set_spell_level_roster_key_pair_candidates',
   'cast_spell_ans_packet_candidates',
   'show_health_bar_packet_candidates',
@@ -4536,11 +4537,11 @@ function prepareSetSpellLevelRosterPairEvent(artifactDirectory, semantic,
   return { packet, roster };
 }
 
-function prepareSetSpellLevelPhysicalSource(prepared, sourceReplay,
-  runtimeImage, pythonExecutable) {
+function decodeSetSpellLevelPhysicalReplay(prepared, sourceReplay,
+  runtimeImage, pythonExecutable, capabilities, setSpellLevelProfile) {
   if (typeof runtimeImage !== 'string' || runtimeImage.trim() === '') {
     throw new EventQueryError('MISSING_RUNTIME_IMAGE',
-      'SetSpellLevel roster source verification requires --runtime-image.');
+      'SetSpellLevel source verification requires --runtime-image.');
   }
   const filename = sourceReplay ?? prepared.sourcePath;
   if (typeof filename !== 'string' || filename.trim() === '') {
@@ -4566,15 +4567,54 @@ function prepareSetSpellLevelPhysicalSource(prepared, sourceReplay,
   let decoded;
   try {
     decoded = decodeSemanticReplay(replay, {
-      capabilities: ['set_spell_level_roster_key_pair'],
+      capabilities,
       runtimeImagePath: path.resolve(runtimeImage),
       pythonExecutable,
+      ...(setSpellLevelProfile ? { setSpellLevelProfile } : {}),
     });
   } catch (error) {
     throw new EventQueryError('SOURCE_REPLAY_DECODE_FAILED',
       `Cannot re-decode original SetSpellLevel packets: ${error.message}`,
       { source_replay: resolved, cause_code: error.code ?? null });
   }
+  return { decoded, sourceReplay: resolved };
+}
+
+function prepareSetSpellLevelPacketPhysicalSource(prepared, sourceReplay,
+  runtimeImage, pythonExecutable) {
+  if (prepared.capabilityResult?.profile_id
+      !== SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_821.id) {
+    throw new EventQueryError('UNSUPPORTED_SOURCE_VERIFICATION',
+      'SetSpellLevel physical source verification requires the exact-821 V2 packet profile.',
+      { event_key: prepared.eventKey });
+  }
+  prepareSetSpellLevelCallbackFields(prepared);
+  const { decoded, sourceReplay: resolved } = decodeSetSpellLevelPhysicalReplay(
+    prepared, sourceReplay, runtimeImage, pythonExecutable,
+    ['set_spell_level_packet'], 'v2');
+  if (decoded.capability_results?.set_spell_level_packet?.status !== 'CANDIDATE'
+      || !isDeepStrictEqual(decoded.capability_results.set_spell_level_packet,
+        prepared.capabilityResult)) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Physical ROFL or pinned runtime image differs from saved SetSpellLevel V2 metadata.',
+      { source_replay: resolved,
+        source_status: decoded.capability_results?.set_spell_level_packet?.status ?? null });
+  }
+  const rows = decoded.events?.set_spell_level_packet_candidates;
+  if (!Array.isArray(rows) || rows.length !== prepared.declaredCount) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Physical SetSpellLevel V2 event stream is incomplete.',
+      { source_replay: resolved });
+  }
+  return { kind: 'SET_SPELL_LEVEL_PACKET', rows,
+    savedPath: prepared.sourcePath ?? null };
+}
+
+function prepareSetSpellLevelPhysicalSource(prepared, sourceReplay,
+  runtimeImage, pythonExecutable) {
+  const { decoded, sourceReplay: resolved } = decodeSetSpellLevelPhysicalReplay(
+    prepared, sourceReplay, runtimeImage, pythonExecutable,
+    ['set_spell_level_roster_key_pair']);
   const { packet, roster } = prepared.setSpellLevelRosterPairSources;
   for (const [capability, saved] of [
     ['set_spell_level_packet', packet.capabilityResult],
@@ -11204,6 +11244,9 @@ async function streamEventQuery(prepared, options, emitLine) {
       : prepared.eventKey === SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821
         ? prepareSetSpellLevelPhysicalSource(prepared,
           options.sourceReplay, options.runtimeImage, options.pythonExecutable)
+      : prepared.eventKey === 'set_spell_level_packet_candidates'
+        ? prepareSetSpellLevelPacketPhysicalSource(prepared,
+          options.sourceReplay, options.runtimeImage, options.pythonExecutable)
       : prepared.eventKey === ANONYMOUS_029C_ROSTER_PAIR_EVENT_821
         ? { kind: 'ANONYMOUS_029C_ROSTER_PAIR' }
       : prepareSourceReplayVerification(prepared, options.sourceReplay)) : null;
@@ -11390,7 +11433,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   if (castV9DigestMetadata) prepareCastSpellAnsNestedBits(prepared);
   if (spellTimerReceiverSlot != null) prepareSetSpellTimerReceiverSlot(prepared);
   const spellLevelCallbackRequested = spellLevelReceiverIndex != null
-    || spellLevelClampedScalar != null;
+    || spellLevelClampedScalar != null
+    || sourceReplayVerification?.kind === 'SET_SPELL_LEVEL_PACKET';
   if (spellLevelCallbackRequested) prepareSetSpellLevelCallbackFields(prepared);
   const damageLookupKeysRequested = damageLookupKey24 != null
     || damageLookupKey2c != null;
@@ -11660,6 +11704,14 @@ async function streamEventQuery(prepared, options, emitLine) {
               source_replay: sourceReplayVerification.sourceReplay });
         }
       }
+      if (sourceReplayVerification?.kind === 'SET_SPELL_LEVEL_PACKET'
+          && !isDeepStrictEqual(row, normalizeReplaySourcePaths(
+            sourceReplayVerification.rows[lineNumber - 1],
+            sourceReplayVerification.savedPath))) {
+        throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+          `Saved SetSpellLevel V2 row ${lineNumber} differs from the physical ROFL.`,
+          { line_number: lineNumber });
+      }
       let sourceCastNestedFields = null;
       if (sourceReplayVerification
           && prepared.eventKey === 'cast_spell_ans_packet_candidates') {
@@ -11754,6 +11806,7 @@ async function streamEventQuery(prepared, options, emitLine) {
           && sourceReplayVerification.kind !== 'TARGET_HERO_ROSTER_PAIR'
           && sourceReplayVerification.kind !== 'SHIELDING_PARAMS_ROSTER_PAIR'
           && sourceReplayVerification.kind !== 'ANONYMOUS_029C_ROSTER_PAIR'
+          && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_PACKET'
           && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_ROSTER_PAIR') {
         updateSourcePacketHash(sourceReplayVerification.savedHash,
           sourcePacketFieldsFromRef(row.raw_packet_ref,
@@ -12052,6 +12105,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       && sourceReplayVerification.kind !== 'TARGET_HERO_ROSTER_PAIR'
       && sourceReplayVerification.kind !== 'SHIELDING_PARAMS_ROSTER_PAIR'
       && sourceReplayVerification.kind !== 'ANONYMOUS_029C_ROSTER_PAIR'
+      && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_PACKET'
       && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_ROSTER_PAIR'
       && sourceReplayVerification.savedHash.digest('hex')
         !== sourceReplayVerification.sourceDigest) {

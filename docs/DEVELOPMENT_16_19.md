@@ -36,6 +36,11 @@ Current progress (older notes below retain their original research context):
   Zero headers are outside the existing V2 source contract and were not
   observed. The pair does not claim skill upgrade, spell identity, actor,
   target, owner or effective level change.
+  The standalone saved V2 `set_spell_level_packet_candidates` query now accepts
+  `--verify-source --runtime-image IMAGE`: it re-decodes the original exact-build
+  ROFL and compares every native packet row before applying `--limit`. One
+  original KR Replay with 33 rows passed this physical source check. The
+  historical V1 packet artifact remains queryable without source verification.
 
 - **Anonymous `0x029c` header key to roster (opt-in candidate):** Exact-821
   `--events anonymous_029c_roster_key_pair --runtime-image IMAGE
