@@ -16,7 +16,9 @@ const {
 const BUILD = '16.19.821.7343';
 const IMAGE_PATH = path.resolve(__dirname, '..', 'artifacts', '16_19_development',
   'kr_821_runtime_capture', 'LeagueOfLegends_16.19.821.7343.memory.bin');
-const REPLAY_DIR = 'C:/Users/26560/Documents/ChatGPT/kr-rofl-batch-collector/data/KR/16.19/builds/16.19.821.7343/rofl';
+const REPLAY_DIR = path.resolve(process.env.ROFL_KR_821_REPLAY_DIR ||
+  path.resolve(__dirname, '..', '..', 'kr-rofl-batch-collector', 'data', 'KR',
+    '16.19', 'builds', '16.19.821.7343', 'rofl'));
 const HAS_IMAGE = fs.existsSync(IMAGE_PATH);
 const HAS_REPLAYS = fs.existsSync(REPLAY_DIR);
 const FIRST_RECORD = '37acbb2393d15e28d1dc507a4e65ef024e04681c4edc8989';
