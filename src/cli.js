@@ -185,6 +185,8 @@ unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
 packet-local selectors or a bounded anonymous float candidate; these do not
 establish damage amount or attribution.
+--damage-packet-v6 opts a decode/batch run into the exact-821 anonymous +0x1c
+u32 callback candidate and preserves the default v5 packet profile otherwise.
 show_health_bar_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
 packet-local callback flag candidates; these do not establish health or display effects.
@@ -216,6 +218,7 @@ Options:
   --decoder-image <path>        Exact 16.15 runtime image (external input; not bundled)
   --runtime-image <path>        Exact-build runtime image for selected native packet candidates
   --events <name[,name...]>     Select 16.19 semantic capabilities to decode
+  --damage-packet-v6            Opt into exact 821 UnitApplyDamage +0x1c u32 packet/association candidates (decode/batch)
   --event-jsonl-only            Store 16.19 event rows only in JSONL (decode/batch with --events)
   --event <key>                 Exact 16.19 candidate JSONL key (query-events)
   --json                        Emit only machine-readable JSON (capabilities)
@@ -241,10 +244,11 @@ Options:
   --cast-nested-bits <0..255|0xhex>  Exact decoded 821 CastSpellAns nested callback bits
   --damage-callback-f32-available  Exact 821 UnitApplyDamage rows with a native-matched anonymous +0x20 f32
                                 Checks saved witness metadata and raw bytes; does not rerun the native parser.
-  --damage-callback-u32-0x10 <uint32|0xhex>  Exact 821 v4/v5 anonymous native +0x10 u32 (zero is valid)
-  --damage-callback-f32-0x18-raw  Exact 821 v5 anonymous native +0x18 f32 RAW_READER rows
-  --damage-lookup-key24 <uint32|0xhex>  Exact 821 UnitApplyDamage v3-v5 native +0x24 lookup key
-  --damage-lookup-key2c <uint32|0xhex>  Exact 821 UnitApplyDamage v3-v5 native +0x2c lookup key
+  --damage-callback-u32-0x10 <uint32|0xhex>  Exact 821 v4-v6 anonymous native +0x10 u32 (zero is valid)
+  --damage-callback-f32-0x18-raw  Exact 821 v5/v6 anonymous native +0x18 f32 RAW_READER rows
+  --damage-callback-u32-0x1c <uint32|0xhex>  Exact 821 v6 anonymous native +0x1c u32 (zero is valid)
+  --damage-lookup-key24 <uint32|0xhex>  Exact 821 UnitApplyDamage v3-v6 native +0x24 lookup key
+  --damage-lookup-key2c <uint32|0xhex>  Exact 821 UnitApplyDamage v3-v6 native +0x2c lookup key
                                 These anonymous object keys do not establish actor or damage roles.
   --die-source-key2c-match <has|none|unavailable>  Exact 821 death/damage
                                 cooccurrence status for the candidate source key
@@ -312,7 +316,9 @@ function parseArgs(argv) {
     castNestedBits: null,
     damageCallbackF32Available: false,
     damageCallbackU32At10: null,
+    damageCallbackU32At1c: null,
     damageCallbackF32At18Raw: false,
+    damagePacketV6: false,
     damageLookupKey24: null,
     damageLookupKey2c: null,
     dieSourceKey2cMatch: null,
@@ -365,6 +371,10 @@ function parseArgs(argv) {
     }
     if (token === '--event-jsonl-only') {
       options.eventJsonlOnly = true;
+      continue;
+    }
+    if (token === '--damage-packet-v6') {
+      options.damagePacketV6 = true;
       continue;
     }
     if (command === 'query-events' && token === '--latest-per-participant') {
@@ -446,6 +456,7 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'opaque-i32') options.opaqueI32 = queryInt32(value, key);
       else if (command === 'query-events' && key === 'cast-nested-bits') options.castNestedBits = queryByte(value, key);
       else if (command === 'query-events' && key === 'damage-callback-u32-0x10') options.damageCallbackU32At10 = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'damage-callback-u32-0x1c') options.damageCallbackU32At1c = queryUint32(value, key);
       else if (command === 'query-events' && key === 'damage-lookup-key24') options.damageLookupKey24 = queryUint32(value, key);
       else if (command === 'query-events' && key === 'damage-lookup-key2c') options.damageLookupKey2c = queryUint32(value, key);
       else if (command === 'query-events' && key === 'die-source-key2c-match') options.dieSourceKey2cMatch = value;
@@ -481,6 +492,15 @@ function parseArgs(argv) {
   }
   if (options.eventJsonlOnly && (!['decode', 'batch'].includes(command) || !options.events)) {
     throw new Error('--event-jsonl-only requires decode or batch with --events');
+  }
+  if (options.damagePacketV6 && (!['decode', 'batch'].includes(command)
+      || !options.events?.some((capability) => [
+        'unit_apply_damage_packet', 'unit_apply_damage_roster_key_pair',
+        'unit_apply_damage_lookup_roster_key_pair',
+        'unit_apply_damage_lookup2c_roster_key_pair',
+        'hero_death_damage_lookup_key_cooccurrence',
+      ].includes(capability)))) {
+    throw new Error('--damage-packet-v6 requires decode or batch with an exact-821 UnitApplyDamage packet or association capability in --events');
   }
   if (command === 'ward-events') {
     positionals.push(...options.inputs);
@@ -598,6 +618,10 @@ function parseArgs(argv) {
     if (options.damageCallbackU32At10 !== null
         && options.event !== 'unit_apply_damage_packet_candidates') {
       throw new Error('--damage-callback-u32-0x10 requires an 821 unit_apply_damage_packet_candidates event');
+    }
+    if (options.damageCallbackU32At1c !== null
+        && options.event !== 'unit_apply_damage_packet_candidates') {
+      throw new Error('--damage-callback-u32-0x1c requires an 821 unit_apply_damage_packet_candidates event');
     }
     if (options.damageCallbackF32At18Raw
         && options.event !== 'unit_apply_damage_packet_candidates') {
@@ -1077,6 +1101,7 @@ function parseOne1619(replay, options, started) {
           candidate821Scan: candidate821Scan ?? undefined,
           runtimeImagePath: options.runtimeImage ?? undefined,
           pythonExecutable: options.python ?? undefined,
+          damagePacketProfile: options.damagePacketV6 ? 'v6' : undefined,
         });
       } catch (error) {
         decoded = {
@@ -3154,6 +3179,7 @@ async function runQueryEventsCommand(parsed) {
       castNestedBits: options.castNestedBits,
       damageCallbackF32Available: options.damageCallbackF32Available,
       damageCallbackU32At10: options.damageCallbackU32At10,
+      damageCallbackU32At1c: options.damageCallbackU32At1c,
       damageCallbackF32At18Raw: options.damageCallbackF32At18Raw,
       damageLookupKey24: options.damageLookupKey24,
       damageLookupKey2c: options.damageLookupKey2c,

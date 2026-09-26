@@ -515,6 +515,37 @@ test('16.19 zero-event PASS remains distinct from missing input and partial fail
   assert.equal(partial.analysis.events.death_events, undefined);
 });
 
+test('821 UnitApplyDamage V6 CLI switch forwards an explicit decode option', (t) => {
+  const input = fixture(t, '16.19.821.7343');
+  const seen = [];
+  const cli = loadCli(null, (_replay, options) => {
+    seen.push(options.damagePacketProfile);
+    return { status: 'CANDIDATE',
+      events: { unit_apply_damage_packet_candidates: [] },
+      capability_results: { unit_apply_damage_packet: {
+        status: 'CANDIDATE', input_count: 0, event_count: 0,
+      } } };
+  });
+  const selected = cli.parseArgs(['decode', input, '--events',
+    'unit_apply_damage_packet', '--damage-packet-v6']);
+  assert.equal(selected.options.damagePacketV6, true);
+  assert.equal(cli.parseOne(input, { ...selected.options, semantic: true }).ok, true);
+  const ordinary = cli.parseArgs(['decode', input, '--events',
+    'unit_apply_damage_packet']);
+  assert.equal(cli.parseOne(input, { ...ordinary.options, semantic: true }).ok, true);
+  assert.deepEqual(seen, ['v6', undefined]);
+  assert.equal(cli.parseArgs(['batch', input, '--events',
+    'hero_death_damage_lookup_key_cooccurrence', '--damage-packet-v6'])
+    .options.damagePacketV6, true);
+  assert.throws(() => cli.parseArgs(['decode', input, '--damage-packet-v6']),
+    /--damage-packet-v6 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--events',
+    'hero_path', '--damage-packet-v6']), /--damage-packet-v6 requires/);
+  assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+    'unit_apply_damage_packet_candidates', '--damage-packet-v6']),
+  /--damage-packet-v6 requires/);
+});
+
 test('16.19 decode requires an explicit capability and reports missing input as failure', async (t) => {
   const cli = loadCli(null, () => ({
     status: 'BLOCKED',

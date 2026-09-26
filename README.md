@@ -912,7 +912,7 @@ node src/cli.js query-events "work\16-19-821-unit-damage" `
   --damage-callback-f32-available --limit 20
 ```
 
-v3、v4 和 v5 伤害包保存结果还可按两个独立的原生对象查找键筛选。以下两个条件同时给出时，必须由同一包满足；`--raw-param` 仍单独表示原始包参数：
+v3 到 v6 伤害包保存结果还可按两个独立的原生对象查找键筛选。以下两个条件同时给出时，必须由同一包满足；`--raw-param` 仍单独表示原始包参数：
 
 ```powershell
 node src/cli.js query-events "work\16-19-821-unit-damage" `
@@ -921,9 +921,9 @@ node src/cli.js query-events "work\16-19-821-unit-damage" `
   --limit 20
 ```
 
-查找键筛选仅接受精确 `16.19.821.7343` 的 v3/v4/v5 保存产物，核对全部行、原始字节和原生见证元数据，`--limit` 不缩短核对范围；缺失或更早的产物会明确拒绝。两个键可分别筛选，不能据此认定伤害包的施加者、目标、致死关系或实际伤害。
+查找键筛选仅接受精确 `16.19.821.7343` 的 v3/v4/v5/v6 保存产物，核对全部行、原始字节和原生见证元数据，`--limit` 不缩短核对范围；缺失或更早的产物会明确拒绝。两个键可分别筛选，不能据此认定伤害包的施加者、目标、致死关系或实际伤害。
 
-v4/v5 保存结果还可筛选匿名 `+0x10` u32；数值零有效，旧 v1/v2/v3 保存结果不具有该字段：
+v4/v5/v6 保存结果还可筛选匿名 `+0x10` u32；数值零有效，旧 v1/v2/v3 保存结果不具有该字段：
 
 ```powershell
 node src/cli.js query-events "work\16-19-821-unit-damage-v4" `
@@ -931,7 +931,7 @@ node src/cli.js query-events "work\16-19-821-unit-damage-v4" `
   --damage-callback-u32-0x10 0 --limit 20
 ```
 
-v5 保存结果可单独筛出原生读取匿名 `+0x18` 浮点值的包；11 份回放共匹配 828 包，常量零包不在此筛选中：
+v5/v6 保存结果可单独筛出原生读取匿名 `+0x18` 浮点值的包；已保存的 v5 十一份回放共匹配 828 包，常量零包不在此筛选中：
 
 ```powershell
 node src/cli.js query-events "work\16-19-821-unit-damage-v5" `
@@ -939,7 +939,19 @@ node src/cli.js query-events "work\16-19-821-unit-damage-v5" `
   --damage-callback-f32-0x18-raw --limit 20
 ```
 
-查询校验精确 build、镜像和变换标识、保存的全包原生见证状态与有序输入摘要，以及每行原始包哈希与来源引用；v2 校验全部匿名原生 `+0x20` 浮点值的读取偏移或常量来源，v3 另校验两项查找键的固定字节变换和 `raw_param` 关系汇总，v4 再校验 `+0x10` 的变换、编码字节、来源和计数，v5 再校验 `+0x18` 的变换、编码字节、读取偏移或常量来源及计数；旧 v1/v2/v3/v4 产物仍按各自合同读取。达到输出上限后仍检查余下行，不重新运行原生解码或打开原始回放。旧版 `callback_f32_*` 筛选的含义保持不变：11 份回放共 628,909 行，其中 6,501 行可用，622,408 行为 `UNAVAILABLE_SHAPE`。匿名浮点值不代表实际伤害量。
+新 v6 解码需显式指定 `--damage-packet-v6`；API 使用 `decodeSemanticReplay(replay, { capabilities: ['unit_apply_damage_packet'], runtimeImagePath, damagePacketProfile: 'v6' })`。默认继续使用 v5。保存结果可按匿名 `+0x1c` u32 筛选，包括零：
+
+```powershell
+node src/cli.js decode "D:\Replays\KR_8392938200.rofl" `
+  --events unit_apply_damage_packet --damage-packet-v6 `
+  --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" `
+  --event-jsonl-only --out-dir "work\16-19-821-unit-damage-v6"
+node src/cli.js query-events "work\16-19-821-unit-damage-v6" `
+  --event unit_apply_damage_packet_candidates `
+  --damage-callback-u32-0x1c 0 --limit 20
+```
+
+查询校验精确 build、镜像和变换标识、保存的全包原生见证状态与有序输入摘要，以及每行原始包哈希与来源引用；v2 校验全部匿名原生 `+0x20` 浮点值的读取偏移或常量来源，v3 另校验两项查找键的固定字节变换和 `raw_param` 关系汇总，v4 再校验 `+0x10` 的变换、编码字节、来源和计数，v5 再校验 `+0x18` 的变换、编码字节、读取偏移或常量来源及计数，v6 再校验 `+0x1c` 的选择位、原生调用点、可变长度原始读取、编码变换、来源和计数；旧 v1-v5 产物仍按各自合同读取。达到输出上限后仍检查余下行，不重新运行原生解码或打开原始回放。旧版 `callback_f32_*` 筛选的含义保持不变：11 份回放共 628,909 行，其中 6,501 行可用，622,408 行为 `UNAVAILABLE_SHAPE`。匿名字段不代表实际伤害量、施加者或目标。
 
 血条显示包的匿名回调零标记可在保存结果中筛选：
 

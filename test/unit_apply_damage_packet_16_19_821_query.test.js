@@ -10,6 +10,7 @@ const test = require('node:test');
 
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: profile,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V6_821: v6Profile,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V1_ID_821: v1ProfileId,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821: v2ProfileId,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: v3ProfileId,
@@ -17,6 +18,9 @@ const {
   decodeUnitApplyDamageCallbackF32FromRaw821,
   decodeUnitApplyDamageCallbackU32FromRaw821,
   decodeUnitApplyDamageCallbackF32At18FromEncoded821,
+  decodeUnitApplyDamageCallbackU32At1cFromEncoded821,
+  decodeUnitApplyDamageU32At1cFromRawSpan821,
+  UNIT_APPLY_DAMAGE_U32_0X1C_RAW_CALL_RVA_BY_SELECTOR_821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
   isObservedShape,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
@@ -30,6 +34,7 @@ const SOURCE_PATH = 'synthetic.rofl';
 const FLOAT_PACKET = '71875e460b083dbaef3ba6ec39b975';
 const OTHER_PACKET = '54814747c6c4d9a90b6ef07c44e2ecaf5b75';
 const RAW_F32_18_PACKET = '3706a54411d863b80b68bb01d1ca1e9bde73ec6b75';
+const RAW_U32_1C_PACKET = '72959d41c6d904810b00f17252b4ded07ecd6b75';
 const CONSTANT_PACKETS = [
   ['5b814d4650a07e33c07422', 'CONSTANT_0', 0],
   ['6a87dd49ea0d8c9d0b3891ecac75', 'CONSTANT_1', 1],
@@ -178,6 +183,38 @@ function v5Row(index, payloadHex = OTHER_PACKET) {
   return entry;
 }
 
+function v6Row(index, payloadHex = OTHER_PACKET) {
+  const entry = v5Row(index, payloadHex);
+  const payload = Buffer.from(payloadHex, 'hex');
+  const selector = (payload[1] >>> 4) & 7;
+  assert.ok([0, 1].includes(selector));
+  entry.build_profile = v6Profile.id;
+  entry.header_selector_bits_12_14 = selector;
+  if (selector === 0) {
+    entry.native_callback_u32_0x1c_candidate = 0;
+    entry.native_callback_u32_0x1c_encoded_bytes_hex = '05050505';
+    entry.native_callback_u32_0x1c_source = 'CONSTANT_0';
+    entry.native_callback_u32_0x1c_raw_call_rva = null;
+    entry.native_callback_u32_0x1c_raw_offset = null;
+    entry.native_callback_u32_0x1c_raw_bytes_hex = null;
+  } else {
+    assert.equal(payloadHex, RAW_U32_1C_PACKET);
+    const rawBytes = payload.subarray(9, 11).toString('hex');
+    entry.native_callback_u32_0x1c_candidate =
+      decodeUnitApplyDamageU32At1cFromRawSpan821(rawBytes);
+    entry.native_callback_u32_0x1c_encoded_bytes_hex = 'c0f305e5';
+    assert.equal(decodeUnitApplyDamageCallbackU32At1cFromEncoded821(
+      entry.native_callback_u32_0x1c_encoded_bytes_hex),
+    entry.native_callback_u32_0x1c_candidate);
+    entry.native_callback_u32_0x1c_source = 'RAW_READER';
+    entry.native_callback_u32_0x1c_raw_call_rva =
+      UNIT_APPLY_DAMAGE_U32_0X1C_RAW_CALL_RVA_BY_SELECTOR_821[selector];
+    entry.native_callback_u32_0x1c_raw_offset = 9;
+    entry.native_callback_u32_0x1c_raw_bytes_hex = rawBytes;
+  }
+  return entry;
+}
+
 async function queryLibrary(directory, options) {
   const lines = [];
   const summary = await streamEventQuery(prepareEventQuery(directory, EVENT), options,
@@ -225,7 +262,8 @@ function writeReplay(root, name, rows, {
           entry.native_callback_f32_0x20_source === 'CONSTANT_2').length,
       },
     } : {}),
-    ...([v3ProfileId, v4ProfileId, profile.id].includes(rows[0]?.build_profile) ? {
+    ...([v3ProfileId, v4ProfileId, profile.id, v6Profile.id]
+      .includes(rows[0]?.build_profile) ? {
       native_callback_lookup_full_write_count: rows.length,
       evidence_lookup_key_0x24_table_sha256:
         profile.evidence_lookup_key_0x24_table_sha256,
@@ -241,7 +279,7 @@ function writeReplay(root, name, rows, {
           entry.native_callback_lookup_key_0x24_raw_param_relation === 'OTHER').length,
       },
     } : {}),
-    ...([v4ProfileId, profile.id].includes(rows[0]?.build_profile) ? {
+    ...([v4ProfileId, profile.id, v6Profile.id].includes(rows[0]?.build_profile) ? {
       evidence_callback_u32_0x10_table_sha256:
         profile.evidence_callback_u32_0x10_table_sha256,
       native_callback_u32_0x10_full_write_count: rows.length,
@@ -252,7 +290,7 @@ function writeReplay(root, name, rows, {
           entry.native_callback_u32_0x10_source === 'CONSTANT_0').length,
       },
     } : {}),
-    ...(rows[0]?.build_profile === profile.id ? {
+    ...([profile.id, v6Profile.id].includes(rows[0]?.build_profile) ? {
       evidence_callback_f32_0x18_table_sha256:
         profile.evidence_callback_f32_0x18_table_sha256,
       native_callback_f32_0x18_full_write_count: rows.length,
@@ -261,6 +299,17 @@ function writeReplay(root, name, rows, {
           entry.native_callback_f32_0x18_source === 'RAW_READER').length,
         CONSTANT_0: rows.filter((entry) =>
           entry.native_callback_f32_0x18_source === 'CONSTANT_0').length,
+      },
+    } : {}),
+    ...(rows[0]?.build_profile === v6Profile.id ? {
+      evidence_callback_u32_0x1c_table_sha256:
+        v6Profile.evidence_callback_u32_0x1c_table_sha256,
+      native_callback_u32_0x1c_full_write_count: rows.length,
+      native_callback_u32_0x1c_source_counts: {
+        RAW_READER: rows.filter((entry) =>
+          entry.native_callback_u32_0x1c_source === 'RAW_READER').length,
+        CONSTANT_0: rows.filter((entry) =>
+          entry.native_callback_u32_0x1c_source === 'CONSTANT_0').length,
       },
     } : {}),
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
@@ -587,6 +636,111 @@ test('anonymous +0x18 raw filter is exact v5 only', async (t) => {
   (error) => error.code === 'INVALID_FILTER');
   const unrelated = command(saved.directory, '--event', 'show_health_bar_packet_candidates',
     '--damage-callback-f32-0x18-raw');
+  assert.equal(unrelated.status, 1);
+});
+
+test('saved v6 +0x1c query selects zero and raw u32 without changing rows',
+  async (t) => {
+    const rows = [v6Row(0), v6Row(1, RAW_U32_1C_PACKET), v6Row(2)];
+    const { directory, lines } = fixture(t, rows);
+    const zero = await queryLibrary(directory,
+      { damageCallbackU32At1c: 0, limit: 1 });
+    assert.deepEqual(zero.lines, [`${lines[0]}\n`]);
+    assert.equal(zero.summary.scanned_count, 3);
+    assert.equal(zero.summary.matched_count, 2);
+    assert.equal(zero.summary.emitted_count, 1);
+    assert.equal(zero.summary.damage_callback_u32_0x1c_checked_count, 3);
+    assert.equal(zero.summary.filters.damage_callback_u32_0x1c, 0);
+    assert.equal(zero.summary.native_witness_check,
+      'PERSISTED_METADATA_AND_RAW_BYTES');
+    assert.equal(zero.summary.rows_unmodified, true);
+    const rawValue = rows[1].native_callback_u32_0x1c_candidate;
+    const raw = await queryLibrary(directory,
+      { damageCallbackU32At1c: rawValue });
+    assert.deepEqual(raw.lines, [`${lines[1]}\n`]);
+    const cli = command(directory, '--damage-callback-u32-0x1c',
+      `0x${rawValue.toString(16)}`);
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.equal(cli.stdout, `${lines[1]}\n`);
+  });
+
+test('saved v6 +0x1c validates every row after limit and rejects forged metadata',
+  async (t) => {
+    const rows = [v6Row(0), v6Row(1, RAW_U32_1C_PACKET)];
+    for (const mutate of [
+      (entry) => { entry.header_selector_bits_12_14 = 6; },
+      (entry) => { entry.native_callback_u32_0x1c_candidate += 1; },
+      (entry) => { entry.native_callback_u32_0x1c_encoded_bytes_hex = '00000000'; },
+      (entry) => { entry.native_callback_u32_0x1c_source = 'CONSTANT_0'; },
+      (entry) => { entry.native_callback_u32_0x1c_raw_call_rva = '0xf4a742'; },
+      (entry) => { entry.native_callback_u32_0x1c_raw_offset = 8; },
+      (entry) => { entry.native_callback_u32_0x1c_raw_bytes_hex = '00f100'; },
+      (entry) => { delete entry.native_callback_u32_0x1c_raw_bytes_hex; },
+    ]) {
+      const changed = rows.map((entry) => structuredClone(entry));
+      mutate(changed[1]);
+      const saved = fixture(t, changed);
+      await assert.rejects(queryLibrary(saved.directory,
+        { damageCallbackU32At1c: 0, limit: 1 }),
+      (error) => error.code === 'INVALID_EVENT_ROW');
+    }
+    const unseen = rows.map((entry) => structuredClone(entry));
+    const unseenPayload = Buffer.from(unseen[1].raw_packet_ref.raw_payload_hex, 'hex');
+    unseenPayload[1] = (unseenPayload[1] & 0x8f) | 0x60;
+    unseen[1].raw_packet_ref.raw_payload_hex = unseenPayload.toString('hex');
+    unseen[1].raw_packet_ref.raw_payload_sha256 = sha256(unseenPayload);
+    unseen[1].header_selector_bits_12_14 = 6;
+    const unseenSaved = fixture(t, unseen);
+    await assert.rejects(queryLibrary(unseenSaved.directory,
+      { damageCallbackU32At1c: 0, limit: 1 }),
+    (error) => error.code === 'INVALID_EVENT_ROW');
+    for (const mutate of [
+      (result) => { result.evidence_callback_u32_0x1c_table_sha256 = '0'.repeat(64); },
+      (result) => { result.native_callback_u32_0x1c_full_write_count -= 1; },
+      (result) => { result.native_callback_u32_0x1c_source_counts.RAW_READER += 1; },
+    ]) {
+      const saved = fixture(t, rows);
+      const file = path.join(saved.directory, 'semantic_run.json');
+      const semantic = JSON.parse(fs.readFileSync(file, 'utf8'));
+      mutate(semantic.capability_results[CAPABILITY]);
+      fs.writeFileSync(file, JSON.stringify(semantic));
+      await assert.rejects(queryLibrary(saved.directory,
+        { damageCallbackU32At1c: 0, limit: 1 }),
+      (error) => error.code === 'CAPABILITY_METADATA_MISMATCH');
+    }
+  });
+
+test('anonymous +0x1c filter is exact v6 only', async (t) => {
+  for (const older of [row(0), v2Row(0), v3Row(0), v4Row(0), v5Row(0)]) {
+    const saved = fixture(t, [older]);
+    await assert.rejects(queryLibrary(saved.directory,
+      { damageCallbackU32At1c: 0 }),
+    (error) => error.code === 'UNSUPPORTED_FILTER');
+  }
+  const forgedV5 = fixture(t, [v5Row(0)]);
+  const forgedFile = path.join(forgedV5.directory, 'semantic_run.json');
+  const forgedSemantic = JSON.parse(fs.readFileSync(forgedFile, 'utf8'));
+  forgedSemantic.capability_results[CAPABILITY]
+    .evidence_callback_u32_0x1c_table_sha256 =
+      v6Profile.evidence_callback_u32_0x1c_table_sha256;
+  fs.writeFileSync(forgedFile, JSON.stringify(forgedSemantic));
+  await assert.rejects(queryLibrary(forgedV5.directory,
+    { damageCallbackF32At18Raw: true }),
+  (error) => error.code === 'CAPABILITY_METADATA_MISMATCH');
+  const v6 = fixture(t, [v6Row(0)]);
+  for (const invalid of [-1, 0x100000000, 1.5, '0']) {
+    await assert.rejects(queryLibrary(v6.directory,
+      { damageCallbackU32At1c: invalid }),
+    (error) => error.code === 'INVALID_FILTER');
+  }
+  const wrongBuild = fixture(t, [v6Row(0)], {
+    replayVersion: '16.19.820.7193',
+  });
+  await assert.rejects(queryLibrary(wrongBuild.directory,
+    { damageCallbackU32At1c: 0 }),
+  (error) => error.code === 'UNSUPPORTED_FILTER');
+  const unrelated = command(v6.directory, '--event', 'show_health_bar_packet_candidates',
+    '--damage-callback-u32-0x1c', '0');
   assert.equal(unrelated.status, 1);
 });
 
