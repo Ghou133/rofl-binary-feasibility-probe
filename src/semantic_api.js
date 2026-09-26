@@ -137,6 +137,8 @@ const { decodeItemChargesPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_item_charges_packet_candidate');
 const { decodeTargetHeroPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_target_hero_packet_candidate');
+const { decodeForceCreateMissilePacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_force_create_missile_packet_candidate');
 const { associateUnitApplyDamageRosterKeys821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const { associateUnitApplyDamageLookupRosterKeys821 } =
@@ -2536,6 +2538,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    force_create_missile_packet: (input, collected) =>
+      decodeForceCreateMissilePacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -2613,6 +2621,7 @@ function decode1619821(replay, profile, options = {}) {
     cooldown_broadcast_packet: 'cooldown_broadcast_packet_candidates',
     item_charges_packet: 'item_charges_packet_candidates',
     target_hero_packet: 'target_hero_packet_candidates',
+    force_create_missile_packet: 'force_create_missile_packet_candidates',
     unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
     unit_apply_damage_lookup_roster_key_pair:
       'unit_apply_damage_lookup_roster_key_candidates',
@@ -2681,6 +2690,7 @@ function decode1619821(replay, profile, options = {}) {
     'cooldown_broadcast_packet',
     'item_charges_packet',
     'target_hero_packet',
+    'force_create_missile_packet',
   ]);
   const facePairSelected = capabilities.includes('face_direction_keyframe_roster_pair');
   const damageKeyPairSelected = capabilities.includes('unit_apply_damage_roster_key_pair');
@@ -2812,6 +2822,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'cooldown_broadcast_packet'
         || capability === 'item_charges_packet'
         || capability === 'target_hero_packet'
+        || capability === 'force_create_missile_packet'
         || capability === 'unit_apply_damage_roster_key_pair'
         || capability === 'unit_apply_damage_lookup_roster_key_pair'
         || capability === 'unit_apply_damage_lookup2c_roster_key_pair'
