@@ -132,6 +132,7 @@ test('output hash failure drains active streams before rejecting', async (t) => 
   for (const name of names) fs.writeFileSync(path.join(directory, name), name);
   const failure = new Error('controlled hash read failure');
   const started = [];
+  const pending = [];
   let open = 0;
   const originalCreateReadStream = fs.createReadStream;
   fs.createReadStream = function delayedReadStream(filePath) {
@@ -140,13 +141,15 @@ test('output hash failure drains active streams before rejecting', async (t) => 
     started.push(name);
     open += 1;
     stream.once('close', () => { open -= 1; });
-    setTimeout(() => {
-      if (name === names[0]) stream.destroy(failure);
-      else {
-        stream.push(Buffer.from(name));
-        stream.push(null);
-      }
-    }, name === names[0] ? 5 : 25);
+    if (name === names[0]) {
+      stream.once('close', () => setImmediate(() => {
+        for (const item of pending) {
+          item.stream.push(Buffer.from(item.name));
+          item.stream.push(null);
+        }
+      }));
+      process.nextTick(() => stream.destroy(failure));
+    } else pending.push({ name, stream });
     return stream;
   };
   try {
