@@ -546,6 +546,36 @@ test('821 UnitApplyDamage V6 CLI switch forwards an explicit decode option', (t)
   /--damage-packet-v6 requires/);
 });
 
+test('821 CastSpellAns V5 CLI switch forwards an explicit decode option', (t) => {
+  const input = fixture(t, '16.19.821.7343');
+  const seen = [];
+  const cli = loadCli(null, (_replay, options) => {
+    seen.push(options.castPacketProfile);
+    return { status: 'CANDIDATE',
+      events: { cast_spell_ans_packet_candidates: [] },
+      capability_results: { cast_spell_ans_packet: {
+        status: 'CANDIDATE', input_count: 0, event_count: 0,
+      } } };
+  });
+  const selected = cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v5']);
+  assert.equal(selected.options.castPacketV5, true);
+  assert.equal(cli.parseOne(input, { ...selected.options, semantic: true }).ok, true);
+  const ordinary = cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet']);
+  assert.equal(cli.parseOne(input, { ...ordinary.options, semantic: true }).ok, true);
+  assert.deepEqual(seen, ['v5', undefined]);
+  assert.equal(cli.parseArgs(['batch', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v5']).options.castPacketV5, true);
+  assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v5']),
+    /--cast-packet-v5 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--events',
+    'hero_path', '--cast-packet-v5']), /--cast-packet-v5 requires/);
+  assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+    'cast_spell_ans_packet_candidates', '--cast-packet-v5']),
+  /--cast-packet-v5 requires/);
+});
+
 test('16.19 decode requires an explicit capability and reports missing input as failure', async (t) => {
   const cli = loadCli(null, () => ({
     status: 'BLOCKED',

@@ -2189,6 +2189,10 @@ function decode1619821(replay, profile, options = {}) {
     throw new TypeError('16.19 capabilities must be an array of nonempty names');
   }
   const capabilities = [...new Set(requested)];
+  const castPacketProfile = options.castPacketProfile ?? 'v4';
+  if (castPacketProfile !== 'v4' && castPacketProfile !== 'v5') {
+    throw new TypeError('exact 821 CastSpellAns packet profile must be v4 or v5');
+  }
   const damagePacketProfile = options.damagePacketProfile ?? 'v5';
   if (damagePacketProfile !== 'v5' && damagePacketProfile !== 'v6') {
     throw new TypeError('exact 821 UnitApplyDamage packet profile must be v5 or v6');
@@ -2388,6 +2392,7 @@ function decode1619821(replay, profile, options = {}) {
         runtimeImagePath: options.runtimeImagePath,
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
+        castPacketProfile,
       }),
     npc_buff_remove_packet: (input, collected) =>
       decodeNpcBuffRemovePacketCandidates821(input, {

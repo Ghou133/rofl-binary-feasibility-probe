@@ -8,7 +8,9 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821: profile } =
+const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821: profile,
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821: v5Profile,
+  decodeCastSpellAnsNestedU32FromRaw821 } =
   require('../src/decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
@@ -48,8 +50,15 @@ function row(index, raw = 'c8', value = 4, replaySha = SHA) {
   };
 }
 
+function rowV5(index, rawU32, replaySha = SHA) {
+  return { ...row(index, 'c8', 4, replaySha), build_profile: v5Profile.id,
+    raw_u32_0x1c_hex: rawU32,
+    opaque_u32_0x1c: decodeCastSpellAnsNestedU32FromRaw821(rawU32) };
+}
+
 function writeReplay(root, name, rows, { replaySha = SHA,
-  profileId = profile.id, replayVersion = profile.replay_version } = {}) {
+  fieldProfile = profile, profileId = fieldProfile.id,
+  replayVersion = profile.replay_version } = {}) {
   const directory = path.join(root, 'replays', name);
   fs.mkdirSync(directory, { recursive: true });
   const result = {
@@ -61,6 +70,9 @@ function writeReplay(root, name, rows, { replaySha = SHA,
       profile.evidence_nested_float_inverse_sha256,
     evidence_nested_byte_inverse_sha256:
       profile.evidence_nested_byte_inverse_sha256,
+    ...(fieldProfile === v5Profile ? {
+      evidence_nested_u32_transform_sha256:
+        v5Profile.evidence_nested_u32_transform_sha256 } : {}),
     status: 'CANDIDATE',
     evidence_status: 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS',
     input_count: rows.length, event_count: rows.length,
@@ -239,4 +251,122 @@ test('batch counts checked v4 rows and unavailable v3 replay separately', (t) =>
   assert.equal(summary.cast_nested_bits_unavailable_count, 1);
   assert.equal(summary.cast_nested_bits_unavailable_replay_count, 1);
   assert.equal(summary.replay_results[1].code, 'CAST_NESTED_BITS_UNAVAILABLE');
+});
+
+test('V5 nested u32 query distinguishes zero and scans every saved row', (t) => {
+  assert.equal(decodeCastSpellAnsNestedU32FromRaw821('eeeeeeee'), 0);
+  assert.equal(decodeCastSpellAnsNestedU32FromRaw821('cee352e7'), 1531465011);
+  const rows = [rowV5(0, 'eeeeeeee'), rowV5(1, 'cee352e7'),
+    rowV5(2, 'cee352e7')];
+  const { directory, lines } = fixture(t, rows, { fieldProfile: v5Profile });
+  const selected = command(directory, '--cast-nested-u32', '1531465011', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${lines[1]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 3);
+  assert.equal(summary.matched_count, 2);
+  assert.equal(summary.emitted_count, 1);
+  assert.equal(summary.cast_nested_u32_checked_count, 3);
+  assert.equal(summary.cast_nested_u32_unavailable_count, 0);
+  assert.equal(summary.filters.cast_nested_u32, 1531465011);
+  assert.equal(summary.rows_unmodified, true);
+
+  const zero = command(directory, '--cast-nested-u32', '0x0');
+  assert.equal(zero.status, 0, zero.stderr);
+  assert.equal(zero.stdout, `${lines[0]}\n`);
+  const bits = command(directory, '--cast-nested-bits', '4',
+    '--cast-nested-u32', '0');
+  assert.equal(bits.status, 0, bits.stderr);
+  assert.equal(bits.stdout, `${lines[0]}\n`);
+  assert.equal(JSON.parse(bits.stderr).cast_nested_bits_checked_count, 3);
+});
+
+test('V5 nested u32 query rejects historical artifact and invalid bounds', (t) => {
+  const old = fixture(t, [row(0)]);
+  const unavailable = command(old.directory, '--cast-nested-u32', '0');
+  assert.equal(unavailable.status, 2, unavailable.stderr);
+  const failure = JSON.parse(unavailable.stderr);
+  assert.equal(failure.code, 'CAST_NESTED_U32_UNAVAILABLE');
+  assert.equal(failure.cast_nested_u32_checked_count, 0);
+  assert.equal(failure.cast_nested_u32_unavailable_count, 1);
+
+  const current = fixture(t, [rowV5(0, 'eeeeeeee')],
+    { fieldProfile: v5Profile });
+  for (const value of ['-1', '4294967296', '0x100000000', '1.5', '+1']) {
+    const rejected = command(current.directory, '--cast-nested-u32', value);
+    assert.equal(rejected.status, 1, `${value}: ${rejected.stderr}`);
+  }
+});
+
+test('V5 nested u32 query rejects changed metadata and later forged row', (t) => {
+  for (const change of [
+    (result) => { result.evidence_nested_u32_transform_sha256 = '0'.repeat(64); },
+    (result) => { result.evidence_callback_table_sha256 = '0'.repeat(64); },
+    (result) => { result.runtime_image_sha256 = '0'.repeat(64); },
+  ]) {
+    const { directory } = fixture(t, [rowV5(0, 'cee352e7')],
+      { fieldProfile: v5Profile });
+    const filename = path.join(directory, 'semantic_run.json');
+    const semantic = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    change(semantic.capability_results[CAPABILITY]);
+    fs.writeFileSync(filename, JSON.stringify(semantic));
+    const rejected = command(directory, '--cast-nested-u32', '1531465011');
+    assert.equal(rejected.status, 2, rejected.stderr);
+    assert.equal(JSON.parse(rejected.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+  }
+  for (const change of [
+    (entry) => { entry.raw_u32_0x1c_hex = 'invalid'; },
+    (entry) => { entry.opaque_u32_0x1c += 1; },
+    (entry) => { delete entry.opaque_u32_0x1c; },
+    (entry) => { entry.build_profile = profile.id; },
+    (entry) => { entry.raw_packet_ref.raw_param += 1; },
+  ]) {
+    const later = rowV5(1, 'cee352e7');
+    change(later);
+    const { root, directory } = fixture(t, [rowV5(0, 'cee352e7'), later],
+      { fieldProfile: v5Profile });
+    const output = path.join(root, 'selected.jsonl');
+    const rejected = command(directory, '--cast-nested-u32', '1531465011',
+      '--limit', '1', '--to-ms', '1000', '--output', output);
+    assert.equal(rejected.status, 2, rejected.stderr);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(fs.existsSync(output), false);
+  }
+});
+
+test('batch nested u32 query counts V5 checks and V4 unavailable separately', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-cast-u32-batch-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const current = writeReplay(root, 'current', [rowV5(0, 'cee352e7')],
+    { fieldProfile: v5Profile });
+  const oldSha = 'c'.repeat(64);
+  const old = writeReplay(root, 'older', [row(0, 'c8', 4, oldSha)],
+    { replaySha: oldSha });
+  const hashes = {};
+  for (const [name, replay] of [['current', current], ['older', old]]) {
+    for (const file of ['semantic_run.json', 'replay_analysis.json', `${EVENT}.jsonl`]) {
+      hashes[`replays/${name}/${file}`] = hashFile(path.join(replay.directory, file));
+    }
+  }
+  fs.writeFileSync(path.join(root, 'manifest.json'), JSON.stringify({
+    command_args: ['batch'],
+    replay_inputs: [
+      { artifact_directory: 'replays/current', sha256: SHA,
+        version: profile.replay_version },
+      { artifact_directory: 'replays/older', sha256: oldSha,
+        version: profile.replay_version },
+    ],
+    output_hashes_excluding_manifest: hashes,
+  }));
+  const queried = command(root, '--cast-nested-u32', '1531465011');
+  assert.equal(queried.status, 0, queried.stderr);
+  assert.equal(queried.stdout, `${current.lines[0]}\n`);
+  const summary = JSON.parse(queried.stderr);
+  assert.equal(summary.query_status, 'PARTIAL');
+  assert.equal(summary.completed_replay_count, 1);
+  assert.equal(summary.unavailable_replay_count, 1);
+  assert.equal(summary.cast_nested_u32_checked_count, 1);
+  assert.equal(summary.cast_nested_u32_unavailable_count, 1);
+  assert.equal(summary.cast_nested_u32_unavailable_replay_count, 1);
+  assert.equal(summary.replay_results[1].code, 'CAST_NESTED_U32_UNAVAILABLE');
 });
