@@ -1,0 +1,292 @@
+{
+  "evidence_tier": "EXACT_BUILD_REPLAY_AND_PINNED_IMAGE_NATIVE_WITNESS",
+  "build": "16.19.821.7343",
+  "runtime_image_sha256": "35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325",
+  "route": "0x039d",
+  "packet_class": "PKT_CHAR_SetCooldown_Broadcast_s",
+  "callback_owner": "AIBaseClient",
+  "factory_case_rva": "0xf09d3f",
+  "constructor_rva": "0xe99ba0",
+  "vtable_rva": "0x1ba2930",
+  "deserializer_rva": "0xf1a4e0",
+  "callback_rva": "0x2bbc90",
+  "lookup_callsite_rva": "0x2bbcc5",
+  "lookup_target_rva": "0x98a840",
+  "replay_count": 11,
+  "scanned_block_count": 18235209,
+  "packet_count": 182482,
+  "native_full_success_count": 182482,
+  "first_failure": null,
+  "ordered_input_rule": "For each packet in Replay block order: u32le raw_param, u32le payload_length, raw payload bytes.",
+  "ordered_native_output_rule": "For each native-full packet in the same order: one protected object +0x10 byte, then u32le captured callback lookup key.",
+  "negative_controls": [
+    {
+      "case": "append one byte to an observed two-byte packet",
+      "result": "Native reader returned AL=1 but consumed only two of three bytes; candidate gate rejected incomplete consumption."
+    },
+    {
+      "case": "truncate an observed seven-byte packet to six bytes",
+      "result": "Native reader returned AL=0 with partial consumption; candidate gate rejected the packet."
+    }
+  ],
+  "semantic_limit": "Callback lookup execution stops before receiver state; actual cooldown, slot, actor, target, receiver result and effect remain UNKNOWN.",
+  "replays": [
+    {
+      "source_sha256": "d3a93326b3420ac0e2d0f077eef70b9b6413a9eb4b3e09f69056902ec2d11a8e",
+      "scanned_block_count": 2048130,
+      "target_count": 19714,
+      "native_full_success_count": 19714,
+      "stream_counts": {
+        "keyframe": 8683,
+        "game_chunk": 11031
+      },
+      "length_counts": {
+        "2": 2063,
+        "3": 8842,
+        "6": 2143,
+        "7": 4718,
+        "10": 658,
+        "11": 1248,
+        "15": 42
+      },
+      "ordered_input_sha256": "7d3608a188fcd26defddd048b688ea9e2cb6baf6fddcebaf1fec1bd3a002280e",
+      "ordered_native_output_sha256": "659298d2d04a45be2695d1ad63ed5cd18b2ce4ec1954b2aa349cb125136afe91",
+      "distinct_callback_lookup_keys": 34,
+      "first_failure": null
+    },
+    {
+      "source_sha256": "d5a53ff86009aa0e3d2544a8f00727e377e25f0a052a832e8f456d1cdcfdef8c",
+      "scanned_block_count": 1433298,
+      "target_count": 14957,
+      "native_full_success_count": 14957,
+      "stream_counts": {
+        "keyframe": 8687,
+        "game_chunk": 6270
+      },
+      "length_counts": {
+        "2": 1765,
+        "3": 6878,
+        "6": 1840,
+        "7": 3501,
+        "10": 603,
+        "11": 349,
+        "15": 21
+      },
+      "ordered_input_sha256": "0395fd0195d2659efb59ad00126205258c1e49e937e95e09d171790a9b3d3bb2",
+      "ordered_native_output_sha256": "21f9865792caf518628e1bf5458dba2d1546f8003cb757af7a050b6f9ae98d1f",
+      "distinct_callback_lookup_keys": 34,
+      "first_failure": null
+    },
+    {
+      "source_sha256": "26030cc38d97a96adb101a290746761c289044e3190d4962468cd3bc062518eb",
+      "scanned_block_count": 1444090,
+      "target_count": 11954,
+      "native_full_success_count": 11954,
+      "stream_counts": {
+        "keyframe": 8326,
+        "game_chunk": 3628
+      },
+      "length_counts": {
+        "2": 1531,
+        "3": 6501,
+        "6": 1621,
+        "7": 1795,
+        "10": 277,
+        "11": 219,
+        "15": 10
+      },
+      "ordered_input_sha256": "648b8113acf4ee66a7f44a98542065663c5209e5c088363d74210ca7bf338c42",
+      "ordered_native_output_sha256": "295099195702f9888ac5108ff6fd0746967ae5a9b09bd17c39925432babcfa2a",
+      "distinct_callback_lookup_keys": 34,
+      "first_failure": null
+    },
+    {
+      "source_sha256": "bf13d633a79cfc649292b4ef08fddab5328b914b1d809565d51e464f3fa9c541",
+      "scanned_block_count": 1420018,
+      "target_count": 10652,
+      "native_full_success_count": 10652,
+      "stream_counts": {
+        "keyframe": 7696,
+        "game_chunk": 2956
+      },
+      "length_counts": {
+        "2": 958,
+        "3": 6078,
+        "6": 1020,
+        "7": 1481,
+        "10": 684,
+        "11": 305,
+        "14": 117,
+        "15": 9
+      },
+      "ordered_input_sha256": "ba2bbfc3f2074bd101a47a81045b07a8b4b1f7abffe1f66144685171e64f1d3b",
+      "ordered_native_output_sha256": "6b7458f967a66829fb286e6e538d2fb31ef69bb9b29d52eabeea5ab80bcc5d87",
+      "distinct_callback_lookup_keys": 34,
+      "first_failure": null
+    },
+    {
+      "source_sha256": "dd78cf6bbac9728109998bcef6d9554ad93ba06c192c7547314e7a1ef17c2404",
+      "scanned_block_count": 1705869,
+      "target_count": 17265,
+      "native_full_success_count": 17265,
+      "stream_counts": {
+        "keyframe": 9768,
+        "game_chunk": 7497
+      },
+      "length_counts": {
+        "2": 2478,
+        "3": 7291,
+        "6": 2044,
+        "7": 4687,
+        "10": 249,
+        "11": 451,
+        "15": 65
+      },
+      "ordered_input_sha256": "148f890e0439786d2c4ed81433fe735b5cc59e4d209b92b13b56825a64198735",
+      "ordered_native_output_sha256": "45bc031764a481b52f34cf565f57efb6df66f54f169dee0886cb4ed263abcebb",
+      "distinct_callback_lookup_keys": 34,
+      "first_failure": null
+    },
+    {
+      "source_sha256": "18070abab4a973ca9d753ed48b4b155042de9b70f3fe059defbad5d9b27b1264",
+      "scanned_block_count": 2288756,
+      "target_count": 15615,
+      "native_full_success_count": 15615,
+      "stream_counts": {
+        "keyframe": 10926,
+        "game_chunk": 4689
+      },
+      "length_counts": {
+        "2": 1403,
+        "3": 8524,
+        "6": 2462,
+        "7": 2148,
+        "10": 425,
+        "11": 447,
+        "14": 200,
+        "15": 6
+      },
+      "ordered_input_sha256": "311faffdd8c08209d9d9c08d061a78956f994ac4086237dc06a6e400ab5fe4f0",
+      "ordered_native_output_sha256": "246f7dfe10967bd9581125750d9b33b9fefac76d32571163d74baa05fb161289",
+      "distinct_callback_lookup_keys": 34,
+      "first_failure": null
+    },
+    {
+      "source_sha256": "4d6e5dc8a4da1c9048c4e75d984c3eb98623f9ebf9d325ba28a51874e43b9e39",
+      "scanned_block_count": 1272273,
+      "target_count": 11607,
+      "native_full_success_count": 11607,
+      "stream_counts": {
+        "keyframe": 7384,
+        "game_chunk": 4223
+      },
+      "length_counts": {
+        "2": 988,
+        "3": 5918,
+        "6": 1817,
+        "7": 1632,
+        "10": 298,
+        "11": 397,
+        "15": 557
+      },
+      "ordered_input_sha256": "fed879b4230abaaa1ba34cd6557cc765d0ee5c4cbb7b3ba45da3db2d4306a66d",
+      "ordered_native_output_sha256": "06f83733a93e640881b5c52f4dcfb2ff178d29f961e6f9392ee2031fba86be53",
+      "distinct_callback_lookup_keys": 34,
+      "first_failure": null
+    },
+    {
+      "source_sha256": "8c84fa11712e5faf516f0316d34aa9e6dbe542b36e5d1472c294daf2533ae1ef",
+      "scanned_block_count": 1619918,
+      "target_count": 17791,
+      "native_full_success_count": 17791,
+      "stream_counts": {
+        "keyframe": 9783,
+        "game_chunk": 8008
+      },
+      "length_counts": {
+        "2": 1919,
+        "3": 7636,
+        "6": 1958,
+        "7": 4617,
+        "10": 1165,
+        "11": 355,
+        "14": 106,
+        "15": 35
+      },
+      "ordered_input_sha256": "d68ef8aaaafb6b8291795c04253fe79422bad0b707c23b75e94d0d7aaee86b26",
+      "ordered_native_output_sha256": "d8a593520eaf0464f1a1ceb57edeae0f3eb574b3915d0914320d7f2212f4ada8",
+      "distinct_callback_lookup_keys": 34,
+      "first_failure": null
+    },
+    {
+      "source_sha256": "823b546655866c076a5e14874197ad42eb2f83917f563c08c7a928193e5cb52d",
+      "scanned_block_count": 1988624,
+      "target_count": 30894,
+      "native_full_success_count": 30894,
+      "stream_counts": {
+        "keyframe": 9636,
+        "game_chunk": 21258
+      },
+      "length_counts": {
+        "2": 1541,
+        "3": 7407,
+        "6": 12678,
+        "7": 1757,
+        "10": 6843,
+        "11": 655,
+        "15": 13
+      },
+      "ordered_input_sha256": "88997b885f8efc59fb31bb6c81a1f24b0b07d7aec561f8ad3812d0679b31711d",
+      "ordered_native_output_sha256": "ad2f3417f2c14020505b0758b27f3276195bfce5ef1159d3429b3bf2c6aaca60",
+      "distinct_callback_lookup_keys": 34,
+      "first_failure": null
+    },
+    {
+      "source_sha256": "682b6703b2caeafb49b501a93b398cc9227381d412ae7f25a942a3035a8ea9ca",
+      "scanned_block_count": 1750384,
+      "target_count": 20057,
+      "native_full_success_count": 20057,
+      "stream_counts": {
+        "keyframe": 9349,
+        "game_chunk": 10708
+      },
+      "length_counts": {
+        "2": 1779,
+        "3": 9423,
+        "6": 2614,
+        "7": 4780,
+        "10": 288,
+        "11": 538,
+        "14": 137,
+        "15": 498
+      },
+      "ordered_input_sha256": "fcb0e502baea9c62a7cd6d3ead2414a39c38efd443185c1f4a97cf3ee50e2498",
+      "ordered_native_output_sha256": "9094a52dceec08fff68712abdf25d8d1d55334883954f64bdc76d756e365ef84",
+      "distinct_callback_lookup_keys": 33,
+      "first_failure": null
+    },
+    {
+      "source_sha256": "2453323e79e62e24b43f3d041b77f2b4d2773e39cba77a125663544ee2e0940b",
+      "scanned_block_count": 1263849,
+      "target_count": 11976,
+      "native_full_success_count": 11976,
+      "stream_counts": {
+        "keyframe": 7739,
+        "game_chunk": 4237
+      },
+      "length_counts": {
+        "2": 1005,
+        "3": 6102,
+        "6": 2568,
+        "7": 1174,
+        "10": 399,
+        "11": 512,
+        "15": 216
+      },
+      "ordered_input_sha256": "50f419c40af315d2d4de24aede5474b752f03e3f285cf58a0db4e7307bb2c042",
+      "ordered_native_output_sha256": "a7c19b5a06501a2edf9b2fed4f615e448b53179685099fd2acc2f6d7c318fea4",
+      "distinct_callback_lookup_keys": 34,
+      "first_failure": null
+    }
+  ]
+}

@@ -47,7 +47,7 @@ Current progress (older notes below retain their original research context):
   pass fully consumed all 182,482 packets and captured one lookup key per
   packet; ordered raw-input and native-output SHA-256 values are retained
   for each Replay in
-  [the source-bound evidence summary](evidence/cooldown_broadcast_821_native_gate.json).
+  [the source-bound evidence summary](COOLDOWN_BROADCAST_821_NATIVE_GATE.json).
   The bounded CLI/API decoder verifies the exact image,
   native full consumption, object identity, callback key, and both digests
   before emitting `cooldown_broadcast_packet_candidates`. One real CLI
