@@ -3568,11 +3568,10 @@ function prepareRosterBridgeSourceVerification(prepared, sourceReplay) {
   const result = decoded.capability_results?.hero_roster_metadata_bridge;
   const rows = decoded.events?.[ROSTER_BRIDGE_EVENT_821];
   if (result?.status !== 'CANDIDATE'
-      || result.metadata_sha256 !== prepared.capabilityResult.metadata_sha256
-      || result.stats_json_sha256 !== prepared.capabilityResult.stats_json_sha256
+      || !isDeepStrictEqual(result, prepared.capabilityResult)
       || !Array.isArray(rows) || rows.length !== 10) {
     throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
-      'Physical ROFL tail statsJson or HeroStats bridge differs from saved candidate metadata.',
+      'Physical ROFL tail, HeroStats bridge result, or packet references differ from saved candidate metadata.',
       { source_replay: resolved, source_status: result?.status ?? null });
   }
   return { kind: 'ROSTER_BRIDGE', rows, sourceReplay: resolved };
@@ -3589,8 +3588,16 @@ function prepareRosterBridgeInventory(artifactDirectory, semantic, analysis,
       || result.event_count !== 10
       || result.metadata_player_count !== 10
       || result.unique_kda_match_count !== 10
+      || !isCount(result.input_count) || result.input_count === 0
+      || result.input_count % 10 !== 0
+      || result.runtime_image_used !== false
+      || result.runtime_image_status !== 'NOT_REQUIRED'
+      || !isDeepStrictEqual(result.known_limits, profile.known_limits)
       || !REPLAY_SHA.test(result.metadata_sha256)
       || !REPLAY_SHA.test(result.stats_json_sha256)
+      || !result.dependency_statuses
+      || Object.keys(result.dependency_statuses).length
+        !== profile.depends_on.length
       || !profile.depends_on.every((name) =>
         result.dependency_statuses?.[name] === 'CANDIDATE')) {
     throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
@@ -3629,7 +3636,8 @@ function prepareRosterBridgeInventory(artifactDirectory, semantic, analysis,
       || !Array.isArray(players) || players.length !== 10
       || players.some((player, index) =>
         player?.metadata_index !== index
-        || typeof player.champion !== 'string' || player.champion.length === 0
+        || typeof player.champion !== 'string'
+        || player.champion.trim().length === 0
         || player.team_id !== (index < 5 ? 100 : 200)
         || player.team !== (index < 5 ? 'blue' : 'red')
         || player.role_status !== 'VERIFIED_FROM_METADATA'
@@ -3646,6 +3654,15 @@ function prepareRosterBridgeInventory(artifactDirectory, semantic, analysis,
   if (new Set(signatures).size !== 10) {
     throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
       'Manifest-hashed roster inventory has ambiguous K/D/A signatures.');
+  }
+  const deaths = players.reduce((sum, player) =>
+    sum + player.aggregate_stats.deaths, 0);
+  const assists = players.reduce((sum, player) =>
+    sum + player.aggregate_stats.assists, 0);
+  if (result.observed_hero_death_count !== deaths
+      || result.observed_assist_pair_count !== assists) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'Saved roster bridge event totals differ from manifest-hashed inventory K/D/A.');
   }
   if (analysis.event_counts?.[ROSTER_BRIDGE_EVENT_821] !== 10) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',

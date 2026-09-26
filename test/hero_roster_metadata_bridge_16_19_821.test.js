@@ -345,3 +345,41 @@ test('missing champion in manifest-hashed inventory cannot be queried', (t) => {
     'hero_roster_metadata_bridge_candidates'),
   (error) => error.code === 'CAPABILITY_METADATA_MISMATCH');
 });
+
+test('matching whitespace champion forgeries in saved inventory and rows are rejected', (t) => {
+  const fixture = writeSavedBridgeFixture(t);
+  const inventory = JSON.parse(fixture.files['rofl_inventory.json']);
+  inventory.metadata.players[0].champion = '   ';
+  fixture.files['rofl_inventory.json'] = JSON.stringify(inventory);
+  const event = 'hero_roster_metadata_bridge_candidates';
+  const rows = fixture.files[`${event}.jsonl`].trimEnd().split('\n')
+    .map((line) => JSON.parse(line));
+  rows[0].champion_metadata = '   ';
+  fixture.files[`${event}.jsonl`] =
+    `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`;
+  fixture.rewrite();
+  assert.throws(() => prepareEventQuery(fixture.directory, event),
+    (error) => error.code === 'CAPABILITY_METADATA_MISMATCH');
+});
+
+test('forged saved assist total or evidence status yields zero CLI stdout after manifest rewrite', (t) => {
+  for (const mutate of [
+    (result) => { result.observed_assist_pair_count = 9999; },
+    (result) => { result.evidence_status = 'FORGED'; },
+  ]) {
+    const fixture = writeSavedBridgeFixture(t);
+    const semantic = JSON.parse(fixture.files['semantic_run.json']);
+    mutate(semantic.capability_results.hero_roster_metadata_bridge);
+    fixture.files['semantic_run.json'] = JSON.stringify(semantic);
+    fixture.rewrite();
+    const cli = childProcess.spawnSync(process.execPath, [
+      path.join(__dirname, '..', 'src', 'cli.js'),
+      'query-events', fixture.directory,
+      '--event', 'hero_roster_metadata_bridge_candidates',
+      '--verify-source', '--limit', '1',
+    ], { encoding: 'utf8' });
+    assert.equal(cli.status, 2);
+    assert.equal(cli.stdout, '');
+    assert.match(cli.stderr, /CAPABILITY_METADATA_MISMATCH/);
+  }
+});
