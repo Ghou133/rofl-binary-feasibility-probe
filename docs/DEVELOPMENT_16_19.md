@@ -34,6 +34,32 @@ Current progress (older notes below retain their original research context):
   executed: actual item identity, charges, slot, owner, receiver state and
   gameplay effect remain `UNKNOWN`. Original Replays, image, and full JSONL
   stay ignored outside Git. Focused exact-image Node tests passed 9/9.
+- **TargetHero 0x0265 callback u32 (opt-in candidate):** The pinned exact KR
+  `16.19.821.7343` runtime registers route `0x0265` as
+  `PKT_AI_TargetHeroS2C_s` on `AIBaseClient`, through factory case
+  `0xf05c17`, constructor `0xe99060`, deserializer `0xf19ec0`, and callback
+  `0x2bb950`. This differs from the historical build's use of route `0x0265`.
+  Strict framing of 11 original KR Replays found 62,219 game-stream packets:
+  30,874 one-byte and 31,345 three-byte payloads. All 62,219 natively
+  deserialized with full consumption and reached the callback callsite with
+  one packet-local u32; the decoder stops before the receiver-dependent
+  function. Independent per-Replay ordered raw-input hashes and native-output
+  hashes matched the CLI decoder; the sanitized per-Replay hashes are in
+  [the exact native gate summary](TARGET_HERO_821_NATIVE_GATE.json). Eight
+  truncate/append controls were not
+  accepted as full packets. `--events target_hero_packet --runtime-image IMAGE
+  --event-jsonl-only` is an explicit CLI opt-in; the API uses
+  `capabilities: ['target_hero_packet']`. A real CLI run emitted 6,703/6,703
+  candidate rows with `MATCHED_USED`, one native batch, and zero framing
+  errors. Saved `query-events --event target_hero_packet_candidates
+  --opaque-u32 0 --limit 1` validated all 6,703 rows, matched 3,335 and
+  emitted one unchanged row. The saved query validates each row and both
+  ordered digests even after the output limit; focused exact-image tests
+  passed 9/9 with zero skips. The callback u32 is zero for every observed
+  one-byte packet and takes ten `0x400000ae..0x400000b7` values for the
+  three-byte packets. A resolved target object, source actor, receiver state,
+  and actual effect remain `UNKNOWN`. Original Replays, image, complete
+  native gate and CLI artifacts remain local and ignored.
 - **SetItemGroupData_Broadcast conditional callback byte (opt-in V2 candidate):**
   `--item-group-packet-v2` or API `itemGroupPacketProfile: 'v2'` retains the
   exact `0x013f` V1 packet route and lookup key, then adds the native object's

@@ -1,0 +1,161 @@
+{
+  "evidence_tier": "EXACT_BUILD_REPLAY_AND_PINNED_IMAGE_NATIVE_WITNESS",
+  "build": "16.19.821.7343",
+  "runtime_image_sha256": "35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325",
+  "route": "0x0265",
+  "packet_class": "PKT_AI_TargetHeroS2C_s",
+  "callback_owner": "AIBaseClient",
+  "factory_case_rva": "0xf05c17",
+  "constructor_rva": "0xe99060",
+  "vtable_rva": "0x1ba1b20",
+  "deserializer_rva": "0xf19ec0",
+  "registration_rva": "0x261223",
+  "callback_rva": "0x2bb950",
+  "receiver_callsite_rva": "0x2bb9b2",
+  "receiver_function_rva": "0x2d2be0",
+  "callback_table_sha256": "328528d693ab5d96a815b6706694025a980e609019304aeb2e5e32797011c04b",
+  "callback_code_sha256": "d390dfdc0c6e32a0ca6d51094aad9ae19e23d590cd501785761448b9200b1070",
+  "replay_count": 11,
+  "scanned_block_count": 18235209,
+  "packet_count": 62219,
+  "native_full_success_count": 62219,
+  "length_counts": {
+    "1": 30874,
+    "3": 31345
+  },
+  "stream_counts": {
+    "game_chunk": 62219
+  },
+  "callback_u32_distinct_count": 11,
+  "callback_u32_zero_count": 30874,
+  "negative_controls": {
+    "truncate_or_append_test_count": 8,
+    "accepted_as_full_count": 0
+  },
+  "ordered_input_rule": "For each packet in Replay block order: u32le raw_param, u32le payload_length, raw payload bytes.",
+  "ordered_native_output_rule": "For each native-full packet in the same order: four protected object +0x10 bytes, then u32le pre-receiver callback argument.",
+  "semantic_limit": "Native callback execution stops before the receiver-dependent call. Resolved target object, source actor, target state and actual effect remain UNKNOWN.",
+  "replays": [
+    {
+      "source_sha256": "d3a93326b3420ac0e2d0f077eef70b9b6413a9eb4b3e09f69056902ec2d11a8e",
+      "scanned_block_count": 2048130,
+      "route_packet_count": 6703,
+      "length_counts": {
+        "1": 3335,
+        "3": 3368
+      },
+      "ordered_input_sha256": "345d3ee474473c854758689cf5d2e36dfc8cfa447c90bfe95bc6dc5346ab73d1",
+      "ordered_native_output_sha256": "3ba80c45cadedad61508c0afb88e9b170c8cc663120c304be1d2f5c335559753"
+    },
+    {
+      "source_sha256": "d5a53ff86009aa0e3d2544a8f00727e377e25f0a052a832e8f456d1cdcfdef8c",
+      "scanned_block_count": 1433298,
+      "route_packet_count": 4778,
+      "length_counts": {
+        "1": 2366,
+        "3": 2412
+      },
+      "ordered_input_sha256": "75688f1873c3f43766aa8c70fd2319418d8addd303c6d752d8c3059c1117204b",
+      "ordered_native_output_sha256": "cd7eeb4ef24e2fd831c12e743b213dc7e62915e2261846252b1ae9b510adb580"
+    },
+    {
+      "source_sha256": "26030cc38d97a96adb101a290746761c289044e3190d4962468cd3bc062518eb",
+      "scanned_block_count": 1444090,
+      "route_packet_count": 4497,
+      "length_counts": {
+        "1": 2223,
+        "3": 2274
+      },
+      "ordered_input_sha256": "2eaf046bac04bb4f8304286b1e1df4bf5754263be1da23b6dbb6ea77eea607ca",
+      "ordered_native_output_sha256": "b00898ec3b7d32fdf08af3489c1e1a574b63cf9b51004049268d201b9fd05d29"
+    },
+    {
+      "source_sha256": "bf13d633a79cfc649292b4ef08fddab5328b914b1d809565d51e464f3fa9c541",
+      "scanned_block_count": 1420018,
+      "route_packet_count": 4718,
+      "length_counts": {
+        "1": 2355,
+        "3": 2363
+      },
+      "ordered_input_sha256": "af77fba4e8ce936d2d6b710eb444611d4e79d168b9ab2c977e0ffc26ffc76e7b",
+      "ordered_native_output_sha256": "6d1f6be0e943742dc42d322310b71060e0c626604645a624af15c9abb023d20d"
+    },
+    {
+      "source_sha256": "dd78cf6bbac9728109998bcef6d9554ad93ba06c192c7547314e7a1ef17c2404",
+      "scanned_block_count": 1705869,
+      "route_packet_count": 5530,
+      "length_counts": {
+        "1": 2761,
+        "3": 2769
+      },
+      "ordered_input_sha256": "f9aa885e315f424982a01c96b4ffd9bcbefed9ee13cb82680b0a15d799a51732",
+      "ordered_native_output_sha256": "2f511554b150e268143ba4478ece23c63572a1fed3c4dd63b777f1346cac43de"
+    },
+    {
+      "source_sha256": "18070abab4a973ca9d753ed48b4b155042de9b70f3fe059defbad5d9b27b1264",
+      "scanned_block_count": 2288756,
+      "route_packet_count": 5444,
+      "length_counts": {
+        "1": 2716,
+        "3": 2728
+      },
+      "ordered_input_sha256": "19ace18ce3204175501bea09a3978b1c83b10992c132b0a48ef06ee78f9b58df",
+      "ordered_native_output_sha256": "8e4621c3fb766311a79a0c34edede80a8fa84cd3eb6cf1d66fb7c3ba81ddc981"
+    },
+    {
+      "source_sha256": "4d6e5dc8a4da1c9048c4e75d984c3eb98623f9ebf9d325ba28a51874e43b9e39",
+      "scanned_block_count": 1272273,
+      "route_packet_count": 4521,
+      "length_counts": {
+        "1": 2239,
+        "3": 2282
+      },
+      "ordered_input_sha256": "8fbe165d264d25d1d17ac51ead60e19a77d06e6ef4af399566cb32c8c0b1b789",
+      "ordered_native_output_sha256": "e660697f664dfff2288ce20eff12611a453556b217d43f804fb1a67359507147"
+    },
+    {
+      "source_sha256": "8c84fa11712e5faf516f0316d34aa9e6dbe542b36e5d1472c294daf2533ae1ef",
+      "scanned_block_count": 1619918,
+      "route_packet_count": 6249,
+      "length_counts": {
+        "1": 3101,
+        "3": 3148
+      },
+      "ordered_input_sha256": "ff49f54aebf52aa0f019c0fb980cb132a22aba1fd68b3dd081209ce224c1ec50",
+      "ordered_native_output_sha256": "cc8556bfa6cb74076c6615b92dd521685d277f7e8e2748d1010bad0ab8aa474a"
+    },
+    {
+      "source_sha256": "823b546655866c076a5e14874197ad42eb2f83917f563c08c7a928193e5cb52d",
+      "scanned_block_count": 1988624,
+      "route_packet_count": 7788,
+      "length_counts": {
+        "1": 3845,
+        "3": 3943
+      },
+      "ordered_input_sha256": "1e8e23ef7698d37b42b292cc797b5c562c2bf67cdc64fb1bc4f75bd9fa069b72",
+      "ordered_native_output_sha256": "88da68e878d59fd40c48bc060619bc21d6ac0fa6d1d28aeb8d55d3ebc54e72d8"
+    },
+    {
+      "source_sha256": "682b6703b2caeafb49b501a93b398cc9227381d412ae7f25a942a3035a8ea9ca",
+      "scanned_block_count": 1750384,
+      "route_packet_count": 5859,
+      "length_counts": {
+        "1": 2920,
+        "3": 2939
+      },
+      "ordered_input_sha256": "e5daec036bb3b828c1b21e32c585875b938b62c7e954197f7a588a806eb18835",
+      "ordered_native_output_sha256": "e1cb2da957ade600b685de70f50b5c8d83c6f6efa9f7b1c91475c895e4c0a9c5"
+    },
+    {
+      "source_sha256": "2453323e79e62e24b43f3d041b77f2b4d2773e39cba77a125663544ee2e0940b",
+      "scanned_block_count": 1263849,
+      "route_packet_count": 6132,
+      "length_counts": {
+        "1": 3013,
+        "3": 3119
+      },
+      "ordered_input_sha256": "555702a0eb963edd690209479fc450c5b8ad66f4febd4a38273df28c54672a08",
+      "ordered_native_output_sha256": "718cb3a0bbcdcd48d3633040c3750a480ace047a55cc6a203845771c63bd812e"
+    }
+  ]
+}
