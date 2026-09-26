@@ -1910,6 +1910,11 @@ Current progress (older notes below retain their original research context):
   ignored under `artifacts/16_19_development/time_stats_821_probe/`,
   `artifacts/16_19_development/kr_821_heal_probe/`, and
   `artifacts/16_19_development/epic_cc_821_probe/`.
+  For `TOTAL_UNITS_HEALED`, the sole final mismatch is participant 1 in
+  `KR_8392938200`: all 33 snapshots have `0x23c = 1`, and the last is
+  57,919 ms before the Replay tail value of 5. Other participant-1 counters
+  agree with the tail, so changing the participant assignment does not
+  resolve this gap; no late healing event is directly observed.
   The combined six-capability CLI batch returned 11/11 `CANDIDATE`, zero
   errors, and 3,270 rows per ability; input hashes and individual results are
   ignored under `artifacts/16_19_development/kr_821_time_heal_epic_cc_11/`.
@@ -2467,6 +2472,19 @@ Current progress (older notes below retain their original research context):
   controls, a weak lead. `0x023c` co-times with other routes, `0x0113` forms
   short repeated trains, and `0x0194` appears during observed death intervals.
   None is emitted as a path candidate.
+- **821 team-visibility route stop-loss:** The pinned image registers numeric
+  route `0x021b` with `PKT_S2C_OnEnterTeamVisibility_s` and a callback that
+  reads object `+0x10`. Across all 11 exact-build KR Replays, 6,192,525
+  packets have two-byte payloads: 3,104,065 `1b03` and 3,088,460 `1b50`,
+  with zero framing errors. Native deserialization of both original payload
+  shapes reaches a pointer to process heap omitted from the captured module
+  image, so neither has a full-consumption or decoded-field witness. A wrong
+  selector returns success after consuming only one of two bytes. No field or
+  event is emitted. A same-build heap capture or live packet callback trace,
+  including both payloads and truncation/append controls, is needed to reopen
+  this route. Actual visibility, actor, ward and map meaning remain unknown.
+  Counts, packet references and the failed native probe are retained under
+  ignored `artifacts/16_19_development/visibility_021b_821/`.
 - **821 HeroStats route correction:** The exact image registers
   `PKT_S2C_HeroStats_s` and its factory constructor at numeric ID `0x0089`.
   An earlier probe on two real 1,263-byte KR keyframe payloads consumed only
