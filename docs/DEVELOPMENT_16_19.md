@@ -25,9 +25,9 @@ Current progress (older notes below retain their original research context):
   seven observed strings are fail-closed scope gates, not a substitute for
   native per-packet decoding. Image, Replays and outputs remain outside Git.
   Focused decoder and query tests passed 12/12 with the exact local inputs.
-  The public suite last passed before the output-digest change (1,150 Node
-  passes, 78 declared skips and 19 Python unittest passes); the digest change
-  has not yet had a full public-suite rerun.
+  After the output-digest change, `npm test` passed with 1,122 Node passes,
+  108 declared skips (private inputs were not set for that run), zero failures,
+  and 19 Python unittest passes. The focused exact-input suite passed 12/12.
 - **Saved event discovery:** `query-events DIR --list-events` lists actual
   saved candidate keys and per-Replay exact build, capability status and
   declared count. It distinguishes saved zero rows, unavailable and
@@ -57,6 +57,12 @@ Current progress (older notes below retain their original research context):
   callback lookup/cast results and a packet-linked state change remain
   unobserved; this branch cannot identify a fatal packet, target or effect.
   Source artifacts are the ignored `combat_v5_associations_11_821` batch.
+- **Cast/Timer identity stop-loss:** The pinned image registers the
+  `SetSpellTimer` callback through `AIBaseClient`, but the captured module
+  has no replay-session receiver heap or observed per-packet map hit. Among
+  5,481 Timer V2 rows, 303 rows carry raw parameters outside the common
+  `0x400000ae..b7` family. No independent participant or spell-slot binding
+  was established; Cast and Timer identities remain `UNKNOWN`.
 - **CastSpellAns nested anonymous u32 at packet +0x4c (opt-in packet V6):**
   The pinned `16.19.821.7343` image callback RVA `0x8d7860..0x8d78cb`
   reads nested `+0x3c` (packet object `+0x4c`), converts four protected
