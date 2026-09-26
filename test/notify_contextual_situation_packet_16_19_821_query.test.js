@@ -15,6 +15,7 @@ const CLI = path.resolve(__dirname, '../src/cli.js');
 const CAPABILITY = 'notify_contextual_situation_packet';
 const EVENT = 'notify_contextual_situation_packet_candidates';
 const PAYLOAD_HEX = '0cc3aafbf72fbf89888831f7311f';
+const BLASTCONE_PAYLOAD_HEX = '0e670619e699e6dcf3d7d7e6f0cd09f3ea';
 const SOURCE_PATH = 'synthetic.rofl';
 const STRING = 'RecallLeadIn';
 
@@ -22,19 +23,22 @@ function sha256(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
 }
 
-function row(index, replaySha) {
+function row(index, replaySha, situation = STRING) {
   const time = 1000 + index;
   const rawParam = 0x400000b4 + index;
-  const bytes = Buffer.from(STRING, 'utf8');
+  const bytes = Buffer.from(situation, 'utf8');
+  const payloadHex = situation === 'AttackBlastcone'
+    ? BLASTCONE_PAYLOAD_HEX : PAYLOAD_HEX;
   return {
     event_type: 'NOTIFY_CONTEXTUAL_SITUATION_PACKET_CANDIDATE',
     game_version: profile.replay_version, patch: '16.19',
     build_profile: profile.id, replay_sha256: replaySha,
     replay_time_ms: time, raw_param: rawParam,
     packet_name_candidate: profile.packet_name,
-    contextual_situation: STRING,
+    contextual_situation: situation,
     contextual_situation_utf8_hex: bytes.toString('hex'),
-    native_string_length: bytes.length, native_string_capacity: bytes.length + 1,
+    native_string_length: bytes.length,
+    native_string_capacity: bytes.length + (situation === 'AttackBlastcone' ? 2 : 1),
     semantic_effect_status: 'UNKNOWN', confidence: 'CANDIDATE',
     semantic_status: profile.evidence_status,
     raw_packet_ref: {
@@ -44,9 +48,9 @@ function row(index, replaySha) {
       decompressed_block_offset: 20 + index * 30,
       decompressed_payload_offset: 29 + index * 30,
       packet_id: profile.replay_block_packet_id, replay_time_ms: time,
-      payload_length: PAYLOAD_HEX.length / 2, raw_param: rawParam,
-      raw_payload_hex: PAYLOAD_HEX,
-      raw_payload_sha256: sha256(Buffer.from(PAYLOAD_HEX, 'hex')),
+      payload_length: payloadHex.length / 2, raw_param: rawParam,
+      raw_payload_hex: payloadHex,
+      raw_payload_sha256: sha256(Buffer.from(payloadHex, 'hex')),
     },
   };
 }
@@ -60,6 +64,19 @@ function nativeInputSha256(rows) {
     header.writeUInt32LE(payload.length, 4);
     digest.update(header);
     digest.update(payload);
+  }
+  return digest.digest('hex');
+}
+
+function nativeOutputSha256(rows) {
+  const digest = crypto.createHash('sha256');
+  const header = Buffer.alloc(8);
+  for (const entry of rows) {
+    const bytes = Buffer.from(entry.contextual_situation_utf8_hex, 'hex');
+    header.writeUInt32LE(entry.native_string_length, 0);
+    header.writeUInt32LE(entry.native_string_capacity, 4);
+    digest.update(header);
+    digest.update(bytes);
   }
   return digest.digest('hex');
 }
@@ -81,6 +98,7 @@ function writeReplay(root, name, rows, replaySha, replayVersion = profile.replay
     native_witness_status: 'FULLY_CONSUMED_ALL',
     native_full_success_count: rows.length,
     native_input_sha256: nativeInputSha256(rows),
+    native_output_sha256: nativeOutputSha256(rows),
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
     runtime_image_sha256: profile.evidence_runtime_image_sha256,
   };
@@ -182,7 +200,33 @@ test('saved 821 contextual rows are validated after limit and partial output is 
   }
 });
 
-test('saved 821 contextual metadata is exact-build and native-input bound', (t) => {
+test('valid-to-valid native string forgery fails the ordered output digest, including after limit', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-contextual-output-hash-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const replaySha = 'a'.repeat(64);
+  const first = writeReplay(root, 'first', [
+    row(0, replaySha, 'AttackBlastcone'),
+    row(1, replaySha, 'AttackBlastcone'),
+  ], replaySha);
+  const original = first.lines.map((line) => JSON.parse(line));
+  for (const alteredIndex of [0, 1]) {
+    const forged = structuredClone(original);
+    forged[alteredIndex].contextual_situation = 'RecallLeadIn';
+    forged[alteredIndex].contextual_situation_utf8_hex =
+      Buffer.from('RecallLeadIn', 'utf8').toString('hex');
+    forged[alteredIndex].native_string_length = Buffer.byteLength('RecallLeadIn');
+    forged[alteredIndex].native_string_capacity = Buffer.byteLength('RecallLeadIn') + 1;
+    fs.writeFileSync(first.eventPath, `${forged.map(JSON.stringify).join('\n')}\n`);
+    const output = path.join(root, `forged-${alteredIndex}.jsonl`);
+    const selected = query(first.directory, '--contextual-situation',
+      alteredIndex === 0 ? 'RecallLeadIn' : 'AttackBlastcone',
+      '--limit', '1', '--output', output);
+    assert.equal(errorCode(selected), 'EVENT_COUNT_MISMATCH');
+    assert.equal(fs.existsSync(output), false);
+  }
+});
+
+test('saved 821 contextual metadata is exact-build and native-input/output bound', (t) => {
   const { first } = fixture(t);
   const originalSemantic = fs.readFileSync(first.semanticPath, 'utf8');
   const originalAnalysis = fs.readFileSync(first.analysisPath, 'utf8');
@@ -190,6 +234,7 @@ test('saved 821 contextual metadata is exact-build and native-input bound', (t) 
     ['profile_id', 'foreign'],
     ['runtime_image_sha256', '0'.repeat(64)],
     ['native_full_success_count', 1],
+    ['native_output_sha256', 'not-a-sha'],
   ]) {
     const semantic = JSON.parse(originalSemantic);
     const analysis = JSON.parse(originalAnalysis);
@@ -205,6 +250,16 @@ test('saved 821 contextual metadata is exact-build and native-input bound', (t) 
   const analysis = JSON.parse(originalAnalysis);
   semantic.capability_results[CAPABILITY].native_input_sha256 = '0'.repeat(64);
   analysis.semantic.capability_results[CAPABILITY].native_input_sha256 = '0'.repeat(64);
+  fs.writeFileSync(first.semanticPath, JSON.stringify(semantic));
+  fs.writeFileSync(first.analysisPath, JSON.stringify(analysis));
+  assert.equal(errorCode(query(first.directory)), 'EVENT_COUNT_MISMATCH');
+
+  semantic.capability_results[CAPABILITY].native_input_sha256 =
+    JSON.parse(originalSemantic).capability_results[CAPABILITY].native_input_sha256;
+  analysis.semantic.capability_results[CAPABILITY].native_input_sha256 =
+    JSON.parse(originalAnalysis).semantic.capability_results[CAPABILITY].native_input_sha256;
+  semantic.capability_results[CAPABILITY].native_output_sha256 = '0'.repeat(64);
+  analysis.semantic.capability_results[CAPABILITY].native_output_sha256 = '0'.repeat(64);
   fs.writeFileSync(first.semanticPath, JSON.stringify(semantic));
   fs.writeFileSync(first.analysisPath, JSON.stringify(analysis));
   assert.equal(errorCode(query(first.directory)), 'EVENT_COUNT_MISMATCH');
@@ -226,6 +281,16 @@ test('saved 821 contextual metadata is exact-build and native-input bound', (t) 
   fs.writeFileSync(first.semanticPath, JSON.stringify(unavailableSemantic));
   fs.writeFileSync(first.analysisPath, JSON.stringify(unavailableAnalysis));
   assert.equal(errorCode(query(first.directory)), 'CAPABILITY_UNAVAILABLE');
+
+  for (const promotedStatus of ['PASS', 'PROMOTED']) {
+    const promotedSemantic = JSON.parse(originalSemantic);
+    const promotedAnalysis = JSON.parse(originalAnalysis);
+    promotedSemantic.capability_results[CAPABILITY].status = promotedStatus;
+    promotedAnalysis.semantic.capability_results[CAPABILITY].status = promotedStatus;
+    fs.writeFileSync(first.semanticPath, JSON.stringify(promotedSemantic));
+    fs.writeFileSync(first.analysisPath, JSON.stringify(promotedAnalysis));
+    assert.equal(errorCode(query(first.directory)), 'CAPABILITY_METADATA_MISMATCH');
+  }
 });
 
 test('contextual string filter is scoped to its candidate event', (t) => {

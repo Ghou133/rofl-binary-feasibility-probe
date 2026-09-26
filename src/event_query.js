@@ -1208,6 +1208,11 @@ function prepareNotifyContextualSituationPacketEvent(semantic, analysis, eventKe
       { replay_version: semantic.replay_version,
         required_replay_version: profile.replay_version });
   }
+  if (result && !['CANDIDATE', 'MISSING_INPUT', 'PROFILE_UNAVAILABLE',
+    'DECODE_FAILED', 'UNSUPPORTED'].includes(result.status)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} must remain an exact-build candidate or declared unavailable.`);
+  }
   if (result?.status !== 'CANDIDATE') return;
   if (result.profile_id !== profile.id
       || result.input_packet_id !== profile.replay_block_packet_id
@@ -1229,6 +1234,7 @@ function prepareNotifyContextualSituationPacketEvent(semantic, analysis, eventKe
       || result.native_witness_status !== 'FULLY_CONSUMED_ALL'
       || result.native_full_success_count !== result.event_count
       || !REPLAY_SHA.test(result.native_input_sha256 ?? '')
+      || !REPLAY_SHA.test(result.native_output_sha256 ?? '')
       || !isDeepStrictEqual(
         analysis.semantic?.capability_results?.[profile.capability], result)) {
     throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
@@ -1315,6 +1321,10 @@ function notifyContextualSituationPacketRow(row, prepared, lineNumber, state) {
   header.writeUInt32LE(payload.length, 4);
   state.nativeInputHash.update(header);
   state.nativeInputHash.update(payload);
+  header.writeUInt32LE(row.native_string_length, 0);
+  header.writeUInt32LE(row.native_string_capacity, 4);
+  state.nativeOutputHash.update(header);
+  state.nativeOutputHash.update(stringBytes);
 }
 
 function prepareFaceDirectionRosterPairEvent(semantic, analysis, eventKey, result) {
@@ -8272,7 +8282,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   const associationPacketPositions = new Set();
   const contextualSituationState = prepared.eventKey
     === 'notify_contextual_situation_packet_candidates'
-    ? { positions: new Set(), nativeInputHash: crypto.createHash('sha256') } : null;
+    ? { positions: new Set(), nativeInputHash: crypto.createHash('sha256'),
+      nativeOutputHash: crypto.createHash('sha256') } : null;
   const firstBloodAssistPacketPositions = prepared.eventKey
     === 'first_blood_assist_event_packet_candidates'
     ? new Set(prepared.capabilityResult.excluded_same_length_foreign_packet_refs
@@ -8651,9 +8662,11 @@ async function streamEventQuery(prepared, options, emitLine) {
   if (contextualSituationState
       && (contextualSituationState.positions.size !== scannedCount
         || contextualSituationState.nativeInputHash.digest('hex')
-          !== prepared.capabilityResult.native_input_sha256)) {
+          !== prepared.capabilityResult.native_input_sha256
+        || contextualSituationState.nativeOutputHash.digest('hex')
+          !== prepared.capabilityResult.native_output_sha256)) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
-      'NotifyContextualSituation raw packet count or ordered native input SHA-256 differs from capability metadata.');
+      'NotifyContextualSituation raw packet count or ordered native input/output SHA-256 differs from capability metadata.');
   }
   if (objectiveStealChildCounts
       && !isDeepStrictEqual(objectiveStealChildCounts,

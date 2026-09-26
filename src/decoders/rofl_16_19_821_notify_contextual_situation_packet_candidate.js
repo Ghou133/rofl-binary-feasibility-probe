@@ -112,6 +112,19 @@ function nativeInputSha256(rows) {
   return digest.digest('hex');
 }
 
+function nativeOutputSha256(rows) {
+  const digest = crypto.createHash('sha256');
+  const header = Buffer.alloc(8);
+  for (const row of rows) {
+    const bytes = Buffer.from(row.contextual_situation_utf8_hex, 'hex');
+    header.writeUInt32LE(row.native_string_length, 0);
+    header.writeUInt32LE(row.native_string_capacity, 4);
+    digest.update(header);
+    digest.update(bytes);
+  }
+  return digest.digest('hex');
+}
+
 function validNativeRow(nativeRow, block) {
   if (nativeRow == null || typeof nativeRow !== 'object'
       || !OBSERVED_STRINGS.has(nativeRow.contextual_situation)
@@ -311,6 +324,14 @@ function decodeNotifyContextualSituationPacketCandidates821(replay, {
       raw_packet_ref: packetRef(replay, block, chunk),
     });
   }
+  const outputSha = nativeOutputSha256(native.rows);
+  if (native.native_output_sha256 !== outputSha) {
+    return fail('DECODE_FAILED', '0x0113 native output string digest differs', {
+      input_count: observedCount, scanned_block_count: scannedBlockCount,
+      runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+      native_witness_status: 'FAILED',
+    });
+  }
   return {
     ...base,
     status: 'CANDIDATE', input_count: observedCount, event_count: events.length,
@@ -323,6 +344,7 @@ function decodeNotifyContextualSituationPacketCandidates821(replay, {
     native_witness_status: 'FULLY_CONSUMED_ALL',
     native_full_success_count: native.native_full_success_count,
     native_input_sha256: inputSha,
+    native_output_sha256: outputSha,
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
     runtime_image_sha256: imageSha,
   };

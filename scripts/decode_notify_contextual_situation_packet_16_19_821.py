@@ -41,6 +41,16 @@ def input_hash(packets):
     return digest.hexdigest()
 
 
+def output_hash(rows):
+    digest = hashlib.sha256()
+    for row in rows:
+        raw = bytes.fromhex(row['contextual_situation_utf8_hex'])
+        digest.update(struct.pack('<II', row['native_string_length'],
+                                  row['native_string_capacity']))
+        digest.update(raw)
+    return digest.hexdigest()
+
+
 def read_request():
     raw = sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1)
     if len(raw) > MAX_REQUEST_BYTES:
@@ -131,6 +141,7 @@ def main():
         'packet_id': PACKET_ID,
         'packet_count': len(packets),
         'input_sha256': input_hash(packets),
+        'native_output_sha256': output_hash(rows) if first_failure is None else None,
         'native_full_success_count': len(rows),
         'first_failure': first_failure,
         'rows': rows if first_failure is None else [],

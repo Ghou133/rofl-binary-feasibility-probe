@@ -17,14 +17,17 @@ Current progress (older notes below retain their original research context):
   observed string values. Saved `query-events --event
   notify_contextual_situation_packet_candidates --contextual-situation
   RecallCancel --limit 1` validated all 37,229 rows, matched 522 and
-  emitted one original row. These names do not establish a Recall action,
+  emitted one original row. Saved queries check ordered native string
+  length, capacity and UTF-8 bytes against the native output digest, as
+  well as the separate ordered raw-input digest, even after `--limit`.
+  These names do not establish a Recall action,
   actor, team or gameplay effect. The six observed packet lengths and
   seven observed strings are fail-closed scope gates, not a substitute for
   native per-packet decoding. Image, Replays and outputs remain outside Git.
-  Focused decoder and query tests passed 11/11 with the exact local inputs.
-  Public `npm test` passed with 1,150 Node passes, 78 declared skips and
-  19 Python unittest passes; skipped private-input cases were not promoted
-  to real-Replay evidence.
+  Focused decoder and query tests passed 12/12 with the exact local inputs.
+  The public suite last passed before the output-digest change (1,150 Node
+  passes, 78 declared skips and 19 Python unittest passes); the digest change
+  has not yet had a full public-suite rerun.
 - **Saved event discovery:** `query-events DIR --list-events` lists actual
   saved candidate keys and per-Replay exact build, capability status and
   declared count. It distinguishes saved zero rows, unavailable and

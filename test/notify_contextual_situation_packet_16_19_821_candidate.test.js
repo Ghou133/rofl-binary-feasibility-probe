@@ -20,6 +20,19 @@ const REPLAY = process.env.ROFL_821_REPLAY;
 const LEAD_IN = '0cc3aafbf72fbf89888831f7311f';
 const HONEYFRUIT = '0c949876887d76a7c2dd06e8fb45f7';
 
+function nativeOutputSha256(rows) {
+  const digest = crypto.createHash('sha256');
+  const header = Buffer.alloc(8);
+  for (const row of rows) {
+    const bytes = Buffer.from(row.contextual_situation_utf8_hex, 'hex');
+    header.writeUInt32LE(row.native_string_length, 0);
+    header.writeUInt32LE(row.native_string_capacity, 4);
+    digest.update(header);
+    digest.update(bytes);
+  }
+  return digest.digest('hex');
+}
+
 function packet(payloadHex, timeMs = 1000, packetId = 0x0113,
   rawParam = 0x400000b4) {
   const payload = Buffer.from(payloadHex, 'hex');
@@ -65,6 +78,7 @@ test('exact runtime decodes two original packet strings and binds each to its so
     assert.equal(result.event_count, 2);
     assert.equal(result.native_full_success_count, 2);
     assert.equal(result.runtime_image_status, 'MATCHED_USED');
+    assert.equal(result.native_output_sha256, nativeOutputSha256(result.events));
     assert.deepEqual(result.events.map((row) => row.contextual_situation),
       ['RecallLeadIn', 'EatHoneyfruit']);
     assert.deepEqual(result.events.map((row) => row.raw_packet_ref.raw_payload_hex),
@@ -126,6 +140,7 @@ test('native helper returns an ordered packet string witness',
     const native = JSON.parse(run.stdout);
     assert.equal(native.packet_count, 2);
     assert.equal(native.native_full_success_count, 2);
+    assert.equal(native.native_output_sha256, nativeOutputSha256(native.rows));
     assert.deepEqual(native.rows.map((row) => row.contextual_situation),
       ['RecallLeadIn', 'EatHoneyfruit']);
   });
