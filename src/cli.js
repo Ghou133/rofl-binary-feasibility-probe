@@ -251,7 +251,7 @@ Options:
                                 Checks saved witness metadata and raw bytes; does not infer display effect.
   --packet-record-count <0|1>  Exact 821 circular movement restriction packet record count
   --level-after <1..20>        Exact-821 level packet within adjacent EXP keyframes
-  --child-event-id <uint32|0xhex>  Exact 821 stealth, named multikill, HQ or objective-bounty child ID
+  --child-event-id <uint32|0xhex>  Exact 821 named child ID (including OnFirstBloodAssist)
   --latest-per-participant    Last matching observed row per participant and Replay
                                 For interval differences: last matching observed difference.
   --endpoint-reversed-pair    Exact-821 interval rows with two unique nonzero item keys
@@ -624,6 +624,8 @@ function parseArgs(argv) {
     if (options.childEventId !== null) {
       const ids = options.event === 'stealth_event_packet_candidates'
         ? [0x0101, 0x0102]
+        : options.event === 'first_blood_assist_event_packet_candidates'
+          ? [0x0017]
         : options.event === 'hq_kill_event_packet_candidates'
           ? [0x0046]
         : options.event === 'objective_bounty_claimed_packet_candidates'
@@ -635,11 +637,13 @@ function parseArgs(argv) {
             'champion_triple_quadra_multi_group_candidates'].includes(options.event)
             ? [0x000c, 0x000d] : null;
       if (!ids) {
-        throw new Error('--child-event-id requires an 821 stealth, named multikill, OnHQKill or OnObjectiveBountyClaimed candidate event');
+        throw new Error('--child-event-id requires a supported 821 named child candidate event');
       }
       if (!ids.includes(options.childEventId)) {
         throw new Error(options.event === 'stealth_event_packet_candidates'
           ? '--child-event-id must be 0x0101 (OnEnterStealth) or 0x0102 (OnExitStealth)'
+          : options.event === 'first_blood_assist_event_packet_candidates'
+            ? '--child-event-id must be 0x0017 (OnFirstBloodAssist)'
           : options.event === 'hq_kill_event_packet_candidates'
             ? '--child-event-id must be 0x0046 (OnHQKill)'
           : options.event === 'objective_bounty_claimed_packet_candidates'

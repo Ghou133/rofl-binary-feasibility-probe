@@ -104,6 +104,8 @@ const { HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE,
   require('./decoders/rofl_16_19_821_hero_death_damage_lookup_key_cooccurrence_candidate');
 const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
+const { FIRST_BLOOD_ASSIST_EVENT_PACKET_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_first_blood_assist_event_packet_candidate');
 const { TURRET_FIRST_BLOOD_DIE_PAIR_821_PROFILE } =
   require('./decoders/rofl_16_19_821_turret_first_blood_die_pair_candidate');
 const { TURRET_FIRST_BLOOD_EVENT_PACKET_821_PROFILE } =
@@ -157,6 +159,18 @@ const SHOW_HEALTH_BAR_REF_FIELDS_821 = new Set([
   'chunk_file_offset', 'decompressed_block_offset',
   'decompressed_payload_offset', 'packet_id', 'replay_time_ms',
   'payload_length', 'raw_param', 'raw_payload_hex', 'raw_payload_sha256',
+]);
+const FIRST_BLOOD_ASSIST_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param', 'child_event_id', 'registered_event_name',
+  'raw_event_id_hex', 'event_blob_hex', 'event_blob_sha256', 'confidence',
+  'semantic_status', 'raw_packet_ref',
+]);
+const FIRST_BLOOD_ASSIST_REF_FIELDS_821 = new Set([
+  'source_path', 'replay_sha256', 'chunk_index', 'chunk_id', 'chunk_stream',
+  'chunk_file_offset', 'decompressed_block_offset',
+  'decompressed_payload_offset', 'packet_id', 'replay_time_ms',
+  'payload_length', 'raw_param', 'raw_payload_sha256',
 ]);
 const UNIT_APPLY_DAMAGE_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile',
@@ -710,6 +724,7 @@ const EXACT_BLOB_PACKET_EVENTS_821 = Object.freeze({
 });
 const CHILD_EVENT_ID_FILTERS_821 = Object.freeze({
   stealth_event_packet_candidates: Object.freeze([0x0101, 0x0102]),
+  first_blood_assist_event_packet_candidates: Object.freeze([0x0017]),
   hq_kill_event_packet_candidates: Object.freeze([0x0046]),
   objective_bounty_claimed_packet_candidates: Object.freeze([0x0113]),
   champion_double_kill_event_packet_candidates: Object.freeze([0x000b]),
@@ -792,6 +807,76 @@ function sha256File(filename) {
 
 function isCount(value) {
   return Number.isSafeInteger(value) && value >= 0;
+}
+
+function firstBloodAssistPacketRefValid(ref, replaySha, sourcePath) {
+  const profile = FIRST_BLOOD_ASSIST_EVENT_PACKET_821_PROFILE;
+  return ref && typeof ref === 'object' && !Array.isArray(ref)
+    && Object.keys(ref).length === FIRST_BLOOD_ASSIST_REF_FIELDS_821.size
+    && Object.keys(ref).every((field) => FIRST_BLOOD_ASSIST_REF_FIELDS_821.has(field))
+    && ref.source_path === (sourcePath ?? null)
+    && ref.replay_sha256 === replaySha
+    && ref.chunk_stream === 'game_chunk'
+    && isCount(ref.chunk_index) && isCount(ref.chunk_id)
+    && isCount(ref.chunk_file_offset)
+    && isCount(ref.decompressed_block_offset)
+    && isCount(ref.decompressed_payload_offset)
+    && ref.decompressed_payload_offset > ref.decompressed_block_offset
+    && ref.packet_id === profile.replay_block_packet_id
+    && isCount(ref.replay_time_ms)
+    && ref.payload_length === profile.payload_length
+    && Number.isInteger(ref.raw_param) && ref.raw_param > 0
+    && ref.raw_param <= 0xffffffff
+    && REPLAY_SHA.test(ref.raw_payload_sha256 ?? '');
+}
+
+function prepareFirstBloodAssistPacketEvent(semantic, analysis, eventKey, result) {
+  const profile = FIRST_BLOOD_ASSIST_EVENT_PACKET_821_PROFILE;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`);
+  }
+  if (result?.status === 'PASS') {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} must remain an exact-build candidate.`);
+  }
+  if (result?.status !== 'CANDIDATE') return;
+  const count = result.event_count;
+  const excluded = result.excluded_same_length_foreign_count;
+  const refs = result.excluded_same_length_foreign_packet_refs;
+  if (result.profile_id !== profile.id
+      || result.evidence_runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || result.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD'
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || result.input_packet_scope !== 'child_0017_length_16'
+      || result.child_event_id !== profile.child_event_id
+      || !isCount(count) || count === 0
+      || !isCount(excluded) || !isCount(result.input_count)
+      || result.input_count !== count + excluded
+      || result.input_count > 2000
+      || result.observed_same_length_packet_count !== result.input_count
+      || result.target_packet_count !== count
+      || !isCount(result.scanned_block_count)
+      || result.scanned_block_count < result.input_count
+      || !Array.isArray(refs) || refs.length !== excluded
+      || refs.some((ref) => !firstBloodAssistPacketRefValid(ref,
+        semantic.replay_sha256, analysis.source_path))
+      || new Set(refs.map((ref) =>
+        `${ref.chunk_index}/${ref.decompressed_block_offset}`)).size !== refs.length
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(result.event_field_confidence, {
+        replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
+        child_event_id: 'VERIFIED_EXACT_NATIVE_CHILD',
+        registered_event_name: 'VERIFIED_EXACT_IMAGE_LABEL',
+        event_blob_hex: 'VERIFIED_EXACT_NATIVE_BLOB',
+      })
+      || analysis.event_counts?.[eventKey] !== count) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} identity or candidate counts differ from its exact-build profile.`);
+  }
 }
 
 function prepareExactPacketEvent(semantic, analysis, eventKey, result, profile) {
@@ -2130,6 +2215,10 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
       throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
         `${capability} identity differs from its exact-build candidate profile.`);
     }
+  }
+  if (eventKey === 'first_blood_assist_event_packet_candidates') {
+    prepareFirstBloodAssistPacketEvent(semantic, analysis, eventKey,
+      capabilityResult);
   }
   if (exactPacketProfile) {
     prepareExactPacketEvent(semantic, analysis, eventKey, capabilityResult,
@@ -5940,6 +6029,46 @@ function exactBlobPacketRow(row, prepared, lineNumber, seenPacketPositions) {
   seenPacketPositions.add(position);
 }
 
+function firstBloodAssistPacketRow(row, prepared, lineNumber, seenPacketPositions) {
+  if (prepared.eventKey !== 'first_blood_assist_event_packet_candidates') return;
+  const profile = FIRST_BLOOD_ASSIST_EVENT_PACKET_821_PROFILE;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid ${profile.capability} row at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const ref = row.raw_packet_ref;
+  const fields = Object.keys(row);
+  if (fields.length !== FIRST_BLOOD_ASSIST_ROW_FIELDS_821.size
+      || fields.some((field) => !FIRST_BLOOD_ASSIST_ROW_FIELDS_821.has(field))
+      || row.event_type !== 'FIRST_BLOOD_ASSIST_EVENT_PACKET_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.replay_sha256 !== prepared.replaySha
+      || row.child_event_id !== profile.child_event_id
+      || row.registered_event_name !== profile.child_event_name
+      || row.raw_event_id_hex !== '0x49e4'
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== 'CANDIDATE_EXACT_RUNTIME_NAMED_ON_EVENT_CHILD'
+      || !Number.isSafeInteger(row.replay_time_ms) || row.replay_time_ms < 0
+      || !Number.isInteger(row.raw_param) || row.raw_param <= 0
+      || row.raw_param > 0xffffffff
+      || typeof row.event_blob_hex !== 'string'
+      || !/^[0-9a-f]{16}$/.test(row.event_blob_hex)
+      || !REPLAY_SHA.test(row.event_blob_sha256 ?? '')
+      || !firstBloodAssistPacketRefValid(ref, prepared.replaySha,
+        prepared.sourcePath)
+      || ref.replay_time_ms !== row.replay_time_ms
+      || ref.raw_param !== row.raw_param) {
+    invalid('exact child, opaque blob or raw packet reference differs');
+  }
+  if (crypto.createHash('sha256').update(Buffer.from(row.event_blob_hex, 'hex'))
+    .digest('hex') !== row.event_blob_sha256) invalid('native blob SHA-256 differs');
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (seenPacketPositions.has(position)) invalid('duplicate raw packet position');
+  seenPacketPositions.add(position);
+}
+
 function objectiveBountyClaimedPacketRow(row, prepared, lineNumber,
   seenPacketPositions) {
   if (prepared.eventKey !== 'objective_bounty_claimed_packet_candidates') return;
@@ -7042,6 +7171,10 @@ async function streamEventQuery(prepared, options, emitLine) {
   let terminalUnobservedCount = 0;
   const associationKeys = new Set();
   const associationPacketPositions = new Set();
+  const firstBloodAssistPacketPositions = prepared.eventKey
+    === 'first_blood_assist_event_packet_candidates'
+    ? new Set(prepared.capabilityResult.excluded_same_length_foreign_packet_refs
+      .map((ref) => `${ref.chunk_index}/${ref.decompressed_block_offset}`)) : null;
   const episodePhysicalRefs = new Map();
   const wardPairFrames = new Map();
   const inventoryIntervalState = { pairs: new Map(), frameTimes: new Map(),
@@ -7136,6 +7269,10 @@ async function streamEventQuery(prepared, options, emitLine) {
         associationPacketPositions);
       exactBlobPacketRow(row, prepared, lineNumber,
         associationPacketPositions);
+      if (firstBloodAssistPacketPositions) {
+        firstBloodAssistPacketRow(row, prepared, lineNumber,
+          firstBloodAssistPacketPositions);
+      }
       objectiveBountyClaimedPacketRow(row, prepared, lineNumber,
         associationPacketPositions);
       incrementMinionKillsPacketRow(row, prepared, lineNumber,

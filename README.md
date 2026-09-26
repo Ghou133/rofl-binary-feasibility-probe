@@ -362,6 +362,15 @@ OnShutdown 只是镜像中的事件标签，未确认游戏内 shutdown 效果�
 3 个同长度 `0x002c` 子包被原生身份校验排除；另 3 份回放为
 `PROFILE_UNAVAILABLE`。镜像名表中的 OnFirstBloodAssist 不证明实际首杀、
 助攻归属或游戏效果。
+保存的候选流可用 `query-events --event first_blood_assist_event_packet_candidates`
+读取，并用 `--child-event-id 0x0017`、`--raw-param` 或时间范围筛选。
+查询校验精确 build、原生镜像来源、子包标记、匿名 8 字节子包哈希及原始包引用；
+它不重新运行原生解码，也不将标记解释为实际首杀或助攻。
+
+```powershell
+node src/cli.js query-events "work\16-19-821-first-blood-assist" `
+  --event first_blood_assist_event_packet_candidates --child-event-id 0x0017
+```
 
 `turret_plate_event_packet` 只报告 `0x0107` 子包的匿名当包字段和来源。
 11 份 KR 821 回放中观察到 657 个目标子包；同为 17 字节的其他子事件 4964 个作为排除对照，
