@@ -198,6 +198,8 @@ item_group_data_broadcast_packet emits an exact-821 keyframe callback lookup key
 it does not establish an item, group identity, owner, slot, or inventory state.
 --item-group-packet-v2 adds the protected +0x1c byte and a conditional native
 callback byte witnessed with a synthetic lookup hit; actual receiver state is unknown.
+cooldown_broadcast_packet emits an exact-821 game/keyframe callback lookup key;
+it does not establish cooldown state, slot identity, actor, target, or effect.
 unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
 packet-local selectors or a bounded anonymous float candidate; these do not
@@ -712,6 +714,7 @@ function parseArgs(argv) {
       'set_spell_timer_from_buff_packet_candidates',
       'set_spell_level_packet_candidates',
       'item_group_data_broadcast_packet_candidates',
+      'cooldown_broadcast_packet_candidates',
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
       'champion_multiple_kill_event_packet_candidates',
@@ -1168,6 +1171,7 @@ function parseOne1619(replay, options, started) {
       'circular_movement_restriction_packet',
       'notify_contextual_situation_packet',
       'item_group_data_broadcast_packet',
+      'cooldown_broadcast_packet',
       'unit_apply_damage_packet',
       'show_health_bar_packet',
     ].includes(name)))] : [];
@@ -2454,7 +2458,8 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'face_direction_packet'
             || capability === 'circular_movement_restriction_packet'
             || capability === 'notify_contextual_situation_packet'
-            || capability === 'item_group_data_broadcast_packet'
+             || capability === 'item_group_data_broadcast_packet'
+             || capability === 'cooldown_broadcast_packet'
             || capability === 'unit_apply_damage_packet'
             || capability === 'show_health_bar_packet'
             || capability === 'unit_apply_damage_roster_key_pair'
@@ -2952,6 +2957,11 @@ function capabilityQuery(replay, options = {}) {
           'packet-local callback lookup key; live receiver lookup, group identity and inventory effect remain unknown');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'cooldown_broadcast_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full 0x039d packet consumption',
+          'packet-local callback lookup key; receiver lookup, cooldown state, slot, actor, target and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'face_direction_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and bounded 0x038e packet shape validation',
           'packet-local unit-vector and optional scalar candidates with raw provenance; no actor, world position, path or direction effect');
@@ -3191,6 +3201,8 @@ function capabilityQuery(replay, options = {}) {
               'notify_contextual_situation_packet_candidates',
             item_group_data_broadcast_packet:
               'item_group_data_broadcast_packet_candidates',
+            cooldown_broadcast_packet:
+              'cooldown_broadcast_packet_candidates',
             unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
             show_health_bar_packet: 'show_health_bar_packet_candidates',
             unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
