@@ -4,6 +4,23 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Optional saved-row source verification (2026-09-26):** `query-events
+  --verify-source` now reopens the original exact-821 ROFL for the packet-local
+  NotifyContextualSituation, item-group V1/V2, cooldown broadcast, item-charges,
+  and target-hero candidate streams. It checks the full Replay build/SHA-256,
+  strict packet framing, ordered stream/chunk IDs and offsets, timestamp,
+  parameter, payload, and total count before publishing stdout. A single
+  Replay may use `--source-replay PATH` when the same bytes were moved; batch
+  queries use each saved source path. Other event shapes reject this option.
+  Ordinary offline queries remain available and report
+  `SAVED_ONLY_UNVERIFIED`; checked rows report `SOURCE_REPLAY_VERIFIED`
+  (a partial batch reports `PARTIAL_SOURCE_REPLAY_VERIFIED`). This verifies
+  packet provenance against supplied source bytes, without rerunning native
+  callback decoding or promoting candidate effects. Focused query tests passed
+  116/116 with zero skips. The original KR_8392938200 artifact/source passed
+  for 4,600 item-charges and 6,703 target-hero rows; a copy with only saved
+  time/offset edits failed `SOURCE_PROVENANCE_MISMATCH` after `--limit 1` with
+  zero stdout bytes.
 - **Combined 821 CLI/API validation (2026-09-26):** After registering both
   new opt-in candidates, `npm test` passed 1,150 Node tests across 41 groups
   with zero failures and 120 declared skips, plus 19 Python unittests. Exact
