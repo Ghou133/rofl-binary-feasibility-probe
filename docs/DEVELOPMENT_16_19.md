@@ -32,7 +32,7 @@ Current progress (older notes below retain their original research context):
   Replay, image and output files remain outside Git.
   Focused direct/native tests with those private inputs passed 18/18 with
   zero skips; saved-query tests passed 14/14. The public `npm test` run
-  exited 0 with 1,092 Node passes, 100 declared private-input skips, and
+  exited 0 with 1,092 Node passes, 100 declared skips, and
   19 Python unittest passes.
 - **CastSpellAns nested anonymous u32 at +0x1c (opt-in packet V5):** The
   pinned `16.19.821.7343` image callback RVA `0x8d77ed..0x8d785a` reads
