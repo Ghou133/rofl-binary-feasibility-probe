@@ -11,6 +11,8 @@ const test = require('node:test');
 const { FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821: profile,
   decodeProtectedForceCreateMissileComparisonKeyU32 } =
   require('../src/decoders/rofl_16_19_821_force_create_missile_packet_candidate');
+const { bindSavedPacketArtifactToPhysicalReplay } =
+  require('./helpers/physical_saved_packet_replay');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const CAPABILITY = 'force_create_missile_packet';
@@ -147,6 +149,27 @@ test('saved missile comparison key query emits original rows and filters only ob
   assert.equal(JSON.parse(noMatch.stderr).scanned_count, 2);
   assert.equal(errorCode(query(f.dir, '--participant', '1')),
     'PARTICIPANT_UNAVAILABLE');
+});
+
+test('missile source verification checks every physical packet after the output limit', (t) => {
+  const f = fixture(t);
+  const physical = bindSavedPacketArtifactToPhysicalReplay(f.dir);
+  const verified = query(f.dir, '--verify-source', '--limit', '1');
+  assert.equal(verified.status, 0, verified.stderr);
+  assert.equal(JSON.parse(verified.stderr).source_provenance_status,
+    'SOURCE_REPLAY_VERIFIED');
+  assert.equal(verified.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+
+  const forged = structuredClone(physical.rows);
+  forged[1].replay_time_ms += 1;
+  forged[1].raw_packet_ref.replay_time_ms = forged[1].replay_time_ms;
+  forged[1].raw_packet_ref.chunk_file_offset += 1;
+  forged[1].raw_packet_ref.decompressed_block_offset += 1;
+  forged[1].raw_packet_ref.decompressed_payload_offset += 1;
+  fs.writeFileSync(f.eventPath, `${forged.map(JSON.stringify).join('\n')}\n`);
+  const rejected = query(f.dir, '--verify-source', '--limit', '1');
+  assert.equal(errorCode(rejected), 'SOURCE_PROVENANCE_MISMATCH');
+  assert.equal(rejected.stdout, '');
 });
 
 test('later forged comparison output fails after limit without partial stdout or file', (t) => {

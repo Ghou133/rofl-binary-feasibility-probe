@@ -187,6 +187,7 @@ const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
   'cooldown_broadcast_packet_candidates',
   'item_charges_packet_candidates',
   'target_hero_packet_candidates',
+  'force_create_missile_packet_candidates',
 ]);
 const CIRCULAR_MOVEMENT_RESTRICTION_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
