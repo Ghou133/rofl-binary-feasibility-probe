@@ -143,6 +143,8 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.equal(resolveCapability(BUILD, 'hero_champion_kills_snapshot').status,
     'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_assists_snapshot').status, 'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'hero_roster_metadata_bridge').status,
+    'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_missions_minions_killed_snapshot').status,
     'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_ward_stats_snapshot').status, 'CANDIDATE');
@@ -170,6 +172,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.deepEqual(query.capabilities.map((row) => row.capability),
     ['hero_death', 'hero_assist', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
+      'hero_roster_metadata_bridge',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
       'hero_minions_killed_snapshot', 'hero_jungle_minions_killed_snapshot',
