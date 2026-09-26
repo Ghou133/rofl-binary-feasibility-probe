@@ -381,6 +381,15 @@ node src/cli.js query-events "work\16-19-821-first-blood-assist" `
 匿名原生子包和原始来源。11 份 KR 821 回放中仅两份各有一个原生完整消费的
 `0x040a/133` 包；其余回放没有该形状。该包不能证明实际抢夺、
 目标状态变化、行动者或游戏效果。
+保存的候选流可用 `query-events` 按时间、原始包参数或子包 ID 筛选；
+`0x00be` 是 OnKillDragonSteal 镜像标签，`0x00d6` 是 OnKillWormSteal。
+查询校验精确 build、镜像来源、两个子包计数、匿名 124 字节 blob 哈希和
+原始包引用；不重新运行原生解码，也不解释游戏效果。
+
+```powershell
+node src/cli.js query-events "work\16-19-821-objective-steal" `
+  --event objective_steal_event_packet_candidates --child-event-id 0x00be
+```
 
 `turret_plate_event_packet` 只报告 `0x0107` 子包的匿名当包字段和来源。
 11 份 KR 821 回放中观察到 657 个目标子包；同为 17 字节的其他子事件 4964 个作为排除对照，
