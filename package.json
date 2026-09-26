@@ -130,7 +130,7 @@
     "test:16-19-heal-source-query": "node --test test/hero_heal_snapshot_16_19_821_source_query.test.js",
     "test:16-19-force-create-missile": "node --test test/force_create_missile_packet_16_19_821_candidate.test.js test/force_create_missile_packet_16_19_821_query.test.js",
     "test:16-19-change-missile-target": "node --test test/change_missile_target_packet_16_19_821_candidate.test.js test/change_missile_target_packet_16_19_821_query.test.js",
-    "test:16-19-roster-bridge": "node --test test/hero_roster_metadata_bridge_16_19_821.test.js test/shielding_params_roster_key_pair_16_19_821.test.js",
+    "test:16-19-roster-bridge": "node --test test/hero_roster_metadata_bridge_16_19_821.test.js test/shielding_params_roster_key_pair_16_19_821.test.js test/shielding_params_roster_key_pair_16_19_821_query.test.js",
     "test:16-19-set-dimension-missile": "node --test test/set_dimension_missile_packet_16_19_821_candidate.test.js test/set_dimension_missile_packet_16_19_821_query.test.js",
     "test:16-19-anonymous-029c": "node --test test/anonymous_029c_packet_16_19_821_candidate.test.js test/anonymous_029c_packet_16_19_821_query.test.js test/anonymous_029c_roster_key_pair_16_19_821.test.js test/anonymous_029c_roster_key_pair_16_19_821_query.test.js",
     "test:16-19-damage-roster-key": "node --test test/unit_apply_damage_roster_key_16_19_821_candidate.test.js test/unit_apply_damage_roster_key_16_19_821_integration.test.js test/unit_apply_damage_roster_key_16_19_821_query.test.js",

@@ -802,6 +802,7 @@ function parseArgs(argv) {
     if (options.opaqueU32 !== null && ![
       'params_heal_packet_candidates',
       'shielding_params_packet_pair_candidates',
+      'shielding_params_roster_key_pair_candidates',
       'stealth_event_packet_candidates',
       'npc_buff_add_packet_candidates',
       'npc_buff_remove_packet_candidates',
@@ -3772,6 +3773,8 @@ async function runQueryEventsCommand(parsed) {
       limit: options.limit,
       verifySource: options.verifySource,
       sourceReplay: options.sourceReplay,
+      runtimeImage: options.runtimeImage,
+      pythonExecutable: options.python,
     };
     const emitLine = async (line) => {
       if (!writer.write(line)) await once(writer, 'drain');
