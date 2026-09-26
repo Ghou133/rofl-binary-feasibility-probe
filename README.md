@@ -750,6 +750,8 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 
 精确 821 的 NotifyContextualSituation、item-group V1/V2、cooldown broadcast、item-charges、target-hero、ForceCreateMissile、ChangeMissileTarget、SetDimensionMissile、匿名 `0x029c`、UnitApplyDamage、ShowHealthBar 和 CastSpellAns 包候选可加 `--verify-source`，重新读取原始 ROFL 并核对完整 build/SHA-256、严格分帧和逐包时间、偏移、参数及载荷。ChangeMissileTarget、SetDimensionMissile、匿名 `0x029c` 与 UnitApplyDamage 还会核对每行字段及保存的有序原生摘要；ShowHealthBar 会核对行字段、回调字节变换及有序原生输入摘要；CastSpellAns 会核对行与原始包引用；V9 保存查询还会验证全部行的有序原生输出摘要（包括 `--limit` 后），V3–V8 旧产物不具备该见证。单场原文件搬移后可用 `--source-replay "PATH"` 指定同字节副本；批量查询使用各场保存的来源路径。缺源、错源或不一致会失败且不会输出部分行；其他事件形状明确拒绝此选项。离线查询的 `source_provenance_status` 为 `SAVED_ONLY_UNVERIFIED`，原始回放核对通过后为 `SOURCE_REPLAY_VERIFIED`；此校验不重新运行原生回调解码。
 
+精确 821 的 `hero_total_heal_snapshot_candidates` 与 `hero_total_units_healed_snapshot_candidates` 也可加 `--verify-source`：从原始 ROFL 重新解码对应累计快照，核对候选数据、结算尾差和全部保存行，`--limit` 不缩小核验范围。同字节回放搬移后可在单场产物上使用 `--source-replay PATH`。这些是累计上报候选值，核验不证明有效治疗、来源或目标。
+
 先运行 `node src/cli.js query-events "work\16-19-821-batch" --list-events` 可得到实际保存的候选事件键、每场精确 build、能力状态和声明行数。`SAVED` 且声明行数为 0 与 `UNAVAILABLE`、`NOT_REQUESTED` 分开显示。目录清单会校验 Replay 元数据；批量目录还核对清单中所列事件文件的 SHA-256。此命令不扫描 JSONL 行，返回的声明行数和文件散列不代表逐行内容已通过 `--event` 查询校验。
 
 ```powershell

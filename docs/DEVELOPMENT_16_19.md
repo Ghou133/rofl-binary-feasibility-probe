@@ -4,6 +4,16 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Healing counter snapshot source query:** Saved exact-821
+  `hero_total_heal_snapshot_candidates` and
+  `hero_total_units_healed_snapshot_candidates` can now use `--verify-source`.
+  The query re-decodes the same physical ROFL through the existing candidate
+  decoder, checks all keyframe rows and tail-gap metadata even after
+  `--limit`, and accepts a same-byte relocated ROFL via `--source-replay`.
+  One original Replay verified 330/330 rows for each event. The values
+  remain cumulative reported candidates; effective healing, individual
+  recipient and source remain `UNKNOWN`.
+
 - **TargetHero callback key to roster (opt-in candidate):** On exact
   `16.19.821.7343`, select `--events target_hero_roster_key_pair
   --runtime-image IMAGE --event-jsonl-only` or API capability

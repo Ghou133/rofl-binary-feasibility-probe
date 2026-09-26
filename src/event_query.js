@@ -66,6 +66,8 @@ const { PROFILES: FLOAT_STATS_821_PROFILES } =
   require('./decoders/rofl_16_19_821_float_stats_candidate');
 const { HERO_WARD_STATS_SNAPSHOT_821_CANDIDATE_PROFILE } =
   require('./decoders/rofl_16_19_821_aux_counts_candidate');
+const { PROFILES: HERO_HEAL_SNAPSHOT_PROFILES_821 } =
+  require('./decoders/rofl_16_19_821_heal_stats_candidate');
 const { HERO_INVENTORY_BROADCAST_PACKET_CANDIDATE_PROFILE_821 } =
   require('./decoders/rofl_16_19_821_inventory_broadcast_packet_candidate');
 const { LOOKUP_TABLE_SHA256, decodeRuntimeCountByte } =
@@ -209,6 +211,8 @@ const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
 const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
   'hero_roster_metadata_bridge_candidates',
+  'hero_total_heal_snapshot_candidates',
+  'hero_total_units_healed_snapshot_candidates',
   'target_hero_roster_key_pair_candidates',
   'cast_spell_ans_packet_candidates',
   'show_health_bar_packet_candidates',
@@ -1126,7 +1130,7 @@ function prepareSourceReplayVerification(prepared, sourceReplay) {
       || prepared.replayVersion !== '16.19.821.7343'
       || prepared.capabilityStatus !== 'CANDIDATE') {
     throw new EventQueryError('UNSUPPORTED_SOURCE_VERIFICATION',
-      '--verify-source supports only the registered exact-821 packet-local candidate streams.',
+      '--verify-source supports only registered exact-821 candidate streams.',
       { event_key: prepared.eventKey });
   }
   if (prepared.eventKey === 'cast_spell_ans_packet_candidates') {
@@ -3688,6 +3692,10 @@ function prepareNamedMultiGroupAssociation(semantic, analysis, eventKey,
 const PREPARED_REPLAY_METADATA = Symbol('prepared replay metadata');
 
 const ROSTER_BRIDGE_EVENT_821 = 'hero_roster_metadata_bridge_candidates';
+const HERO_HEAL_SNAPSHOT_EVENTS_821 = Object.freeze({
+  hero_total_heal_snapshot_candidates: 'hero_total_heal_snapshot',
+  hero_total_units_healed_snapshot_candidates: 'hero_total_units_healed_snapshot',
+});
 const ROSTER_BRIDGE_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'hero_raw_param', 'participant_id_candidate',
@@ -3767,6 +3775,85 @@ function prepareRosterBridgeSourceVerification(prepared, sourceReplay) {
       { source_replay: resolved, source_status: result?.status ?? null });
   }
   return { kind: 'ROSTER_BRIDGE', rows, sourceReplay: resolved };
+}
+
+function prepareHeroHealSnapshotSourceVerification(prepared, sourceReplay) {
+  const capability = HERO_HEAL_SNAPSHOT_EVENTS_821[prepared.eventKey];
+  const profile = HERO_HEAL_SNAPSHOT_PROFILES_821[capability];
+  if (!profile || prepared.replayVersion !== profile.replay_version
+      || prepared.capabilityStatus !== 'CANDIDATE') {
+    throw new EventQueryError('UNSUPPORTED_SOURCE_VERIFICATION',
+      'Healing snapshot source verification requires an exact-821 candidate.');
+  }
+  const saved = prepared.capabilityResult;
+  const mirrored = prepared[PREPARED_REPLAY_METADATA]?.analysis.semantic
+    ?.capability_results?.[capability];
+  if (saved.profile_id !== profile.id || saved.input_packet_id !== 0x0089
+      || saved.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || saved.lookup_table_sha256 !== profile.lookup_table_sha256
+      || saved.runtime_image_used !== false
+      || saved.event_count !== prepared.declaredCount
+      || saved.input_count !== prepared.declaredCount
+      || saved.keyframe_count * 10 !== prepared.declaredCount
+      || saved.observed_participant_count !== 10
+      || !isDeepStrictEqual(saved.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(mirrored, saved)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'Saved healing snapshot does not match its exact-build candidate profile.');
+  }
+  const filename = sourceReplay ?? prepared.sourcePath;
+  if (typeof filename !== 'string' || filename.trim() === '') {
+    throw new EventQueryError('MISSING_SOURCE_REPLAY',
+      'No original ROFL path is available; supply --source-replay for this Replay.');
+  }
+  const resolved = path.resolve(filename);
+  let replay;
+  try {
+    replay = parseReplayFile(resolved);
+  } catch (error) {
+    throw new EventQueryError(error.code === 'INPUT_READ_ERROR'
+      ? 'SOURCE_REPLAY_READ_FAILED' : 'SOURCE_REPLAY_INVALID',
+    `Cannot verify original ROFL: ${error.message}`,
+    { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  if (replay.header.version !== prepared.replayVersion
+      || replay.source_sha256 !== prepared.replaySha) {
+    throw new EventQueryError('SOURCE_REPLAY_IDENTITY_MISMATCH',
+      'Original ROFL build or SHA-256 differs from saved Replay identity.',
+      { source_replay: resolved });
+  }
+  let decoded;
+  try {
+    decoded = decodeSemanticReplay(replay, { capabilities: [capability] });
+  } catch (error) {
+    throw new EventQueryError('SOURCE_REPLAY_FRAMING_FAILED',
+      `Cannot decode original ROFL healing snapshot: ${error.message}`,
+      { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  const result = decoded.capability_results?.[capability];
+  const rows = decoded.events?.[prepared.eventKey];
+  if (result?.status !== 'CANDIDATE'
+      || !Array.isArray(rows) || rows.length !== prepared.declaredCount
+      || !['STATIC_821_RUNTIME_TRANSFORM_EMBEDDED', 'PROVIDED_NOT_USED']
+        .includes(prepared.capabilityResult.runtime_image_status)) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Physical ROFL healing snapshot is unavailable or differs in row count.',
+      { source_replay: resolved, source_status: result?.status ?? null });
+  }
+  const normalized = structuredClone(result);
+  normalized.runtime_image_status = prepared.capabilityResult.runtime_image_status;
+  for (const gap of normalized.tail_gaps ?? []) {
+    if (gap.last_raw_packet_ref) {
+      gap.last_raw_packet_ref.source_path = prepared.sourcePath ?? null;
+    }
+  }
+  if (!isDeepStrictEqual(normalized, prepared.capabilityResult)) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Physical ROFL healing totals, tail gaps or packet references differ from saved capability metadata.',
+      { source_replay: resolved });
+  }
+  return { kind: 'HERO_HEAL_SNAPSHOT', rows, sourceReplay: resolved };
 }
 
 function prepareRosterBridgeInventory(artifactDirectory, semantic, analysis,
@@ -10036,6 +10123,9 @@ async function streamEventQuery(prepared, options, emitLine) {
   const sourceReplayVerification = options.verifySource
     ? (prepared.eventKey === ROSTER_BRIDGE_EVENT_821
       ? prepareRosterBridgeSourceVerification(prepared, options.sourceReplay)
+      : Object.hasOwn(HERO_HEAL_SNAPSHOT_EVENTS_821, prepared.eventKey)
+        ? prepareHeroHealSnapshotSourceVerification(prepared,
+          options.sourceReplay)
       : prepared.eventKey === TARGET_HERO_ROSTER_PAIR_EVENT_821
         ? { kind: 'TARGET_HERO_ROSTER_PAIR' }
       : prepareSourceReplayVerification(prepared, options.sourceReplay)) : null;
@@ -10465,6 +10555,19 @@ async function streamEventQuery(prepared, options, emitLine) {
               source_replay: sourceReplayVerification.sourceReplay });
         }
       }
+      if (sourceReplayVerification?.kind === 'HERO_HEAL_SNAPSHOT') {
+        const canonical = sourceReplayVerification.rows[lineNumber - 1];
+        if (!canonical || !isDeepStrictEqual(row, {
+          ...canonical,
+          raw_packet_ref: { ...canonical.raw_packet_ref,
+            source_path: prepared.sourcePath ?? null },
+        })) {
+          throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+            `Saved healing snapshot row ${lineNumber} differs from physical ROFL decoding.`,
+            { line_number: lineNumber,
+              source_replay: sourceReplayVerification.sourceReplay });
+        }
+      }
       let sourceCastNestedFields = null;
       if (sourceReplayVerification
           && prepared.eventKey === 'cast_spell_ans_packet_candidates') {
@@ -10549,6 +10652,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       }
       if (sourceReplayVerification
           && sourceReplayVerification.kind !== 'ROSTER_BRIDGE'
+          && sourceReplayVerification.kind !== 'HERO_HEAL_SNAPSHOT'
           && sourceReplayVerification.kind !== 'TARGET_HERO_ROSTER_PAIR') {
         updateSourcePacketHash(sourceReplayVerification.savedHash,
           sourcePacketFieldsFromRef(row.raw_packet_ref,
@@ -10843,6 +10947,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   }
   if (sourceReplayVerification
       && sourceReplayVerification.kind !== 'ROSTER_BRIDGE'
+      && sourceReplayVerification.kind !== 'HERO_HEAL_SNAPSHOT'
       && sourceReplayVerification.kind !== 'TARGET_HERO_ROSTER_PAIR'
       && sourceReplayVerification.savedHash.digest('hex')
         !== sourceReplayVerification.sourceDigest) {
@@ -11398,7 +11503,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   }
   if (options.verifySource && !SOURCE_REPLAY_PACKET_EVENTS_821.has(prepared.eventKey)) {
     throw new EventQueryError('UNSUPPORTED_SOURCE_VERIFICATION',
-      '--verify-source supports only the registered exact-821 packet-local candidate streams.',
+      '--verify-source supports only registered exact-821 candidate streams.',
       { event_key: prepared.eventKey });
   }
   if (options.endpointReversedPair
