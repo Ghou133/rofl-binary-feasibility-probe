@@ -20,7 +20,22 @@ Current progress (older notes below retain their original research context):
   `+0x08` matched 2,778, `+0x0c` matched 2,770, and eight `+0x0c`
   values remained explicit nonmatches. Both source packet refs and the
   unmatched values are retained. Field roles and actual shield effects
-  remain `UNKNOWN`.
+  remain `UNKNOWN`. Saved pair queries now support either anonymous u32 as
+  `--opaque-u32`, reject `--participant`, and with `--verify-source
+  --runtime-image IMAGE` physically re-decode the entire exact-build ROFL
+  before applying `--limit`. All 2,778 saved pair rows in 11 Replays passed
+  this source check; eight nonroster `+0x0c` values remain unassigned.
+
+- **SetSpellLevel header key to roster (opt-in candidate):** Exact-821
+  `--events set_spell_level_roster_key_pair --runtime-image IMAGE
+  --event-jsonl-only` auto-selects the native V2 `0x025d` source and saves
+  its complete packet stream beside the pair and ten-key roster streams.
+  Eleven original KR Replays returned 11/11 `CANDIDATE`: 283 of 342
+  native packet headers matched a same-Replay full-u32 roster key; 59
+  nonroster nonzero headers remain in the source stream and exclusion count.
+  Zero headers are outside the existing V2 source contract and were not
+  observed. The pair does not claim skill upgrade, spell identity, actor,
+  target, owner or effective level change.
 
 - **Anonymous `0x029c` header key to roster (opt-in candidate):** Exact-821
   `--events anonymous_029c_roster_key_pair --runtime-image IMAGE
