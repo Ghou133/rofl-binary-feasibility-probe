@@ -12,9 +12,11 @@ const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821: profile,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821: v5Profile,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821: v6Profile,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821: v7Profile,
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821: v8Profile,
   decodeCastSpellAnsNestedU32FromRaw821,
   decodeCastSpellAnsNestedU32At4cFromRaw821,
-  decodeCastSpellAnsNestedF32AtA0FromRaw821 } =
+  decodeCastSpellAnsNestedF32AtA0FromRaw821,
+  decodeCastSpellAnsNestedU32At28FromRaw821 } =
   require('../src/decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
@@ -72,6 +74,13 @@ function rowV7(index, rawAtA0, replaySha = SHA) {
     opaque_f32_0xa0: decodeCastSpellAnsNestedF32AtA0FromRaw821(rawAtA0) };
 }
 
+function rowV8(index, rawAt28, replaySha = SHA) {
+  return { ...rowV7(index, '5858c8d6', replaySha), build_profile: v8Profile.id,
+    raw_u32_0x28_hex: rawAt28,
+    opaque_u32_0x28: decodeCastSpellAnsNestedU32At28FromRaw821(rawAt28),
+    callback_tree_lookup_status: 'UNKNOWN' };
+}
+
 function writeReplay(root, name, rows, { replaySha = SHA,
   fieldProfile = profile, profileId = fieldProfile.id,
   replayVersion = profile.replay_version } = {}) {
@@ -86,17 +95,22 @@ function writeReplay(root, name, rows, { replaySha = SHA,
       profile.evidence_nested_float_inverse_sha256,
     evidence_nested_byte_inverse_sha256:
       profile.evidence_nested_byte_inverse_sha256,
-    ...([v5Profile, v6Profile, v7Profile].includes(fieldProfile) ? {
+    ...([v5Profile, v6Profile, v7Profile, v8Profile].includes(fieldProfile) ? {
       evidence_nested_u32_transform_sha256:
         v5Profile.evidence_nested_u32_transform_sha256 } : {}),
-    ...([v6Profile, v7Profile].includes(fieldProfile) ? {
+    ...([v6Profile, v7Profile, v8Profile].includes(fieldProfile) ? {
       evidence_nested_u32_0x4c_transform_sha256:
         v6Profile.evidence_nested_u32_0x4c_transform_sha256 } : {}),
-    ...(fieldProfile === v7Profile ? {
+    ...([v7Profile, v8Profile].includes(fieldProfile) ? {
       evidence_nested_f32_0xa0_transform_sha256:
         v7Profile.evidence_nested_f32_0xa0_transform_sha256,
       evidence_nested_f32_0xa0_inverse_sha256:
         v7Profile.evidence_nested_f32_0xa0_inverse_sha256 } : {}),
+    ...(fieldProfile === v8Profile ? {
+      evidence_nested_u32_0x28_transform_sha256:
+        v8Profile.evidence_nested_u32_0x28_transform_sha256,
+      evidence_nested_u32_0x28_inverse_sha256:
+        v8Profile.evidence_nested_u32_0x28_inverse_sha256 } : {}),
     status: 'CANDIDATE',
     evidence_status: 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS',
     input_count: rows.length, event_count: rows.length,
@@ -605,4 +619,101 @@ test('batch V7 nested f32 query counts V6 unavailable separately', (t) => {
   assert.equal(summary.cast_nested_f32_0xa0_unavailable_count, 1);
   assert.equal(summary.cast_nested_f32_0xa0_unavailable_replay_count, 1);
   assert.equal(summary.replay_results[1].code, 'CAST_NESTED_F32_0XA0_UNAVAILABLE');
+});
+
+test('V8 packet-local lookup-key query validates all rows and preserves original JSONL', (t) => {
+  const rows = [rowV8(0, '9194b8fb'), rowV8(1, '7cef92cb'),
+    rowV8(2, '09a09cbb')];
+  assert.deepEqual(rows.map((entry) => entry.opaque_u32_0x28),
+    [137424977, 190941627, 11563543]);
+  const { directory, lines } = fixture(t, rows, { fieldProfile: v8Profile });
+  const selected = command(directory, '--cast-nested-u32-0x28',
+    '190941627', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${lines[1]}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 3);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.cast_nested_u32_0x28_checked_count, 3);
+  assert.equal(summary.cast_nested_u32_0x28_unavailable_count, 0);
+  assert.equal(summary.filters.cast_nested_u32_0x28, 190941627);
+  assert.equal(summary.rows_unmodified, true);
+  assert.equal(summary.native_witness_check, 'PERSISTED_METADATA_AND_RAW_BYTES');
+  const hex = command(directory, '--cast-nested-u32-0x28', '0x0b6189bb');
+  assert.equal(hex.status, 0, hex.stderr);
+  assert.equal(hex.stdout, `${lines[1]}\n`);
+  const prior = command(directory, '--cast-nested-f32-0xa0', '1');
+  assert.equal(prior.status, 0, prior.stderr);
+  assert.equal(prior.stdout, `${lines.join('\n')}\n`);
+});
+
+test('V8 lookup-key query rejects metadata drift and a forged later row without stdout', (t) => {
+  for (const field of ['evidence_nested_u32_0x28_transform_sha256',
+    'evidence_nested_u32_0x28_inverse_sha256']) {
+    const { directory } = fixture(t, [rowV8(0, '9194b8fb')],
+      { fieldProfile: v8Profile });
+    const filename = path.join(directory, 'semantic_run.json');
+    const semantic = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    semantic.capability_results[CAPABILITY][field] = '0'.repeat(64);
+    fs.writeFileSync(filename, JSON.stringify(semantic));
+    const rejected = command(directory, '--cast-nested-u32-0x28', '137424977');
+    assert.equal(rejected.status, 2, rejected.stderr);
+    assert.equal(JSON.parse(rejected.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+    assert.equal(rejected.stdout, '');
+  }
+  for (const change of [
+    (entry) => { entry.raw_u32_0x28_hex = 'invalid'; },
+    (entry) => { entry.opaque_u32_0x28 += 1; },
+    (entry) => { entry.callback_tree_lookup_status = 'HIT'; },
+    (entry) => { entry.raw_packet_ref.packet_id = 0x01db; },
+  ]) {
+    const later = rowV8(1, '7cef92cb');
+    change(later);
+    const { root, directory } = fixture(t, [rowV8(0, '9194b8fb'), later],
+      { fieldProfile: v8Profile });
+    const output = path.join(root, 'selected.jsonl');
+    const rejected = command(directory, '--cast-nested-u32-0x28', '137424977',
+      '--limit', '1', '--to-ms', '1000', '--output', output);
+    assert.equal(rejected.status, 2, rejected.stderr);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+    assert.equal(rejected.stdout, '');
+    assert.equal(fs.existsSync(output), false);
+  }
+});
+
+test('batch V8 lookup-key query counts V7 unavailable separately', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-cast-u32-28-batch-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const current = writeReplay(root, 'current', [rowV8(0, '9194b8fb')],
+    { fieldProfile: v8Profile });
+  const oldSha = 'c'.repeat(64);
+  const old = writeReplay(root, 'older', [rowV7(0, '5858c8d6', oldSha)],
+    { replaySha: oldSha, fieldProfile: v7Profile });
+  const hashes = {};
+  for (const [name, replay] of [['current', current], ['older', old]]) {
+    for (const file of ['semantic_run.json', 'replay_analysis.json', `${EVENT}.jsonl`]) {
+      hashes[`replays/${name}/${file}`] = hashFile(path.join(replay.directory, file));
+    }
+  }
+  fs.writeFileSync(path.join(root, 'manifest.json'), JSON.stringify({
+    command_args: ['batch'],
+    replay_inputs: [
+      { artifact_directory: 'replays/current', sha256: SHA,
+        version: profile.replay_version },
+      { artifact_directory: 'replays/older', sha256: oldSha,
+        version: profile.replay_version },
+    ],
+    output_hashes_excluding_manifest: hashes,
+  }));
+  const queried = command(root, '--cast-nested-u32-0x28', '137424977');
+  assert.equal(queried.status, 0, queried.stderr);
+  assert.equal(queried.stdout, `${current.lines[0]}\n`);
+  const summary = JSON.parse(queried.stderr);
+  assert.equal(summary.query_status, 'PARTIAL');
+  assert.equal(summary.completed_replay_count, 1);
+  assert.equal(summary.unavailable_replay_count, 1);
+  assert.equal(summary.cast_nested_u32_0x28_checked_count, 1);
+  assert.equal(summary.cast_nested_u32_0x28_unavailable_count, 1);
+  assert.equal(summary.cast_nested_u32_0x28_unavailable_replay_count, 1);
+  assert.equal(summary.replay_results[1].code, 'CAST_NESTED_U32_0X28_UNAVAILABLE');
 });

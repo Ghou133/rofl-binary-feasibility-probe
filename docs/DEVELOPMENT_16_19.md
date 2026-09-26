@@ -290,6 +290,27 @@ Current progress (older notes below retain their original research context):
   the captured module has no receiver heap, so it was not emitted.
   Focused decoder/native tests passed 21/21, saved-query tests 17/17, and
   CLI option tests 30/30 with the supplied exact inputs.
+- **CastSpellAns packet-local callback lookup key at packet +0x28 (opt-in V8):**
+  The exact 821 nested deserializer at RVA `0x10babce..0x10bae7b` writes the
+  protected word at nested `+0x18`; callback RVA `0x8d75b3..0x8d75f5`
+  decodes its four bytes, and RVA `0x8d86c2..0x8d875a` uses the resulting
+  word as a conditional runtime-tree lookup key. The pinned image is SHA-256
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`.
+  The byte transform and its inverse pass all 256 inputs, with SHA-256
+  `8aa1a1d1b3c61b2717fbf3b7349dcc659f21d91cd0fe98404e4dc6b700214cb5`
+  and `442516bee22a1147d65334928ed5300c815deeab1ac6c92002960045590a4e71`.
+  A native audit fully consumed 63,496/63,496 packets across the 11
+  original KR 821 Replays; the real V8 CLI batch wrote 11/11 `CANDIDATE`,
+  exact image `MATCHED_USED`, zero framing errors, and all 63,496 rows to
+  ignored `artifacts/16_19_development/cast_v8_11_replay_20260926/`.
+  The new field has 424 distinct values; every prior V7 row field and raw
+  packet reference was preserved. Native truncate/append controls fail full
+  consumption as expected, and 448 saved native object bytes match the
+  route-specific witness. V4 remains default, V8 is opt-in, and the tree
+  lookup result, object identity, actor, spell and effect remain `UNKNOWN`:
+  the captured module does not contain the live receiver heap. The native
+  packet witness includes the raw and decoded `+0x28` values per packet;
+  there is no ordered native-output digest for these rows.
 - **Damage identity stop-loss:** In saved V5 output for the 11 KR Replays,
   anonymous `+0x18` `RAW_READER` occurred in 11/1,035 death-coincident
   victim-key packets and 823/62,860 first-lookup roster pairs. Conditional

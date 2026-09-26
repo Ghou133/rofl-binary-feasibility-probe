@@ -572,7 +572,11 @@ test('821 CastSpellAns V5 CLI switch forwards an explicit decode option', (t) =>
     'cast_spell_ans_packet', '--cast-packet-v7']);
   assert.equal(newest.options.castPacketV7, true);
   assert.equal(cli.parseOne(input, { ...newest.options, semantic: true }).ok, true);
-  assert.deepEqual(seen, ['v5', undefined, 'v6', 'v7']);
+  const lookup = cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v8']);
+  assert.equal(lookup.options.castPacketV8, true);
+  assert.equal(cli.parseOne(input, { ...lookup.options, semantic: true }).ok, true);
+  assert.deepEqual(seen, ['v5', undefined, 'v6', 'v7', 'v8']);
   assert.equal(cli.parseArgs(['batch', input, '--events',
     'cast_spell_ans_packet', '--cast-packet-v5']).options.castPacketV5, true);
   assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v5']),
@@ -589,9 +593,24 @@ test('821 CastSpellAns V5 CLI switch forwards an explicit decode option', (t) =>
     /--cast-packet-v6 requires/);
   assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v7']),
     /--cast-packet-v7 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v8']),
+    /--cast-packet-v8 requires/);
   assert.throws(() => cli.parseArgs(['decode', input, '--events',
     'cast_spell_ans_packet', '--cast-packet-v6', '--cast-packet-v7']),
   /mutually exclusive/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v7', '--cast-packet-v8']),
+  /mutually exclusive/);
+  const lookupQuery = cli.parseArgs(['query-events', input, '--event',
+    'cast_spell_ans_packet_candidates', '--cast-nested-u32-0x28', '0x0b6189bb']);
+  assert.equal(lookupQuery.options.castNestedU32At28, 190941627);
+  for (const invalid of ['-1', '4294967296', 'NaN']) {
+    assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+      'cast_spell_ans_packet_candidates', '--cast-nested-u32-0x28', invalid]));
+  }
+  assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+    'set_spell_level_packet_candidates', '--cast-nested-u32-0x28', '1']),
+  /--cast-nested-u32-0x28 requires/);
   const query = cli.parseArgs(['query-events', input, '--event',
     'cast_spell_ans_packet_candidates', '--cast-nested-f32-0xa0', '1.25']);
   assert.equal(query.options.castNestedF32AtA0, 1.25);
