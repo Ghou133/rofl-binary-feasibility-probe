@@ -13,11 +13,13 @@ const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: DAMAGE_V4_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V6_821: DAMAGE_V6_PROFILE,
 } = require('./rofl_16_19_821_unit_apply_damage_packet_candidate');
 const {
   UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: RAW_PAIR_PROFILE,
   UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821: RAW_PAIR_PROFILE_V1,
   UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821: RAW_PAIR_PROFILE_V2,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V4_821: RAW_PAIR_PROFILE_V4,
   associateUnitApplyDamageRosterKeys821,
 } = require('./rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const { PROFILES } = require('./rofl_16_19_821_float_stats_candidate');
@@ -73,6 +75,16 @@ const HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE = Object.freeze({
   ]),
 });
 
+const HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V4_821 = Object.freeze({
+  ...HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE,
+  id: 'rofl-16.19.821.7343-kr-hero-death-damage-lookup-key-cooccurrence-candidate-v4',
+  known_limits: Object.freeze([
+    ...HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE.known_limits.slice(0, 3),
+    'The death route is freshly decoded and the complete native-witnessed v6 damage, including the anonymous +0x1c u32, and HeroStats sources are physically checked against the same Replay.',
+    ...HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE.known_limits.slice(4),
+  ]),
+});
+
 function v5F32Metadata(damage) {
   return {
     evidence_callback_f32_0x18_table_sha256:
@@ -97,6 +109,30 @@ function v5F32Row(row) {
   };
 }
 
+function v6U32Metadata(damage) {
+  return {
+    evidence_callback_u32_0x1c_table_sha256:
+      damage.evidence_callback_u32_0x1c_table_sha256,
+    native_callback_u32_0x1c_full_write_count:
+      damage.native_callback_u32_0x1c_full_write_count,
+    native_callback_u32_0x1c_source_counts:
+      structuredClone(damage.native_callback_u32_0x1c_source_counts),
+  };
+}
+
+function v6U32Row(row) {
+  return {
+    header_selector_bits_12_14: row.header_selector_bits_12_14,
+    native_callback_u32_0x1c_candidate: row.native_callback_u32_0x1c_candidate,
+    native_callback_u32_0x1c_encoded_bytes_hex:
+      row.native_callback_u32_0x1c_encoded_bytes_hex,
+    native_callback_u32_0x1c_source: row.native_callback_u32_0x1c_source,
+    native_callback_u32_0x1c_raw_call_rva: row.native_callback_u32_0x1c_raw_call_rva,
+    native_callback_u32_0x1c_raw_offset: row.native_callback_u32_0x1c_raw_offset,
+    native_callback_u32_0x1c_raw_bytes_hex: row.native_callback_u32_0x1c_raw_bytes_hex,
+  };
+}
+
 function sha(value) {
   return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
 }
@@ -118,7 +154,9 @@ function associateHeroDeathDamageLookupKeyCooccurrence821(replay, {
     ? HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821
     : unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V4_ID
       ? HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V2_821
-      : HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE;
+      : unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V6_PROFILE.id
+        ? HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V4_821
+        : HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE;
   const base = {
     profile_id: profile.id,
     depends_on: [...profile.depends_on],
@@ -198,7 +236,7 @@ function associateHeroDeathDamageLookupKeyCooccurrence821(replay, {
   const damage = unitApplyDamagePacketOutcome;
   const snapshot = minionsKilledSnapshotOutcome;
   if (death.profile_id !== DEATH_PROFILE.id
-      || ![DAMAGE_V3_ID, DAMAGE_V4_ID, DAMAGE_PROFILE.id]
+      || ![DAMAGE_V3_ID, DAMAGE_V4_ID, DAMAGE_PROFILE.id, DAMAGE_V6_PROFILE.id]
         .includes(damage.profile_id)
       || snapshot.profile_id !== SNAPSHOT_PROFILE.id) {
     return fail('PROFILE_UNAVAILABLE', 'one or more exact 821 source profiles differ');
@@ -226,7 +264,8 @@ function associateHeroDeathDamageLookupKeyCooccurrence821(replay, {
   }
   const expectedRawPair = damage.profile_id === DAMAGE_V3_ID
     ? RAW_PAIR_PROFILE_V1 : damage.profile_id === DAMAGE_V4_ID
-      ? RAW_PAIR_PROFILE_V2 : RAW_PAIR_PROFILE;
+      ? RAW_PAIR_PROFILE_V2 : damage.profile_id === DAMAGE_V6_PROFILE.id
+        ? RAW_PAIR_PROFILE_V4 : RAW_PAIR_PROFILE;
   if (rawPair.profile_id !== expectedRawPair.id
       || rawPair.damage_packet_count !== damage.event_count
       || rawPair.snapshot_count !== snapshot.event_count
@@ -307,7 +346,9 @@ function associateHeroDeathDamageLookupKeyCooccurrence821(replay, {
       if (dieSourceEqual) joint += 1;
       packetCandidates.push({
         raw_param: row.raw_param,
-        ...(damage.profile_id === DAMAGE_PROFILE.id ? v5F32Row(row) : {}),
+        ...([DAMAGE_PROFILE.id, DAMAGE_V6_PROFILE.id].includes(damage.profile_id)
+          ? v5F32Row(row) : {}),
+        ...(damage.profile_id === DAMAGE_V6_PROFILE.id ? v6U32Row(row) : {}),
         native_callback_lookup_key_u32_0x24_candidate:
           row.native_callback_lookup_key_u32_0x24_candidate,
         native_callback_lookup_key_0x24_encoded_bytes_hex:
@@ -373,7 +414,9 @@ function associateHeroDeathDamageLookupKeyCooccurrence821(replay, {
     replay_sha256: replay.source_sha256,
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
     runtime_image_sha256: RUNTIME_IMAGE_SHA256,
-    ...(damage.profile_id === DAMAGE_PROFILE.id ? v5F32Metadata(damage) : {}),
+    ...([DAMAGE_PROFILE.id, DAMAGE_V6_PROFILE.id].includes(damage.profile_id)
+      ? v5F32Metadata(damage) : {}),
+    ...(damage.profile_id === DAMAGE_V6_PROFILE.id ? v6U32Metadata(damage) : {}),
     dependency_statuses: {
       hero_death: death.status,
       unit_apply_damage_packet: damage.status,
@@ -404,5 +447,6 @@ module.exports = {
   HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE,
   HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821,
   HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V2_821,
+  HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V4_821,
   associateHeroDeathDamageLookupKeyCooccurrence821,
 };

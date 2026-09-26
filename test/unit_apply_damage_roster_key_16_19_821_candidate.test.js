@@ -18,7 +18,9 @@ const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821: DAMAGE_V2_ID,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: DAMAGE_V4_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V6_821: DAMAGE_V6_PROFILE,
   decodeUnitApplyDamagePacketCandidates821,
+  decodeUnitApplyDamagePacketCandidates821V6,
   decodeUnitApplyDamageCallbackF32FromRaw821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
@@ -29,6 +31,7 @@ const {
   UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: profile,
   UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821: v1Profile,
   UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821: v2Profile,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V4_821: v4Profile,
   associateUnitApplyDamageRosterKeys821: associate,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 
@@ -36,10 +39,12 @@ const BUILD = '16.19.821.7343';
 const SNAPSHOT_PROFILE = PROFILES.hero_minions_killed_snapshot;
 const FIRST_PARAM = 0x400000ae;
 const COMMON_PAYLOAD = Buffer.from('71875e460b083dbaef3ba6ec39b975', 'hex');
-const IMAGE_PATH = path.resolve(__dirname, '..', 'artifacts', '16_19_development',
-  'kr_821_runtime_capture', 'LeagueOfLegends_16.19.821.7343.memory.bin');
-const REPLAY_PATH = path.resolve(__dirname, '..', '..', 'kr-rofl-batch-collector',
-  'data', 'KR', '16.19', 'builds', BUILD, 'rofl', 'KR_8392938200.rofl');
+const IMAGE_PATH = process.env.ROFL_ASSOC_821_IMAGE_PATH ?? path.resolve(__dirname,
+  '..', 'artifacts', '16_19_development', 'kr_821_runtime_capture',
+  'LeagueOfLegends_16.19.821.7343.memory.bin');
+const REPLAY_PATH = process.env.ROFL_ASSOC_821_REPLAY_PATH ?? path.resolve(__dirname,
+  '..', '..', 'kr-rofl-batch-collector', 'data', 'KR', '16.19', 'builds',
+  BUILD, 'rofl', 'KR_8392938200.rofl');
 
 function sha256(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
@@ -101,12 +106,14 @@ function fixture({ version = BUILD,
   chunks.push({ stream: 1, body: Buffer.concat(damageKeys.map((rawParam, i) =>
     packet(0x005f, rawParam, COMMON_PAYLOAD, 1500 + i * 100))) });
   const replay = replayFromChunks(chunks, version);
-  const damageProfileId = damageProfile === 'v5' ? DAMAGE_PROFILE.id
+  const damageProfileId = damageProfile === 'v6' ? DAMAGE_V6_PROFILE.id
+    : damageProfile === 'v5' ? DAMAGE_PROFILE.id
     : damageProfile === 'v4' ? DAMAGE_V4_ID
     : damageProfile === 'v3' ? DAMAGE_V3_ID : DAMAGE_V2_ID;
-  const hasLookupKeys = ['v3', 'v4', 'v5'].includes(damageProfile);
-  const hasU32 = damageProfile === 'v4' || damageProfile === 'v5';
-  const hasF32At18 = damageProfile === 'v5';
+  const hasLookupKeys = ['v3', 'v4', 'v5', 'v6'].includes(damageProfile);
+  const hasU32 = ['v4', 'v5', 'v6'].includes(damageProfile);
+  const hasF32At18 = ['v5', 'v6'].includes(damageProfile);
+  const hasU32At1c = damageProfile === 'v6';
   const damageEvents = [];
   const snapshotEvents = [];
   const lookupRelationCounts = {
@@ -183,6 +190,15 @@ function fixture({ version = BUILD,
         native_callback_f32_0x18_raw_offset: null,
         native_callback_f32_0x18_raw_bytes_hex: null,
       } : {}),
+      ...(hasU32At1c ? {
+        header_selector_bits_12_14: 0,
+        native_callback_u32_0x1c_candidate: 0,
+        native_callback_u32_0x1c_encoded_bytes_hex: '05050505',
+        native_callback_u32_0x1c_source: 'CONSTANT_0',
+        native_callback_u32_0x1c_raw_call_rva: null,
+        native_callback_u32_0x1c_raw_offset: null,
+        native_callback_u32_0x1c_raw_bytes_hex: null,
+      } : {}),
       semantic_effect_status: 'UNKNOWN',
       confidence: 'CANDIDATE',
       semantic_status: DAMAGE_PROFILE.evidence_status,
@@ -228,6 +244,14 @@ function fixture({ version = BUILD,
         DAMAGE_PROFILE.evidence_callback_f32_0x18_table_sha256,
       native_callback_f32_0x18_full_write_count: damageEvents.length,
       native_callback_f32_0x18_source_counts: {
+        RAW_READER: 0, CONSTANT_0: damageEvents.length,
+      },
+    } : {}),
+    ...(hasU32At1c ? {
+      evidence_callback_u32_0x1c_table_sha256:
+        DAMAGE_V6_PROFILE.evidence_callback_u32_0x1c_table_sha256,
+      native_callback_u32_0x1c_full_write_count: damageEvents.length,
+      native_callback_u32_0x1c_source_counts: {
         RAW_READER: 0, CONSTANT_0: damageEvents.length,
       },
     } : {}),
@@ -397,6 +421,36 @@ test('821 UnitApplyDamage roster association accepts v5 and binds anonymous +0x1
   }
 });
 
+test('821 UnitApplyDamage roster association preserves v5 and binds v6 +0x1c', () => {
+  const v5 = fixture({ damageProfile: 'v5' });
+  assert.equal(associate(v5.replay, v5).profile_id, profile.id);
+  const values = fixture({ damageProfile: 'v6' });
+  const result = associate(values.replay, values);
+  assert.equal(result.status, 'CANDIDATE', result.error);
+  assert.equal(result.profile_id, v4Profile.id);
+  assert.equal(result.native_callback_u32_0x1c_full_write_count, 4);
+  assert.deepEqual(result.native_callback_u32_0x1c_source_counts,
+    { RAW_READER: 0, CONSTANT_0: 4 });
+  assert.equal(result.events[0].header_selector_bits_12_14, 0);
+  assert.equal(result.events[0].native_callback_u32_0x1c_candidate, 0);
+  assert.equal(result.events[0].native_callback_u32_0x1c_raw_offset, null);
+  for (const mutate of [
+    (damage) => { damage.native_callback_u32_0x1c_full_write_count -= 1; },
+    (damage) => { damage.native_callback_u32_0x1c_source_counts.CONSTANT_0 -= 1; },
+    (damage) => { damage.events[0].header_selector_bits_12_14 = 6; },
+    (damage) => { damage.events[0].native_callback_u32_0x1c_candidate = 1; },
+    (damage) => { damage.events[0].native_callback_u32_0x1c_encoded_bytes_hex = '00000000'; },
+    (damage) => { damage.events[0].native_callback_u32_0x1c_raw_bytes_hex = '00f1'; },
+  ]) {
+    const forged = fixture({ damageProfile: 'v6' });
+    mutate(forged.unitApplyDamagePacketOutcome);
+    assert.equal(associate(forged.replay, forged).status, 'INCONSISTENT');
+  }
+  const old = fixture({ damageProfile: 'v5' });
+  old.unitApplyDamagePacketOutcome.events[0].native_callback_u32_0x1c_candidate = 0;
+  assert.equal(associate(old.replay, old).status, 'INCONSISTENT');
+});
+
 test('821 UnitApplyDamage roster association rejects wrong build or missing inputs', () => {
   const wrong = fixture({ version: '16.19.821.7344' });
   assert.equal(associate(wrong.replay, wrong).status, 'UNSUPPORTED');
@@ -475,4 +529,33 @@ test('one original KR 821 Replay yields source-bound full-key associations', {
     unitApplyDamagePacketOutcome, minionsKilledSnapshotOutcome,
   }).status, 'INCONSISTENT');
   rawAt18.native_callback_f32_0x18_raw_bytes_hex = originalRawAt18;
+});
+
+
+test('one original KR 821 Replay binds v6 +0x1c raw spans to roster candidates', {
+  skip: !fs.existsSync(IMAGE_PATH) || !fs.existsSync(REPLAY_PATH)
+    ? 'exact private image or original KR Replay is unavailable' : false,
+}, () => {
+  const replay = parseReplayFile(REPLAY_PATH);
+  const unitApplyDamagePacketOutcome = decodeUnitApplyDamagePacketCandidates821V6(replay,
+    { runtimeImagePath: IMAGE_PATH });
+  const minionsKilledSnapshotOutcome = decodeHeroFloatSnapshotCandidates821(replay,
+    'hero_minions_killed_snapshot');
+  assert.equal(unitApplyDamagePacketOutcome.status, 'CANDIDATE');
+  assert.equal(minionsKilledSnapshotOutcome.status, 'CANDIDATE');
+  const inputs = { unitApplyDamagePacketOutcome, minionsKilledSnapshotOutcome };
+  const result = associate(replay, inputs);
+  assert.equal(result.status, 'CANDIDATE', result.error);
+  assert.equal(result.profile_id, v4Profile.id);
+  assert.equal(result.native_callback_u32_0x1c_full_write_count,
+    result.damage_packet_count);
+  const raw = unitApplyDamagePacketOutcome.events.find((row) =>
+    row.native_callback_u32_0x1c_source === 'RAW_READER');
+  assert.ok(raw);
+  const original = raw.native_callback_u32_0x1c_raw_bytes_hex;
+  const changed = Buffer.from(original, 'hex');
+  changed[0] ^= 1;
+  raw.native_callback_u32_0x1c_raw_bytes_hex = changed.toString('hex');
+  assert.equal(associate(replay, inputs).status, 'INCONSISTENT');
+  raw.native_callback_u32_0x1c_raw_bytes_hex = original;
 });

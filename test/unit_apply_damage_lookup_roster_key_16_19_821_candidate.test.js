@@ -16,6 +16,7 @@ const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: DAMAGE_V4_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V6_821: DAMAGE_V6_PROFILE,
   decodeUnitApplyDamagePacketCandidates821,
   decodeUnitApplyDamageCallbackF32FromRaw821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
@@ -30,6 +31,7 @@ const {
   UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE: profile,
   UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821: v1Profile,
   UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V2_821: v2Profile,
+  UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V4_821: v4Profile,
   associateUnitApplyDamageLookupRosterKeys821: associate,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
 
@@ -143,10 +145,12 @@ function fixture({ version = BUILD, missingRosterKey = false,
   };
   const nativeInput = crypto.createHash('sha256');
   const nativeHeader = Buffer.alloc(8);
-  const damageProfileId = damageProfile === 'v5' ? DAMAGE_PROFILE.id
+  const damageProfileId = damageProfile === 'v6' ? DAMAGE_V6_PROFILE.id
+    : damageProfile === 'v5' ? DAMAGE_PROFILE.id
     : damageProfile === 'v4' ? DAMAGE_V4_ID : DAMAGE_V3_ID;
-  const hasU32 = damageProfile === 'v4' || damageProfile === 'v5';
-  const hasF32At18 = damageProfile === 'v5';
+  const hasU32 = ['v4', 'v5', 'v6'].includes(damageProfile);
+  const hasF32At18 = ['v5', 'v6'].includes(damageProfile);
+  const hasU32At1c = damageProfile === 'v6';
   walkBlocks(replay, (block, chunk) => {
     if (block.packet_id !== 0x005f && block.packet_id !== 0x0089) return;
     const sourceRef = ref(replay, block, chunk);
@@ -214,6 +218,15 @@ function fixture({ version = BUILD, missingRosterKey = false,
         native_callback_f32_0x18_raw_offset: null,
         native_callback_f32_0x18_raw_bytes_hex: null,
       } : {}),
+      ...(hasU32At1c ? {
+        header_selector_bits_12_14: 0,
+        native_callback_u32_0x1c_candidate: 0,
+        native_callback_u32_0x1c_encoded_bytes_hex: '05050505',
+        native_callback_u32_0x1c_source: 'CONSTANT_0',
+        native_callback_u32_0x1c_raw_call_rva: null,
+        native_callback_u32_0x1c_raw_offset: null,
+        native_callback_u32_0x1c_raw_bytes_hex: null,
+      } : {}),
       semantic_effect_status: 'UNKNOWN',
       confidence: 'CANDIDATE',
       semantic_status: DAMAGE_PROFILE.evidence_status,
@@ -256,6 +269,14 @@ function fixture({ version = BUILD, missingRosterKey = false,
         DAMAGE_PROFILE.evidence_callback_f32_0x18_table_sha256,
       native_callback_f32_0x18_full_write_count: damageEvents.length,
       native_callback_f32_0x18_source_counts: {
+        RAW_READER: 0, CONSTANT_0: damageEvents.length,
+      },
+    } : {}),
+    ...(hasU32At1c ? {
+      evidence_callback_u32_0x1c_table_sha256:
+        DAMAGE_V6_PROFILE.evidence_callback_u32_0x1c_table_sha256,
+      native_callback_u32_0x1c_full_write_count: damageEvents.length,
+      native_callback_u32_0x1c_source_counts: {
         RAW_READER: 0, CONSTANT_0: damageEvents.length,
       },
     } : {}),
@@ -374,6 +395,24 @@ test('821 native lookup roster association preserves v4 and accepts source-bound
     mutate(forged.unitApplyDamagePacketOutcome);
     assert.equal(associate(forged.replay, forged).status, 'INCONSISTENT');
   }
+});
+
+test('821 native lookup roster association preserves v5 and binds v6 +0x1c', () => {
+  const old = fixture({ damageProfile: 'v5' });
+  assert.equal(associate(old.replay, old).profile_id, profile.id);
+  const values = fixture({ damageProfile: 'v6' });
+  const result = associate(values.replay, values);
+  assert.equal(result.status, 'CANDIDATE', result.error);
+  assert.equal(result.profile_id, v4Profile.id);
+  assert.equal(result.native_callback_u32_0x1c_full_write_count, 5);
+  assert.deepEqual(result.native_callback_u32_0x1c_source_counts,
+    { RAW_READER: 0, CONSTANT_0: 5 });
+  assert.equal(result.events[0].native_callback_u32_0x1c_candidate, 0);
+  assert.equal(result.events[0].native_callback_u32_0x1c_raw_call_rva, null);
+  const forged = fixture({ damageProfile: 'v6' });
+  forged.unitApplyDamagePacketOutcome.events[0]
+    .native_callback_u32_0x1c_encoded_bytes_hex = '00000000';
+  assert.equal(associate(forged.replay, forged).status, 'INCONSISTENT');
 });
 
 test('821 cached raw-key proof must match current source rows', () => {

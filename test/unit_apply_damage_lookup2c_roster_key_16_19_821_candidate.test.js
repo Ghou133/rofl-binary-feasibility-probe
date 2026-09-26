@@ -16,6 +16,7 @@ const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: DAMAGE_V4_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V6_821: DAMAGE_V6_PROFILE,
   decodeUnitApplyDamagePacketCandidates821,
   decodeUnitApplyDamageCallbackF32FromRaw821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
@@ -34,6 +35,7 @@ const {
   UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE: profile,
   UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821: v1Profile,
   UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V2_821: v2Profile,
+  UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V4_821: v4Profile,
   associateUnitApplyDamageLookup2cRosterKeys821: associate,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_lookup2c_roster_key_candidate');
 
@@ -245,7 +247,8 @@ function fixture({ version = BUILD, missingRosterKey = false,
 
 function withDamageProfile(values, version) {
   const damage = values.unitApplyDamagePacketOutcome;
-  damage.profile_id = version === 4 ? DAMAGE_V4_ID : DAMAGE_PROFILE.id;
+  damage.profile_id = version === 4 ? DAMAGE_V4_ID
+    : version === 6 ? DAMAGE_V6_PROFILE.id : DAMAGE_PROFILE.id;
   damage.evidence_callback_u32_0x10_table_sha256 =
     DAMAGE_PROFILE.evidence_callback_u32_0x10_table_sha256;
   damage.native_callback_u32_0x10_full_write_count = damage.event_count;
@@ -258,7 +261,7 @@ function withDamageProfile(values, version) {
     row.native_callback_u32_0x10_encoded_bytes_hex = '85858585';
     row.native_callback_u32_0x10_source = 'CONSTANT_0';
   }
-  if (version === 5) {
+  if (version >= 5) {
     damage.evidence_callback_f32_0x18_table_sha256 =
       DAMAGE_PROFILE.evidence_callback_f32_0x18_table_sha256;
     damage.native_callback_f32_0x18_full_write_count = damage.event_count;
@@ -272,6 +275,23 @@ function withDamageProfile(values, version) {
       row.native_callback_f32_0x18_source = 'CONSTANT_0';
       row.native_callback_f32_0x18_raw_offset = null;
       row.native_callback_f32_0x18_raw_bytes_hex = null;
+    }
+  }
+  if (version === 6) {
+    damage.evidence_callback_u32_0x1c_table_sha256 =
+      DAMAGE_V6_PROFILE.evidence_callback_u32_0x1c_table_sha256;
+    damage.native_callback_u32_0x1c_full_write_count = damage.event_count;
+    damage.native_callback_u32_0x1c_source_counts = {
+      RAW_READER: 0, CONSTANT_0: damage.event_count,
+    };
+    for (const row of damage.events) {
+      row.header_selector_bits_12_14 = 0;
+      row.native_callback_u32_0x1c_candidate = 0;
+      row.native_callback_u32_0x1c_encoded_bytes_hex = '05050505';
+      row.native_callback_u32_0x1c_source = 'CONSTANT_0';
+      row.native_callback_u32_0x1c_raw_call_rva = null;
+      row.native_callback_u32_0x1c_raw_offset = null;
+      row.native_callback_u32_0x1c_raw_bytes_hex = null;
     }
   }
   return values;
@@ -396,6 +416,22 @@ test('821 +0x2c pairing preserves v4 and binds v5 anonymous +0x18 evidence', () 
   const forged = withDamageProfile(fixture(), 5);
   forged.unitApplyDamagePacketOutcome.events[0]
     .native_callback_f32_0x18_encoded_bytes_hex = '00000000';
+  assert.equal(associate(forged.replay, forged).status, 'INCONSISTENT');
+});
+
+test('821 +0x2c pairing preserves v5 and binds v6 +0x1c', () => {
+  const old = withDamageProfile(fixture(), 5);
+  assert.equal(associate(old.replay, old).profile_id, profile.id);
+  const values = withDamageProfile(fixture(), 6);
+  const result = associate(values.replay, values);
+  assert.equal(result.status, 'CANDIDATE', result.error);
+  assert.equal(result.profile_id, v4Profile.id);
+  assert.equal(result.native_callback_u32_0x1c_full_write_count,
+    result.damage_packet_count);
+  assert.equal(result.events[0].native_callback_u32_0x1c_candidate, 0);
+  assert.equal(result.events[0].native_callback_u32_0x1c_source, 'CONSTANT_0');
+  const forged = withDamageProfile(fixture(), 6);
+  forged.unitApplyDamagePacketOutcome.events[0].header_selector_bits_12_14 = 6;
   assert.equal(associate(forged.replay, forged).status, 'INCONSISTENT');
 });
 
