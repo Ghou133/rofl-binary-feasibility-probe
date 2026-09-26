@@ -18,12 +18,15 @@ const {
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821: profileV6,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821: profileV7,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821: profileV8,
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821: profileV9,
   decodeCastSpellAnsNestedU32FromRaw821,
   decodeCastSpellAnsNestedU32At4cFromRaw821,
   decodeCastSpellAnsNestedF32AtA0FromRaw821,
   decodeCastSpellAnsNestedU32At28FromRaw821,
   decodeCastSpellAnsPacketCandidates821: decode,
 } = require('../src/decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
+const { DIGEST_SCHEMA, batchDigest, replayDigestStart, replayDigestBatch } =
+  require('../src/decoders/rofl_16_19_821_cast_spell_ans_native_digest');
 
 const BUILD = '16.19.821.7343';
 const IMAGE_SHA256 = '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325';
@@ -106,6 +109,13 @@ function nativeResultV8(request) {
     row.raw_u32_0x28_hex = '9194b8fb';
     row.opaque_u32_0x28 = 137424977;
   }
+  return output;
+}
+
+function nativeResultV9(request) {
+  const output = nativeResultV8(request);
+  output.native_output_digest_schema = DIGEST_SCHEMA;
+  output.native_output_sha256 = batchDigest(output.results);
   return output;
 }
 
@@ -312,6 +322,72 @@ test('821 CastSpellAns V8 rejects mismatched key, raw bytes and transform identi
   assert.equal(invoke.mock.callCount(), 3);
 });
 
+test('821 CastSpellAns V9 binds the native batch digest to the replay result', (t) => {
+  const image = fakeImage(t);
+  const replay = replayWithChunks([{ packets: [packet()] }]);
+  t.mock.method(childProcess, 'spawnSync', (_python, args, options) => {
+    assert.ok(args.includes('--native-output-digest-v9'));
+    return { status: 0, stderr: '', stdout: JSON.stringify(
+      nativeResultV9(JSON.parse(options.input))) };
+  });
+  const result = decode(replay, { runtimeImagePath: image, castPacketProfile: 'v9' });
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.profile_id, profileV9.id);
+  assert.equal(result.evidence_native_output_digest_schema, DIGEST_SCHEMA);
+  assert.equal(result.events[0].build_profile, profileV9.id);
+  assert.equal(result.events[0].opaque_u32_0x28, 137424977);
+  const replayHash = replayDigestStart(replay.source_sha256);
+  replayDigestBatch(replayHash, 0, 1, batchDigest(
+    nativeResultV9({ packets: [{ raw_param: 0x400000ae,
+      payload_hex: PAYLOAD.toString('hex') }] }).results));
+  assert.equal(result.native_output_sha256, replayHash.digest('hex'));
+  assert.equal(result.native_output_batch_size, 8192);
+});
+
+test('821 CastSpellAns V9 rejects a forged native digest atomically', (t) => {
+  const image = fakeImage(t);
+  const replay = replayWithChunks([{ packets: [packet()] }]);
+  t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const output = nativeResultV9(JSON.parse(options.input));
+    output.native_output_sha256 = '0'.repeat(64);
+    return { status: 0, stderr: '', stdout: JSON.stringify(output) };
+  });
+  const result = decode(replay, { runtimeImagePath: image, castPacketProfile: 'v9' });
+  assert.equal(result.status, 'DECODE_FAILED');
+  assert.equal(result.events, null);
+  assert.match(result.error, /native output digest differs/);
+});
+
+test('821 CastSpellAns V9 chains native batches and discards a forged later batch', (t) => {
+  const image = fakeImage(t);
+  const replay = replayWithChunks([{
+    packets: Array.from({ length: 8193 }, () => packet()),
+  }]);
+  let forgeSecond = false;
+  let calls = 0;
+  t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    calls += 1;
+    const request = JSON.parse(options.input);
+    const output = nativeResultV9(request);
+    if (forgeSecond && request.packets.length === 1) {
+      output.native_output_sha256 = '0'.repeat(64);
+    }
+    return { status: 0, stderr: '', stdout: JSON.stringify(output) };
+  });
+  const good = decode(replay, { runtimeImagePath: image,
+    castPacketProfile: 'v9' });
+  assert.equal(good.status, 'CANDIDATE');
+  assert.equal(good.event_count, 8193);
+  assert.match(good.native_output_sha256, /^[0-9a-f]{64}$/);
+  assert.equal(calls, 2);
+  forgeSecond = true;
+  const bad = decode(replay, { runtimeImagePath: image,
+    castPacketProfile: 'v9' });
+  assert.equal(bad.status, 'DECODE_FAILED');
+  assert.equal(bad.events, null);
+  assert.equal(calls, 4);
+});
+
 test('821 CastSpellAns V7 rejects mismatched native +0xa0 field and identity atomically', (t) => {
   const image = fakeImage(t);
   const replay = replayWithChunks([{ packets: [packet()] }]);
@@ -388,7 +464,7 @@ test('821 CastSpellAns V5 rejects mismatched native field and transform atomical
     assert.equal(result.events, null, variant);
   }
   assert.equal(decode(replay, { runtimeImagePath: image,
-    castPacketProfile: 'v9' }).status, 'UNSUPPORTED');
+    castPacketProfile: 'v10' }).status, 'UNSUPPORTED');
   assert.equal(invoke.mock.callCount(), 3);
 });
 

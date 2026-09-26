@@ -9,6 +9,10 @@ const { walkBlocks } = require('../rofl');
 const { replaySourceError } = require('./replay_source_integrity');
 const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
 const { runtimeByteLookupTable821 } = require('./rofl_16_19_821_runtime_bytes');
+const { BATCH_SIZE: V9_BATCH_SIZE, DIGEST_SCHEMA: V9_DIGEST_SCHEMA,
+  batchDigest: v9BatchDigest, replayDigestStart: v9ReplayDigestStart,
+  replayDigestBatch: v9ReplayDigestBatch } =
+  require('./rofl_16_19_821_cast_spell_ans_native_digest');
 
 const REPLAY_VERSION = '16.19.821.7343';
 const IMAGE_SHA256 = '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325';
@@ -40,6 +44,8 @@ const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_ID_821 =
   'rofl-16.19.821.7343-kr-cast-spell-ans-packet-runtime-candidate-v7';
 const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_ID_821 =
   'rofl-16.19.821.7343-kr-cast-spell-ans-packet-runtime-candidate-v8';
+const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_ID_821 =
+  'rofl-16.19.821.7343-kr-cast-spell-ans-packet-runtime-candidate-v9';
 
 const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
   id: CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V4_ID_821,
@@ -106,6 +112,16 @@ const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821 = Object.freeze({
   known_limits: Object.freeze([
     ...CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821.known_limits,
     'The packet +0x28 lookup key does not establish a lookup hit, receiver, actor, spell or cast effect.',
+  ]),
+});
+const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821 = Object.freeze({
+  ...CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821,
+  id: CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_ID_821,
+  evidence_native_output_digest_schema: V9_DIGEST_SCHEMA,
+  evidence_scope: 'exact 821 V8 packet fields plus native-produced ordered output digest bound to every persisted field and source packet payload SHA; receiver-tree result remains unknown',
+  known_limits: Object.freeze([
+    ...CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821.known_limits,
+    'The ordered digest binds persisted native packet fields, not receiver-tree lookup results or gameplay effects.',
   ]),
 });
 
@@ -309,11 +325,13 @@ function collectRows(replay, precollected) {
 function decodeCastSpellAnsPacketCandidates821(replay, {
   runtimeImagePath, pythonExecutable, precollected, castPacketProfile = 'v4',
 } = {}) {
-  const useV8 = castPacketProfile === 'v8';
+  const useV9 = castPacketProfile === 'v9';
+  const useV8 = castPacketProfile === 'v8' || useV9;
   const useV7 = castPacketProfile === 'v7' || useV8;
   const includeV6 = castPacketProfile === 'v6' || useV7;
   const includeV5 = castPacketProfile === 'v5' || includeV6;
-  const profile = useV8 ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821
+  const profile = useV9 ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821
+    : useV8 ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821
     : useV7 ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821
     : includeV6 ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821
     : includeV5 ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821
@@ -336,6 +354,7 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
       evidence_nested_u32_0x28_transform_sha256: NESTED_U32_0X28_TRANSFORM_SHA256,
       evidence_nested_u32_0x28_inverse_sha256: NESTED_U32_0X28_INVERSE_SHA256,
     } : {}),
+    ...(useV9 ? { evidence_native_output_digest_schema: V9_DIGEST_SCHEMA } : {}),
   };
   const fail = (status, error, extra = {}) => ({
     ...base, status, input_count: null, event_count: null, events: null,
@@ -343,7 +362,7 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
     error, ...extra,
   });
   if (castPacketProfile !== 'v4' && !includeV5) {
-    return fail('UNSUPPORTED', 'CastSpellAns packet profile must be v4, v5, v6, v7 or v8');
+    return fail('UNSUPPORTED', 'CastSpellAns packet profile must be v4, v5, v6, v7, v8 or v9');
   }
   if (replay?.header?.version !== REPLAY_VERSION) {
     return fail('UNSUPPORTED', `cast packet candidate supports only ${REPLAY_VERSION}`);
@@ -413,6 +432,10 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
   const script = path.resolve(__dirname, '..', '..', 'scripts',
     'decode_cast_spell_ans_packet_16_19_821.py');
   const events = [];
+  const v9ReplayHash = useV9 ? v9ReplayDigestStart(replay.source_sha256) : null;
+  if (V9_BATCH_SIZE !== MAX_BATCH_PACKETS) {
+    throw new Error('Cast V9 digest batch size differs from native batch size');
+  }
   for (let start = 0; start < rows.length; start += MAX_BATCH_PACKETS) {
     const batch = rows.slice(start, start + MAX_BATCH_PACKETS);
     const request = JSON.stringify({
@@ -431,6 +454,7 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
     if (includeV6) nativeArgs.push('--nested-u32-0x4c');
     if (useV7) nativeArgs.push('--nested-f32-0xa0');
     if (useV8) nativeArgs.push('--nested-u32-0x28');
+    if (useV9) nativeArgs.push('--native-output-digest-v9');
     const run = childProcess.spawnSync(python, nativeArgs, {
       input: request, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: 60000,
     });
@@ -472,6 +496,8 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
           !== NESTED_U32_0X28_TRANSFORM_SHA256
           || decoded.nested_u32_0x28_inverse_sha256
           !== NESTED_U32_0X28_INVERSE_SHA256))
+        || (useV9 && (decoded.native_output_digest_schema !== V9_DIGEST_SCHEMA
+          || !/^[0-9a-f]{64}$/.test(decoded.native_output_sha256 ?? '')))
         || !Array.isArray(decoded.results) || decoded.results.length !== batch.length) {
       return failed('DECODE_FAILED', 'runtime cast output identity or packet count differs', {
         runtime_image_used: start > 0,
@@ -562,6 +588,16 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
         raw_packet_ref: ref,
       });
     }
+    if (useV9) {
+      const outputSha = v9BatchDigest(decoded.results);
+      if (decoded.native_output_sha256 !== outputSha) {
+        return failed('DECODE_FAILED', `runtime cast V9 batch ${start} native output digest differs`, {
+          runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+          runtime_image_sha256: IMAGE_SHA256,
+        });
+      }
+      v9ReplayDigestBatch(v9ReplayHash, start, batch.length, outputSha);
+    }
   }
   return {
     ...base, status: 'CANDIDATE',
@@ -569,7 +605,10 @@ function decodeCastSpellAnsPacketCandidates821(replay, {
     input_count: inputCount, event_count: events.length,
     scanned_block_count: scannedBlockCount,
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
-    runtime_image_sha256: IMAGE_SHA256, events,
+    runtime_image_sha256: IMAGE_SHA256,
+    ...(useV9 ? { native_output_sha256: v9ReplayHash.digest('hex'),
+      native_output_batch_size: V9_BATCH_SIZE } : {}),
+    events,
   };
 }
 
@@ -579,12 +618,16 @@ module.exports = {
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_ID_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_ID_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_ID_821,
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_ID_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821,
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821,
   decodeNestedBits,
+  decodeNestedByte,
+  decodeNestedFloat,
   decodeCastSpellAnsNestedU32FromRaw821,
   decodeCastSpellAnsNestedU32At4cFromRaw821,
   decodeCastSpellAnsNestedF32AtA0FromRaw821,

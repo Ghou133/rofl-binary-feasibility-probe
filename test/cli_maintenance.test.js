@@ -576,7 +576,11 @@ test('821 CastSpellAns V5 CLI switch forwards an explicit decode option', (t) =>
     'cast_spell_ans_packet', '--cast-packet-v8']);
   assert.equal(lookup.options.castPacketV8, true);
   assert.equal(cli.parseOne(input, { ...lookup.options, semantic: true }).ok, true);
-  assert.deepEqual(seen, ['v5', undefined, 'v6', 'v7', 'v8']);
+  const witnessed = cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v9']);
+  assert.equal(witnessed.options.castPacketV9, true);
+  assert.equal(cli.parseOne(input, { ...witnessed.options, semantic: true }).ok, true);
+  assert.deepEqual(seen, ['v5', undefined, 'v6', 'v7', 'v8', 'v9']);
   assert.equal(cli.parseArgs(['batch', input, '--events',
     'cast_spell_ans_packet', '--cast-packet-v5']).options.castPacketV5, true);
   assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v5']),
@@ -595,11 +599,16 @@ test('821 CastSpellAns V5 CLI switch forwards an explicit decode option', (t) =>
     /--cast-packet-v7 requires/);
   assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v8']),
     /--cast-packet-v8 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v9']),
+    /--cast-packet-v9 requires/);
   assert.throws(() => cli.parseArgs(['decode', input, '--events',
     'cast_spell_ans_packet', '--cast-packet-v6', '--cast-packet-v7']),
   /mutually exclusive/);
   assert.throws(() => cli.parseArgs(['decode', input, '--events',
     'cast_spell_ans_packet', '--cast-packet-v7', '--cast-packet-v8']),
+  /mutually exclusive/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v8', '--cast-packet-v9']),
   /mutually exclusive/);
   const lookupQuery = cli.parseArgs(['query-events', input, '--event',
     'cast_spell_ans_packet_candidates', '--cast-nested-u32-0x28', '0x0b6189bb']);

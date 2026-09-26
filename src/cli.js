@@ -177,6 +177,7 @@ candidate; the default CastSpellAns packet profile remains v4.
 --cast-packet-v6 also records a second exact-821 nested anonymous u32;
 --cast-packet-v7 also records an exact-821 nested anonymous f32;
 --cast-packet-v8 also records a packet-local anonymous callback lookup key;
+--cast-packet-v9 adds an ordered native-output digest for those packet fields;
 all newer CastSpellAns packet profiles require explicit selection.
 set_spell_timer_from_buff_packet emits an exact-821 packet-local opaque candidate.
 --spell-timer-packet-v2 adds an exact-821 native callback receiver-slot
@@ -252,6 +253,7 @@ Options:
   --cast-packet-v6              Opt into exact 821 CastSpellAns two nested anonymous u32 candidates (decode/batch)
   --cast-packet-v7              Opt into exact 821 CastSpellAns nested anonymous f32 candidate (decode/batch)
   --cast-packet-v8              Opt into exact 821 CastSpellAns anonymous callback lookup key (decode/batch)
+  --cast-packet-v9              Opt into exact 821 CastSpellAns ordered native-output witness (decode/batch)
   --spell-timer-packet-v2       Opt into exact 821 SetSpellTimerFromBuff native receiver callback candidates (decode/batch)
   --spell-level-packet-v2       Opt into exact 821 SetSpellLevel callback receiver/scalar candidates (decode/batch)
   --item-group-packet-v2        Opt into exact 821 item-group conditional callback byte candidate (decode/batch)
@@ -387,6 +389,7 @@ function parseArgs(argv) {
     castPacketV6: false,
     castPacketV7: false,
     castPacketV8: false,
+    castPacketV9: false,
     spellTimerPacketV2: false,
     spellLevelPacketV2: false,
     itemGroupPacketV2: false,
@@ -463,6 +466,10 @@ function parseArgs(argv) {
     }
     if (token === '--cast-packet-v8') {
       options.castPacketV8 = true;
+      continue;
+    }
+    if (token === '--cast-packet-v9') {
+      options.castPacketV9 = true;
       continue;
     }
     if (token === '--spell-level-packet-v2') {
@@ -638,10 +645,14 @@ function parseArgs(argv) {
       || !options.events?.includes('cast_spell_ans_packet'))) {
     throw new Error('--cast-packet-v8 requires decode or batch with exact-821 cast_spell_ans_packet in --events');
   }
+  if (options.castPacketV9 && (!['decode', 'batch'].includes(command)
+      || !options.events?.includes('cast_spell_ans_packet'))) {
+    throw new Error('--cast-packet-v9 requires decode or batch with exact-821 cast_spell_ans_packet in --events');
+  }
   if ([options.castPacketV5, options.castPacketV6, options.castPacketV7,
-    options.castPacketV8]
+    options.castPacketV8, options.castPacketV9]
     .filter(Boolean).length > 1) {
-    throw new Error('--cast-packet-v5, --cast-packet-v6, --cast-packet-v7 and --cast-packet-v8 are mutually exclusive');
+    throw new Error('--cast-packet-v5 through --cast-packet-v9 are mutually exclusive');
   }
   if (options.spellLevelPacketV2 && (!['decode', 'batch'].includes(command)
       || !options.events?.includes('set_spell_level_packet'))) {
@@ -1334,7 +1345,8 @@ function parseOne1619(replay, options, started) {
           candidate821Scan: candidate821Scan ?? undefined,
           runtimeImagePath: options.runtimeImage ?? undefined,
           pythonExecutable: options.python ?? undefined,
-          castPacketProfile: options.castPacketV8 ? 'v8'
+          castPacketProfile: options.castPacketV9 ? 'v9'
+            : options.castPacketV8 ? 'v8'
             : options.castPacketV7 ? 'v7'
             : options.castPacketV6 ? 'v6'
               : options.castPacketV5 ? 'v5' : undefined,

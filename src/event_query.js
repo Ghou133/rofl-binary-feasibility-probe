@@ -72,11 +72,17 @@ const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821,
-  decodeNestedBits, decodeCastSpellAnsNestedU32FromRaw821,
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821,
+  decodeNestedBits, decodeNestedByte, decodeNestedFloat,
+  decodeCastSpellAnsNestedU32FromRaw821,
   decodeCastSpellAnsNestedU32At4cFromRaw821,
   decodeCastSpellAnsNestedF32AtA0FromRaw821,
   decodeCastSpellAnsNestedU32At28FromRaw821 } =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
+const { BATCH_SIZE: CAST_V9_BATCH_SIZE, DIGEST_SCHEMA: CAST_V9_DIGEST_SCHEMA,
+  batchDigest: castV9BatchDigest, replayDigestStart: castV9ReplayDigestStart,
+  replayDigestBatch: castV9ReplayDigestBatch } =
+  require('./decoders/rofl_16_19_821_cast_spell_ans_native_digest');
 const { SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_821,
   SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_821,
   SET_SPELL_LEVEL_PACKET_CANDIDATE_FIELD_CONFIDENCE_V2_821,
@@ -4051,6 +4057,9 @@ function castSpellAnsOpaqueI32(row, lineNumber) {
 function prepareCastSpellAnsNestedBits(prepared) {
   const result = prepared.capabilityResult;
   const profile = result?.profile_id
+      === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821.id
+    ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821
+    : result?.profile_id
       === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821.id
     ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821
     : result?.profile_id
@@ -4092,20 +4101,30 @@ function prepareCastSpellAnsNestedBits(prepared) {
           !== profile.evidence_nested_u32_transform_sha256)
       || ([CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821,
         CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821,
-        CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821].includes(profile)
+        CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821,
+        CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821].includes(profile)
         && result.evidence_nested_u32_0x4c_transform_sha256
           !== profile.evidence_nested_u32_0x4c_transform_sha256)
       || ([CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821,
-        CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821].includes(profile)
+        CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821,
+        CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821].includes(profile)
         && (result.evidence_nested_f32_0xa0_transform_sha256
           !== profile.evidence_nested_f32_0xa0_transform_sha256
           || result.evidence_nested_f32_0xa0_inverse_sha256
             !== profile.evidence_nested_f32_0xa0_inverse_sha256))
-      || (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821
+      || ([CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821,
+        CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821].includes(profile)
         && (result.evidence_nested_u32_0x28_transform_sha256
           !== profile.evidence_nested_u32_0x28_transform_sha256
           || result.evidence_nested_u32_0x28_inverse_sha256
             !== profile.evidence_nested_u32_0x28_inverse_sha256))
+      || (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821
+        ? result.evidence_native_output_digest_schema !== CAST_V9_DIGEST_SCHEMA
+          || result.native_output_batch_size !== CAST_V9_BATCH_SIZE
+          || !REPLAY_SHA.test(result.native_output_sha256 ?? '')
+        : Object.hasOwn(result, 'native_output_sha256')
+          || Object.hasOwn(result, 'native_output_batch_size')
+          || Object.hasOwn(result, 'evidence_native_output_digest_schema'))
       || result.runtime_image_status !== 'MATCHED_USED'
       || result.runtime_image_used !== true
       || result.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS'
@@ -4222,7 +4241,8 @@ function prepareCastSpellAnsNestedF32AtA0(prepared) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--cast-nested-f32-0xa0 requires an exact 16.19.821.7343 CastSpellAns packet candidate event.');
   }
-  if (![profile.id, CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821.id]
+  if (![profile.id, CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821.id,
+    CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821.id]
     .includes(prepared.capabilityResult?.profile_id)) {
     const older = [CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821.id,
       CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821.id.replace(/-v4$/, '-v3'),
@@ -4246,7 +4266,8 @@ function prepareCastSpellAnsNestedU32At28(prepared) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--cast-nested-u32-0x28 requires an exact 16.19.821.7343 CastSpellAns packet candidate event.');
   }
-  if (prepared.capabilityResult?.profile_id !== profile.id) {
+  if (![profile.id, CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821.id]
+    .includes(prepared.capabilityResult?.profile_id)) {
     const older = [CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821.id,
       CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821.id.replace(/-v4$/, '-v3'),
       CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821.id,
@@ -4270,7 +4291,9 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
       { line_number: lineNumber });
   };
   const profileId = prepared.capabilityResult.profile_id;
-  const profile = profileId === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821.id
+  const profile = profileId === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821.id
+    ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821
+    : profileId === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821.id
     ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821
     : profileId === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821.id
     ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821
@@ -4306,6 +4329,19 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
   const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
   if (packetPositions.has(position)) invalid('raw packet reference occurs twice');
   packetPositions.add(position);
+  if (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821
+      && (![0, 1].includes(row.opaque_flag_0x148)
+        || !Number.isInteger(row.opaque_i32_0x14c)
+        || row.opaque_i32_0x14c < -0x80000000
+        || row.opaque_i32_0x14c > 0x7fffffff
+        || !/^[0-9a-f]{8}$/.test(row.raw_f32_0xe0_bytes_hex ?? '')
+        || !Number.isFinite(row.opaque_f32_0xe0)
+        || row.opaque_f32_0xe0 !== decodeNestedFloat(
+          row.raw_f32_0xe0_bytes_hex)
+        || !/^[0-9a-f]{2}$/.test(row.raw_u8_0x140_hex ?? '')
+        || row.opaque_u8_0x140 !== decodeNestedByte(row.raw_u8_0x140_hex))) {
+    invalid('V9 prior native packet fields or raw-byte transforms differ');
+  }
   const raw = row.raw_nested_bits_0x24_hex;
   const value = row.opaque_nested_bits_0x24;
   if (typeof raw !== 'string' || !/^[0-9a-f]{2}$/.test(raw)
@@ -4324,7 +4360,8 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
     }
     if ([CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821,
       CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821,
-      CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821].includes(profile)) {
+      CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821,
+      CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821].includes(profile)) {
       const rawAt4c = row.raw_u32_0x4c_hex;
       const valueAt4c = row.opaque_u32_0x4c;
       if (typeof rawAt4c !== 'string' || !/^[0-9a-f]{8}$/.test(rawAt4c)
@@ -4334,7 +4371,8 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
         invalid('raw +0x4c u32 and decoded value differ from the pinned 821 transform');
       }
       if ([CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821,
-        CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821].includes(profile)) {
+        CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821,
+        CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821].includes(profile)) {
         const rawAtA0 = row.raw_f32_0xa0_bytes_hex;
         const valueAtA0 = row.opaque_f32_0xa0;
         if (typeof rawAtA0 !== 'string' || !/^[0-9a-f]{8}$/.test(rawAtA0)
@@ -4343,7 +4381,8 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
               rawAtA0)) {
           invalid('raw +0xa0 f32 and decoded value differ from the pinned 821 transform');
         }
-        if (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821) {
+        if ([CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821,
+          CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821].includes(profile)) {
           const rawAt28 = row.raw_u32_0x28_hex;
           const valueAt28 = row.opaque_u32_0x28;
           if (typeof rawAt28 !== 'string' || !/^[0-9a-f]{8}$/.test(rawAt28)
@@ -9275,6 +9314,13 @@ async function streamEventQuery(prepared, options, emitLine) {
   if (castNestedU32At4c != null) prepareCastSpellAnsNestedU32At4c(prepared);
   if (castNestedF32AtA0 != null) prepareCastSpellAnsNestedF32AtA0(prepared);
   if (castNestedU32At28 != null) prepareCastSpellAnsNestedU32At28(prepared);
+  const castV9DigestMetadata = prepared.eventKey === 'cast_spell_ans_packet_candidates'
+    && (prepared.capabilityResult?.profile_id
+      === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821.id
+      || Object.hasOwn(prepared.capabilityResult ?? {}, 'native_output_sha256')
+      || Object.hasOwn(prepared.capabilityResult ?? {},
+        'evidence_native_output_digest_schema'));
+  if (castV9DigestMetadata) prepareCastSpellAnsNestedBits(prepared);
   if (spellTimerReceiverSlot != null) prepareSetSpellTimerReceiverSlot(prepared);
   const spellLevelCallbackRequested = spellLevelReceiverIndex != null
     || spellLevelClampedScalar != null;
@@ -9347,6 +9393,10 @@ async function streamEventQuery(prepared, options, emitLine) {
   let spellLevelCallbackCheckedCount = 0;
   const spellLevelPacketPositions = new Set();
   const castNestedBitsPacketPositions = new Set();
+  const castV9State = prepared.capabilityResult?.profile_id
+    === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821.id
+    ? { rows: [], batchStart: 0,
+      replayHash: castV9ReplayDigestStart(prepared.replaySha) } : null;
   let damageCallbackF32AvailableCount = 0;
   let damageCallbackF32UnavailableCount = 0;
   const damagePacketPositions = new Set();
@@ -9518,6 +9568,25 @@ async function streamEventQuery(prepared, options, emitLine) {
         } else {
           sourceCastNestedFields = castSpellAnsNestedBits(row, prepared,
             lineNumber, castNestedBitsPacketPositions);
+        }
+      }
+      if (prepared.eventKey === 'cast_spell_ans_packet_candidates'
+          && row.build_profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821.id
+          && !castV9State) {
+        throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+          `CastSpellAns V9 row at JSONL line ${lineNumber} lacks V9 digest metadata.`,
+          { line_number: lineNumber });
+      }
+      if (castV9State) {
+        sourceCastNestedFields ??= castSpellAnsNestedBits(row, prepared,
+          lineNumber, castNestedBitsPacketPositions);
+        castV9State.rows.push(row);
+        if (castV9State.rows.length === CAST_V9_BATCH_SIZE) {
+          const digest = castV9BatchDigest(castV9State.rows, true);
+          castV9ReplayDigestBatch(castV9State.replayHash,
+            castV9State.batchStart, castV9State.rows.length, digest);
+          castV9State.batchStart += castV9State.rows.length;
+          castV9State.rows = [];
         }
       }
       exactNamedKillPacketRow(row, prepared, lineNumber,
@@ -9834,6 +9903,21 @@ async function streamEventQuery(prepared, options, emitLine) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
       'JSONL row count disagrees with event_counts and the capability result.',
       { scanned_count: scannedCount, declared_event_count: prepared.declaredCount });
+  }
+  if (castV9State) {
+    if (castV9State.rows.length) {
+      const digest = castV9BatchDigest(castV9State.rows, true);
+      castV9ReplayDigestBatch(castV9State.replayHash,
+        castV9State.batchStart, castV9State.rows.length, digest);
+      castV9State.batchStart += castV9State.rows.length;
+    }
+    if (castV9State.batchStart !== scannedCount
+        || castV9State.replayHash.digest('hex')
+          !== prepared.capabilityResult.native_output_sha256) {
+      throw new EventQueryError('NATIVE_OUTPUT_DIGEST_MISMATCH',
+        'CastSpellAns V9 ordered native output digest differs from saved rows.',
+        { scanned_count: scannedCount });
+    }
   }
   if (sourceReplayVerification
       && sourceReplayVerification.savedHash.digest('hex')
@@ -10200,6 +10284,10 @@ async function streamEventQuery(prepared, options, emitLine) {
     capability_status: prepared.capabilityStatus,
     source_provenance_status: sourceReplayVerification
       ? 'SOURCE_REPLAY_VERIFIED' : 'SAVED_ONLY_UNVERIFIED',
+    ...(castV9State ? {
+      native_witness_check: 'ORDERED_NATIVE_OUTPUT_DIGEST',
+      native_output_sha256: prepared.capabilityResult.native_output_sha256,
+    } : {}),
     semantic_run_status: prepared.semanticRunStatus,
     semantic_api_status: prepared.semanticApiStatus,
     declared_event_count: prepared.declaredCount,
@@ -10244,7 +10332,8 @@ async function streamEventQuery(prepared, options, emitLine) {
     ...(castNestedU32At28 == null ? {} : {
       cast_nested_u32_0x28_checked_count: castNestedU32At28CheckedCount,
       cast_nested_u32_0x28_unavailable_count: 0,
-      native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
+      native_witness_check: castV9State ? 'ORDERED_NATIVE_OUTPUT_DIGEST'
+        : 'PERSISTED_METADATA_AND_RAW_BYTES',
     }),
     ...(spellTimerReceiverSlot == null ? {} : {
       spell_timer_receiver_checked_count: spellTimerReceiverCheckedCount,
@@ -10560,6 +10649,11 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       declared_event_count: summary.declared_event_count,
       scanned_count: summary.scanned_count,
       matched_count: summary.matched_count,
+      ...(summary.native_witness_check ? {
+        native_witness_check: summary.native_witness_check,
+        ...(summary.native_output_sha256
+          ? { native_output_sha256: summary.native_output_sha256 } : {}),
+      } : {}),
       ...(options.castNestedBits == null ? {} : {
         cast_nested_bits_checked_count: summary.cast_nested_bits_checked_count,
         cast_nested_bits_unavailable_count: 0,
@@ -10582,7 +10676,8 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         cast_nested_u32_0x28_checked_count:
           summary.cast_nested_u32_0x28_checked_count,
         cast_nested_u32_0x28_unavailable_count: 0,
-        native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
+        native_witness_check: summary.native_witness_check
+          ?? 'PERSISTED_METADATA_AND_RAW_BYTES',
       }),
       ...(options.spellTimerReceiverSlot == null ? {} : {
         spell_timer_receiver_checked_count:
@@ -10647,6 +10742,15 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       'No Replay in this batch has a queryable event stream.',
       { event_key: prepared.eventKey, replay_results: replayResults });
   }
+  const castWitnesses = prepared.eventKey === 'cast_spell_ans_packet_candidates'
+    ? replayResults.filter((replay) => replay.query_status === 'COMPLETE')
+      .map((replay) => replay.native_witness_check).filter(Boolean) : [];
+  const castBatchWitnessCheck = castWitnesses.includes('ORDERED_NATIVE_OUTPUT_DIGEST')
+    ? castWitnesses.length === completedCount
+        && castWitnesses.every((value) => value === 'ORDERED_NATIVE_OUTPUT_DIGEST')
+      ? 'ORDERED_NATIVE_OUTPUT_DIGEST'
+      : 'MIXED_NATIVE_OUTPUT_DIGEST_AND_PERSISTED_METADATA'
+    : null;
   return { schema_version: 1, command: 'query-events',
     query_status: completedCount === prepared.replays.length ? 'COMPLETE' : 'PARTIAL',
     source_provenance_status: !options.verifySource ? 'SAVED_ONLY_UNVERIFIED'
@@ -10655,6 +10759,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     artifact_directory: prepared.artifactDirectory, event_key: prepared.eventKey,
     replay_count: prepared.replays.length, completed_replay_count: completedCount,
     unavailable_replay_count: prepared.replays.length - completedCount,
+    ...(castBatchWitnessCheck ? { native_witness_check: castBatchWitnessCheck } : {}),
     scanned_count: scannedCount, matched_count: matchedCount,
     ...(options.castNestedBits == null ? {} : {
       cast_nested_bits_checked_count: castNestedBitsCheckedCount,
@@ -10693,7 +10798,8 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       cast_nested_u32_0x28_unavailable_replay_count:
         replayResults.filter((replay) =>
           replay.code === 'CAST_NESTED_U32_0X28_UNAVAILABLE').length,
-      native_witness_check: 'PERSISTED_METADATA_AND_RAW_BYTES',
+      native_witness_check: castBatchWitnessCheck
+        ?? 'PERSISTED_METADATA_AND_RAW_BYTES',
     }),
     ...(options.spellTimerReceiverSlot == null ? {} : {
       spell_timer_receiver_checked_count: spellTimerReceiverCheckedCount,

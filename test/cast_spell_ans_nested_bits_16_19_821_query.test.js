@@ -13,11 +13,14 @@ const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821: profile,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821: v6Profile,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V7_821: v7Profile,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V8_821: v8Profile,
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V9_821: v9Profile,
   decodeCastSpellAnsNestedU32FromRaw821,
   decodeCastSpellAnsNestedU32At4cFromRaw821,
   decodeCastSpellAnsNestedF32AtA0FromRaw821,
   decodeCastSpellAnsNestedU32At28FromRaw821 } =
   require('../src/decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
+const { DIGEST_SCHEMA, batchDigest, replayDigestStart, replayDigestBatch } =
+  require('../src/decoders/rofl_16_19_821_cast_spell_ans_native_digest');
 const { bindSavedPacketArtifactToPhysicalReplay } =
   require('./helpers/physical_saved_packet_replay');
 
@@ -83,6 +86,13 @@ function rowV8(index, rawAt28, replaySha = SHA) {
     callback_tree_lookup_status: 'UNKNOWN' };
 }
 
+function rowV9(index, rawAt28, replaySha = SHA) {
+  return { ...rowV8(index, rawAt28, replaySha), build_profile: v9Profile.id,
+    opaque_flag_0x148: 0, opaque_i32_0x14c: 0,
+    raw_f32_0xe0_bytes_hex: 'ffffffff', opaque_f32_0xe0: 0,
+    raw_u8_0x140_hex: '2c', opaque_u8_0x140: 0 };
+}
+
 function writeReplay(root, name, rows, { replaySha = SHA,
   fieldProfile = profile, profileId = fieldProfile.id,
   replayVersion = profile.replay_version } = {}) {
@@ -97,22 +107,32 @@ function writeReplay(root, name, rows, { replaySha = SHA,
       profile.evidence_nested_float_inverse_sha256,
     evidence_nested_byte_inverse_sha256:
       profile.evidence_nested_byte_inverse_sha256,
-    ...([v5Profile, v6Profile, v7Profile, v8Profile].includes(fieldProfile) ? {
+    ...([v5Profile, v6Profile, v7Profile, v8Profile, v9Profile].includes(fieldProfile) ? {
       evidence_nested_u32_transform_sha256:
         v5Profile.evidence_nested_u32_transform_sha256 } : {}),
-    ...([v6Profile, v7Profile, v8Profile].includes(fieldProfile) ? {
+    ...([v6Profile, v7Profile, v8Profile, v9Profile].includes(fieldProfile) ? {
       evidence_nested_u32_0x4c_transform_sha256:
         v6Profile.evidence_nested_u32_0x4c_transform_sha256 } : {}),
-    ...([v7Profile, v8Profile].includes(fieldProfile) ? {
+    ...([v7Profile, v8Profile, v9Profile].includes(fieldProfile) ? {
       evidence_nested_f32_0xa0_transform_sha256:
         v7Profile.evidence_nested_f32_0xa0_transform_sha256,
       evidence_nested_f32_0xa0_inverse_sha256:
         v7Profile.evidence_nested_f32_0xa0_inverse_sha256 } : {}),
-    ...(fieldProfile === v8Profile ? {
+    ...([v8Profile, v9Profile].includes(fieldProfile) ? {
       evidence_nested_u32_0x28_transform_sha256:
         v8Profile.evidence_nested_u32_0x28_transform_sha256,
       evidence_nested_u32_0x28_inverse_sha256:
         v8Profile.evidence_nested_u32_0x28_inverse_sha256 } : {}),
+    ...(fieldProfile === v9Profile ? (() => {
+      const hash = replayDigestStart(replaySha);
+      for (let start = 0; start < rows.length; start += 8192) {
+        const batch = rows.slice(start, start + 8192);
+        replayDigestBatch(hash, start, batch.length, batchDigest(batch, true));
+      }
+      return { evidence_native_output_digest_schema: DIGEST_SCHEMA,
+        native_output_batch_size: 8192,
+        native_output_sha256: hash.digest('hex') };
+    })() : {}),
     status: 'CANDIDATE',
     evidence_status: 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS',
     input_count: rows.length, event_count: rows.length,
@@ -647,6 +667,54 @@ test('V8 packet-local lookup-key query validates all rows and preserves original
   const prior = command(directory, '--cast-nested-f32-0xa0', '1');
   assert.equal(prior.status, 0, prior.stderr);
   assert.equal(prior.stdout, `${lines.join('\n')}\n`);
+});
+
+test('V9 query checks its ordered native-output digest after limit and without filters', (t) => {
+  const rows = [rowV9(0, '9194b8fb'), rowV9(1, '7cef92cb')];
+  const { root, directory, lines } = fixture(t, rows, { fieldProfile: v9Profile });
+  const selected = command(directory, '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${lines[0]}\n`);
+  assert.equal(JSON.parse(selected.stderr).native_witness_check,
+    'ORDERED_NATIVE_OUTPUT_DIGEST');
+  const filtered = command(directory, '--cast-nested-u32-0x28', '137424977',
+    '--limit', '1');
+  assert.equal(filtered.status, 0, filtered.stderr);
+  assert.equal(filtered.stdout, `${lines[0]}\n`);
+  assert.equal(JSON.parse(filtered.stderr).scanned_count, 2);
+
+  const forged = structuredClone(rows);
+  forged[1].raw_u32_0x28_hex = '09a09cbb';
+  forged[1].opaque_u32_0x28 = 11563543;
+  fs.writeFileSync(path.join(directory, `${EVENT}.jsonl`),
+    `${forged.map(JSON.stringify).join('\n')}\n`);
+  const output = path.join(root, 'forged-selection.jsonl');
+  const rejected = command(directory, '--limit', '1', '--to-ms', '1000',
+    '--output', output);
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'NATIVE_OUTPUT_DIGEST_MISMATCH');
+  assert.equal(rejected.stdout, '');
+  assert.equal(fs.existsSync(output), false);
+});
+
+test('V9 saved query rejects missing digest metadata and V8 downgrade', (t) => {
+  for (const change of [
+    (result) => { delete result.native_output_sha256; },
+    (result) => { result.native_output_sha256 = '0'.repeat(64); },
+    (result) => { result.profile_id = v8Profile.id; },
+  ]) {
+    const { directory } = fixture(t, [rowV9(0, '9194b8fb')],
+      { fieldProfile: v9Profile });
+    const file = path.join(directory, 'semantic_run.json');
+    const semantic = JSON.parse(fs.readFileSync(file, 'utf8'));
+    change(semantic.capability_results[CAPABILITY]);
+    fs.writeFileSync(file, JSON.stringify(semantic));
+    const rejected = command(directory, '--limit', '1');
+    assert.equal(rejected.status, 2, rejected.stderr);
+    assert.equal(rejected.stdout, '');
+    assert.ok(['CAPABILITY_METADATA_MISMATCH', 'NATIVE_OUTPUT_DIGEST_MISMATCH']
+      .includes(JSON.parse(rejected.stderr).code));
+  }
 });
 
 test('V8 lookup-key query rejects metadata drift and a forged later row without stdout', (t) => {

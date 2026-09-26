@@ -18,6 +18,8 @@ from pathlib import Path
 # SHA below is the Cast gate; the loader's additional table check is fixed by
 # that same image identity and does not assign inventory semantics here.
 from decode_mapview_inventory_16_19_821 import make_emulator, read_image
+from cast_spell_ans_native_digest_16_19_821 import (
+    SCHEMA as V9_NATIVE_OUTPUT_SCHEMA, batch_digest as v9_batch_digest)
 
 
 BUILD = '16.19.821.7343'
@@ -327,10 +329,16 @@ def main():
                         help='opt in to the anonymous nested callback +0xa0 f32')
     parser.add_argument('--nested-u32-0x28', action='store_true',
                         help='opt in to the anonymous nested callback lookup key')
+    parser.add_argument('--native-output-digest-v9', action='store_true',
+                        help='emit an ordered digest of persisted V9 native fields')
     options = parser.parse_args()
     digest = None
     try:
         packets = read_request()
+        if options.native_output_digest_v9 and not all((
+                options.nested_u32_0x1c, options.nested_u32_0x4c,
+                options.nested_f32_0xa0, options.nested_u32_0x28)):
+            raise ValueError('V9 native output digest requires all V5-V8 fields')
         image, digest, _inventory_table = read_image(options.image)
         if digest != IMAGE_SHA256:
             raise ValueError('cast runtime image SHA-256 mismatch')
@@ -401,6 +409,10 @@ def main():
         if nested_u32_at_0x28_table is not None:
             output['nested_u32_0x28_transform_sha256'] = NESTED_U32_0X28_TRANSFORM_SHA256
             output['nested_u32_0x28_inverse_sha256'] = NESTED_U32_0X28_INVERSE_SHA256
+        if options.native_output_digest_v9 and all(
+                row.get('status') == 'DECODED' for row in results):
+            output['native_output_digest_schema'] = V9_NATIVE_OUTPUT_SCHEMA
+            output['native_output_sha256'] = v9_batch_digest(results)
         json.dump(output, sys.stdout, separators=(',', ':'))
         sys.stdout.write('\n')
         return 0
