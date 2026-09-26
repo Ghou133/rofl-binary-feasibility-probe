@@ -60,7 +60,8 @@ Current progress (older notes below retain their original research context):
 - **Optional saved-row source verification (2026-09-26):** `query-events
   --verify-source` now reopens the original exact-821 ROFL for the packet-local
   NotifyContextualSituation, item-group V1/V2, cooldown broadcast, item-charges,
-  target-hero, ForceCreateMissile, and UnitApplyDamage candidate streams. It checks the full
+  target-hero, ForceCreateMissile, SetDimensionMissile, UnitApplyDamage, and
+  CastSpellAns candidate streams. It checks the full
   Replay build/SHA-256,
   strict packet framing, ordered stream/chunk IDs and offsets, timestamp,
   parameter, payload, and total count before publishing stdout. A single
