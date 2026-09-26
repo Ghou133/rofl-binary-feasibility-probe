@@ -10,6 +10,8 @@ const test = require('node:test');
 
 const { COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821: profile } =
   require('../src/decoders/rofl_16_19_821_cooldown_broadcast_packet_candidate');
+const { bindSavedPacketArtifactToPhysicalReplay } =
+  require('./helpers/physical_saved_packet_replay');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const CAPABILITY = 'cooldown_broadcast_packet';
@@ -125,6 +127,17 @@ function errorCode(run) {
   assert.equal(run.status, 2, run.stderr);
   return JSON.parse(run.stderr).code;
 }
+
+test('source verification binds game and keyframe cooldown packets in source order', (t) => {
+  const f = fixture(t);
+  const physical = bindSavedPacketArtifactToPhysicalReplay(f.dir);
+  const selected = query(f.dir, '--verify-source', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.source_provenance_status, 'SOURCE_REPLAY_VERIFIED');
+  assert.equal(summary.scanned_count, 2);
+});
 
 test('saved cooldown lookup query validates all rows and emits original JSONL', (t) => {
   const f = fixture(t);

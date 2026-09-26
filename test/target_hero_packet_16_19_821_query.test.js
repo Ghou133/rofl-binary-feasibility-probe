@@ -10,6 +10,8 @@ const test = require('node:test');
 
 const { TARGET_HERO_PACKET_CANDIDATE_PROFILE_821: profile } =
   require('../src/decoders/rofl_16_19_821_target_hero_packet_candidate');
+const { bindSavedPacketArtifactToPhysicalReplay } =
+  require('./helpers/physical_saved_packet_replay');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const CAPABILITY = 'target_hero_packet';
@@ -125,6 +127,16 @@ function errorCode(run) {
   assert.equal(run.status, 2, run.stderr);
   return JSON.parse(run.stderr).code;
 }
+
+test('source verification accepts exact-821 target-hero packet references', (t) => {
+  const f = fixture(t);
+  const physical = bindSavedPacketArtifactToPhysicalReplay(f.dir);
+  const selected = query(f.dir, '--verify-source', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+  assert.equal(JSON.parse(selected.stderr).source_provenance_status,
+    'SOURCE_REPLAY_VERIFIED');
+});
 
 test('saved target-hero callback query validates all rows and emits original JSONL', (t) => {
   const f = fixture(t);

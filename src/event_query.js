@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const readline = require('node:readline');
 const { isDeepStrictEqual } = require('node:util');
+const { parseReplayFile, walkBlocks } = require('./rofl');
 const { CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE } =
   require('./decoders/rofl_16_19_821_champion_die_hero_death_pair_candidate');
 const { CHAMPION_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
@@ -176,6 +177,13 @@ const { TARGET_HERO_PACKET_CANDIDATE_PROFILE_821,
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
+const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
+  'notify_contextual_situation_packet_candidates',
+  'item_group_data_broadcast_packet_candidates',
+  'cooldown_broadcast_packet_candidates',
+  'item_charges_packet_candidates',
+  'target_hero_packet_candidates',
+]);
 const CIRCULAR_MOVEMENT_RESTRICTION_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'raw_param', 'raw_payload_hex', 'raw_selector_byte',
@@ -995,6 +1003,81 @@ function checkBatchHash(hashes, relative, filename, cache = null) {
     throw new EventQueryError('ARTIFACT_HASH_MISMATCH',
       `Batch manifest SHA-256 differs for ${relative}.`, { filename, relative });
   }
+}
+
+// The saved native digests cover packet parameters, payloads and callback values,
+// not Replay positions or timestamps. This opt-in witness binds those fields to
+// the original, independently hashed ROFL without rerunning the native decoder.
+function sourcePacketFieldsFromBlock(block, chunk) {
+  return [chunk.index, chunk.chunk_id, chunk.stream, chunk.offset,
+    block.offset, block.payload_offset, block.packet_id, block.timestamp_ms,
+    block.payload_length, block.param >>> 0, block.payload.toString('hex')];
+}
+
+function sourcePacketFieldsFromRef(ref) {
+  return [ref.chunk_index, ref.chunk_id, ref.chunk_stream, ref.chunk_file_offset,
+    ref.decompressed_block_offset, ref.decompressed_payload_offset,
+    ref.packet_id, ref.replay_time_ms, ref.payload_length, ref.raw_param,
+    ref.raw_payload_hex];
+}
+
+function updateSourcePacketHash(hash, fields) {
+  hash.update(JSON.stringify(fields)).update('\n');
+}
+
+function prepareSourceReplayVerification(prepared, sourceReplay) {
+  if (!SOURCE_REPLAY_PACKET_EVENTS_821.has(prepared.eventKey)
+      || prepared.replayVersion !== '16.19.821.7343'
+      || prepared.capabilityStatus !== 'CANDIDATE') {
+    throw new EventQueryError('UNSUPPORTED_SOURCE_VERIFICATION',
+      '--verify-source supports only the registered exact-821 packet-local candidate streams.',
+      { event_key: prepared.eventKey });
+  }
+  const filename = sourceReplay ?? prepared.sourcePath;
+  if (typeof filename !== 'string' || filename.trim() === '') {
+    throw new EventQueryError('MISSING_SOURCE_REPLAY',
+      'No original ROFL path is available; supply --source-replay for this Replay.');
+  }
+  const resolved = path.resolve(filename);
+  let replay;
+  try {
+    replay = parseReplayFile(resolved);
+  } catch (error) {
+    throw new EventQueryError(error.code === 'INPUT_READ_ERROR'
+      ? 'SOURCE_REPLAY_READ_FAILED' : 'SOURCE_REPLAY_INVALID',
+    `Cannot verify original ROFL: ${error.message}`,
+    { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  if (replay.header.version !== prepared.replayVersion
+      || replay.source_sha256 !== prepared.replaySha) {
+    throw new EventQueryError('SOURCE_REPLAY_IDENTITY_MISMATCH',
+      'Original ROFL build or SHA-256 differs from the saved Replay identity.',
+      { source_replay: resolved, expected_replay_version: prepared.replayVersion,
+        observed_replay_version: replay.header.version,
+        expected_replay_sha256: prepared.replaySha,
+        observed_replay_sha256: replay.source_sha256 });
+  }
+  const sourceHash = crypto.createHash('sha256');
+  let sourcePacketCount = 0;
+  try {
+    walkBlocks(replay, (block, chunk) => {
+      if (block.packet_id !== prepared.capabilityResult.input_packet_id) return;
+      updateSourcePacketHash(sourceHash, sourcePacketFieldsFromBlock(block, chunk));
+      sourcePacketCount += 1;
+    }, { strict: true });
+  } catch (error) {
+    throw new EventQueryError('SOURCE_REPLAY_FRAMING_FAILED',
+      `Original ROFL strict packet framing failed: ${error.message}`,
+      { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  if (sourcePacketCount !== prepared.declaredCount) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Original ROFL packet count differs from the saved candidate stream.',
+      { source_replay: resolved, source_packet_count: sourcePacketCount,
+        saved_event_count: prepared.declaredCount });
+  }
+  return { sourcePacketCount, sourceDigest: sourceHash.digest('hex'),
+    savedHash: crypto.createHash('sha256') };
 }
 
 function isCount(value) {
@@ -8634,6 +8717,12 @@ function validateFilters(options) {
 
 async function streamEventQuery(prepared, options, emitLine) {
   validateFilters(options);
+  if (options.sourceReplay != null && !options.verifySource) {
+    throw new EventQueryError('INVALID_FILTER',
+      '--source-replay requires --verify-source.');
+  }
+  const sourceReplayVerification = options.verifySource
+    ? prepareSourceReplayVerification(prepared, options.sourceReplay) : null;
   const { fromMs = null, toMs = null, participant = null,
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     contextualSituation = null,
@@ -9032,6 +9121,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (targetHeroState) {
         targetHeroPacketRow(row, prepared, lineNumber, targetHeroState);
       }
+      if (sourceReplayVerification) {
+        updateSourcePacketHash(sourceReplayVerification.savedHash,
+          sourcePacketFieldsFromRef(row.raw_packet_ref));
+      }
       faceDirectionRosterPairRow(row, prepared, lineNumber, faceRosterPairState);
       unitApplyDamageRosterKeyRow(row, prepared, lineNumber,
         damageRosterPairState);
@@ -9295,6 +9388,15 @@ async function streamEventQuery(prepared, options, emitLine) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
       'JSONL row count disagrees with event_counts and the capability result.',
       { scanned_count: scannedCount, declared_event_count: prepared.declaredCount });
+  }
+  if (sourceReplayVerification
+      && sourceReplayVerification.savedHash.digest('hex')
+        !== sourceReplayVerification.sourceDigest) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Saved packet positions, times, parameters or payloads differ from the original ROFL.',
+      { event_key: prepared.eventKey, source_packet_count:
+          sourceReplayVerification.sourcePacketCount,
+        saved_event_count: scannedCount });
   }
   if (contextualSituationState
       && (contextualSituationState.positions.size !== scannedCount
@@ -9632,6 +9734,8 @@ async function streamEventQuery(prepared, options, emitLine) {
     event_storage: prepared.eventStorage,
     capability: prepared.capability,
     capability_status: prepared.capabilityStatus,
+    source_provenance_status: sourceReplayVerification
+      ? 'SOURCE_REPLAY_VERIFIED' : 'SAVED_ONLY_UNVERIFIED',
     semantic_run_status: prepared.semanticRunStatus,
     semantic_api_status: prepared.semanticApiStatus,
     declared_event_count: prepared.declaredCount,
@@ -9778,6 +9882,15 @@ async function streamEventQuery(prepared, options, emitLine) {
 
 async function streamBatchEventQuery(prepared, options, emitLine) {
   validateFilters(options);
+  if (options.sourceReplay != null) {
+    throw new EventQueryError('UNSUPPORTED_SOURCE_REPLAY_OVERRIDE',
+      '--source-replay applies to one Replay artifact; batch verification uses each saved source path.');
+  }
+  if (options.verifySource && !SOURCE_REPLAY_PACKET_EVENTS_821.has(prepared.eventKey)) {
+    throw new EventQueryError('UNSUPPORTED_SOURCE_VERIFICATION',
+      '--verify-source supports only the registered exact-821 packet-local candidate streams.',
+      { event_key: prepared.eventKey });
+  }
   if (options.endpointReversedPair
       && prepared.eventKey !== 'inventory_keyframe_interval_difference_candidates') {
     throw new EventQueryError('UNSUPPORTED_FILTER',
@@ -9846,6 +9959,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       replay_sha256: replay.replaySha, replay_version: replay.replayVersion };
     if (replay.unavailable) {
       replayResults.push({ ...identity, query_status: 'UNAVAILABLE',
+        source_provenance_status: 'NOT_VERIFIED',
         ...replay.unavailable });
       continue;
     }
@@ -9878,6 +9992,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         throw error;
       }
       replayResults.push({ ...identity, query_status: 'UNAVAILABLE',
+        source_provenance_status: 'NOT_VERIFIED',
         code: error.code, message: error.message, ...error.details });
       if (error.code === 'CAST_NESTED_BITS_UNAVAILABLE') {
         castNestedBitsUnavailableCount += error.details.cast_nested_bits_unavailable_count;
@@ -9960,6 +10075,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     }
     replayResults.push({ ...identity, query_status: 'COMPLETE',
       capability_status: summary.capability_status,
+      source_provenance_status: summary.source_provenance_status,
       declared_event_count: summary.declared_event_count,
       scanned_count: summary.scanned_count,
       matched_count: summary.matched_count,
@@ -10046,6 +10162,9 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   }
   return { schema_version: 1, command: 'query-events',
     query_status: completedCount === prepared.replays.length ? 'COMPLETE' : 'PARTIAL',
+    source_provenance_status: !options.verifySource ? 'SAVED_ONLY_UNVERIFIED'
+      : completedCount === prepared.replays.length
+        ? 'SOURCE_REPLAY_VERIFIED' : 'PARTIAL_SOURCE_REPLAY_VERIFIED',
     artifact_directory: prepared.artifactDirectory, event_key: prepared.eventKey,
     replay_count: prepared.replays.length, completed_replay_count: completedCount,
     unavailable_replay_count: prepared.replays.length - completedCount,

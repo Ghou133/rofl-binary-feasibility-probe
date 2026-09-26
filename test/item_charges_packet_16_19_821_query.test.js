@@ -11,6 +11,9 @@ const test = require('node:test');
 const { ITEM_CHARGES_PACKET_CANDIDATE_PROFILE_821: profile,
   decodeProtectedItemChargesCallbackBytes } =
   require('../src/decoders/rofl_16_19_821_item_charges_packet_candidate');
+const { streamEventQuery } = require('../src/event_query');
+const { bindSavedPacketArtifactToPhysicalReplay } =
+  require('./helpers/physical_saved_packet_replay');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const CAPABILITY = 'item_charges_packet';
@@ -153,8 +156,140 @@ test('saved item charges query selects callback witness and keeps rows unchanged
   assert.equal(summary.matched_count, 1);
   assert.equal(summary.emitted_count, 1);
   assert.equal(summary.rows_unmodified, true);
+  assert.equal(summary.source_provenance_status, 'SAVED_ONLY_UNVERIFIED');
   assert.equal(summary.filters.item_charges_selector_u8, 0);
   assert.equal(summary.filters.item_charges_value_u16, 35);
+});
+
+test('source verification checks every saved packet after the output limit', (t) => {
+  const f = fixture(t);
+  const physical = bindSavedPacketArtifactToPhysicalReplay(f.dir);
+  const verified = query(f.dir, '--verify-source', '--limit', '1');
+  assert.equal(verified.status, 0, verified.stderr);
+  assert.equal(JSON.parse(verified.stderr).source_provenance_status,
+    'SOURCE_REPLAY_VERIFIED');
+  assert.equal(verified.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+
+  const forged = structuredClone(physical.rows);
+  forged[1].replay_time_ms += 1;
+  forged[1].raw_packet_ref.replay_time_ms = forged[1].replay_time_ms;
+  forged[1].raw_packet_ref.chunk_file_offset += 1;
+  forged[1].raw_packet_ref.decompressed_block_offset += 1;
+  forged[1].raw_packet_ref.decompressed_payload_offset += 1;
+  fs.writeFileSync(f.eventPath, `${forged.map(JSON.stringify).join('\n')}\n`);
+  const rejected = query(f.dir, '--verify-source', '--limit', '1');
+  assert.equal(errorCode(rejected), 'SOURCE_PROVENANCE_MISMATCH');
+  assert.equal(rejected.stdout, '');
+  const offline = query(f.dir, '--limit', '1');
+  assert.equal(offline.status, 0, offline.stderr);
+  assert.equal(JSON.parse(offline.stderr).source_provenance_status,
+    'SAVED_ONLY_UNVERIFIED');
+});
+
+test('source verification rejects missing and mismatched ROFL; override accepts a copy', (t) => {
+  const f = fixture(t);
+  const { sourcePath } = bindSavedPacketArtifactToPhysicalReplay(f.dir);
+  const relocated = path.join(f.root, 'relocated.rofl');
+  fs.copyFileSync(sourcePath, relocated);
+  const accepted = query(f.dir, '--verify-source', '--source-replay', relocated,
+    '--limit', '1');
+  assert.equal(accepted.status, 0, accepted.stderr);
+  assert.equal(JSON.parse(accepted.stderr).source_provenance_status,
+    'SOURCE_REPLAY_VERIFIED');
+
+  const missing = query(f.dir, '--verify-source', '--source-replay',
+    path.join(f.root, 'missing.rofl'), '--limit', '1');
+  assert.equal(errorCode(missing), 'SOURCE_REPLAY_READ_FAILED');
+  assert.equal(missing.stdout, '');
+
+  const wrong = path.join(f.root, 'wrong.rofl');
+  const bytes = fs.readFileSync(sourcePath);
+  bytes[15 + profile.replay_version.length + 17 + 12] ^= 1;
+  fs.writeFileSync(wrong, bytes);
+  const mismatched = query(f.dir, '--verify-source', '--source-replay', wrong,
+    '--limit', '1');
+  assert.equal(errorCode(mismatched), 'SOURCE_REPLAY_IDENTITY_MISMATCH');
+  assert.equal(mismatched.stdout, '');
+
+  const wrongBuild = path.join(f.root, 'wrong-build.rofl');
+  const otherBuild = fs.readFileSync(sourcePath);
+  otherBuild.write('16.19.820.7193', 15, 'ascii');
+  fs.writeFileSync(wrongBuild, otherBuild);
+  const buildMismatch = query(f.dir, '--verify-source', '--source-replay',
+    wrongBuild, '--limit', '1');
+  assert.equal(errorCode(buildMismatch), 'SOURCE_REPLAY_IDENTITY_MISMATCH');
+  assert.equal(JSON.parse(buildMismatch.stderr).observed_replay_version,
+    '16.19.820.7193');
+  assert.equal(buildMismatch.stdout, '');
+});
+
+test('batch source verification uses each Replay source and preserves manifest checks', (t) => {
+  const f = fixture(t);
+  const physical = bindSavedPacketArtifactToPhysicalReplay(f.dir);
+  const relative = 'replays/sample';
+  const hashes = Object.fromEntries(['semantic_run.json', 'replay_analysis.json',
+    `${EVENT}.jsonl`].map((name) => [`${relative}/${name}`,
+    sha256(fs.readFileSync(path.join(f.dir, name)))]));
+  const manifest = {
+    command_args: ['batch'], replay_inputs: [{ artifact_directory: relative,
+      sha256: physical.semantic.replay_sha256, version: profile.replay_version }],
+    output_hashes_excluding_manifest: hashes,
+  };
+  const manifestPath = path.join(f.root, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  const selected = query(f.root, '--verify-source', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.source_provenance_status, 'SOURCE_REPLAY_VERIFIED');
+  assert.deepEqual(summary.replay_results.map((replay) =>
+    replay.source_provenance_status), ['SOURCE_REPLAY_VERIFIED']);
+  assert.equal(selected.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+
+  const override = query(f.root, '--verify-source', '--source-replay',
+    physical.sourcePath, '--limit', '1');
+  assert.equal(errorCode(override), 'UNSUPPORTED_SOURCE_REPLAY_OVERRIDE');
+  assert.equal(override.stdout, '');
+
+  const unavailableRelative = 'replays/unavailable';
+  const unavailableDir = path.join(f.root, 'replays', 'unavailable');
+  fs.mkdirSync(unavailableDir);
+  const unavailableSha = 'b'.repeat(64);
+  const unavailableSemantic = structuredClone(physical.semantic);
+  const unavailableAnalysis = structuredClone(physical.analysis);
+  unavailableSemantic.replay_sha256 = unavailableSha;
+  unavailableAnalysis.replay_sha256 = unavailableSha;
+  for (const result of [unavailableSemantic.capability_results[CAPABILITY],
+    unavailableAnalysis.semantic.capability_results[CAPABILITY]]) {
+    result.status = 'MISSING_INPUT';
+    result.missing_input = 'runtime_image';
+  }
+  fs.writeFileSync(path.join(unavailableDir, 'semantic_run.json'),
+    JSON.stringify(unavailableSemantic));
+  fs.writeFileSync(path.join(unavailableDir, 'replay_analysis.json'),
+    JSON.stringify(unavailableAnalysis));
+  manifest.replay_inputs.push({ artifact_directory: unavailableRelative,
+    sha256: unavailableSha, version: profile.replay_version });
+  for (const name of ['semantic_run.json', 'replay_analysis.json']) {
+    manifest.output_hashes_excluding_manifest[`${unavailableRelative}/${name}`] =
+      sha256(fs.readFileSync(path.join(unavailableDir, name)));
+  }
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  const partial = query(f.root, '--verify-source', '--limit', '1');
+  assert.equal(partial.status, 0, partial.stderr);
+  const partialSummary = JSON.parse(partial.stderr);
+  assert.equal(partialSummary.query_status, 'PARTIAL');
+  assert.equal(partialSummary.source_provenance_status,
+    'PARTIAL_SOURCE_REPLAY_VERIFIED');
+  assert.deepEqual(partialSummary.replay_results.map((replay) =>
+    replay.source_provenance_status), ['SOURCE_REPLAY_VERIFIED', 'NOT_VERIFIED']);
+});
+
+test('source verification rejects unrelated saved event shapes explicitly', async () => {
+  await assert.rejects(streamEventQuery({
+    eventKey: 'hero_death_candidates', replayVersion: profile.replay_version,
+    capabilityStatus: 'CANDIDATE',
+  }, { verifySource: true }, async () => {}),
+  { code: 'UNSUPPORTED_SOURCE_VERIFICATION' });
 });
 
 test('saved query accepts a native range-checked selector outside observed Replay values', (t) => {

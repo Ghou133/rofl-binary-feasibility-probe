@@ -251,6 +251,8 @@ Options:
   --event-jsonl-only            Store 16.19 event rows only in JSONL (decode/batch with --events)
   --event <key>                 Exact 16.19 candidate JSONL key (query-events)
   --list-events                 List saved 16.19 candidate keys and declared counts (query-events)
+  --verify-source               Check supported exact-821 packet rows against the original ROFL
+  --source-replay <path>        Original ROFL override for one Replay with --verify-source
   --json                        Emit only machine-readable JSON (capabilities)
   --python <command>            Python command with Unicorn installed (default: python)
   --details-dir <path>          Validation-only directory for same-game Details matching
@@ -343,6 +345,8 @@ function parseArgs(argv) {
     events: null,
     event: null,
     listEvents: false,
+    verifySource: false,
+    sourceReplay: null,
     eventJsonlOnly: false,
     participant: null,
     killerParticipant: null,
@@ -466,6 +470,10 @@ function parseArgs(argv) {
       options.listEvents = true;
       continue;
     }
+    if (command === 'query-events' && token === '--verify-source') {
+      options.verifySource = true;
+      continue;
+    }
     if (command === 'query-events' && token === '--endpoint-reversed-pair') {
       options.endpointReversedPair = true;
       continue;
@@ -520,6 +528,7 @@ function parseArgs(argv) {
       else if (key === 'runtime-image') options.runtimeImage = value;
       else if (key === 'events') options.events = parseEventNames(value);
       else if (command === 'query-events' && key === 'event') options.event = value;
+      else if (command === 'query-events' && key === 'source-replay') options.sourceReplay = value;
       else if (key === 'python') options.python = value;
       else if (key === 'ward-spawns') options.wardSpawns = value;
       else if (key === 'ward-lifecycles') options.wardLifecycles = value;
@@ -645,9 +654,10 @@ function parseArgs(argv) {
         'dieSourceKey2cMatch', 'showHealthZeroFlag', 'packetRecordCount',
         'levelAfter', 'childEventId', 'latestPerParticipant',
         'endpointReversedPair', 'comparisonToEndpoints', 'limit'];
-      if (options.event || options.output || filterKeys.some((key) =>
+      if (options.event || options.output || options.verifySource
+          || options.sourceReplay || filterKeys.some((key) =>
         options[key] !== null && options[key] !== false)) {
-        throw new Error('--list-events cannot be combined with --event, --output or query filters');
+        throw new Error('--list-events cannot be combined with --event, --output, source verification or query filters');
       }
     }
     if (options.participant !== null && options.participant > 10) {
@@ -3467,6 +3477,8 @@ async function runQueryEventsCommand(parsed) {
       endpointReversedPair: options.endpointReversedPair,
       comparisonToEndpoints: options.comparisonToEndpoints,
       limit: options.limit,
+      verifySource: options.verifySource,
+      sourceReplay: options.sourceReplay,
     };
     const emitLine = async (line) => {
       if (!writer.write(line)) await once(writer, 'drain');

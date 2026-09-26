@@ -10,6 +10,8 @@ const test = require('node:test');
 
 const { NOTIFY_CONTEXTUAL_SITUATION_PACKET_CANDIDATE_PROFILE_821: profile } =
   require('../src/decoders/rofl_16_19_821_notify_contextual_situation_packet_candidate');
+const { bindSavedPacketArtifactToPhysicalReplay } =
+  require('./helpers/physical_saved_packet_replay');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const CAPABILITY = 'notify_contextual_situation_packet';
@@ -148,6 +150,16 @@ function errorCode(result) {
   assert.equal(result.status, 2, result.stderr);
   return JSON.parse(result.stderr).code;
 }
+
+test('source verification accepts exact-821 contextual packet references', (t) => {
+  const { first } = fixture(t);
+  const physical = bindSavedPacketArtifactToPhysicalReplay(first.directory);
+  const selected = query(first.directory, '--verify-source', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${JSON.stringify(physical.rows[0])}\n`);
+  assert.equal(JSON.parse(selected.stderr).source_provenance_status,
+    'SOURCE_REPLAY_VERIFIED');
+});
 
 test('saved 821 contextual string query filters exact text, time and raw parameter', (t) => {
   const { first } = fixture(t);
