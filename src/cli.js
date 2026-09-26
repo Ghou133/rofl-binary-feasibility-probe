@@ -199,8 +199,9 @@ it does not establish an item, group identity, owner, slot, or inventory state.
 --item-group-packet-v2 adds the protected +0x1c byte and a conditional native
 callback byte witnessed with a synthetic lookup hit; actual receiver state is unknown.
 cooldown_broadcast_packet emits an exact-821 game/keyframe callback lookup key;
-item_charges_packet emits exact-821 packet-local callback arguments before receiver state;
 it does not establish cooldown state, slot identity, actor, target, or effect.
+item_charges_packet emits exact-821 packet-local callback arguments before receiver state;
+it does not establish item identity, charge state, slot, owner, or effect.
 unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
 packet-local selectors or a bounded anonymous float candidate; these do not

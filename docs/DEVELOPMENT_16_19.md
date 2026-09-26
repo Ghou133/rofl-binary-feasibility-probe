@@ -20,12 +20,17 @@ Current progress (older notes below retain their original research context):
   CLI/API decoder and saved query verify separate ordered input/output
   hashes; per-Replay hashes and shape counts are in
   [the sanitized native gate summary](ITEM_CHARGES_821_NATIVE_GATE.json).
+  The hashes cover raw parameter/payload and native callback bytes, not
+  saved timestamps or file offsets; full provenance requires the original
+  ROFL.
   One real CLI run emitted 4,600/4,600 candidate rows in one native batch,
   matched both independent hashes, and had zero framing errors. A saved
   selector-zero query validated all 4,600 rows after `--limit 1`, matched
   631, and emitted one unchanged row; valid unobserved selector `6` matched
   zero. Selector values observed were `0`, `1`, `2`, `3`, `4`, `5`, and `8`;
-  the u16 argument ranged from 0 to 1,111. The receiver method was not
+  a separate synthetic packet natively passed the range check with selector
+  `7`, which the saved query accepts. The u16 argument ranged from 0 to
+  1,111 in the original Replays. The receiver method was not
   executed: actual item identity, charges, slot, owner, receiver state and
   gameplay effect remain `UNKNOWN`. Original Replays, image, and full JSONL
   stay ignored outside Git. Focused exact-image Node tests passed 9/9.

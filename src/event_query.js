@@ -266,7 +266,6 @@ const ITEM_CHARGES_ROW_FIELDS_821 = new Set([
 ]);
 const ITEM_CHARGES_REF_FIELDS_821 = NOTIFY_CONTEXTUAL_SITUATION_REF_FIELDS_821;
 const ITEM_CHARGES_OBSERVED_LENGTHS_821 = new Set([1, 2, 3, 4]);
-const ITEM_CHARGES_OBSERVED_SELECTORS_821 = new Set([0, 1, 2, 3, 4, 5, 8]);
 const OBJECTIVE_STEAL_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'raw_param', 'child_event_id', 'registered_event_name',
@@ -1719,7 +1718,7 @@ function itemChargesPacketRow(row, prepared, lineNumber, state) {
       || !decoded
       || row.native_callback_selector_u8 !== decoded.selector_u8
       || row.native_callback_value_u16 !== decoded.value_u16
-      || !ITEM_CHARGES_OBSERVED_SELECTORS_821.has(row.native_callback_selector_u8)
+      || row.native_callback_selector_u8 > 0x26
       || ref?.source_path !== prepared.sourcePath
       || ref.replay_sha256 !== prepared.replaySha
       || ref.chunk_stream !== 'game_chunk'

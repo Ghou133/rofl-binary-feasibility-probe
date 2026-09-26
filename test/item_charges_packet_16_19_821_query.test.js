@@ -157,6 +157,38 @@ test('saved item charges query selects callback witness and keeps rows unchanged
   assert.equal(summary.filters.item_charges_value_u16, 35);
 });
 
+test('saved query accepts a native range-checked selector outside observed Replay values', (t) => {
+  const f = fixture(t);
+  const rows = structuredClone(f.rows);
+  // The pinned 821 image fully consumes this synthetic packet and returns 7/62.
+  rows[1].native_protected_callback_bytes_hex = '8dc1d8e6';
+  rows[1].native_callback_selector_u8 = 7;
+  rows[1].native_callback_value_u16 = 62;
+  rows[1].raw_packet_ref.raw_payload_hex = '9e8dd8';
+  rows[1].raw_packet_ref.payload_length = 3;
+  rows[1].raw_packet_ref.raw_payload_sha256 =
+    sha256(Buffer.from('9e8dd8', 'hex'));
+  assert.deepEqual(decodeProtectedItemChargesCallbackBytes(
+    rows[1].native_protected_callback_bytes_hex),
+  { selector_u8: 7, value_u16: 62 });
+  const [nativeInput, nativeOutput] = hashes(rows);
+  for (const result of [f.semantic.capability_results[CAPABILITY],
+    f.analysis.semantic.capability_results[CAPABILITY]]) {
+    result.native_input_sha256 = nativeInput;
+    result.native_output_sha256 = nativeOutput;
+  }
+  fs.writeFileSync(f.eventPath, `${rows.map(JSON.stringify).join('\n')}\n`);
+  fs.writeFileSync(f.semanticPath, JSON.stringify(f.semantic));
+  fs.writeFileSync(f.analysisPath, JSON.stringify(f.analysis));
+  const selected = query(f.dir, '--item-charges-selector-u8', '7', '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.stdout, `${JSON.stringify(rows[1])}\n`);
+  const summary = JSON.parse(selected.stderr);
+  assert.equal(summary.scanned_count, 2);
+  assert.equal(summary.matched_count, 1);
+  assert.equal(summary.emitted_count, 1);
+});
+
 test('valid unobserved callback filters scan all saved rows and return zero', (t) => {
   const f = fixture(t);
   for (const args of [
