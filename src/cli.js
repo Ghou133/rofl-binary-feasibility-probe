@@ -199,6 +199,7 @@ it does not establish an item, group identity, owner, slot, or inventory state.
 --item-group-packet-v2 adds the protected +0x1c byte and a conditional native
 callback byte witnessed with a synthetic lookup hit; actual receiver state is unknown.
 cooldown_broadcast_packet emits an exact-821 game/keyframe callback lookup key;
+item_charges_packet emits exact-821 packet-local callback arguments before receiver state;
 it does not establish cooldown state, slot identity, actor, target, or effect.
 unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
@@ -267,6 +268,8 @@ Options:
                         Previous/current item IDs and --slot must match the SAME changed slot.
   --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
   --item-group-callback-u8 <0..255|0xhex>  Exact 821 item-group V2 conditional callback byte candidate
+  --item-charges-selector-u8 <0..255|0xhex>  Exact 821 0x0437 callback selector argument
+  --item-charges-value-u16 <0..65535|0xhex>  Exact 821 0x0437 callback value argument
   --opaque-pair <u32:u8>      Exact anonymous 821 Buff Add/Remove/Update pair
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
   --cast-nested-bits <0..255|0xhex>  Exact decoded 821 CastSpellAns nested callback bits
@@ -348,6 +351,8 @@ function parseArgs(argv) {
     slot: null,
     opaqueU32: null,
     itemGroupCallbackU8: null,
+    itemChargesSelectorU8: null,
+    itemChargesValueU16: null,
     opaquePair: null,
     opaqueI32: null,
     castNestedBits: null,
@@ -531,6 +536,8 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'comparison-to-endpoints') options.comparisonToEndpoints = value;
       else if (command === 'query-events' && key === 'opaque-u32') options.opaqueU32 = queryUint32(value, key);
       else if (command === 'query-events' && key === 'item-group-callback-u8') options.itemGroupCallbackU8 = queryByte(value, key);
+      else if (command === 'query-events' && key === 'item-charges-selector-u8') options.itemChargesSelectorU8 = queryByte(value, key);
+      else if (command === 'query-events' && key === 'item-charges-value-u16') options.itemChargesValueU16 = queryWord(value, key);
       else if (command === 'query-events' && key === 'opaque-pair') options.opaquePair = queryOpaquePair(value);
       else if (command === 'query-events' && key === 'opaque-i32') options.opaqueI32 = queryInt32(value, key);
       else if (command === 'query-events' && key === 'cast-nested-bits') options.castNestedBits = queryByte(value, key);
@@ -625,7 +632,8 @@ function parseArgs(argv) {
     if (options.listEvents) {
       const filterKeys = ['fromMs', 'toMs', 'participant', 'killerParticipant',
         'assistingParticipant', 'rawParam', 'contextualSituation', 'itemId', 'previousItemId', 'slot',
-        'opaqueU32', 'itemGroupCallbackU8', 'opaquePair', 'opaqueI32', 'castNestedBits', 'castNestedU32',
+        'opaqueU32', 'itemGroupCallbackU8', 'itemChargesSelectorU8', 'itemChargesValueU16',
+        'opaquePair', 'opaqueI32', 'castNestedBits', 'castNestedU32',
         'castNestedU32At4c', 'castNestedF32AtA0', 'spellTimerReceiverSlot',
         'spellLevelReceiverIndex',
         'spellLevelClampedScalar', 'damageCallbackF32Available',
@@ -888,6 +896,12 @@ function queryRawParam(value) {
 function queryByte(value, label) {
   const number = queryUint32(value, label);
   if (number > 0xff) throw new Error(`--${label} must be in 0..255`);
+  return number;
+}
+
+function queryWord(value, label) {
+  const number = queryUint32(value, label);
+  if (number > 0xffff) throw new Error(`--${label} must be in 0..65535`);
   return number;
 }
 
@@ -1172,6 +1186,7 @@ function parseOne1619(replay, options, started) {
       'notify_contextual_situation_packet',
       'item_group_data_broadcast_packet',
       'cooldown_broadcast_packet',
+      'item_charges_packet',
       'unit_apply_damage_packet',
       'show_health_bar_packet',
     ].includes(name)))] : [];
@@ -2460,6 +2475,7 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'notify_contextual_situation_packet'
              || capability === 'item_group_data_broadcast_packet'
              || capability === 'cooldown_broadcast_packet'
+             || capability === 'item_charges_packet'
             || capability === 'unit_apply_damage_packet'
             || capability === 'show_health_bar_packet'
             || capability === 'unit_apply_damage_roster_key_pair'
@@ -2962,6 +2978,11 @@ function capabilityQuery(replay, options = {}) {
           'packet-local callback lookup key; receiver lookup, cooldown state, slot, actor, target and effect remain unknown');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'item_charges_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full 0x0437 packet consumption',
+          'packet-local callback selector/value before receiver method; item identity, charges, slot, owner and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'face_direction_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and bounded 0x038e packet shape validation',
           'packet-local unit-vector and optional scalar candidates with raw provenance; no actor, world position, path or direction effect');
@@ -3203,6 +3224,7 @@ function capabilityQuery(replay, options = {}) {
               'item_group_data_broadcast_packet_candidates',
             cooldown_broadcast_packet:
               'cooldown_broadcast_packet_candidates',
+            item_charges_packet: 'item_charges_packet_candidates',
             unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
             show_health_bar_packet: 'show_health_bar_packet_candidates',
             unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
@@ -3406,6 +3428,8 @@ async function runQueryEventsCommand(parsed) {
       slot: options.slot,
       opaqueU32: options.opaqueU32,
       itemGroupCallbackU8: options.itemGroupCallbackU8,
+      itemChargesSelectorU8: options.itemChargesSelectorU8,
+      itemChargesValueU16: options.itemChargesValueU16,
       opaquePair: options.opaquePair,
       opaqueI32: options.opaqueI32,
       castNestedBits: options.castNestedBits,

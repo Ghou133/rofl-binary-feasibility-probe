@@ -166,6 +166,9 @@ const { ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
 const { COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
   decodeProtectedCooldownLookupKeyU32 } =
   require('./decoders/rofl_16_19_821_cooldown_broadcast_packet_candidate');
+const { ITEM_CHARGES_PACKET_CANDIDATE_PROFILE_821,
+  decodeProtectedItemChargesCallbackBytes } =
+  require('./decoders/rofl_16_19_821_item_charges_packet_candidate');
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
@@ -252,6 +255,18 @@ const COOLDOWN_BROADCAST_REF_FIELDS_821 =
 const COOLDOWN_BROADCAST_OBSERVED_LENGTHS_821 = new Set([
   2, 3, 6, 7, 10, 11, 14, 15,
 ]);
+const ITEM_CHARGES_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param', 'packet_name_candidate',
+  'native_protected_callback_bytes_hex', 'native_callback_selector_u8',
+  'native_callback_value_u16', 'native_pre_receiver_witness',
+  'native_receiver_status', 'item_identity_status', 'charge_state_status',
+  'slot_identity_status', 'owner_status', 'semantic_effect_status',
+  'confidence', 'semantic_status', 'raw_packet_ref',
+]);
+const ITEM_CHARGES_REF_FIELDS_821 = NOTIFY_CONTEXTUAL_SITUATION_REF_FIELDS_821;
+const ITEM_CHARGES_OBSERVED_LENGTHS_821 = new Set([1, 2, 3, 4]);
+const ITEM_CHARGES_OBSERVED_SELECTORS_821 = new Set([0, 1, 2, 3, 4, 5, 8]);
 const OBJECTIVE_STEAL_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'raw_param', 'child_event_id', 'registered_event_name',
@@ -1623,6 +1638,126 @@ function cooldownBroadcastPacketRow(row, prepared, lineNumber, state) {
   state.nativeOutputHash.update(Buffer.from(protectedHex, 'hex')).update(key);
 }
 
+function prepareItemChargesPacketEvent(semantic, analysis, eventKey, result) {
+  const profile = ITEM_CHARGES_PACKET_CANDIDATE_PROFILE_821;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`);
+  }
+  if (result && !['CANDIDATE', 'MISSING_INPUT', 'PROFILE_UNAVAILABLE',
+    'DECODE_FAILED', 'UNSUPPORTED'].includes(result.status)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} must remain a candidate or declared unavailable.`);
+  }
+  if (result?.status !== 'CANDIDATE') return;
+  if (result.profile_id !== profile.id
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || result.evidence_status !== profile.evidence_status
+      || result.evidence_runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || !isCount(result.input_count) || result.input_count === 0
+      || result.event_count !== result.input_count
+      || result.event_count !== analysis.event_counts?.[eventKey]
+      || !isCount(result.scanned_block_count)
+      || result.scanned_block_count < result.event_count
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(result.event_field_confidence, {
+        replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
+        native_callback_selector_u8: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+        native_callback_value_u16: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+      })
+      || result.native_witness_status !== 'FULLY_CONSUMED_ALL_PRE_RECEIVER'
+      || result.native_pre_receiver_witness !== 'NATIVE_RANGE_CHECK_PASSED'
+      || result.native_full_success_count !== result.event_count
+      || result.native_batch_count !== Math.ceil(result.event_count / 10_000)
+      || !REPLAY_SHA.test(result.native_input_sha256 ?? '')
+      || !REPLAY_SHA.test(result.native_output_sha256 ?? '')
+      || !isDeepStrictEqual(
+        analysis.semantic?.capability_results?.[profile.capability], result)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} identity or native witness counts differ.`);
+  }
+}
+
+function itemChargesPacketRow(row, prepared, lineNumber, state) {
+  if (prepared.eventKey !== 'item_charges_packet_candidates') return;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid item charges packet row at JSONL line ${lineNumber}: ${reason}.`);
+  };
+  const profile = ITEM_CHARGES_PACKET_CANDIDATE_PROFILE_821;
+  const ref = row.raw_packet_ref;
+  const rowFields = Object.keys(row);
+  const refFields = ref && typeof ref === 'object' && !Array.isArray(ref)
+    ? Object.keys(ref) : [];
+  const payloadHex = ref?.raw_payload_hex;
+  const protectedHex = row.native_protected_callback_bytes_hex;
+  const decoded = decodeProtectedItemChargesCallbackBytes(protectedHex);
+  if (rowFields.length !== ITEM_CHARGES_ROW_FIELDS_821.size
+      || rowFields.some((field) => !ITEM_CHARGES_ROW_FIELDS_821.has(field))
+      || refFields.length !== ITEM_CHARGES_REF_FIELDS_821.size
+      || refFields.some((field) => !ITEM_CHARGES_REF_FIELDS_821.has(field))
+      || row.event_type !== 'ITEM_CHARGES_PACKET_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.packet_name_candidate !== profile.packet_name
+      || row.semantic_status !== profile.evidence_status
+      || row.native_pre_receiver_witness !== 'NATIVE_RANGE_CHECK_PASSED'
+      || row.native_receiver_status !== 'NOT_EXECUTED'
+      || row.item_identity_status !== 'UNKNOWN'
+      || row.charge_state_status !== 'UNKNOWN'
+      || row.slot_identity_status !== 'UNKNOWN'
+      || row.owner_status !== 'UNKNOWN'
+      || row.semantic_effect_status !== 'UNKNOWN'
+      || row.confidence !== 'CANDIDATE'
+      || row.replay_sha256 !== prepared.replaySha
+      || !Number.isSafeInteger(row.replay_time_ms) || row.replay_time_ms < 0
+      || !Number.isSafeInteger(row.raw_param) || row.raw_param < 0
+      || row.raw_param > 0xffffffff
+      || !decoded
+      || row.native_callback_selector_u8 !== decoded.selector_u8
+      || row.native_callback_value_u16 !== decoded.value_u16
+      || !ITEM_CHARGES_OBSERVED_SELECTORS_821.has(row.native_callback_selector_u8)
+      || ref?.source_path !== prepared.sourcePath
+      || ref.replay_sha256 !== prepared.replaySha
+      || ref.chunk_stream !== 'game_chunk'
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== profile.replay_block_packet_id
+      || ref.replay_time_ms !== row.replay_time_ms
+      || ref.raw_param !== row.raw_param
+      || typeof payloadHex !== 'string'
+      || !/^(?:[0-9a-f]{2})+$/.test(payloadHex)
+      || !ITEM_CHARGES_OBSERVED_LENGTHS_821.has(payloadHex.length / 2)
+      || ref.payload_length !== payloadHex.length / 2
+      || !REPLAY_SHA.test(ref.raw_payload_sha256 ?? '')) {
+    invalid('exact-build profile, native callback, packet shape, or provenance differs');
+  }
+  const payload = Buffer.from(payloadHex, 'hex');
+  if (ref.raw_payload_sha256 !== crypto.createHash('sha256').update(payload).digest('hex')) {
+    invalid('raw payload SHA-256 differs');
+  }
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (state.positions.has(position)) invalid('duplicate raw packet position');
+  state.positions.add(position);
+  const inputHeader = Buffer.alloc(8);
+  inputHeader.writeUInt32LE(row.raw_param, 0);
+  inputHeader.writeUInt32LE(payload.length, 4);
+  state.nativeInputHash.update(inputHeader).update(payload);
+  const outputValues = Buffer.alloc(6);
+  outputValues.writeUInt32LE(row.native_callback_selector_u8, 0);
+  outputValues.writeUInt16LE(row.native_callback_value_u16, 4);
+  state.nativeOutputHash.update(Buffer.from(protectedHex, 'hex'))
+    .update(outputValues);
+}
+
 function prepareFaceDirectionRosterPairEvent(semantic, analysis, eventKey, result) {
   const profile = FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE;
   if (semantic.replay_version !== profile.replay_version) {
@@ -2842,6 +2977,10 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   }
   if (eventKey === 'cooldown_broadcast_packet_candidates') {
     prepareCooldownBroadcastPacketEvent(semantic, analysis, eventKey,
+      capabilityResult);
+  }
+  if (eventKey === 'item_charges_packet_candidates') {
+    prepareItemChargesPacketEvent(semantic, analysis, eventKey,
       capabilityResult);
   }
   if (eventKey === 'face_direction_keyframe_roster_pair_candidates') {
@@ -8263,6 +8402,7 @@ function validateFilters(options) {
     contextualSituation = null,
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, itemGroupCallbackU8 = null,
+    itemChargesSelectorU8 = null, itemChargesValueU16 = null,
     opaquePair = null, opaqueI32 = null,
     castNestedBits = null, castNestedU32 = null, castNestedU32At4c = null,
     castNestedF32AtA0 = null,
@@ -8323,6 +8463,8 @@ function validateFilters(options) {
     ['slot', slot, 0, 9],
     ['opaqueU32', opaqueU32, 0, 0xffffffff],
     ['itemGroupCallbackU8', itemGroupCallbackU8, 0, 0xff],
+    ['itemChargesSelectorU8', itemChargesSelectorU8, 0, 0xff],
+    ['itemChargesValueU16', itemChargesValueU16, 0, 0xffff],
     ['opaqueI32', opaqueI32, -0x80000000, 0x7fffffff],
     ['castNestedBits', castNestedBits, 0, 0xff],
     ['castNestedU32', castNestedU32, 0, 0xffffffff],
@@ -8367,6 +8509,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     contextualSituation = null,
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, itemGroupCallbackU8 = null,
+    itemChargesSelectorU8 = null, itemChargesValueU16 = null,
     opaquePair = null, opaqueI32 = null,
     castNestedBits = null, castNestedU32 = null, castNestedU32At4c = null,
     castNestedF32AtA0 = null,
@@ -8479,6 +8622,15 @@ async function streamEventQuery(prepared, options, emitLine) {
           !== ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id)) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--item-group-callback-u8 requires exact-821 item-group V2 candidates.');
+  }
+  if ((itemChargesSelectorU8 != null || itemChargesValueU16 != null)
+      && (prepared.eventKey !== 'item_charges_packet_candidates'
+        || prepared.replayVersion !== '16.19.821.7343'
+        || prepared.capabilityStatus !== 'CANDIDATE'
+        || prepared.capabilityResult.profile_id
+          !== ITEM_CHARGES_PACKET_CANDIDATE_PROFILE_821.id)) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--item-charges-selector-u8 and --item-charges-value-u16 require exact-821 item charges packet candidates.');
   }
   if (opaqueU32 != null && (!opaqueU32Fields
       || prepared.replayVersion !== '16.19.821.7343')) {
@@ -8610,6 +8762,10 @@ async function streamEventQuery(prepared, options, emitLine) {
     === 'cooldown_broadcast_packet_candidates'
     ? { positions: new Set(), nativeInputHash: crypto.createHash('sha256'),
       nativeOutputHash: crypto.createHash('sha256') } : null;
+  const itemChargesState = prepared.eventKey
+    === 'item_charges_packet_candidates'
+    ? { positions: new Set(), nativeInputHash: crypto.createHash('sha256'),
+      nativeOutputHash: crypto.createHash('sha256') } : null;
   const firstBloodAssistPacketPositions = prepared.eventKey
     === 'first_blood_assist_event_packet_candidates'
     ? new Set(prepared.capabilityResult.excluded_same_length_foreign_packet_refs
@@ -8735,6 +8891,9 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (cooldownBroadcastState) {
         cooldownBroadcastPacketRow(row, prepared, lineNumber,
           cooldownBroadcastState);
+      }
+      if (itemChargesState) {
+        itemChargesPacketRow(row, prepared, lineNumber, itemChargesState);
       }
       faceDirectionRosterPairRow(row, prepared, lineNumber, faceRosterPairState);
       unitApplyDamageRosterKeyRow(row, prepared, lineNumber,
@@ -8934,6 +9093,10 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (itemGroupCallbackU8 != null
             && row.native_callback_u8_if_lookup_hit_candidate
               !== itemGroupCallbackU8)
+          || (itemChargesSelectorU8 != null
+            && row.native_callback_selector_u8 !== itemChargesSelectorU8)
+          || (itemChargesValueU16 != null
+            && row.native_callback_value_u16 !== itemChargesValueU16)
           || (opaquePair != null && (!pairValue.available
             || pairValue.u32 !== opaquePair.u32 || pairValue.u8 !== opaquePair.u8))
           || (opaqueI32 != null && opaqueI32Field.value !== opaqueI32)
@@ -9022,6 +9185,15 @@ async function streamEventQuery(prepared, options, emitLine) {
           !== prepared.capabilityResult.native_output_sha256)) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
       'Cooldown raw packet count or ordered native input/output SHA-256 differs from capability metadata.');
+  }
+  if (itemChargesState
+      && (itemChargesState.positions.size !== scannedCount
+        || itemChargesState.nativeInputHash.digest('hex')
+          !== prepared.capabilityResult.native_input_sha256
+        || itemChargesState.nativeOutputHash.digest('hex')
+          !== prepared.capabilityResult.native_output_sha256)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Item charges raw packet count or ordered native input/output SHA-256 differs from capability metadata.');
   }
   if (objectiveStealChildCounts
       && !isDeepStrictEqual(objectiveStealChildCounts,
@@ -9417,6 +9589,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       ...(opaqueU32 == null ? {} : { opaque_u32: opaqueU32 }),
       ...(itemGroupCallbackU8 == null ? {}
         : { item_group_callback_u8: itemGroupCallbackU8 }),
+      ...(itemChargesSelectorU8 == null ? {}
+        : { item_charges_selector_u8: itemChargesSelectorU8 }),
+      ...(itemChargesValueU16 == null ? {}
+        : { item_charges_value_u16: itemChargesValueU16 }),
       ...(opaquePair == null ? {} : { opaque_pair: opaquePair }),
       ...(opaqueI32 == null ? {} : { opaque_i32: opaqueI32 }),
       ...(castNestedBits == null ? {} : { cast_nested_bits: castNestedBits }),
