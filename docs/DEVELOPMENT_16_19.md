@@ -846,6 +846,19 @@ Current progress (older notes below retain their original research context):
   truncated, appended, and foreign-route controls did not satisfy the full
   target gate. No spell identity, actual level, owner, or effect is inferred.
   Ignored output is in `artifacts/16_19_development/set_spell_level_cli_batch_11/`.
+- **Completed opt-in SetSpellLevel callback witness V2:** The exact 821 callback
+  at RVA `0x998630` selects a synthetic receiver table slot from decoded
+  object `+0x10` (0..63, otherwise slot 0); exact callee RVA `0x947f20`
+  caps nonnegative `+0x14` at 6, writes the selected receiver's `+0x28`,
+  and writes its `+0x2c` positive flag only for a positive value. V2 runs
+  both native routines for each source-bound packet, keeps V1 as the default,
+  and exposes only candidate receiver-slot, selection-source, capped-scalar,
+  and flag-write fields. All 342/342 packets across the 11 supplied exact
+  Replays completed V2 native witness with matched image and zero framing
+  errors. Native fallback/9-to-6/zero controls passed; a signed-negative
+  control wrote -1 natively and was rejected from bounded V2 output. The
+  synthetic table does not identify a live receiver, spell, level change, or
+  effect.
 - **Completed candidate:** Exact KR 821 `0x00fd` SetSpellTimerFromBuff is
   selectable through CLI/API with six anonymous callback fields, raw object
   bytes, and Replay packet provenance. All 5,481/5,481 target packets across

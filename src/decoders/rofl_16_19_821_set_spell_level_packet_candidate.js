@@ -15,6 +15,13 @@ const CALLBACK_TABLE_SHA256 = Object.freeze({
   opaque_u32_0x10: '8aa1a1d1b3c61b2717fbf3b7349dcc659f21d91cd0fe98404e4dc6b700214cb5',
   opaque_u32_0x14: 'b097f9ce648ac9593a43258eb81b7ee20dc37e7162a8bd584e768785c24ddbb3',
 });
+const CALLBACK_REGION_SHA256 = 'f365aa3bc45e3a21abc7a8039cb9402ce270539a863a49b9333138e8a93321ab';
+const RECEIVER_WRITE_REGION_SHA256 = '550b1300a158e61bb8e7ee4502a0d823defcc9c694ab000198799d22f57d781e';
+const CALLBACK_WITNESS_MODE = 'NATIVE_SYNTHETIC_RECEIVER';
+const SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V1_ID_821 =
+  'rofl-16.19.821.7343-kr-set-spell-level-packet-runtime-candidate-v1';
+const SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_ID_821 =
+  'rofl-16.19.821.7343-kr-set-spell-level-packet-runtime-candidate-v2';
 const PACKET_ID = 0x025d;
 const CAPABILITY = 'set_spell_level_packet';
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
@@ -24,7 +31,7 @@ const MAX_REQUEST_BYTES = 4_000_000;
 const OBSERVED_PAYLOAD_LENGTHS = new Set([1, 2, 3]);
 
 const SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
-  id: 'rofl-16.19.821.7343-kr-set-spell-level-packet-runtime-candidate-v1',
+  id: SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V1_ID_821,
   replay_version: REPLAY_VERSION,
   capability: CAPABILITY,
   status: 'CANDIDATE',
@@ -43,9 +50,65 @@ const SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
     'The pinned exact-build mapped runtime image and Python Unicorn are required.',
   ]),
 });
+const SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V1_821 =
+  SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_821;
+const SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_821 = Object.freeze({
+  ...SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V1_821,
+  id: SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_ID_821,
+  evidence_callback_rva: '0x00998630',
+  evidence_receiver_write_rva: '0x00947f20',
+  evidence_callback_region_sha256: CALLBACK_REGION_SHA256,
+  evidence_receiver_write_region_sha256: RECEIVER_WRITE_REGION_SHA256,
+  evidence_callback_witness_mode: CALLBACK_WITNESS_MODE,
+  evidence_scope: 'exact 821 native SetSpellLevel callback/receiver-write witness on each decoded packet; 342/342 source-bound packets across 11 KR Replays; synthetic receiver table does not identify a live receiver',
+  known_limits: Object.freeze([
+    ...SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V1_821.known_limits,
+    'Native callback witness uses a synthetic receiver table; no live receiver, spell identity, actual level change, or effect is established.',
+    'V2 rejects signed-negative callback scalars; the observed KR values are 1 through 6.',
+  ]),
+});
 
 function sha256(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
+function ror8(value, count) {
+  return ((value >>> count) | (value << (8 - count))) & 0xff;
+}
+
+function swapBits(value) {
+  return (((value & 0xd5) << 1) | ((value >>> 1) & 0x55)) & 0xff;
+}
+
+let callbackByteTables;
+function exactCallbackByteTables() {
+  if (callbackByteTables) return callbackByteTables;
+  const at10 = Buffer.from(Array.from({ length: 256 }, (_, value) =>
+    (ror8((~ror8((swapBits(value) + 0x68) & 0xff, 6)) & 0xff, 6) - 2) & 0xff));
+  const at14 = Buffer.from(Array.from({ length: 256 }, (_, value) =>
+    ((ror8(value, 6) + 0x41) & 0xff) ^ 8));
+  if (sha256(at10) !== CALLBACK_TABLE_SHA256.opaque_u32_0x10
+      || sha256(at14) !== CALLBACK_TABLE_SHA256.opaque_u32_0x14
+      || new Set(at10).size !== 256 || new Set(at14).size !== 256) {
+    throw new Error('exact 821 SetSpellLevel callback byte transforms differ');
+  }
+  callbackByteTables = { at10, at14 };
+  return callbackByteTables;
+}
+
+function decodeRawU32(rawHex, table) {
+  if (typeof rawHex !== 'string' || !/^[0-9a-f]{8}$/.test(rawHex)) return null;
+  const raw = Buffer.from(rawHex, 'hex');
+  for (let index = 0; index < raw.length; index += 1) raw[index] = table[raw[index]];
+  return raw.readUInt32LE(0);
+}
+
+function decodeSetSpellLevelU32At10FromRaw821(rawHex) {
+  return decodeRawU32(rawHex, exactCallbackByteTables().at10);
+}
+
+function decodeSetSpellLevelU32At14FromRaw821(rawHex) {
+  return decodeRawU32(rawHex, exactCallbackByteTables().at14);
 }
 
 function callbackTablesMatch(value) {
@@ -100,20 +163,32 @@ function collectRows(replay, precollected) {
 }
 
 function decodeSetSpellLevelPacketCandidates821(replay, {
-  runtimeImagePath, pythonExecutable, precollected,
+  runtimeImagePath, pythonExecutable, precollected, setSpellLevelProfile = 'v1',
 } = {}) {
-  const profile = SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_821;
+  const v2 = setSpellLevelProfile === 'v2';
+  const profile = v2 ? SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_821
+    : SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V1_821;
   const base = {
     profile_id: profile.id,
     input_packet_id: PACKET_ID,
     evidence_runtime_image_sha256: IMAGE_SHA256,
     evidence_callback_table_sha256: CALLBACK_TABLE_SHA256,
+    ...(v2 ? {
+      evidence_callback_rva: profile.evidence_callback_rva,
+      evidence_receiver_write_rva: profile.evidence_receiver_write_rva,
+      evidence_callback_region_sha256: CALLBACK_REGION_SHA256,
+      evidence_receiver_write_region_sha256: RECEIVER_WRITE_REGION_SHA256,
+      evidence_callback_witness_mode: CALLBACK_WITNESS_MODE,
+    } : {}),
   };
   const fail = (status, error, extra = {}) => ({
     ...base, status, input_count: null, event_count: null, events: null,
     runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
     error, ...extra,
   });
+  if (setSpellLevelProfile !== 'v1' && setSpellLevelProfile !== 'v2') {
+    return fail('UNSUPPORTED', 'SetSpellLevel packet profile must be v1 or v2');
+  }
   if (replay?.header?.version !== REPLAY_VERSION) {
     return fail('UNSUPPORTED', `SetSpellLevel packet candidate supports only ${REPLAY_VERSION}`);
   }
@@ -200,7 +275,10 @@ function decodeSetSpellLevelPacketCandidates821(replay, {
         runtime_image_used: start > 0,
       });
     }
-    const run = childProcess.spawnSync(python, ['-B', script, '--image', imagePath], {
+    const run = childProcess.spawnSync(python, [
+      '-B', script, '--image', imagePath,
+      ...(v2 ? ['--callback-witness-v2'] : []),
+    ], {
       input: request, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: 60000,
     });
     if (run.error || run.status !== 0) {
@@ -208,7 +286,7 @@ function decodeSetSpellLevelPacketCandidates821(replay, {
         || `Python exited ${run.status}`).trim().slice(0, 1500);
       const missingPython = run.error?.code === 'ENOENT'
         || /ModuleNotFoundError: No module named ['"]unicorn['"]|requires the installed unicorn dependency/.test(detail);
-      const wrongImage = /runtime image SHA-256 mismatch|record transform table differs|callback transform differs/i.test(detail);
+      const wrongImage = /runtime image SHA-256 mismatch|record transform table differs|callback transform differs|callback region differs|receiver write region differs/i.test(detail);
       return failed(missingPython ? 'MISSING_INPUT' : 'DECODE_FAILED',
         `exact runtime SetSpellLevel packet decoder failed: ${detail}`, {
           ...(missingPython ? { missing_input: 'python_unicorn' } : {}),
@@ -227,6 +305,11 @@ function decodeSetSpellLevelPacketCandidates821(replay, {
     }
     if (decoded?.status !== 'PASS' || decoded.runtime_image_sha256 !== IMAGE_SHA256
         || !callbackTablesMatch(decoded.callback_table_sha256)
+        || (v2 && (decoded.callback_rva !== profile.evidence_callback_rva
+          || decoded.receiver_write_rva !== profile.evidence_receiver_write_rva
+          || decoded.callback_region_sha256 !== CALLBACK_REGION_SHA256
+          || decoded.receiver_write_region_sha256 !== RECEIVER_WRITE_REGION_SHA256
+          || decoded.callback_witness_mode !== CALLBACK_WITNESS_MODE))
         || !Array.isArray(decoded.results) || decoded.results.length !== batch.length) {
       return failed('DECODE_FAILED', 'runtime SetSpellLevel output identity or packet count differs', {
         runtime_image_used: start > 0, runtime_image_status: 'EXECUTION_FAILED',
@@ -245,7 +328,22 @@ function decodeSetSpellLevelPacketCandidates821(replay, {
           || !Number.isInteger(row.opaque_u32_0x14) || row.opaque_u32_0x14 < 0
           || row.opaque_u32_0x14 > 0xffffffff
           || !/^[0-9a-f]{8}$/.test(row.raw_u32_0x10_hex)
-          || !/^[0-9a-f]{8}$/.test(row.raw_u32_0x14_hex)) {
+          || !/^[0-9a-f]{8}$/.test(row.raw_u32_0x14_hex)
+          || (v2 && (!Number.isInteger(row.native_receiver_slot_candidate)
+            || row.native_receiver_slot_candidate < 0
+            || row.native_receiver_slot_candidate > 63
+            || !['INDEXED', 'FALLBACK_0'].includes(row.native_receiver_selection_source)
+            || !Number.isInteger(row.native_clamped_scalar_candidate)
+            || row.native_clamped_scalar_candidate < 0
+            || row.native_clamped_scalar_candidate > 6
+            || typeof row.native_positive_flag_written !== 'boolean'
+            || row.opaque_u32_0x10 !== decodeSetSpellLevelU32At10FromRaw821(row.raw_u32_0x10_hex)
+            || row.opaque_u32_0x14 !== decodeSetSpellLevelU32At14FromRaw821(row.raw_u32_0x14_hex)
+            || row.opaque_u32_0x14 > 0x7fffffff
+            || row.native_receiver_slot_candidate !== (row.opaque_u32_0x10 <= 63 ? row.opaque_u32_0x10 : 0)
+            || row.native_receiver_selection_source !== (row.opaque_u32_0x10 <= 63 ? 'INDEXED' : 'FALLBACK_0')
+            || row.native_clamped_scalar_candidate !== Math.min(row.opaque_u32_0x14, 6)
+            || row.native_positive_flag_written !== (row.native_clamped_scalar_candidate > 0)))) {
         return failed('DECODE_FAILED', `runtime SetSpellLevel packet ${start + index} did not fully decode`, {
           runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
           runtime_image_sha256: IMAGE_SHA256, first_failed_packet_ref: ref,
@@ -264,6 +362,12 @@ function decodeSetSpellLevelPacketCandidates821(replay, {
         opaque_u32_0x14: row.opaque_u32_0x14,
         raw_object_u32_0x10_hex: row.raw_u32_0x10_hex,
         raw_object_u32_0x14_hex: row.raw_u32_0x14_hex,
+        ...(v2 ? {
+          native_receiver_slot_candidate: row.native_receiver_slot_candidate,
+          native_receiver_selection_source: row.native_receiver_selection_source,
+          native_clamped_scalar_candidate: row.native_clamped_scalar_candidate,
+          native_positive_flag_written: row.native_positive_flag_written,
+        } : {}),
         confidence: 'CANDIDATE',
         semantic_status: 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS',
         raw_packet_ref: ref,
@@ -279,6 +383,12 @@ function decodeSetSpellLevelPacketCandidates821(replay, {
       raw_param: 'VERIFIED_DIRECT',
       opaque_u32_0x10: 'CANDIDATE_EXACT_RUNTIME_FIELD',
       opaque_u32_0x14: 'CANDIDATE_EXACT_RUNTIME_FIELD',
+      ...(v2 ? {
+        native_receiver_slot_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+        native_receiver_selection_source: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+        native_clamped_scalar_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+        native_positive_flag_written: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+      } : {}),
     },
     input_count: inputCount, event_count: events.length,
     scanned_block_count: scannedBlockCount,
@@ -289,5 +399,11 @@ function decodeSetSpellLevelPacketCandidates821(replay, {
 
 module.exports = {
   SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_821,
+  SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V1_ID_821,
+  SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_ID_821,
+  SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V1_821,
+  SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_821,
+  decodeSetSpellLevelU32At10FromRaw821,
+  decodeSetSpellLevelU32At14FromRaw821,
   decodeSetSpellLevelPacketCandidates821,
 };
