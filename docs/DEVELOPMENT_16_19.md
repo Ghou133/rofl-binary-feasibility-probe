@@ -4,6 +4,37 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **SetItemGroupData_Broadcast conditional callback byte (opt-in V2 candidate):**
+  `--item-group-packet-v2` or API `itemGroupPacketProfile: 'v2'` retains the
+  exact `0x013f` V1 packet route and lookup key, then adds the native object's
+  protected `+0x1c` byte and the callback's transformed u8 value if its
+  receiver lookup hits. The pinned nested reader writes `+0x1c`; callback
+  RVA `0x35055e..0x350578` transforms it and `0x3505c9` writes it to a
+  receiver entry only on the lookup-hit branch. The native witness supplies
+  a synthetic lookup hit and checks that write for every selected packet;
+  its callback transform, code region and nested reader region are pinned to
+  the exact KR `16.19.821.7343` image. A read-only census of all 11 original
+  KR Replays found 1,604 distinct `0x013f` payloads, all native fully
+  consumed, and six transformed byte values: `0`, `1`, `2`, `3`, `99`, `255`.
+  Two original packets with the same raw parameter `0x400000ae` and lookup
+  key `90922051` produced `1` and `0`; they show this byte varies
+  independently of the lookup key. Native truncate and append controls fail
+  full consumption. A real CLI V2 run on `KR_8393821675.rofl` emitted
+  90,240/90,240 `CANDIDATE` rows in 10 native batches with `MATCHED_USED`
+  and zero framing errors; direct API decoding of that Replay returned the
+  same count. Saved `query-events --event
+  item_group_data_broadcast_packet_candidates --opaque-u32 90922051
+  --item-group-callback-u8 0 --limit 1` validated all 90,240 rows, matched
+  33 and emitted one unchanged row. The valid but unobserved byte `4`
+  completed the same full-row validation with zero matches. V2 saved queries
+  check separate ordered
+  raw-input and native-output digests including the new protected and
+  transformed byte, even after the output limit. V1 remains the default
+  profile, row shape and digest. The captured image lacks live receiver
+  state: actual lookup success, group/item/owner/slot, purchase, inventory
+  state change and gameplay effect remain `UNKNOWN`. The private image,
+  Replays and generated JSONL stay ignored outside Git. Focused exact-image
+  Node and Python tests passed 11/11 and 5/5 without skips.
 - **SetItemGroupData_Broadcast packet lookup key (opt-in candidate):** Exact
   KR `16.19.821.7343` keyframe route `0x013f` is a packet factory route,
   separate from `0x040a` OnEvent child IDs. The pinned runtime image SHA-256
