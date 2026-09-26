@@ -47,18 +47,19 @@
   },
   "ordered_input_rule": "For each packet in Replay block order: u32le raw_param, u32le payload_length, raw payload bytes.",
   "ordered_native_output_rule": "For each native-full packet in the same order: four protected object +0x1c bytes, then u32le synthetic pre-compare callback key.",
+  "route_absent_digest_rule": "For a Replay with zero 0x040c packets, both ordered SHA-256 values hash the empty byte stream; no native packet witness ran.",
   "semantic_limit": "Synthetic receiver reaches the exact callback key before live receiver comparison. Receiver match, missile identity, owner, target, actual target change, gameplay effect, and causality remain UNKNOWN.",
   "replays": [
-    { "source_sha256": "d3a93326b3420ac0e2d0f077eef70b9b6413a9eb4b3e09f69056902ec2d11a8e", "route_packet_count": 11 },
-    { "source_sha256": "d5a53ff86009aa0e3d2544a8f00727e377e25f0a052a832e8f456d1cdcfdef8c", "route_packet_count": 0 },
-    { "source_sha256": "26030cc38d97a96adb101a290746761c289044e3190d4962468cd3bc062518eb", "route_packet_count": 3620 },
-    { "source_sha256": "bf13d633a79cfc649292b4ef08fddab5328b914b1d809565d51e464f3fa9c541", "route_packet_count": 3271 },
-    { "source_sha256": "dd78cf6bbac9728109998bcef6d9554ad93ba06c192c7547314e7a1ef17c2404", "route_packet_count": 0 },
-    { "source_sha256": "18070abab4a973ca9d753ed48b4b155042de9b70f3fe059defbad5d9b27b1264", "route_packet_count": 5570 },
-    { "source_sha256": "4d6e5dc8a4da1c9048c4e75d984c3eb98623f9ebf9d325ba28a51874e43b9e39", "route_packet_count": 5 },
-    { "source_sha256": "8c84fa11712e5faf516f0316d34aa9e6dbe542b36e5d1472c294daf2533ae1ef", "route_packet_count": 0 },
-    { "source_sha256": "823b546655866c076a5e14874197ad42eb2f83917f563c08c7a928193e5cb52d", "route_packet_count": 472 },
-    { "source_sha256": "682b6703b2caeafb49b501a93b398cc9227381d412ae7f25a942a3035a8ea9ca", "route_packet_count": 0 },
-    { "source_sha256": "2453323e79e62e24b43f3d041b77f2b4d2773e39cba77a125663544ee2e0940b", "route_packet_count": 176 }
+    { "source_sha256": "d3a93326b3420ac0e2d0f077eef70b9b6413a9eb4b3e09f69056902ec2d11a8e", "route_packet_count": 11, "ordered_input_sha256": "42e4d20f35dc3926929c83b8360bd8ad5eaa5801ef382c18fbc5f8c28feb38e3", "ordered_native_output_sha256": "d754242d31c406ddbc5da9b22b94e98c94df121921d58b4fbec43bf939bf8b61" },
+    { "source_sha256": "d5a53ff86009aa0e3d2544a8f00727e377e25f0a052a832e8f456d1cdcfdef8c", "route_packet_count": 0, "ordered_input_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "ordered_native_output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
+    { "source_sha256": "26030cc38d97a96adb101a290746761c289044e3190d4962468cd3bc062518eb", "route_packet_count": 3620, "ordered_input_sha256": "dfa1ca731f69235fcea8035f7c2e4d1470ae46180156ada547840610de5ec2c1", "ordered_native_output_sha256": "108694294bb3d34c90b2213a909f87aaa800eeefe687423cabc509eec584000e" },
+    { "source_sha256": "bf13d633a79cfc649292b4ef08fddab5328b914b1d809565d51e464f3fa9c541", "route_packet_count": 3271, "ordered_input_sha256": "166033348b96e636677218706301b2765409cf89bd532516f5b65ec1ef0a8820", "ordered_native_output_sha256": "4f3d89d254001fc5de75d981f364df8eb595cf784580f48b5f4bf0051868d588" },
+    { "source_sha256": "dd78cf6bbac9728109998bcef6d9554ad93ba06c192c7547314e7a1ef17c2404", "route_packet_count": 0, "ordered_input_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "ordered_native_output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
+    { "source_sha256": "18070abab4a973ca9d753ed48b4b155042de9b70f3fe059defbad5d9b27b1264", "route_packet_count": 5570, "ordered_input_sha256": "144a0cafc814fa7bd582b91ea240c7f0d9d682586d035cf85bd5579637655419", "ordered_native_output_sha256": "a0ab59229b8a74b32ae6cb255dcbec811e1c17cbefb71375f10b0c04785b532b" },
+    { "source_sha256": "4d6e5dc8a4da1c9048c4e75d984c3eb98623f9ebf9d325ba28a51874e43b9e39", "route_packet_count": 5, "ordered_input_sha256": "b4ba43fbae9db5c2004b76cb5669fde77c5cc71c109c7cb73732a2a1b97e88fd", "ordered_native_output_sha256": "298d4a924e00e36659d17c692aff4240f5edda00eb0c3efbd857e2415ecf2187" },
+    { "source_sha256": "8c84fa11712e5faf516f0316d34aa9e6dbe542b36e5d1472c294daf2533ae1ef", "route_packet_count": 0, "ordered_input_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "ordered_native_output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
+    { "source_sha256": "823b546655866c076a5e14874197ad42eb2f83917f563c08c7a928193e5cb52d", "route_packet_count": 472, "ordered_input_sha256": "12be9d7137764d14a1d6aab4b6ea618d5cfd554819b19ecb1f6d03e30f214e9b", "ordered_native_output_sha256": "71e1e86d8ac8e8f1d9dfec447ffa11206d2c37b71bbcd37c90e33d595c7928b7" },
+    { "source_sha256": "682b6703b2caeafb49b501a93b398cc9227381d412ae7f25a942a3035a8ea9ca", "route_packet_count": 0, "ordered_input_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "ordered_native_output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
+    { "source_sha256": "2453323e79e62e24b43f3d041b77f2b4d2773e39cba77a125663544ee2e0940b", "route_packet_count": 176, "ordered_input_sha256": "f432470350afb5bf6e492ec178159684d1f1a49b0405a9d4396601707626317d", "ordered_native_output_sha256": "d2a18a3ba4e3126a39d3b244fec50be8f038b48f18e96fb4a7d819c78022c9bf" }
   ]
 }
