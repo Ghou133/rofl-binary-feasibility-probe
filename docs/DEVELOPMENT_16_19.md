@@ -25,6 +25,30 @@ Current progress (older notes below retain their original research context):
   equal tail values; no missing tail interval is filled. The new bridge
   JSONL rows omit PUUID, Riot ID, player name, and metadata player ID;
   existing Replay inventory artifacts retain their established fields.
+
+- **ChangeMissileTarget V2 anonymous native f32 triplet (explicit opt-in):**
+  The exact KR `16.19.821.7343` deserializer `0x10e8e30` writes protected
+  object bytes `+0x10..+0x1b` through helper `0x10a5b00`. Its native
+  inverse yields three finite f32 components at `+0x10/+0x14/+0x18`.
+  In the 11 original Replays, all 12,869 length-13 packets carry twelve
+  packet bytes in component order `payload[9:13], [5:9], [1:5]`; the 256
+  length-3/4 packets carry no vector bytes and retain the native default
+  zero triplet. All 13,125 packets passed full exact-image deserialization.
+  One-byte changes at each of the twelve long-form data positions changed
+  exactly one protected vector byte without changing the callback key;
+  truncation, append, and wrong-image controls failed closed. The V2 CLI
+  flag `--change-missile-target-v2` and API
+  `changeMissileTargetProfile: 'v2'` add the protected bytes, inverse raw
+  f32 bytes, three values, and packet/default source. V1 remains the default
+  and its saved artifacts retain their original format and digest. V2
+  native output digests and saved-query validation bind all vector bytes
+  and values; two original Replays (one long-form and one short-form) passed
+  complete `--verify-source --limit 1` queries over 3,620 and 176 rows.
+  [The V2 native gate](CHANGE_MISSILE_TARGET_821_NATIVE_VECTOR_V2_GATE.json)
+  records the form counts and per-Replay hashes. These are anonymous
+  packet-local values; target position, identity, receiver match, change,
+  effect and causality remain `UNKNOWN`.
+
 - **ChangeMissileTarget 0x040c packet-local comparison key (opt-in candidate):**
   The pinned KR `16.19.821.7343` image registers
   `PKT_S2C_ChangeMissileTarget_s` on `MissileClient` through factory case
