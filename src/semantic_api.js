@@ -2193,6 +2193,10 @@ function decode1619821(replay, profile, options = {}) {
   if (!['v4', 'v5', 'v6'].includes(castPacketProfile)) {
     throw new TypeError('exact 821 CastSpellAns packet profile must be v4, v5 or v6');
   }
+  const setSpellLevelProfile = options.setSpellLevelProfile ?? 'v1';
+  if (setSpellLevelProfile !== 'v1' && setSpellLevelProfile !== 'v2') {
+    throw new TypeError('exact 821 SetSpellLevel packet profile must be v1 or v2');
+  }
   const damagePacketProfile = options.damagePacketProfile ?? 'v5';
   if (damagePacketProfile !== 'v5' && damagePacketProfile !== 'v6') {
     throw new TypeError('exact 821 UnitApplyDamage packet profile must be v5 or v6');
@@ -2435,6 +2439,7 @@ function decode1619821(replay, profile, options = {}) {
         runtimeImagePath: options.runtimeImagePath,
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
+        setSpellLevelProfile,
       }),
     direct_input_movement_turn_packet: (input, collected) =>
       decodeDirectInputMovementTurnPacketCandidates821(input, {

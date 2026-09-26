@@ -16,8 +16,9 @@ const {
 } = require('../src/decoders/rofl_16_19_821_set_spell_level_packet_candidate');
 
 const BUILD = '16.19.821.7343';
-const IMAGE = path.resolve(__dirname, '..', 'artifacts', '16_19_development',
-  'kr_821_runtime_capture', 'LeagueOfLegends_16.19.821.7343.memory.bin');
+const IMAGE = process.env.ROFL_821_RUNTIME_IMAGE || path.resolve(__dirname, '..',
+  'artifacts', '16_19_development', 'kr_821_runtime_capture',
+  'LeagueOfLegends_16.19.821.7343.memory.bin');
 // Three observed game-stream 0x025d payloads in KR_8392938200.rofl.
 const PAYLOADS = [Buffer.from('fa', 'hex'), Buffer.from('c37b', 'hex'),
   Buffer.from('cd7bb2', 'hex')];

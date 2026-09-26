@@ -858,7 +858,17 @@ Current progress (older notes below retain their original research context):
   errors. Native fallback/9-to-6/zero controls passed; a signed-negative
   control wrote -1 natively and was rejected from bounded V2 output. The
   synthetic table does not identify a live receiver, spell, level change, or
-  effect.
+  effect. An integrated V2 `batch` run over the same 11 original Replays
+  returned 11/11 `CANDIDATE`, 342 JSONL rows, and zero framing errors.
+  Saved `query-events` then checked all 342 rows in 11/11 Replays despite
+  `--limit 1`: receiver index 12 matched 278 rows and clamped scalar 6
+  matched 22. The query checks both saved capability metadata copies,
+  exact V2 row shape, and protected raw words before filtering; V1 artifacts
+  report these callback fields unavailable. The private Replay/image inputs
+  and generated batch artifacts remain outside Git. Image-backed SetSpellLevel
+  Node tests passed 16/16, native Python controls passed 4/4. The public
+  `npm test` run passed 1,129 Node tests, skipped 73 declared cases, failed 0,
+  and passed 19 public Python unittests.
 - **Completed candidate:** Exact KR 821 `0x00fd` SetSpellTimerFromBuff is
   selectable through CLI/API with six anonymous callback fields, raw object
   bytes, and Replay packet provenance. All 5,481/5,481 target packets across

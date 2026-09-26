@@ -96,6 +96,7 @@
 | `16.19.821.7343 --events npc_buff_replace_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x01ad` BuffReplace 包，保留四个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `npc_buff_replace_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff 替换、名称、归属或生命周期 |
 | `16.19.821.7343 --events set_spell_timer_from_buff_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x00fd` SetSpellTimerFromBuff 包，保留六个按对象偏移命名的匿名回调字段、受保护原始字节与包来源 | 仅写入 `set_spell_timer_from_buff_packet_candidates`，状态为 `CANDIDATE`；不推断 Buff、法术身份或实际计时效果 |
 | `16.19.821.7343 --events set_spell_level_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x025d` SetSpellLevel 包，保留两个按对象偏移命名的匿名回调整数、受保护原始字节与包来源 | 仅写入 `set_spell_level_packet_candidates`，状态为 `CANDIDATE`；不推断法术身份、等级、归属或实际效果 |
+| `16.19.821.7343 --events set_spell_level_packet --spell-level-packet-v2 --runtime-image PATH` | 显式运行原生回调与合成接收器写入见证，在 V1 匿名字段之外添加接收器表索引候选、回退来源、0..6 截断标量候选及正值标志写入 | V1 仍为默认；V2 只输出 `CANDIDATE`，合成表索引不识别真实法术或实际等级变化；API 用 `setSpellLevelProfile: 'v2'` 显式选择 |
 | `16.19.820.7193 --events hero_death_timer` | HN 路由的计时 float、同刻 Hero_Die 和后续复活时间相互校验时，输出候选计时秒数 | 仅写入 `hero_death_timer_candidates`；该 profile 仅用于 820 HN 路由，821 KR 使用独立精确版本的候选 profile；不产生确认的死亡或重生事件 |
 | `16.19.820.7193 --events hero_respawn` | 将 HN 已观察且与计时包唯一配对的 `0x0357` 包输出为候选复活时点 | 仅写入 `hero_respawn_candidates`；依赖完整的 HN 计时候选校验，不补造回放结束后的复活 |
 | `16.19.820.7193 --events hero_level_state` | HN `0x02b3` 包中观察到的候选英雄等级值及原始包来源 | 仅写入 `hero_level_state_candidates`；同等级的独立包保留为重复观测，不补造升级事件；KR 路由未适配 |
@@ -533,6 +534,16 @@ node src/cli.js decode "D:\Replays\example-16.19.821.7343.rofl" `
 `query-events --event set_spell_level_packet_candidates --opaque-u32 VALUE`
 可按匿名 `opaque_u32_0x10` 或 `opaque_u32_0x14` 精确筛选，输出仍保留完整候选行。
 外层 `raw_param` 不参与匹配；字段缺失与已检查的零命中分别报告。
+
+SetSpellLevel V2 需显式指定 `--spell-level-packet-v2`，API 可传入
+`setSpellLevelProfile: 'v2'`。V2 保存结果可使用
+`query-events --event set_spell_level_packet_candidates --spell-level-receiver-index 12`
+或 `--spell-level-clamped-scalar 6` 筛选；查询会逐行复核原始对象字节、
+精确镜像证据和接收器候选，即使设置 `--limit 1` 也会检查剩余行。
+V1 保存结果对这两个筛选条件明确报告字段不可用。11 份精确 821 KR
+回放的 V2 CLI 批处理得到 342/342 个候选包，11/11 为 `CANDIDATE`，
+零 framing 错误；接收器索引 12 命中 278 行，截断标量 6 命中 22 行。
+这些字段来自合成接收器见证，不确认真实接收器、法术身份或等级变化。
 
 821 的 `hero_inventory_packet`、`hero_deaths_snapshot` 与至少一种移动包路由一起选择时，
 `semantic_run.json` 和 API 的 `candidate_associations.movement_full_param_participant_candidate`

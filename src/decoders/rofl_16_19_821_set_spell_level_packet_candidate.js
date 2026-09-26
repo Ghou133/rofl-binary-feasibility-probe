@@ -67,6 +67,16 @@ const SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_821 = Object.freeze({
     'V2 rejects signed-negative callback scalars; the observed KR values are 1 through 6.',
   ]),
 });
+const SET_SPELL_LEVEL_PACKET_CANDIDATE_FIELD_CONFIDENCE_V2_821 = Object.freeze({
+  replay_time_ms: 'VERIFIED_DIRECT',
+  raw_param: 'VERIFIED_DIRECT',
+  opaque_u32_0x10: 'CANDIDATE_EXACT_RUNTIME_FIELD',
+  opaque_u32_0x14: 'CANDIDATE_EXACT_RUNTIME_FIELD',
+  native_receiver_slot_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+  native_receiver_selection_source: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+  native_clamped_scalar_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+  native_positive_flag_written: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+});
 
 function sha256(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
@@ -378,18 +388,11 @@ function decodeSetSpellLevelPacketCandidates821(replay, {
     ...base, status: 'CANDIDATE',
     evidence_status: 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS',
     known_limits: [...profile.known_limits],
-    event_field_confidence: {
-      replay_time_ms: 'VERIFIED_DIRECT',
-      raw_param: 'VERIFIED_DIRECT',
-      opaque_u32_0x10: 'CANDIDATE_EXACT_RUNTIME_FIELD',
-      opaque_u32_0x14: 'CANDIDATE_EXACT_RUNTIME_FIELD',
-      ...(v2 ? {
-        native_receiver_slot_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
-        native_receiver_selection_source: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
-        native_clamped_scalar_candidate: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
-        native_positive_flag_written: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
-      } : {}),
-    },
+    event_field_confidence: v2
+      ? { ...SET_SPELL_LEVEL_PACKET_CANDIDATE_FIELD_CONFIDENCE_V2_821 }
+      : Object.fromEntries(Object.entries(
+        SET_SPELL_LEVEL_PACKET_CANDIDATE_FIELD_CONFIDENCE_V2_821)
+        .filter(([field]) => !field.startsWith('native_'))),
     input_count: inputCount, event_count: events.length,
     scanned_block_count: scannedBlockCount,
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
@@ -403,6 +406,7 @@ module.exports = {
   SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_ID_821,
   SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V1_821,
   SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_821,
+  SET_SPELL_LEVEL_PACKET_CANDIDATE_FIELD_CONFIDENCE_V2_821,
   decodeSetSpellLevelU32At10FromRaw821,
   decodeSetSpellLevelU32At14FromRaw821,
   decodeSetSpellLevelPacketCandidates821,

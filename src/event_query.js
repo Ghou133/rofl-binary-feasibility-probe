@@ -72,6 +72,12 @@ const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
   decodeNestedBits, decodeCastSpellAnsNestedU32FromRaw821,
   decodeCastSpellAnsNestedU32At4cFromRaw821 } =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
+const { SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_821,
+  SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_821,
+  SET_SPELL_LEVEL_PACKET_CANDIDATE_FIELD_CONFIDENCE_V2_821,
+  decodeSetSpellLevelU32At10FromRaw821,
+  decodeSetSpellLevelU32At14FromRaw821 } =
+  require('./decoders/rofl_16_19_821_set_spell_level_packet_candidate');
 const { CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE_PROFILE_821,
   decodeCircularMovementRestrictionPayload821 } =
   require('./decoders/rofl_16_19_821_circular_movement_restriction_packet_candidate');
@@ -3012,6 +3018,142 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
     return { bits: value, u32: nestedU32, u32At4c: null };
   }
   return { bits: value, u32: null, u32At4c: null };
+}
+
+function prepareSetSpellLevelCallbackFields(prepared) {
+  const profile = SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_821;
+  if (prepared.eventKey !== 'set_spell_level_packet_candidates'
+      || prepared.replayVersion !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      'SetSpellLevel native receiver filters require an exact 16.19.821.7343 packet candidate event.');
+  }
+  const result = prepared.capabilityResult;
+  if (result?.profile_id === SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_821.id) {
+    throw new EventQueryError('SPELL_LEVEL_CALLBACK_UNAVAILABLE',
+      'This SetSpellLevel artifact predates the native receiver callback fields.',
+      { spell_level_callback_checked_count: 0,
+        spell_level_callback_unavailable_count: prepared.declaredCount,
+        capability_status: prepared.capabilityStatus });
+  }
+  const analysisResult = prepared[PREPARED_REPLAY_METADATA]?.analysis?.semantic
+    ?.capability_results?.[profile.capability];
+  if (prepared.capabilityStatus !== 'CANDIDATE'
+      || result?.profile_id !== profile.id
+      || result.status !== 'CANDIDATE'
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || !isDeepStrictEqual(result.evidence_callback_table_sha256,
+        profile.evidence_callback_table_sha256)
+      || result.evidence_callback_rva !== profile.evidence_callback_rva
+      || result.evidence_receiver_write_rva
+        !== profile.evidence_receiver_write_rva
+      || result.evidence_callback_region_sha256
+        !== profile.evidence_callback_region_sha256
+      || result.evidence_receiver_write_region_sha256
+        !== profile.evidence_receiver_write_region_sha256
+      || result.evidence_callback_witness_mode
+        !== profile.evidence_callback_witness_mode
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || result.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS'
+      || !isCount(result.input_count) || result.input_count === 0
+      || result.input_count > 10_000
+      || result.input_count !== result.event_count
+      || result.event_count !== prepared.declaredCount
+      || !isCount(result.scanned_block_count)
+      || result.scanned_block_count < result.input_count
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(result.event_field_confidence,
+        SET_SPELL_LEVEL_PACKET_CANDIDATE_FIELD_CONFIDENCE_V2_821)
+      || !isDeepStrictEqual(analysisResult, result)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'SetSpellLevel native callback metadata differs from its exact-build V2 profile.');
+  }
+}
+
+const SET_SPELL_LEVEL_V2_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param', 'opaque_u32_0x10', 'opaque_u32_0x14',
+  'raw_object_u32_0x10_hex', 'raw_object_u32_0x14_hex',
+  'native_receiver_slot_candidate', 'native_receiver_selection_source',
+  'native_clamped_scalar_candidate', 'native_positive_flag_written',
+  'confidence', 'semantic_status', 'raw_packet_ref',
+]);
+const SET_SPELL_LEVEL_V2_REF_FIELDS_821 = new Set([
+  'source_path', 'replay_sha256', 'chunk_index', 'chunk_id', 'chunk_stream',
+  'chunk_file_offset', 'decompressed_block_offset',
+  'decompressed_payload_offset', 'packet_id', 'replay_time_ms',
+  'payload_length', 'raw_param', 'raw_payload_sha256',
+]);
+
+function setSpellLevelCallbackFields(row, prepared, lineNumber, packetPositions) {
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid SetSpellLevel native callback fields at JSONL line ${lineNumber}: ${reason}.`,
+      { line_number: lineNumber });
+  };
+  const profile = SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_V2_821;
+  const ref = row.raw_packet_ref;
+  const rowFields = Object.keys(row);
+  const refFields = ref && typeof ref === 'object' && !Array.isArray(ref)
+    ? Object.keys(ref) : [];
+  if (rowFields.length !== SET_SPELL_LEVEL_V2_ROW_FIELDS_821.size
+      || rowFields.some((field) => !SET_SPELL_LEVEL_V2_ROW_FIELDS_821.has(field))
+      || refFields.length !== SET_SPELL_LEVEL_V2_REF_FIELDS_821.size
+      || refFields.some((field) => !SET_SPELL_LEVEL_V2_REF_FIELDS_821.has(field))
+      || row.event_type !== 'SET_SPELL_LEVEL_PACKET_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS'
+      || !Number.isSafeInteger(row.raw_param) || row.raw_param <= 0
+      || row.raw_param > 0xffffffff || !ref
+      || ref.source_path !== (prepared.sourcePath ?? null)
+      || ref.replay_sha256 !== prepared.replaySha
+      || ref.chunk_stream !== 'game_chunk'
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== profile.replay_block_packet_id
+      || ref.replay_time_ms !== row.replay_time_ms
+      || !Number.isSafeInteger(ref.payload_length) || ref.payload_length < 1
+      || ref.payload_length > 3 || ref.raw_param !== row.raw_param
+      || !REPLAY_SHA.test(ref.raw_payload_sha256 ?? '')) {
+    invalid('candidate profile or raw packet reference differs');
+  }
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (packetPositions.has(position)) invalid('raw packet reference occurs twice');
+  packetPositions.add(position);
+  const rawIndex = row.raw_object_u32_0x10_hex;
+  const rawScalar = row.raw_object_u32_0x14_hex;
+  const decodedIndex = row.opaque_u32_0x10;
+  const decodedScalar = row.opaque_u32_0x14;
+  if (typeof rawIndex !== 'string' || !/^[0-9a-f]{8}$/.test(rawIndex)
+      || typeof rawScalar !== 'string' || !/^[0-9a-f]{8}$/.test(rawScalar)
+      || !Number.isSafeInteger(decodedIndex) || decodedIndex < 0
+      || decodedIndex > 0xffffffff
+      || !Number.isSafeInteger(decodedScalar) || decodedScalar < 0
+      || decodedScalar > 0x7fffffff
+      || decodedIndex !== decodeSetSpellLevelU32At10FromRaw821(rawIndex)
+      || decodedScalar !== decodeSetSpellLevelU32At14FromRaw821(rawScalar)) {
+    invalid('protected raw words and decoded values differ from the pinned 821 transforms');
+  }
+  const indexed = decodedIndex <= 63;
+  const slot = indexed ? decodedIndex : 0;
+  const scalar = Math.min(decodedScalar, 6);
+  if (row.native_receiver_slot_candidate !== slot
+      || row.native_receiver_selection_source
+        !== (indexed ? 'INDEXED' : 'FALLBACK_0')
+      || row.native_clamped_scalar_candidate !== scalar
+      || row.native_positive_flag_written !== (scalar > 0)) {
+    invalid('native receiver selection or clamped scalar differs');
+  }
+  return { slot, scalar };
 }
 
 function validUnitApplyDamageRosterRef(ref, replaySha, sourcePath, packetId,
@@ -7372,6 +7514,7 @@ function validateFilters(options) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, castNestedU32 = null, castNestedU32At4c = null,
+    spellLevelReceiverIndex = null, spellLevelClampedScalar = null,
     damageCallbackF32Available = false,
     damageCallbackF32At18Raw = false,
     damageLookupKey24 = null, damageLookupKey2c = null,
@@ -7426,6 +7569,8 @@ function validateFilters(options) {
     ['castNestedBits', castNestedBits, 0, 0xff],
     ['castNestedU32', castNestedU32, 0, 0xffffffff],
     ['castNestedU32At4c', castNestedU32At4c, 0, 0xffffffff],
+    ['spellLevelReceiverIndex', spellLevelReceiverIndex, 0, 63],
+    ['spellLevelClampedScalar', spellLevelClampedScalar, 0, 6],
     ['packetRecordCount', packetRecordCount, 0, 1],
     ['showHealthZeroFlag', showHealthZeroFlag, 0, 1],
     ['levelAfter', levelAfter, 1, 20],
@@ -7454,6 +7599,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
     castNestedBits = null, castNestedU32 = null, castNestedU32At4c = null,
+    spellLevelReceiverIndex = null, spellLevelClampedScalar = null,
     damageCallbackF32Available = false,
     damageCallbackF32At18Raw = false,
     damageLookupKey24 = null, damageLookupKey2c = null,
@@ -7565,6 +7711,9 @@ async function streamEventQuery(prepared, options, emitLine) {
   if (castNestedBits != null) prepareCastSpellAnsNestedBits(prepared);
   if (castNestedU32 != null) prepareCastSpellAnsNestedU32(prepared);
   if (castNestedU32At4c != null) prepareCastSpellAnsNestedU32At4c(prepared);
+  const spellLevelCallbackRequested = spellLevelReceiverIndex != null
+    || spellLevelClampedScalar != null;
+  if (spellLevelCallbackRequested) prepareSetSpellLevelCallbackFields(prepared);
   const damageLookupKeysRequested = damageLookupKey24 != null
     || damageLookupKey2c != null;
   const damagePacketCheck = damageCallbackF32Available || damageLookupKeysRequested
@@ -7620,6 +7769,8 @@ async function streamEventQuery(prepared, options, emitLine) {
   let castNestedBitsCheckedCount = 0;
   let castNestedU32CheckedCount = 0;
   let castNestedU32At4cCheckedCount = 0;
+  let spellLevelCallbackCheckedCount = 0;
+  const spellLevelPacketPositions = new Set();
   const castNestedBitsPacketPositions = new Set();
   let damageCallbackF32AvailableCount = 0;
   let damageCallbackF32UnavailableCount = 0;
@@ -7865,6 +8016,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (castNestedBits != null) castNestedBitsCheckedCount += 1;
       if (castNestedU32 != null) castNestedU32CheckedCount += 1;
       if (castNestedU32At4c != null) castNestedU32At4cCheckedCount += 1;
+      const spellLevelCallback = spellLevelCallbackRequested
+        ? setSpellLevelCallbackFields(row, prepared, lineNumber,
+          spellLevelPacketPositions) : null;
+      if (spellLevelCallbackRequested) spellLevelCallbackCheckedCount += 1;
       const damageCallbackF32 = damagePacketCheck
         ? unitApplyDamageCallbackF32(row, prepared, lineNumber,
           damagePacketPositions, damageShapeFamilies, damageNativeInputHash,
@@ -7957,6 +8112,10 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (castNestedU32 != null && nestedFields.u32 !== castNestedU32)
           || (castNestedU32At4c != null
             && nestedFields.u32At4c !== castNestedU32At4c)
+          || (spellLevelReceiverIndex != null
+            && spellLevelCallback.slot !== spellLevelReceiverIndex)
+          || (spellLevelClampedScalar != null
+            && spellLevelCallback.scalar !== spellLevelClampedScalar)
           || (damageCallbackF32Available && !damageCallbackF32)
           || (damageLookupKey24 != null
             && row.native_callback_lookup_key_u32_0x24_candidate
@@ -8332,6 +8491,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       cast_nested_u32_0x4c_checked_count: castNestedU32At4cCheckedCount,
       cast_nested_u32_0x4c_unavailable_count: 0,
     }),
+    ...(spellLevelCallbackRequested ? {
+      spell_level_callback_checked_count: spellLevelCallbackCheckedCount,
+      spell_level_callback_unavailable_count: 0,
+    } : {}),
     ...(damageCallbackF32Available ? {
       damage_callback_f32_available_count: damageCallbackF32AvailableCount,
       damage_callback_f32_unavailable_count: damageCallbackF32UnavailableCount,
@@ -8388,6 +8551,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       ...(castNestedU32 == null ? {} : { cast_nested_u32: castNestedU32 }),
       ...(castNestedU32At4c == null ? {}
         : { cast_nested_u32_0x4c: castNestedU32At4c }),
+      ...(spellLevelReceiverIndex == null ? {}
+        : { spell_level_receiver_index: spellLevelReceiverIndex }),
+      ...(spellLevelClampedScalar == null ? {}
+        : { spell_level_clamped_scalar: spellLevelClampedScalar }),
       ...(damageCallbackF32Available ? { damage_callback_f32_available: true } : {}),
       ...(damageLookupKey24 == null ? {}
         : { damage_lookup_key24: damageLookupKey24 }),
@@ -8457,6 +8624,8 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   let castNestedU32UnavailableCount = 0;
   let castNestedU32At4cCheckedCount = 0;
   let castNestedU32At4cUnavailableCount = 0;
+  let spellLevelCallbackCheckedCount = 0;
+  let spellLevelCallbackUnavailableCount = 0;
   let damageCallbackF32CheckedCount = 0;
   let damageCallbackF32AvailableCount = 0;
   let damageCallbackF32UnavailableCount = 0;
@@ -8500,6 +8669,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
             'OPAQUE_I32_UNAVAILABLE', 'CAST_NESTED_BITS_UNAVAILABLE',
             'CAST_NESTED_U32_UNAVAILABLE',
             'CAST_NESTED_U32_0X4C_UNAVAILABLE',
+            'SPELL_LEVEL_CALLBACK_UNAVAILABLE',
             'CHILD_EVENT_ID_UNAVAILABLE'].includes(error.code)) {
         throw error;
       }
@@ -8515,6 +8685,10 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         castNestedU32At4cUnavailableCount +=
           error.details.cast_nested_u32_0x4c_unavailable_count;
       }
+      if (error.code === 'SPELL_LEVEL_CALLBACK_UNAVAILABLE') {
+        spellLevelCallbackUnavailableCount +=
+          error.details.spell_level_callback_unavailable_count;
+      }
       continue;
     }
     completedCount += 1;
@@ -8528,6 +8702,10 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     }
     if (options.castNestedU32At4c != null) {
       castNestedU32At4cCheckedCount += summary.cast_nested_u32_0x4c_checked_count;
+    }
+    if (options.spellLevelReceiverIndex != null
+        || options.spellLevelClampedScalar != null) {
+      spellLevelCallbackCheckedCount += summary.spell_level_callback_checked_count;
     }
     if (options.damageCallbackF32Available) {
       damageCallbackF32CheckedCount += summary.damage_callback_f32_checked_count;
@@ -8580,6 +8758,12 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
           summary.cast_nested_u32_0x4c_checked_count,
         cast_nested_u32_0x4c_unavailable_count: 0,
       }),
+      ...(options.spellLevelReceiverIndex == null
+          && options.spellLevelClampedScalar == null ? {} : {
+            spell_level_callback_checked_count:
+              summary.spell_level_callback_checked_count,
+            spell_level_callback_unavailable_count: 0,
+          }),
       ...(options.damageCallbackF32Available ? {
         damage_callback_f32_checked_count: summary.damage_callback_f32_checked_count,
         damage_callback_f32_available_count: summary.damage_callback_f32_available_count,
@@ -8660,6 +8844,15 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
         replayResults.filter((replay) =>
           replay.code === 'CAST_NESTED_U32_0X4C_UNAVAILABLE').length,
     }),
+    ...(options.spellLevelReceiverIndex == null
+        && options.spellLevelClampedScalar == null ? {} : {
+          spell_level_callback_checked_count: spellLevelCallbackCheckedCount,
+          spell_level_callback_unavailable_count:
+            spellLevelCallbackUnavailableCount,
+          spell_level_callback_unavailable_replay_count:
+            replayResults.filter((replay) =>
+              replay.code === 'SPELL_LEVEL_CALLBACK_UNAVAILABLE').length,
+        }),
     ...(options.damageCallbackF32Available ? {
       damage_callback_f32_checked_count: damageCallbackF32CheckedCount,
       damage_callback_f32_available_count: damageCallbackF32AvailableCount,
