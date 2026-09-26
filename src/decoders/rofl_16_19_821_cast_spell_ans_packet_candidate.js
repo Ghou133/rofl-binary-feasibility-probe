@@ -58,7 +58,7 @@ const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821 = Object.freeze({
   ...CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
   id: CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_ID_821,
   evidence_nested_u32_transform_sha256: NESTED_U32_TRANSFORM_SHA256,
-  evidence_scope: '11693/11693 exact 821 CastSpellAns route packets in two original KR Replays natively fully consumed with protected +0x1c callback u32 and raw provenance',
+  evidence_scope: '63496/63496 exact 821 CastSpellAns route packets in 11 original KR Replays natively fully consumed with protected +0x1c callback u32 and raw provenance',
   known_limits: Object.freeze([
     ...CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821.known_limits,
     'The nested +0x0c callback u32 is anonymous; its value proves no caster, spell, target or action.',

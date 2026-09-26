@@ -26,6 +26,12 @@ Current progress (older notes below retain their original research context):
   protected four bytes and transform before filtering. V3/V4 artifacts
   report this field unavailable. The callback's temporary transfer does
   not prove caster, spell, target, cast success or gameplay effect.
+  A subsequent selected CLI batch across all 11 exact-build KR Replays
+  returned `CANDIDATE` in 11/11 with zero framing errors and
+  63,496/63,496 V5 rows. A saved batch `--cast-nested-u32 1531465011
+  --limit 1` query completed 11/11, checked every 63,496 row, matched
+  511 (all in `KR_8392938200`), and emitted one original JSONL row.
+  These private Replay and image inputs and local outputs remain outside Git.
 - **UnitApplyDamage anonymous callback u32 at +0x1c (opt-in V6):** On the
   pinned `16.19.821.7343` mapped image (SHA-256
   `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`),
