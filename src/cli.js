@@ -189,6 +189,10 @@ candidate while preserving the default packet profile.
 set_spell_level_packet emits an exact-821 packet-local opaque candidate.
 --spell-level-packet-v2 adds exact-821 native callback receiver selection
 and clamped scalar candidates while preserving the default packet profile.
+set_spell_level_roster_key_pair matches only full 0x025d packet-header u32
+keys to the ten candidate HeroStats roster keys, using the native V2 packet
+profile. Nonroster packets remain in the source stream; actor, owner, spell
+identity, actual level change and effect remain unknown.
 increment_minion_kills_packet emits an exact-821 packet-local lookup-key candidate.
 Selecting it with hero_minions_killed_snapshot also emits packet-to-keyframe bracket candidates;
 the endpoint difference does not establish a per-packet CS effect or last hit.
@@ -694,8 +698,9 @@ function parseArgs(argv) {
     throw new Error('--cast-packet-v5 through --cast-packet-v9 are mutually exclusive');
   }
   if (options.spellLevelPacketV2 && (!['decode', 'batch'].includes(command)
-      || !options.events?.includes('set_spell_level_packet'))) {
-    throw new Error('--spell-level-packet-v2 requires decode or batch with exact-821 set_spell_level_packet in --events');
+      || !options.events?.some((name) => ['set_spell_level_packet',
+        'set_spell_level_roster_key_pair'].includes(name)))) {
+    throw new Error('--spell-level-packet-v2 requires decode or batch with exact-821 set_spell_level_packet or set_spell_level_roster_key_pair in --events');
   }
   if (options.itemGroupPacketV2 && (!['decode', 'batch'].includes(command)
       || !options.events?.includes('item_group_data_broadcast_packet'))) {
@@ -811,6 +816,7 @@ function parseArgs(argv) {
       'npc_buff_replace_packet_candidates',
       'set_spell_timer_from_buff_packet_candidates',
       'set_spell_level_packet_candidates',
+      'set_spell_level_roster_key_pair_candidates',
       'item_group_data_broadcast_packet_candidates',
       'cooldown_broadcast_packet_candidates',
       'target_hero_packet_candidates',
@@ -1324,6 +1330,14 @@ function parseOne1619(replay, options, started) {
     }
   }
   if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('set_spell_level_roster_key_pair')) {
+    for (const source of ['set_spell_level_packet', 'hero_death', 'hero_assist',
+      'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+      'hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
       && options.events.includes('shielding_params_roster_key_pair')) {
     for (const source of ['shielding_params_packet_pair', 'hero_death',
       'hero_assist', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
@@ -1395,6 +1409,8 @@ function parseOne1619(replay, options, started) {
     const requested = [...new Set([...(options.events ?? []),
       ...(options.events?.includes('target_hero_roster_key_pair')
         ? ['target_hero_packet', 'hero_roster_metadata_bridge'] : []),
+      ...(options.events?.includes('set_spell_level_roster_key_pair')
+        ? ['set_spell_level_packet', 'hero_roster_metadata_bridge'] : []),
       ...(options.events?.includes('shielding_params_roster_key_pair')
         ? ['shielding_params_packet_pair', 'hero_roster_metadata_bridge'] : []),
       ...(options.events?.includes('anonymous_029c_roster_key_pair')
@@ -2712,6 +2728,7 @@ function capabilityQuery(replay, options = {}) {
              || capability === 'item_charges_packet'
              || capability === 'target_hero_packet'
              || capability === 'target_hero_roster_key_pair'
+             || capability === 'set_spell_level_roster_key_pair'
              || capability === 'force_create_missile_packet'
              || capability === 'change_missile_target_packet'
              || capability === 'set_dimension_missile_packet'
@@ -2761,6 +2778,7 @@ function capabilityQuery(replay, options = {}) {
         : profile.game_version === '16.19.821.7343'
           && (capability === 'hero_roster_metadata_bridge'
             || capability === 'target_hero_roster_key_pair'
+            || capability === 'set_spell_level_roster_key_pair'
             || capability === 'shielding_params_roster_key_pair'
             || capability === 'anonymous_029c_roster_key_pair')
           ? { required_fields: [
@@ -3212,6 +3230,11 @@ function capabilityQuery(replay, options = {}) {
           'callback-transformed anonymous fields and raw packet provenance; no owner, spell identity, level change, or lifecycle inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'set_spell_level_roster_key_pair') {
+        validationPending.push('complete exact-821 native V2 0x025d packet and ten-key HeroStats metadata-bridge outcomes',
+          'full-u32 packet-header equality only; nonroster headers excluded; packet actor, owner, spell identity, actual level change and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'direct_input_movement_turn_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x00ba full packet consumption',
           'three callback-transformed opaque f32 fields and raw packet provenance; no world-position, general hero-path or participant inference');
@@ -3513,6 +3536,8 @@ function capabilityQuery(replay, options = {}) {
             set_spell_timer_from_buff_packet:
               'set_spell_timer_from_buff_packet_candidates',
             set_spell_level_packet: 'set_spell_level_packet_candidates',
+            set_spell_level_roster_key_pair:
+              'set_spell_level_roster_key_pair_candidates',
             direct_input_movement_turn_packet:
               'direct_input_movement_turn_packet_candidates',
             set_movement_driver_packet: 'set_movement_driver_packet_candidates',

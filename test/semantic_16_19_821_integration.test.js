@@ -163,6 +163,8 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'target_hero_roster_key_pair').status,
     'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'set_spell_level_roster_key_pair').status,
+    'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'change_missile_target_packet').status,
     'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'set_dimension_missile_packet').status,
@@ -220,6 +222,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'npc_buff_replace_packet',
       'set_spell_timer_from_buff_packet',
       'set_spell_level_packet',
+      'set_spell_level_roster_key_pair',
       'direct_input_movement_turn_packet', 'set_movement_driver_packet',
       'increment_minion_kills_packet', 'face_direction_packet',
       'circular_movement_restriction_packet',
@@ -251,6 +254,10 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'EXACT_IMAGE_REQUIRED');
   assert.equal(queried.target_hero_roster_key_pair.output,
     'target_hero_roster_key_pair_candidates');
+  assert.equal(queried.set_spell_level_roster_key_pair.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.set_spell_level_roster_key_pair.output,
+    'set_spell_level_roster_key_pair_candidates');
   assert.equal(queried.shielding_params_roster_key_pair.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
   assert.equal(queried.shielding_params_roster_key_pair.output,

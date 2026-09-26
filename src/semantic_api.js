@@ -108,6 +108,8 @@ const { decodeSetSpellTimerFromBuffPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_set_spell_timer_from_buff_packet_candidate');
 const { decodeSetSpellLevelPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_set_spell_level_packet_candidate');
+const { associateSetSpellLevelRosterKeyPair821 } =
+  require('./decoders/rofl_16_19_821_set_spell_level_roster_key_pair_candidate');
 const {
   DIRECT_INPUT_MOVEMENT_TURN_PACKET_CANDIDATE_PROFILE_821,
   decodeDirectInputMovementTurnPacketCandidates821,
@@ -2220,6 +2222,11 @@ function decode1619821(replay, profile, options = {}) {
       if (!capabilities.includes(source)) capabilities.push(source);
     }
   }
+  if (capabilities.includes('set_spell_level_roster_key_pair')) {
+    for (const source of ['set_spell_level_packet', 'hero_roster_metadata_bridge']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
   if (capabilities.includes('shielding_params_roster_key_pair')) {
     for (const source of ['shielding_params_packet_pair',
       'hero_roster_metadata_bridge']) {
@@ -2235,9 +2242,14 @@ function decode1619821(replay, profile, options = {}) {
   if (!['v4', 'v5', 'v6', 'v7', 'v8', 'v9'].includes(castPacketProfile)) {
     throw new TypeError('exact 821 CastSpellAns packet profile must be v4, v5, v6, v7, v8 or v9');
   }
-  const setSpellLevelProfile = options.setSpellLevelProfile ?? 'v1';
+  const setSpellLevelProfile = options.setSpellLevelProfile
+    ?? (capabilities.includes('set_spell_level_roster_key_pair') ? 'v2' : 'v1');
   if (setSpellLevelProfile !== 'v1' && setSpellLevelProfile !== 'v2') {
     throw new TypeError('exact 821 SetSpellLevel packet profile must be v1 or v2');
+  }
+  if (capabilities.includes('set_spell_level_roster_key_pair')
+      && setSpellLevelProfile !== 'v2') {
+    throw new TypeError('exact 821 SetSpellLevel roster pair requires packet profile v2');
   }
   const setSpellTimerProfile = options.setSpellTimerProfile ?? 'v1';
   if (setSpellTimerProfile !== 'v1'
@@ -2663,6 +2675,7 @@ function decode1619821(replay, profile, options = {}) {
     npc_buff_replace_packet: 'npc_buff_replace_packet_candidates',
     set_spell_timer_from_buff_packet: 'set_spell_timer_from_buff_packet_candidates',
     set_spell_level_packet: 'set_spell_level_packet_candidates',
+    set_spell_level_roster_key_pair: 'set_spell_level_roster_key_pair_candidates',
     direct_input_movement_turn_packet: 'direct_input_movement_turn_packet_candidates',
     set_movement_driver_packet: 'set_movement_driver_packet_candidates',
     increment_minion_kills_packet: 'increment_minion_kills_packet_candidates',
@@ -2802,6 +2815,12 @@ function decode1619821(replay, profile, options = {}) {
           heroRosterMetadataBridgeOutcome:
             decodeCapability('hero_roster_metadata_bridge'),
         });
+      } else if (capability === 'set_spell_level_roster_key_pair') {
+        outcome = associateSetSpellLevelRosterKeyPair821(replay, {
+          setSpellLevelPacketOutcome: decodeCapability('set_spell_level_packet'),
+          heroRosterMetadataBridgeOutcome:
+            decodeCapability('hero_roster_metadata_bridge'),
+        });
       } else if (capability === 'shielding_params_roster_key_pair') {
         outcome = associateShieldingParamsRosterKeys821(replay, {
           shieldingParamsPacketPairOutcome:
@@ -2901,6 +2920,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'npc_buff_replace_packet'
         || capability === 'set_spell_timer_from_buff_packet'
         || capability === 'set_spell_level_packet'
+        || capability === 'set_spell_level_roster_key_pair'
         || capability === 'direct_input_movement_turn_packet'
         || capability === 'set_movement_driver_packet'
         || capability === 'increment_minion_kills_packet'
@@ -2914,6 +2934,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'item_charges_packet'
         || capability === 'target_hero_packet'
         || capability === 'target_hero_roster_key_pair'
+        || capability === 'set_spell_level_roster_key_pair'
         || capability === 'force_create_missile_packet'
         || capability === 'change_missile_target_packet'
         || capability === 'set_dimension_missile_packet'
@@ -2965,6 +2986,7 @@ function decode1619821(replay, profile, options = {}) {
     if (result.status !== 'CANDIDATE') continue;
     if (capability === 'hero_roster_metadata_bridge'
         || capability === 'target_hero_roster_key_pair'
+        || capability === 'set_spell_level_roster_key_pair'
         || capability === 'shielding_params_roster_key_pair'
         || capability === 'anonymous_029c_roster_key_pair'
         || capability === 'face_direction_keyframe_roster_pair'

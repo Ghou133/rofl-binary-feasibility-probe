@@ -111,6 +111,7 @@
 | `16.19.821.7343 --events set_spell_timer_from_buff_packet --spell-timer-packet-v2 --runtime-image PATH` | 显式执行精确 821 原生回调，在 V1 匿名字段外记录合成接收器见证的表槽位候选 `0..5` 或 `63` 和选择路径 | V1 仍为默认；V2 只输出 `CANDIDATE`，不确认真实接收器、法术身份或计时效果；API 用 `setSpellTimerProfile: 'v2'` 选择 |
 | `16.19.821.7343 --events set_spell_level_packet --runtime-image PATH` | 精确 821 镜像完整消费 KR `0x025d` SetSpellLevel 包，保留两个按对象偏移命名的匿名回调整数、受保护原始字节与包来源 | 仅写入 `set_spell_level_packet_candidates`，状态为 `CANDIDATE`；不推断法术身份、等级、归属或实际效果 |
 | `16.19.821.7343 --events set_spell_level_packet --spell-level-packet-v2 --runtime-image PATH` | 显式运行原生回调与合成接收器写入见证，在 V1 匿名字段之外添加接收器表索引候选、回退来源、0..6 截断标量候选及正值标志写入 | V1 仍为默认；V2 只输出 `CANDIDATE`，合成表索引不识别真实法术或实际等级变化；API 用 `setSpellLevelProfile: 'v2'` 显式选择 |
+| `16.19.821.7343 --events set_spell_level_roster_key_pair --runtime-image PATH` | 将 `0x025d` 包头完整 u32 与本场十个 `0x0089` HeroStats 阵容键做候选相等配对；配对自动运行原生 V2 包解码和阵容元数据桥 | 只把匹配行写入 `set_spell_level_roster_key_pair_candidates`；阵容外包保留在完整 `set_spell_level_packet_candidates` 来源流及排除计数中。英雄、队伍、位置为元数据标签；包行动者、归属、法术身份、实际等级变化和效果仍为 `UNKNOWN` |
 | `16.19.820.7193 --events hero_death_timer` | HN 路由的计时 float、同刻 Hero_Die 和后续复活时间相互校验时，输出候选计时秒数 | 仅写入 `hero_death_timer_candidates`；该 profile 仅用于 820 HN 路由，821 KR 使用独立精确版本的候选 profile；不产生确认的死亡或重生事件 |
 | `16.19.820.7193 --events hero_respawn` | 将 HN 已观察且与计时包唯一配对的 `0x0357` 包输出为候选复活时点 | 仅写入 `hero_respawn_candidates`；依赖完整的 HN 计时候选校验，不补造回放结束后的复活 |
 | `16.19.820.7193 --events hero_level_state` | HN `0x02b3` 包中观察到的候选英雄等级值及原始包来源 | 仅写入 `hero_level_state_candidates`；同等级的独立包保留为重复观测，不补造升级事件；KR 路由未适配 |
@@ -562,6 +563,15 @@ V1 保存结果对这两个筛选条件明确报告字段不可用。11 份精�
 回放的 V2 CLI 批处理得到 342/342 个候选包，11/11 为 `CANDIDATE`，
 零 framing 错误；接收器索引 12 命中 278 行，截断标量 6 命中 22 行。
 这些字段来自合成接收器见证，不确认真实接收器、法术身份或等级变化。
+
+`--events set_spell_level_roster_key_pair --runtime-image PATH --event-jsonl-only`
+可单独输出包头键与十人阵容键的候选配对，API 用
+`capabilities: ['set_spell_level_roster_key_pair']`。配对自动要求原生 V2 包来源；
+显式指定 API `setSpellLevelProfile: 'v1'` 时会拒绝。11 份精确 build KR
+回放的本能力批处理有 342 个原生 V2 SetSpellLevel 包，其中 283 个完整键匹配、
+59 个阵容外非零键；阵容外来源行不会被改写成参与者。原生包来源对零包头
+仍保持既有的未验证形状拒绝门槛，本批已检查的零包头数量为零。每个匹配行保留包和阵容快照
+两份原始引用。该关联只说明完整键共现，不确认包行动者、技能升级或实际效果。
 
 821 的 `hero_inventory_packet`、`hero_deaths_snapshot` 与至少一种移动包路由一起选择时，
 `semantic_run.json` 和 API 的 `candidate_associations.movement_full_param_participant_candidate`
