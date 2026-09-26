@@ -149,6 +149,8 @@ const { decodeSetDimensionMissilePacketCandidates821 } =
   require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
 const { decodeAnonymous029cPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_anonymous_029c_packet_candidate');
+const { associateAnonymous029cRosterKeyPair821 } =
+  require('./decoders/rofl_16_19_821_anonymous_029c_roster_key_pair_candidate');
 const { associateUnitApplyDamageRosterKeys821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const { associateUnitApplyDamageLookupRosterKeys821 } =
@@ -2224,6 +2226,11 @@ function decode1619821(replay, profile, options = {}) {
       if (!capabilities.includes(source)) capabilities.push(source);
     }
   }
+  if (capabilities.includes('anonymous_029c_roster_key_pair')) {
+    for (const source of ['anonymous_029c_packet', 'hero_roster_metadata_bridge']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
   const castPacketProfile = options.castPacketProfile ?? 'v4';
   if (!['v4', 'v5', 'v6', 'v7', 'v8', 'v9'].includes(castPacketProfile)) {
     throw new TypeError('exact 821 CastSpellAns packet profile must be v4, v5, v6, v7, v8 or v9');
@@ -2674,6 +2681,7 @@ function decode1619821(replay, profile, options = {}) {
     change_missile_target_packet: 'change_missile_target_packet_candidates',
     set_dimension_missile_packet: 'set_dimension_missile_packet_candidates',
     anonymous_029c_packet: 'anonymous_029c_packet_candidates',
+    anonymous_029c_roster_key_pair: 'anonymous_029c_roster_key_pair_candidates',
     unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
     unit_apply_damage_lookup_roster_key_pair:
       'unit_apply_damage_lookup_roster_key_candidates',
@@ -2801,6 +2809,12 @@ function decode1619821(replay, profile, options = {}) {
           heroRosterMetadataBridgeOutcome:
             decodeCapability('hero_roster_metadata_bridge'),
         });
+      } else if (capability === 'anonymous_029c_roster_key_pair') {
+        outcome = associateAnonymous029cRosterKeyPair821(replay, {
+          anonymous029cPacketOutcome: decodeCapability('anonymous_029c_packet'),
+          heroRosterMetadataBridgeOutcome:
+            decodeCapability('hero_roster_metadata_bridge'),
+        });
       } else if (capability === 'face_direction_keyframe_roster_pair') {
         outcome = associateFaceDirectionKeyframeRosterPairs821(replay, {
           faceDirectionPacketOutcome: decodeCapability('face_direction_packet'),
@@ -2904,6 +2918,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'change_missile_target_packet'
         || capability === 'set_dimension_missile_packet'
         || capability === 'anonymous_029c_packet'
+        || capability === 'anonymous_029c_roster_key_pair'
         || capability === 'unit_apply_damage_roster_key_pair'
         || capability === 'unit_apply_damage_lookup_roster_key_pair'
         || capability === 'unit_apply_damage_lookup2c_roster_key_pair'
@@ -2951,6 +2966,7 @@ function decode1619821(replay, profile, options = {}) {
     if (capability === 'hero_roster_metadata_bridge'
         || capability === 'target_hero_roster_key_pair'
         || capability === 'shielding_params_roster_key_pair'
+        || capability === 'anonymous_029c_roster_key_pair'
         || capability === 'face_direction_keyframe_roster_pair'
         || capability === 'unit_apply_damage_roster_key_pair'
         || capability === 'unit_apply_damage_lookup_roster_key_pair'

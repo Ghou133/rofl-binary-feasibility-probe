@@ -229,6 +229,9 @@ before the receiver method; receiver state, missile identity, owner, target,
 dimension change, effect and causality are unknown.
 anonymous_029c_packet emits an exact-821 game packet-local decoded u32 or
 0xffffffff sentinel; the packet class name, actor, target, role and effect are unknown.
+anonymous_029c_roster_key_pair joins only full-u32 0x029c packet headers to the
+ten candidate HeroStats roster keys; its independent decoded u32 is not a
+participant key, and packet class, actor, target, role and effect remain unknown.
 unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
 to witness full native consumption of every selected packet before emitting
 packet-local selectors or a bounded anonymous float candidate; these do not
@@ -815,6 +818,7 @@ function parseArgs(argv) {
       'change_missile_target_packet_candidates',
       'set_dimension_missile_packet_candidates',
       'anonymous_029c_packet_candidates',
+      'anonymous_029c_roster_key_pair_candidates',
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
       'champion_multiple_kill_event_packet_candidates',
@@ -1327,6 +1331,14 @@ function parseOne1619(replay, options, started) {
     }
   }
   if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('anonymous_029c_roster_key_pair')) {
+    for (const source of ['anonymous_029c_packet', 'hero_death', 'hero_assist',
+      'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+      'hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
       && options.events.some((name) => [
         'unit_apply_damage_roster_key_pair',
         'unit_apply_damage_lookup_roster_key_pair',
@@ -1384,6 +1396,8 @@ function parseOne1619(replay, options, started) {
         ? ['target_hero_packet', 'hero_roster_metadata_bridge'] : []),
       ...(options.events?.includes('shielding_params_roster_key_pair')
         ? ['shielding_params_packet_pair', 'hero_roster_metadata_bridge'] : []),
+      ...(options.events?.includes('anonymous_029c_roster_key_pair')
+        ? ['anonymous_029c_packet', 'hero_roster_metadata_bridge'] : []),
     ])];
     let decoded = null;
     if (analysis.block_errors.length > 0) {
@@ -2701,6 +2715,7 @@ function capabilityQuery(replay, options = {}) {
              || capability === 'change_missile_target_packet'
              || capability === 'set_dimension_missile_packet'
              || capability === 'anonymous_029c_packet'
+             || capability === 'anonymous_029c_roster_key_pair'
             || capability === 'unit_apply_damage_packet'
             || capability === 'show_health_bar_packet'
             || capability === 'unit_apply_damage_roster_key_pair'
@@ -2745,7 +2760,8 @@ function capabilityQuery(replay, options = {}) {
         : profile.game_version === '16.19.821.7343'
           && (capability === 'hero_roster_metadata_bridge'
             || capability === 'target_hero_roster_key_pair'
-            || capability === 'shielding_params_roster_key_pair')
+            || capability === 'shielding_params_roster_key_pair'
+            || capability === 'anonymous_029c_roster_key_pair')
           ? { required_fields: [
             ['NUM_DEATHS', assessHeroDeathTail821(replay)],
             ['CHAMPIONS_KILLED', assessHeroChampionKillsSnapshotTail821(replay)],
@@ -3260,6 +3276,11 @@ function capabilityQuery(replay, options = {}) {
           'anonymous packet-local u32 or sentinel; packet class, actor, target, role and effect remain unknown');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'anonymous_029c_roster_key_pair') {
+        validationPending.push('complete exact-821 native 0x029c packet outcome and ten-key HeroStats metadata bridge',
+          'full-u32 header equality only; zero and nonroster headers excluded; decoded +0x14 u32 is independent; actor, target, role and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'face_direction_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and bounded 0x038e packet shape validation',
           'packet-local unit-vector and optional scalar candidates with raw provenance; no actor, world position, path or direction effect');
@@ -3517,6 +3538,8 @@ function capabilityQuery(replay, options = {}) {
               'set_dimension_missile_packet_candidates',
             anonymous_029c_packet:
               'anonymous_029c_packet_candidates',
+            anonymous_029c_roster_key_pair:
+              'anonymous_029c_roster_key_pair_candidates',
             unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
             show_health_bar_packet: 'show_health_bar_packet_candidates',
             unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
