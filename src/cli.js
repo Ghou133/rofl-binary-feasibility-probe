@@ -3276,11 +3276,22 @@ async function runQueryEventsCommand(parsed) {
       process.stdout.write(`${JSON.stringify(listSavedEvents(artifactDirectory, batch))}\n`);
       return 0;
     }
+    if (options.output && options.output !== '-') {
+      outputPath = path.resolve(options.output);
+      const relative = path.relative(artifactDirectory, outputPath);
+      const outsideArtifacts = relative === '..'
+        || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+      // Keep paths inside the artifact tree on the input-alias check below.
+      // An existing external output can be rejected before hashing batch events.
+      if (outsideArtifacts && fs.existsSync(outputPath)) {
+        throw new EventQueryError('OUTPUT_EXISTS',
+          `Query output already exists: ${outputPath}`);
+      }
+    }
     const prepared = batch
       ? prepareBatchEventQuery(artifactDirectory, options.event)
       : prepareEventQuery(artifactDirectory, options.event);
     if (options.output && options.output !== '-') {
-      outputPath = path.resolve(options.output);
       const replayInputs = batch ? prepared.replays
         .flatMap((replay) => [replay.prepared?.inputPath,
           path.join(replay.replayDirectory, 'semantic_run.json'),
