@@ -122,7 +122,8 @@ const { decodeFaceDirectionPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_face_direction_packet_candidate');
 const { decodeCircularMovementRestrictionPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_circular_movement_restriction_packet_candidate');
-const { decodeUnitApplyDamagePacketCandidates821 } =
+const { decodeUnitApplyDamagePacketCandidates821,
+  decodeUnitApplyDamagePacketCandidates821V6 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 const { decodeShowHealthBarPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_show_health_bar_packet_candidate');
@@ -2188,6 +2189,10 @@ function decode1619821(replay, profile, options = {}) {
     throw new TypeError('16.19 capabilities must be an array of nonempty names');
   }
   const capabilities = [...new Set(requested)];
+  const damagePacketProfile = options.damagePacketProfile ?? 'v5';
+  if (damagePacketProfile !== 'v5' && damagePacketProfile !== 'v6') {
+    throw new TypeError('exact 821 UnitApplyDamage packet profile must be v5 or v6');
+  }
   const decoders = {
     hero_death: decodeHeroDeathCandidates821,
     hero_assist: (input, collected) => decodeHeroAssistCandidates821(input, collected, {
@@ -2457,7 +2462,9 @@ function decode1619821(replay, profile, options = {}) {
         precollected: collected,
       }),
     unit_apply_damage_packet: (input, collected) =>
-      decodeUnitApplyDamagePacketCandidates821(input, {
+      (damagePacketProfile === 'v6'
+        ? decodeUnitApplyDamagePacketCandidates821V6
+        : decodeUnitApplyDamagePacketCandidates821)(input, {
         runtimeImagePath: options.runtimeImagePath,
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
