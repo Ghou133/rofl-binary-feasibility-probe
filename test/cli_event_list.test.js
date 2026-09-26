@@ -174,4 +174,7 @@ test('list-events rejects query filters instead of ignoring them', (t) => {
   const result = run(fixture.first, '--limit', '1');
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /--list-events cannot be combined/);
+  const newField = run(fixture.first, '--cast-nested-f32-0xa0', '1');
+  assert.notEqual(newField.status, 0);
+  assert.match(newField.stderr, /--list-events cannot be combined/);
 });

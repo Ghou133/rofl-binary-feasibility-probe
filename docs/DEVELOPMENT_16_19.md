@@ -4,6 +4,12 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Saved event discovery:** `query-events DIR --list-events` lists actual
+  saved candidate keys and per-Replay exact build, capability status and
+  declared count. It distinguishes saved zero rows, unavailable and
+  unrequested capabilities; batch mode checks manifest hashes. Real V7
+  CastSpellAns and multi-event V5 damage batches each listed 11 KR 821
+  Replays. The listing does not scan JSONL rows and says so in its output.
 - **CastSpellAns nested anonymous f32 at packet +0xa0 (opt-in V7):** The
   exact 821 deserializer at RVA `0x10bd7d4..0x10bd991` writes protected
   nested `+0x90` bytes; the callback at RVA `0x8d76da..0x8d7710` converts
