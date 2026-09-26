@@ -4,6 +4,37 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Missile cross-route key co-occurrence (opt-in candidate):** Select
+  `--events missile_key_cooccurrence --runtime-image IMAGE
+  --event-jsonl-only`, or API capability `missile_key_cooccurrence`.
+  The exact-821 native `0x0087` ForceCreateMissile callback comparison u32
+  is compared by full value with each `0x040c` ChangeMissileTarget packet
+  header u32 in the same original Replay. Only physically preceding packets
+  within a fixed 2,000 ms lookback count; the window exceeds the 1,137 ms
+  maximum nearest-predecessor offset observed in these 11 Replays, and is
+  not a gameplay duration. The 11-Replay native sources contain
+  206,957 Force and 13,125 Change packets (Change absent in four Replays).
+  Among all 13,125 Change rows, 12,259 have at least one preceding equal
+  key within the window: 12,258 have one, one has multiple; 866 have none.
+  A `+0x100` rotated-key control has zero preceding window matches. Same-key
+  future Force rows within 2,000 ms occur for 134 Change rows, nine of which
+  also have a preceding match. Of the 866 unmatched rows, 200 have only a
+  later same key in physical packet order and 666 have no equal key in the
+  Replay. The candidate emits **every** Change row with
+  its match count, explicit ambiguous/unmatched status, both packet refs for
+  unique preceding matches, and a null Force ref otherwise. All observed
+  keys are nonzero; a future zero key is explicitly excluded and counted.
+  Pair-only requests save both native packet streams when both routes occur.
+  The full 11-Replay CLI
+  batch returned seven `CANDIDATE` pairs and four explicit
+  `PROFILE_UNAVAILABLE` pairs, with zero framing errors and aggregate
+  `PARTIAL` status. Real pair-only CLI runs
+  on `KR_8394041123` (176/176 unique) and `KR_8393581977` (3,093 unique,
+  one ambiguous, 177 unmatched) returned `CANDIDATE` and zero framing
+  errors. Live receiver matches, missile identity, creation, target change,
+  ownership, effects and causality remain `UNKNOWN`. The 11-Replay source
+  streams and selected pair outputs remain ignored local artifacts.
+
 - **Bounded output hashing:** Batch manifest hashing now opens at most eight
   output streams at once and waits for each stream to close before reusing
   its slot. On an existing 11-Replay artifact with 86 files (1,357.8 MiB),

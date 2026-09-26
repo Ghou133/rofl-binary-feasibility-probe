@@ -167,6 +167,8 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'change_missile_target_packet').status,
     'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'missile_key_cooccurrence').status,
+    'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'set_dimension_missile_packet').status,
     'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'anonymous_029c_packet').status,
@@ -236,6 +238,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'target_hero_roster_key_pair',
       'force_create_missile_packet',
       'change_missile_target_packet',
+      'missile_key_cooccurrence',
       'set_dimension_missile_packet',
       'anonymous_029c_packet',
       'anonymous_029c_roster_key_pair',
@@ -264,6 +267,12 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'shielding_params_roster_key_pair_candidates');
   assert.equal(queried.change_missile_target_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.missile_key_cooccurrence.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.missile_key_cooccurrence.output,
+    'missile_key_cooccurrence_candidates');
+  assert.deepEqual(queried.missile_key_cooccurrence.missing_inputs,
+    ['exact_runtime_image']);
   assert.equal(queried.set_dimension_missile_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
   assert.equal(queried.anonymous_029c_packet.runtime_image_requirement,

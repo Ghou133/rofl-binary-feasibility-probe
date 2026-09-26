@@ -226,6 +226,9 @@ missile identity, owner, target, creation, effect and causality are unknown.
 change_missile_target_packet emits an exact-821 game packet-local callback
 comparison u32 before consulting live receiver state; receiver match, missile
 identity, owner, resolved target, target change and effect are unknown.
+missile_key_cooccurrence compares 0x040c packet-header u32 with physically
+preceding 0x0087 native callback u32 within 2000 ms. All unmatched and
+ambiguous Change rows remain visible; no missile identity or effect is inferred.
 --change-missile-target-v2 also exposes an anonymous native f32 triplet from
 object +0x10/+0x14/+0x18; it does not establish a target position.
 set_dimension_missile_packet emits an exact-821 game packet-local callback u8
@@ -707,8 +710,9 @@ function parseArgs(argv) {
     throw new Error('--item-group-packet-v2 requires decode or batch with exact-821 item_group_data_broadcast_packet in --events');
   }
   if (options.changeMissileTargetV2 && (!['decode', 'batch'].includes(command)
-      || !options.events?.includes('change_missile_target_packet'))) {
-    throw new Error('--change-missile-target-v2 requires decode or batch with exact-821 change_missile_target_packet in --events');
+      || !options.events?.some((name) => ['change_missile_target_packet',
+        'missile_key_cooccurrence'].includes(name)))) {
+    throw new Error('--change-missile-target-v2 requires decode or batch with exact-821 change_missile_target_packet or missile_key_cooccurrence in --events');
   }
   if (options.spellTimerPacketV2 && (!['decode', 'batch'].includes(command)
       || !options.events?.includes('set_spell_timer_from_buff_packet'))) {
@@ -1330,6 +1334,13 @@ function parseOne1619(replay, options, started) {
     }
   }
   if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('missile_key_cooccurrence')) {
+    for (const source of ['force_create_missile_packet',
+      'change_missile_target_packet']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
       && options.events.includes('set_spell_level_roster_key_pair')) {
     for (const source of ['set_spell_level_packet', 'hero_death', 'hero_assist',
       'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
@@ -1407,6 +1418,8 @@ function parseOne1619(replay, options, started) {
   };
   if (options.semantic !== false) {
     const requested = [...new Set([...(options.events ?? []),
+      ...(options.events?.includes('missile_key_cooccurrence')
+        ? ['force_create_missile_packet', 'change_missile_target_packet'] : []),
       ...(options.events?.includes('target_hero_roster_key_pair')
         ? ['target_hero_packet', 'hero_roster_metadata_bridge'] : []),
       ...(options.events?.includes('set_spell_level_roster_key_pair')
@@ -2731,6 +2744,7 @@ function capabilityQuery(replay, options = {}) {
              || capability === 'set_spell_level_roster_key_pair'
              || capability === 'force_create_missile_packet'
              || capability === 'change_missile_target_packet'
+             || capability === 'missile_key_cooccurrence'
              || capability === 'set_dimension_missile_packet'
              || capability === 'anonymous_029c_packet'
              || capability === 'anonymous_029c_roster_key_pair'
@@ -3290,6 +3304,11 @@ function capabilityQuery(replay, options = {}) {
           'packet-local comparison u32 before live receiver comparison; receiver match, missile identity, owner, resolved target, target change and effect remain unknown');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'missile_key_cooccurrence') {
+        validationPending.push('complete exact-821 native 0x0087 and 0x040c source outcomes',
+          'full-u32 equality and physical precedence within 2000 ms; unmatched and ambiguous rows retained; missile identity, ownership, effects and causality remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'set_dimension_missile_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native full 0x008a packet consumption',
           'packet-local callback u8 before receiver method; receiver state, missile identity, owner, target, dimension change, effect and causality remain unknown');
@@ -3560,6 +3579,8 @@ function capabilityQuery(replay, options = {}) {
               'force_create_missile_packet_candidates',
             change_missile_target_packet:
               'change_missile_target_packet_candidates',
+            missile_key_cooccurrence:
+              'missile_key_cooccurrence_candidates',
             set_dimension_missile_packet:
               'set_dimension_missile_packet_candidates',
             anonymous_029c_packet:

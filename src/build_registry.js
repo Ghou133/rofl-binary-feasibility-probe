@@ -115,6 +115,8 @@ const forceCreateMissilePacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_force_create_missile_packet_candidate');
 const changeMissileTargetPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_change_missile_target_packet_candidate');
+const missileKeyCooccurrence1619821 =
+  require('./decoders/rofl_16_19_821_missile_key_cooccurrence_candidate');
 const setDimensionMissilePacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
 const anonymous029cPacketCandidate1619821 =
@@ -649,6 +651,7 @@ const BUILD_PROFILES = deepFreeze({
       target_hero_roster_key_pair: 0x0265,
       force_create_missile_packet: 0x0087,
       change_missile_target_packet: 0x040c,
+      missile_key_cooccurrence: 0x040c,
       set_dimension_missile_packet: 0x008a,
       anonymous_029c_packet: 0x029c,
       anonymous_029c_roster_key_pair: 0x029c,
@@ -800,6 +803,8 @@ const BUILD_PROFILES = deepFreeze({
         forceCreateMissilePacketCandidate1619821.FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821,
       change_missile_target_packet:
         changeMissileTargetPacketCandidate1619821.CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821,
+      missile_key_cooccurrence:
+        missileKeyCooccurrence1619821.MISSILE_KEY_COOCCURRENCE_821_PROFILE,
       set_dimension_missile_packet:
         setDimensionMissilePacketCandidate1619821.SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821,
       anonymous_029c_packet:
@@ -944,6 +949,8 @@ const BUILD_PROFILES = deepFreeze({
         forceCreateMissilePacketCandidate1619821.FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821.evidence_status,
       change_missile_target_packet:
         changeMissileTargetPacketCandidate1619821.CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821.evidence_status,
+      missile_key_cooccurrence:
+        missileKeyCooccurrence1619821.MISSILE_KEY_COOCCURRENCE_821_PROFILE.evidence_status,
       set_dimension_missile_packet:
         setDimensionMissilePacketCandidate1619821.SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821.evidence_status,
       anonymous_029c_packet:
@@ -1040,6 +1047,7 @@ const BUILD_PROFILES = deepFreeze({
       target_hero_roster_key_pair: 'nonzero exact 821 native 0x0265 callback u32 matched by full equality to one of ten candidate 0x0089 HeroStats roster keys; champion/team/role are direct Replay metadata labels but live lookup, actor, target and effect remain unknown',
       force_create_missile_packet: 'exact 821 game route 0x0087 PKT_S2C_ForceCreateMissile_s packet-local native callback comparison u32 from object +0x10 before synthetic receiver comparison; live receiver, missile identity, owner, target, creation, effect and causality unknown',
       change_missile_target_packet: 'exact 821 game route 0x040c PKT_S2C_ChangeMissileTarget_s packet-local native callback comparison u32 from object +0x1c before live receiver comparison; receiver match, missile identity, owner, resolved target, target change, effect and causality unknown',
+      missile_key_cooccurrence: 'exact 821 native 0x0087 callback u32 equals 0x040c packet-header u32 in physical packet order within a fixed 2000 ms lookback; all Change rows, unmatched rows and multiple-predecessor ambiguity remain explicit; missile identity, ownership, target, effects and causality unknown',
       set_dimension_missile_packet: 'exact 821 game route 0x008a PKT_SetDimensionMissile_s packet-local callback u8 from object +0x14 before receiver method; live receiver, missile identity, owner, target, actual dimension change, effect and causality unknown',
       anonymous_029c_packet: 'exact 821 anonymous game route 0x029c native object +0x14 decoded u32 or 0xffffffff sentinel; no proved class/callback name, actor, target, object role, behavior or effect',
       anonymous_029c_roster_key_pair: 'exact 821 anonymous 0x029c packet header full-u32 equality with one of ten candidate HeroStats roster keys; zero and nonroster headers are excluded, the independent native +0x14 u32 has no participant meaning, and actor, target, object role and effect remain unknown',
@@ -1112,6 +1120,7 @@ const BUILD_PROFILES = deepFreeze({
       'target_hero_roster_key_pair',
       'force_create_missile_packet',
       'change_missile_target_packet',
+      'missile_key_cooccurrence',
       'set_dimension_missile_packet',
       'anonymous_029c_packet',
       'anonymous_029c_roster_key_pair',

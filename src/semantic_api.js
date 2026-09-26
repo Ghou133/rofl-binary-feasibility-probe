@@ -147,6 +147,8 @@ const { decodeForceCreateMissilePacketCandidates821 } =
   require('./decoders/rofl_16_19_821_force_create_missile_packet_candidate');
 const { decodeChangeMissileTargetPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_change_missile_target_packet_candidate');
+const { associateMissileKeyCooccurrence821 } =
+  require('./decoders/rofl_16_19_821_missile_key_cooccurrence_candidate');
 const { decodeSetDimensionMissilePacketCandidates821 } =
   require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
 const { decodeAnonymous029cPacketCandidates821 } =
@@ -2222,6 +2224,12 @@ function decode1619821(replay, profile, options = {}) {
       if (!capabilities.includes(source)) capabilities.push(source);
     }
   }
+  if (capabilities.includes('missile_key_cooccurrence')) {
+    for (const source of ['force_create_missile_packet',
+      'change_missile_target_packet']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
   if (capabilities.includes('set_spell_level_roster_key_pair')) {
     for (const source of ['set_spell_level_packet', 'hero_roster_metadata_bridge']) {
       if (!capabilities.includes(source)) capabilities.push(source);
@@ -2692,6 +2700,7 @@ function decode1619821(replay, profile, options = {}) {
     target_hero_roster_key_pair: 'target_hero_roster_key_pair_candidates',
     force_create_missile_packet: 'force_create_missile_packet_candidates',
     change_missile_target_packet: 'change_missile_target_packet_candidates',
+    missile_key_cooccurrence: 'missile_key_cooccurrence_candidates',
     set_dimension_missile_packet: 'set_dimension_missile_packet_candidates',
     anonymous_029c_packet: 'anonymous_029c_packet_candidates',
     anonymous_029c_roster_key_pair: 'anonymous_029c_roster_key_pair_candidates',
@@ -2815,6 +2824,13 @@ function decode1619821(replay, profile, options = {}) {
           heroRosterMetadataBridgeOutcome:
             decodeCapability('hero_roster_metadata_bridge'),
         });
+      } else if (capability === 'missile_key_cooccurrence') {
+        outcome = associateMissileKeyCooccurrence821(replay, {
+          forceCreateMissilePacketOutcome:
+            decodeCapability('force_create_missile_packet'),
+          changeMissileTargetPacketOutcome:
+            decodeCapability('change_missile_target_packet'),
+        });
       } else if (capability === 'set_spell_level_roster_key_pair') {
         outcome = associateSetSpellLevelRosterKeyPair821(replay, {
           setSpellLevelPacketOutcome: decodeCapability('set_spell_level_packet'),
@@ -2937,6 +2953,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'set_spell_level_roster_key_pair'
         || capability === 'force_create_missile_packet'
         || capability === 'change_missile_target_packet'
+        || capability === 'missile_key_cooccurrence'
         || capability === 'set_dimension_missile_packet'
         || capability === 'anonymous_029c_packet'
         || capability === 'anonymous_029c_roster_key_pair'
@@ -2985,6 +3002,7 @@ function decode1619821(replay, profile, options = {}) {
   for (const [capability, result] of Object.entries(capabilityResults)) {
     if (result.status !== 'CANDIDATE') continue;
     if (capability === 'hero_roster_metadata_bridge'
+        || capability === 'missile_key_cooccurrence'
         || capability === 'target_hero_roster_key_pair'
         || capability === 'set_spell_level_roster_key_pair'
         || capability === 'shielding_params_roster_key_pair'
