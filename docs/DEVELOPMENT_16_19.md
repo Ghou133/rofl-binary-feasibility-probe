@@ -4,6 +4,17 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Combined 821 CLI/API validation (2026-09-26):** After registering both
+  new opt-in candidates, `npm test` passed 1,150 Node tests across 41 groups
+  with zero failures and 120 declared skips, plus 19 Python unittests. Exact
+  image focused tests passed 10/10 for `0x0437` and 9/9 for `0x0265`. One
+  combined CLI run on `KR_8392938200.rofl` emitted 4,600 item-charges and
+  6,703 target-hero candidate rows with zero framing errors; each route's
+  ordered native input/output digests matched its independent full gate.
+  Saved queries scanned all 4,600 and 6,703 rows respectively and emitted
+  one unchanged match each. The first combined public run exposed an
+  outdated capability-list expectation; that failure was corrected before
+  this passing rerun. The Replay, image, and generated outputs remain local.
 - **SetItemCharges packet callback arguments (opt-in candidate):** The exact
   KR `16.19.821.7343` route `0x0437` is registered as
   `PKT_S2C_SetItemCharges_s` for `HeroInventoryClient` in the pinned runtime
