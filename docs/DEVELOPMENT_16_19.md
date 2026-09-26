@@ -4,6 +4,27 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **HeroStats roster to Replay metadata (opt-in candidate):** Select
+  `--events hero_roster_metadata_bridge --event-jsonl-only` on exact
+  `16.19.821.7343`, or request API capability
+  `hero_roster_metadata_bridge`. The bridge requires complete ten-player
+  HeroStats K/D/A snapshot references, death/source-kill/assist candidate
+  counts, canonical raw `TEAM` values, nonblank `SKIN`, and a unique ten-way
+  match to Replay tail K/D/A. All 11 pinned KR Replays yielded 110 candidate
+  rows; a saved batch query with `--event
+  hero_roster_metadata_bridge_candidates --verify-source --limit 1` checked
+  all 110 physical rows and emitted one. Without `--verify-source`, saved
+  queries validate the manifest-hashed `rofl_inventory.json` and all ten
+  candidate rows without opening the original ROFL. Explicit source
+  verification additionally re-decodes the physical tail `statsJson` and
+  HeroStats packet references. Hero, team, and role labels come directly
+  from metadata; the raw roster key association remains `CANDIDATE` and
+  per-packet actor identity remains `UNKNOWN`. The upstream event counters
+  already use tail gates, so their unique match is internal consistency,
+  not independent player identity proof. Only 49/110 latest K/D/A snapshots
+  equal tail values; no missing tail interval is filled. The new bridge
+  JSONL rows omit PUUID, Riot ID, player name, and metadata player ID;
+  existing Replay inventory artifacts retain their established fields.
 - **ChangeMissileTarget 0x040c packet-local comparison key (opt-in candidate):**
   The pinned KR `16.19.821.7343` image registers
   `PKT_S2C_ChangeMissileTarget_s` on `MissileClient` through factory case
