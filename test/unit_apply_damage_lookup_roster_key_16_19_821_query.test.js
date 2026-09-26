@@ -9,13 +9,16 @@ const path = require('node:path');
 const test = require('node:test');
 
 const { UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821: profile,
+  UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V2_821: v2Profile,
   UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE: currentProfile } =
   require('../src/decoders/rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
 const { UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821: rawPairProfile,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821: v2RawPairProfile,
   UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: currentRawPairProfile } =
   require('../src/decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const { UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: damageProfile,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: damageProfileV3Id,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: damageProfileV4Id,
   decodeUnitApplyDamageLookupKeyFromRaw821 } =
   require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 const { PROFILES } =
@@ -208,6 +211,53 @@ function mutateResult(directory, mutate) {
   }
 }
 
+function promoteFixtureToV5(directory) {
+  for (const basename of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(directory, basename);
+    const doc = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    const caps = basename === 'semantic_run.json'
+      ? doc.capability_results : doc.semantic.capability_results;
+    const count = caps[CAPABILITY].damage_packet_count;
+    const f32Proof = {
+      evidence_callback_f32_0x18_table_sha256:
+        damageProfile.evidence_callback_f32_0x18_table_sha256,
+      native_callback_f32_0x18_full_write_count: count,
+      native_callback_f32_0x18_source_counts: {
+        RAW_READER: 0, CONSTANT_0: count,
+      },
+    };
+    caps[CAPABILITY].profile_id = currentProfile.id;
+    caps[CAPABILITY].known_limits = [...currentProfile.known_limits];
+    Object.assign(caps[CAPABILITY], structuredClone(f32Proof));
+    const damage = caps.unit_apply_damage_packet;
+    damage.profile_id = damageProfile.id;
+    damage.evidence_callback_u32_0x10_table_sha256 =
+      damageProfile.evidence_callback_u32_0x10_table_sha256;
+    damage.native_callback_u32_0x10_full_write_count = count;
+    damage.native_callback_u32_0x10_source_counts = {
+      RAW_READER: 0, CONSTANT_0: count,
+    };
+    Object.assign(damage, structuredClone(f32Proof));
+    const rawPair = caps.unit_apply_damage_roster_key_pair;
+    rawPair.profile_id = currentRawPairProfile.id;
+    Object.assign(rawPair, structuredClone(f32Proof));
+    fs.writeFileSync(filename, JSON.stringify(doc));
+  }
+  const events = path.join(directory, `${EVENT}.jsonl`);
+  fs.writeFileSync(events, fs.readFileSync(events, 'utf8').trimEnd()
+    .split('\n').map((line) => {
+      const entry = JSON.parse(line);
+      entry.build_profile = currentProfile.id;
+      entry.header_selector_bits_6_8 = 5;
+      entry.native_callback_f32_0x18_candidate = 0;
+      entry.native_callback_f32_0x18_encoded_bytes_hex = '3e3e3e3e';
+      entry.native_callback_f32_0x18_source = 'CONSTANT_0';
+      entry.native_callback_f32_0x18_raw_offset = null;
+      entry.native_callback_f32_0x18_raw_bytes_hex = null;
+      return JSON.stringify(entry);
+    }).join('\n') + '\n');
+}
+
 function writeManifest(root, entries) {
   const hashes = {};
   for (const entry of entries) {
@@ -360,11 +410,11 @@ test('saved v2 lookup roster association accepts v4 damage and v2 raw pair', (t)
     const doc = JSON.parse(fs.readFileSync(filename, 'utf8'));
     const caps = basename === 'semantic_run.json'
       ? doc.capability_results : doc.semantic.capability_results;
-    caps[CAPABILITY].profile_id = currentProfile.id;
-    caps[CAPABILITY].known_limits = [...currentProfile.known_limits];
-    caps.unit_apply_damage_roster_key_pair.profile_id = currentRawPairProfile.id;
+    caps[CAPABILITY].profile_id = v2Profile.id;
+    caps[CAPABILITY].known_limits = [...v2Profile.known_limits];
+    caps.unit_apply_damage_roster_key_pair.profile_id = v2RawPairProfile.id;
     const damage = caps.unit_apply_damage_packet;
-    damage.profile_id = damageProfile.id;
+    damage.profile_id = damageProfileV4Id;
     damage.evidence_callback_u32_0x10_table_sha256 =
       damageProfile.evidence_callback_u32_0x10_table_sha256;
     damage.native_callback_u32_0x10_full_write_count = damage.event_count;
@@ -377,10 +427,39 @@ test('saved v2 lookup roster association accepts v4 damage and v2 raw pair', (t)
   fs.writeFileSync(events, fs.readFileSync(events, 'utf8').trimEnd()
     .split('\n').map((line) => {
       const entry = JSON.parse(line);
-      entry.build_profile = currentProfile.id;
+      entry.build_profile = v2Profile.id;
       return JSON.stringify(entry);
     }).join('\n') + '\n');
   const selected = query(directory, '--limit', '1');
   assert.equal(selected.status, 0, selected.stderr);
   assert.equal(JSON.parse(selected.stderr).scanned_count, defaultRows().length);
+});
+
+test('saved v3 lookup roster association validates +0x18 rows after limit', (t) => {
+  const { directory } = fixture(t);
+  promoteFixtureToV5(directory);
+  const selected = query(directory, '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(JSON.parse(selected.stderr).scanned_count, defaultRows().length);
+  const events = path.join(directory, `${EVENT}.jsonl`);
+  const lines = fs.readFileSync(events, 'utf8').trimEnd().split('\n');
+  const last = JSON.parse(lines.at(-1));
+  last.native_callback_f32_0x18_candidate = 1;
+  lines[lines.length - 1] = JSON.stringify(last);
+  fs.writeFileSync(events, lines.join('\n') + '\n');
+  const rejected = query(directory, '--limit', '1');
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('saved v3 lookup roster association rejects forged +0x18 totals', (t) => {
+  const { directory } = fixture(t);
+  promoteFixtureToV5(directory);
+  mutateResult(directory, (result) => {
+    result.native_callback_f32_0x18_full_write_count -= 1;
+  });
+  const rejected = query(directory, '--limit', '1');
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code,
+    'CAPABILITY_METADATA_MISMATCH');
 });

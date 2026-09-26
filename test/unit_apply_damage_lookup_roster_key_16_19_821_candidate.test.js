@@ -15,6 +15,7 @@ const {
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: DAMAGE_V4_ID,
   decodeUnitApplyDamagePacketCandidates821,
   decodeUnitApplyDamageCallbackF32FromRaw821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
@@ -28,6 +29,7 @@ const {
 const {
   UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE: profile,
   UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821: v1Profile,
+  UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V2_821: v2Profile,
   associateUnitApplyDamageLookupRosterKeys821: associate,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
 
@@ -117,6 +119,7 @@ function ref(replay, block, chunk) {
 // The source outcomes follow the existing decoder schema; these bytes do not
 // claim a fresh native execution. One original Replay is tested separately.
 function fixture({ version = BUILD, missingRosterKey = false,
+  damageProfile = 'v3',
   damagePairs = [
     [FIRST_KEY, FIRST_KEY],
     [FIRST_KEY + 0x100, FIRST_KEY],
@@ -140,6 +143,10 @@ function fixture({ version = BUILD, missingRosterKey = false,
   };
   const nativeInput = crypto.createHash('sha256');
   const nativeHeader = Buffer.alloc(8);
+  const damageProfileId = damageProfile === 'v5' ? DAMAGE_PROFILE.id
+    : damageProfile === 'v4' ? DAMAGE_V4_ID : DAMAGE_V3_ID;
+  const hasU32 = damageProfile === 'v4' || damageProfile === 'v5';
+  const hasF32At18 = damageProfile === 'v5';
   walkBlocks(replay, (block, chunk) => {
     if (block.packet_id !== 0x005f && block.packet_id !== 0x0089) return;
     const sourceRef = ref(replay, block, chunk);
@@ -173,13 +180,17 @@ function fixture({ version = BUILD, missingRosterKey = false,
     relations[relation] += 1;
     damageEvents.push({
       event_type: 'UNIT_APPLY_DAMAGE_PACKET_CANDIDATE',
-      game_version: BUILD, patch: '16.19', build_profile: DAMAGE_V3_ID,
+      game_version: BUILD, patch: '16.19', build_profile: damageProfileId,
       replay_sha256: replay.source_sha256, replay_time_ms: block.timestamp_ms,
       raw_param: block.param >>> 0,
       packet_name_candidate: DAMAGE_PROFILE.packet_name,
       header_selector_bits_24_26: block.payload[3] & 7,
       header_selector_bits_0_2: block.payload[0] & 7,
       header_selector_bits_3_5: (block.payload[0] >>> 3) & 7,
+      ...(hasF32At18 ? {
+        header_selector_bits_6_8:
+          ((block.payload[0] >>> 6) | (block.payload[1] << 2)) & 7,
+      } : {}),
       native_callback_f32_0x20_candidate:
         decodeUnitApplyDamageCallbackF32FromRaw821('083dbaef'),
       native_callback_f32_0x20_source: 'RAW_READER',
@@ -191,6 +202,18 @@ function fixture({ version = BUILD, missingRosterKey = false,
       native_callback_lookup_key_u32_0x2c_candidate: 0x40004691,
       native_callback_lookup_key_0x2c_encoded_bytes_hex: '39e504c3',
       native_callback_lookup_key_0x24_raw_param_relation: relation,
+      ...(hasU32 ? {
+        native_callback_u32_0x10_candidate: 0,
+        native_callback_u32_0x10_encoded_bytes_hex: '85858585',
+        native_callback_u32_0x10_source: 'CONSTANT_0',
+      } : {}),
+      ...(hasF32At18 ? {
+        native_callback_f32_0x18_candidate: 0,
+        native_callback_f32_0x18_encoded_bytes_hex: '3e3e3e3e',
+        native_callback_f32_0x18_source: 'CONSTANT_0',
+        native_callback_f32_0x18_raw_offset: null,
+        native_callback_f32_0x18_raw_bytes_hex: null,
+      } : {}),
       semantic_effect_status: 'UNKNOWN',
       confidence: 'CANDIDATE',
       semantic_status: DAMAGE_PROFILE.evidence_status,
@@ -198,7 +221,7 @@ function fixture({ version = BUILD, missingRosterKey = false,
     });
   }, { strict: true });
   const unitApplyDamagePacketOutcome = {
-    status: 'CANDIDATE', profile_id: DAMAGE_V3_ID,
+    status: 'CANDIDATE', profile_id: damageProfileId,
     evidence_status: DAMAGE_PROFILE.evidence_status,
     evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
     evidence_scalar_table_sha256: DAMAGE_PROFILE.evidence_scalar_table_sha256,
@@ -220,6 +243,22 @@ function fixture({ version = BUILD, missingRosterKey = false,
     },
     native_callback_lookup_full_write_count: damageEvents.length,
     native_callback_lookup_key_0x24_raw_param_relation_counts: relations,
+    ...(hasU32 ? {
+      evidence_callback_u32_0x10_table_sha256:
+        DAMAGE_PROFILE.evidence_callback_u32_0x10_table_sha256,
+      native_callback_u32_0x10_full_write_count: damageEvents.length,
+      native_callback_u32_0x10_source_counts: {
+        RAW_READER: 0, CONSTANT_0: damageEvents.length,
+      },
+    } : {}),
+    ...(hasF32At18 ? {
+      evidence_callback_f32_0x18_table_sha256:
+        DAMAGE_PROFILE.evidence_callback_f32_0x18_table_sha256,
+      native_callback_f32_0x18_full_write_count: damageEvents.length,
+      native_callback_f32_0x18_source_counts: {
+        RAW_READER: 0, CONSTANT_0: damageEvents.length,
+      },
+    } : {}),
     native_input_sha256: nativeInput.digest('hex'),
     events: damageEvents,
   };
@@ -310,6 +349,31 @@ test('821 native lookup roster association fails closed on incomplete or altered
   assert.equal(associate(forgedRef.replay, forgedRef).status, 'INCONSISTENT');
   const roster = fixture({ missingRosterKey: true });
   assert.equal(associate(roster.replay, roster).status, 'INCONSISTENT');
+});
+
+test('821 native lookup roster association preserves v4 and accepts source-bound v5 +0x18', () => {
+  const prior = fixture({ damageProfile: 'v4' });
+  const priorResult = associate(prior.replay, prior);
+  assert.equal(priorResult.status, 'CANDIDATE', priorResult.error);
+  assert.equal(priorResult.profile_id, v2Profile.id);
+  assert.equal('native_callback_f32_0x18_candidate' in priorResult.events[0], false);
+
+  const values = fixture({ damageProfile: 'v5' });
+  const result = associate(values.replay, values);
+  assert.equal(result.status, 'CANDIDATE', result.error);
+  assert.equal(result.profile_id, profile.id);
+  assert.equal(result.native_callback_f32_0x18_full_write_count, 5);
+  assert.equal(result.events[0].header_selector_bits_6_8, 5);
+  assert.equal(result.events[0].native_callback_f32_0x18_candidate, 0);
+  for (const mutate of [
+    (damage) => { damage.native_callback_f32_0x18_full_write_count -= 1; },
+    (damage) => { damage.events[0].native_callback_f32_0x18_encoded_bytes_hex = '00000000'; },
+    (damage) => { damage.events[0].native_callback_f32_0x18_raw_offset = 1; },
+  ]) {
+    const forged = fixture({ damageProfile: 'v5' });
+    mutate(forged.unitApplyDamagePacketOutcome);
+    assert.equal(associate(forged.replay, forged).status, 'INCONSISTENT');
+  }
 });
 
 test('821 cached raw-key proof must match current source rows', () => {

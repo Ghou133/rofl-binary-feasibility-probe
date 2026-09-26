@@ -4,6 +4,25 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **UnitApplyDamage anonymous callback f32 v5:** The pinned 821 native
+  deserializer writes callback object `+0x18` from a protected raw f32 reader
+  for header selector 0/2/3/6, or constant zero for selector 5. The output
+  retains the native final-write witness, protected bytes, decoded finite
+  value, raw offset/bytes where applicable, source branch, and table hash.
+  A fresh packet-only batch on all 11 supplied KR Replays was `CANDIDATE`
+  in 11/11 with zero framing errors: 628,909/628,909 full writes, 828
+  `RAW_READER`, and 628,081 `CONSTANT_0`. A saved v5 `query-events
+  --damage-callback-f32-0x18-raw --limit 1` completed 11/11, checked all
+  628,909 rows, matched 828, and emitted one. Four dependent association
+  profiles were versioned to V3 for v5, with historical V1/V2 kept for
+  older packet outputs. A fresh selected-only association batch was
+  `CANDIDATE` in 11/11 for each route: 49,473 raw roster, 62,860 first
+  lookup roster, 173,125 second lookup roster, and 655 death anchors.
+  These are exact packet/key observations; the float does not establish
+  actual damage, a source, target, or health effect. The first local v5
+  saved batch omitted a required table-hash metadata field and was rejected;
+  the corrected batch above is a separate run. Both local artifacts remain
+  ignored, preserving that failed validation.
 - **Damage association source scan reuse:** In a selected exact-821 API/CLI
   run, the four damage/roster/death associations now use the same private,
   Replay-bound strict route scan to verify their complete `0x005f` and

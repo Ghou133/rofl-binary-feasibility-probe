@@ -87,16 +87,20 @@ const { UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821,
   isObservedShape: isObservedUnitApplyDamageShape821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 const { UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
-  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821 } =
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const { UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE,
-  UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821 } =
+  UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821,
+  UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V2_821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
 const { UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE,
-  UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821 } =
+  UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821,
+  UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V2_821 } =
   require('./decoders/rofl_16_19_821_unit_apply_damage_lookup2c_roster_key_candidate');
 const { HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE,
-  HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821 } =
+  HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821,
+  HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V2_821 } =
   require('./decoders/rofl_16_19_821_hero_death_damage_lookup_key_cooccurrence_candidate');
 const { REVIVE_ALLY_EVENT_PACKET_821_PROFILE } =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
@@ -202,6 +206,18 @@ const UNIT_APPLY_DAMAGE_NATIVE_U32_SOURCES_821 = Object.freeze([
 const UNIT_APPLY_DAMAGE_NATIVE_F32_0X18_SOURCES_821 = Object.freeze([
   'RAW_READER', 'CONSTANT_0',
 ]);
+const DAMAGE_ASSOCIATION_V3_F32_RESULT_FIELDS_821 = Object.freeze([
+  'evidence_callback_f32_0x18_table_sha256',
+  'native_callback_f32_0x18_full_write_count',
+  'native_callback_f32_0x18_source_counts',
+]);
+const DAMAGE_ASSOCIATION_V3_F32_ROW_FIELDS_821 = Object.freeze([
+  'header_selector_bits_6_8', 'native_callback_f32_0x18_candidate',
+  'native_callback_f32_0x18_encoded_bytes_hex',
+  'native_callback_f32_0x18_source',
+  'native_callback_f32_0x18_raw_offset',
+  'native_callback_f32_0x18_raw_bytes_hex',
+]);
 const UNIT_APPLY_DAMAGE_ROSTER_RESULT_FIELDS_821 = new Set([
   'profile_id', 'depends_on', 'evidence_runtime_image_sha256', 'known_limits',
   'status', 'evidence_status', 'replay_sha256', 'runtime_image_status',
@@ -212,6 +228,10 @@ const UNIT_APPLY_DAMAGE_ROSTER_RESULT_FIELDS_821 = new Set([
   'first_excluded_packet_refs', 'verified_raw_packet_count', 'input_count',
   'event_count',
 ]);
+const UNIT_APPLY_DAMAGE_ROSTER_V3_RESULT_FIELDS_821 = new Set([
+  ...UNIT_APPLY_DAMAGE_ROSTER_RESULT_FIELDS_821,
+  ...DAMAGE_ASSOCIATION_V3_F32_RESULT_FIELDS_821,
+]);
 const UNIT_APPLY_DAMAGE_ROSTER_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'raw_param', 'hero_stats_participant_id_candidate',
@@ -220,6 +240,10 @@ const UNIT_APPLY_DAMAGE_ROSTER_ROW_FIELDS_821 = new Set([
   'semantic_effect_status', 'confidence', 'semantic_status',
   'unit_apply_damage_raw_packet_ref', 'hero_stats_roster_raw_packet_ref',
   'raw_packet_refs',
+]);
+const UNIT_APPLY_DAMAGE_ROSTER_V3_ROW_FIELDS_821 = new Set([
+  ...UNIT_APPLY_DAMAGE_ROSTER_ROW_FIELDS_821,
+  ...DAMAGE_ASSOCIATION_V3_F32_ROW_FIELDS_821,
 ]);
 const UNIT_APPLY_DAMAGE_ROSTER_DAMAGE_REF_FIELDS_821 = new Set([
   'source_path', 'replay_sha256', 'chunk_index', 'chunk_id', 'chunk_stream',
@@ -245,6 +269,10 @@ const UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_RESULT_FIELDS_821 = new Set([
   'unmatched_alias_0x100_packet_count', 'first_unmatched_packet_refs',
   'verified_raw_packet_count', 'input_count', 'event_count',
 ]);
+const UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_V3_RESULT_FIELDS_821 = new Set([
+  ...UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_RESULT_FIELDS_821,
+  ...DAMAGE_ASSOCIATION_V3_F32_RESULT_FIELDS_821,
+]);
 const UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'raw_param',
@@ -257,6 +285,10 @@ const UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_ROW_FIELDS_821 = new Set([
   'semantic_status', 'unit_apply_damage_raw_packet_ref',
   'hero_stats_roster_raw_packet_ref', 'raw_packet_refs',
 ]);
+const UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_V3_ROW_FIELDS_821 = new Set([
+  ...UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_ROW_FIELDS_821,
+  ...DAMAGE_ASSOCIATION_V3_F32_ROW_FIELDS_821,
+]);
 const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_RESULT_FIELDS_821 = new Set([
   'profile_id', 'depends_on', 'evidence_runtime_image_sha256',
   'evidence_lookup_key_0x24_table_sha256',
@@ -268,6 +300,10 @@ const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_RESULT_FIELDS_821 = new Set([
   'unmatched_packet_count', 'matched_key24_roster_counts',
   'first_unmatched_packet_refs', 'verified_raw_packet_count',
   'input_count', 'event_count',
+]);
+const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_V3_RESULT_FIELDS_821 = new Set([
+  ...UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_RESULT_FIELDS_821,
+  ...DAMAGE_ASSOCIATION_V3_F32_RESULT_FIELDS_821,
 ]);
 const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
@@ -283,6 +319,10 @@ const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_ROW_FIELDS_821 = new Set([
   'source_target_role_status', 'semantic_effect_status', 'confidence',
   'semantic_status', 'unit_apply_damage_raw_packet_ref',
   'hero_stats_roster_raw_packet_ref', 'raw_packet_refs',
+]);
+const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_V3_ROW_FIELDS_821 = new Set([
+  ...UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_ROW_FIELDS_821,
+  ...DAMAGE_ASSOCIATION_V3_F32_ROW_FIELDS_821,
 ]);
 const UNIT_APPLY_DAMAGE_LOOKUP2C_KEY24_ROSTER_RELATIONS_821 = Object.freeze([
   'SAME_ROSTER_KEY', 'DIFFERENT_ROSTER_KEY', 'KEY24_NOT_IN_ROSTER',
@@ -305,6 +345,10 @@ const HERO_DEATH_DAMAGE_LOOKUP_RESULT_FIELDS_821 = new Set([
   'death_anchor_with_die_source_key2c_match_count',
   'death_anchor_without_die_source_key2c_match_count',
   'death_anchor_die_source_unavailable_count', 'input_count', 'event_count',
+]);
+const HERO_DEATH_DAMAGE_LOOKUP_V3_RESULT_FIELDS_821 = new Set([
+  ...HERO_DEATH_DAMAGE_LOOKUP_RESULT_FIELDS_821,
+  ...DAMAGE_ASSOCIATION_V3_F32_RESULT_FIELDS_821,
 ]);
 const HERO_DEATH_DAMAGE_LOOKUP_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
@@ -331,6 +375,10 @@ const HERO_DEATH_DAMAGE_LOOKUP_PACKET_FIELDS_821 = new Set([
   'native_callback_lookup_key_0x24_raw_param_relation',
   'die_source_key2c_equal', 'relative_to_death_primary',
   'unit_apply_damage_raw_packet_ref',
+]);
+const HERO_DEATH_DAMAGE_LOOKUP_V3_PACKET_FIELDS_821 = new Set([
+  ...HERO_DEATH_DAMAGE_LOOKUP_PACKET_FIELDS_821,
+  ...DAMAGE_ASSOCIATION_V3_F32_ROW_FIELDS_821,
 ]);
 const HERO_DEATH_DAMAGE_LOOKUP_DEATH_REF_FIELDS_821 = new Set([
   'role', 'source_path', 'replay_sha256', 'chunk_index', 'chunk_id',
@@ -2707,12 +2755,17 @@ function validUnitApplyDamageRosterRef(ref, replaySha, sourcePath, packetId,
       === ref.raw_payload_sha256;
 }
 
-function damageAssociationProfile(result, current, historical) {
-  return result?.profile_id === historical.id ? historical : current;
+function damageAssociationProfile(result, current, historicalV1, historicalV2) {
+  if (result?.profile_id === historicalV1.id) return historicalV1;
+  if (result?.profile_id === historicalV2.id) return historicalV2;
+  return current;
 }
 
-function damageDependencyAssociationProfile(parentProfile, current, historical) {
-  return parentProfile.id.endsWith('-v1') ? historical : current;
+function damageDependencyAssociationProfile(parentProfile, current,
+  historicalV1, historicalV2) {
+  if (parentProfile.id.endsWith('-v1')) return historicalV1;
+  if (parentProfile.id.endsWith('-v2')) return historicalV2;
+  return current;
 }
 
 function damageProfileIdsForAssociation(profile, allowHistoricalV2 = false) {
@@ -2722,8 +2775,60 @@ function damageProfileIdsForAssociation(profile, allowHistoricalV2 = false) {
         UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821]
       : [UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821];
   }
-  return [UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821,
-    UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id];
+  return profile.id.endsWith('-v2')
+    ? [UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821]
+    : [UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821.id];
+}
+
+function validDamageAssociationV3F32Metadata(result, profile, damage) {
+  if (!profile.id.endsWith('-v3')) {
+    return DAMAGE_ASSOCIATION_V3_F32_RESULT_FIELDS_821.every(
+      (field) => !(field in result));
+  }
+  const counts = result.native_callback_f32_0x18_source_counts;
+  if (result.evidence_callback_f32_0x18_table_sha256
+        !== UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821
+          .evidence_callback_f32_0x18_table_sha256
+      || result.native_callback_f32_0x18_full_write_count
+        !== result.damage_packet_count
+      || !counts || typeof counts !== 'object' || Array.isArray(counts)
+      || !isDeepStrictEqual(Object.keys(counts).sort(),
+        [...UNIT_APPLY_DAMAGE_NATIVE_F32_0X18_SOURCES_821].sort())
+      || UNIT_APPLY_DAMAGE_NATIVE_F32_0X18_SOURCES_821.some((source) =>
+        !isCount(counts[source]))
+      || UNIT_APPLY_DAMAGE_NATIVE_F32_0X18_SOURCES_821.reduce((sum, source) =>
+        sum + counts[source], 0) !== result.damage_packet_count) return false;
+  return !damage || DAMAGE_ASSOCIATION_V3_F32_RESULT_FIELDS_821.every(
+    (field) => isDeepStrictEqual(result[field], damage[field]));
+}
+
+function validDamageAssociationV3F32Row(row, damageRef, profile) {
+  if (!profile.id.endsWith('-v3')) return true;
+  const payload = Buffer.from(damageRef.raw_payload_hex, 'hex');
+  const selector = ((payload[0] >>> 6) | (payload[1] << 2)) & 7;
+  const source = selector === 5 ? 'CONSTANT_0'
+    : [0, 2, 3, 6].includes(selector) ? 'RAW_READER' : null;
+  const encoded = row.native_callback_f32_0x18_encoded_bytes_hex;
+  const value = row.native_callback_f32_0x18_candidate;
+  const offset = row.native_callback_f32_0x18_raw_offset;
+  const rawBytes = row.native_callback_f32_0x18_raw_bytes_hex;
+  if (source === null || row.header_selector_bits_6_8 !== selector
+      || row.native_callback_f32_0x18_source !== source
+      || typeof encoded !== 'string' || !/^[0-9a-f]{8}$/.test(encoded)
+      || !Number.isFinite(value)
+      || !Object.is(value,
+        decodeUnitApplyDamageCallbackF32At18FromEncoded821(encoded))) {
+    return false;
+  }
+  if (source === 'CONSTANT_0') {
+    return encoded === '3e3e3e3e' && Object.is(value, 0)
+      && offset === null && rawBytes === null;
+  }
+  return Number.isSafeInteger(offset) && offset >= 0
+    && offset + 4 <= payload.length
+    && rawBytes === payload.subarray(offset, offset + 4).toString('hex')
+    && encoded === Buffer.from(payload.subarray(offset, offset + 4))
+      .reverse().toString('hex');
 }
 
 function validV4DamageU32Metadata(damage) {
@@ -2770,7 +2875,8 @@ function validV5DamageF32At18Metadata(damage) {
 function prepareUnitApplyDamageRosterKeyEvent(semantic, analysis, eventKey, result) {
   const profile = damageAssociationProfile(result,
     UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
-    UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821);
+    UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
+    UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821);
   if (semantic.replay_version !== profile.replay_version) {
     throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
       `${eventKey} requires exact build ${profile.replay_version}.`);
@@ -2780,9 +2886,12 @@ function prepareUnitApplyDamageRosterKeyEvent(semantic, analysis, eventKey, resu
   const damage = semantic.capability_results?.unit_apply_damage_packet;
   const snapshot = semantic.capability_results?.hero_minions_killed_snapshot;
   const recorded = analysis.semantic?.capability_results;
-  if (Object.keys(result).length !== UNIT_APPLY_DAMAGE_ROSTER_RESULT_FIELDS_821.size
+  const fields = profile.id.endsWith('-v3')
+    ? UNIT_APPLY_DAMAGE_ROSTER_V3_RESULT_FIELDS_821
+    : UNIT_APPLY_DAMAGE_ROSTER_RESULT_FIELDS_821;
+  if (Object.keys(result).length !== fields.size
       || Object.keys(result).some((field) =>
-        !UNIT_APPLY_DAMAGE_ROSTER_RESULT_FIELDS_821.has(field))
+        !fields.has(field))
       || result.profile_id !== profile.id
       || result.evidence_status !== profile.evidence_status
       || result.replay_sha256 !== semantic.replay_sha256
@@ -2812,6 +2921,7 @@ function prepareUnitApplyDamageRosterKeyEvent(semantic, analysis, eventKey, resu
       || result.verified_raw_packet_count !== result.damage_packet_count
         + result.snapshot_count
       || result.input_count !== result.verified_raw_packet_count
+      || !validDamageAssociationV3F32Metadata(result, profile, damage)
       || !excluded || typeof excluded !== 'object' || Array.isArray(excluded)
       || Object.keys(excluded).sort().join(',')
         !== 'alias_0x100,unmatched_other'
@@ -2860,7 +2970,8 @@ function prepareUnitApplyDamageLookupRosterKeyEvent(semantic, analysis,
   eventKey, result) {
   const profile = damageAssociationProfile(result,
     UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE,
-    UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821);
+    UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821,
+    UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V2_821);
   if (semantic.replay_version !== profile.replay_version) {
     throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
       `${eventKey} requires exact build ${profile.replay_version}.`);
@@ -2871,10 +2982,12 @@ function prepareUnitApplyDamageLookupRosterKeyEvent(semantic, analysis,
   const snapshot = semantic.capability_results?.hero_minions_killed_snapshot;
   const rawPair = semantic.capability_results?.unit_apply_damage_roster_key_pair;
   const recorded = analysis.semantic?.capability_results;
-  if (Object.keys(result).length
-        !== UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_RESULT_FIELDS_821.size
+  const fields = profile.id.endsWith('-v3')
+    ? UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_V3_RESULT_FIELDS_821
+    : UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_RESULT_FIELDS_821;
+  if (Object.keys(result).length !== fields.size
       || Object.keys(result).some((field) =>
-        !UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_RESULT_FIELDS_821.has(field))
+        !fields.has(field))
       || result.profile_id !== profile.id
       || result.evidence_status !== profile.evidence_status
       || result.replay_sha256 !== semantic.replay_sha256
@@ -2913,6 +3026,7 @@ function prepareUnitApplyDamageLookupRosterKeyEvent(semantic, analysis,
       || result.verified_raw_packet_count !== result.damage_packet_count
         + result.snapshot_count
       || result.input_count !== result.verified_raw_packet_count
+      || !validDamageAssociationV3F32Metadata(result, profile, damage)
       || !unmatched || typeof unmatched !== 'object' || Array.isArray(unmatched)
       || Object.keys(unmatched).sort().join(',') !== 'alias_0x100,other'
       || (unmatched.alias_0x100 === null)
@@ -2964,9 +3078,15 @@ function prepareUnitApplyDamageLookupRosterKeyEvent(semantic, analysis,
       || (rawPair && (rawPair.status !== 'CANDIDATE'
         || rawPair.profile_id !== damageDependencyAssociationProfile(profile,
           UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
-          UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821).id
+          UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
+          UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821).id
         || rawPair.evidence_status
           !== UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE.evidence_status
+        || !validDamageAssociationV3F32Metadata(rawPair,
+          damageDependencyAssociationProfile(profile,
+            UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
+            UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
+            UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821), damage)
         || rawPair.damage_packet_count !== result.damage_packet_count
         || rawPair.snapshot_count !== result.snapshot_count
         || rawPair.keyframe_count !== result.keyframe_count
@@ -2993,7 +3113,8 @@ function prepareUnitApplyDamageLookup2cRosterKeyEvent(semantic, analysis,
   eventKey, result) {
   const profile = damageAssociationProfile(result,
     UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE,
-    UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821);
+    UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821,
+    UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V2_821);
   if (semantic.replay_version !== profile.replay_version) {
     throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
       `${eventKey} requires exact build ${profile.replay_version}.`);
@@ -3008,10 +3129,12 @@ function prepareUnitApplyDamageLookup2cRosterKeyEvent(semantic, analysis,
   const unmatched = result.first_unmatched_packet_refs;
   const expectedDependencies = Object.fromEntries(
     profile.depends_on.map((dependency) => [dependency, 'CANDIDATE']));
-  if (Object.keys(result).length
-        !== UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_RESULT_FIELDS_821.size
+  const fields = profile.id.endsWith('-v3')
+    ? UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_V3_RESULT_FIELDS_821
+    : UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_RESULT_FIELDS_821;
+  if (Object.keys(result).length !== fields.size
       || Object.keys(result).some((field) =>
-        !UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_RESULT_FIELDS_821.has(field))
+        !fields.has(field))
       || result.profile_id !== profile.id
       || result.evidence_status !== profile.evidence_status
       || result.replay_sha256 !== semantic.replay_sha256
@@ -3067,6 +3190,7 @@ function prepareUnitApplyDamageLookup2cRosterKeyEvent(semantic, analysis,
       || result.verified_raw_packet_count !== result.damage_packet_count
         + result.snapshot_count
       || result.input_count !== result.verified_raw_packet_count
+      || !validDamageAssociationV3F32Metadata(result, profile, damage)
       || analysis.event_counts?.[eventKey] !== result.event_count
       || !isDeepStrictEqual(recorded?.[profile.capability], result)
       || (damage && (damage.status !== 'CANDIDATE'
@@ -3100,9 +3224,15 @@ function prepareUnitApplyDamageLookup2cRosterKeyEvent(semantic, analysis,
       || (rawPair && (rawPair.status !== 'CANDIDATE'
         || rawPair.profile_id !== damageDependencyAssociationProfile(profile,
           UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
-          UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821).id
+          UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
+          UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821).id
         || rawPair.evidence_status
           !== UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE.evidence_status
+        || !validDamageAssociationV3F32Metadata(rawPair,
+          damageDependencyAssociationProfile(profile,
+            UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
+            UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
+            UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821), damage)
         || rawPair.runtime_image_status !== 'MATCHED_USED'
         || rawPair.runtime_image_used !== true
         || rawPair.runtime_image_sha256
@@ -3120,9 +3250,15 @@ function prepareUnitApplyDamageLookup2cRosterKeyEvent(semantic, analysis,
         || lookup24Pair.profile_id
           !== damageDependencyAssociationProfile(profile,
             UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE,
-            UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821).id
+            UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821,
+            UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V2_821).id
         || lookup24Pair.evidence_status
           !== UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE.evidence_status
+        || !validDamageAssociationV3F32Metadata(lookup24Pair,
+          damageDependencyAssociationProfile(profile,
+            UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE,
+            UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821,
+            UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V2_821), damage)
         || lookup24Pair.evidence_runtime_image_sha256
           !== profile.evidence_runtime_image_sha256
         || lookup24Pair.runtime_image_status !== 'MATCHED_USED'
@@ -3159,7 +3295,8 @@ function prepareHeroDeathDamageLookupKeyCooccurrenceEvent(semantic, analysis,
   eventKey, result) {
   const profile = damageAssociationProfile(result,
     HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE,
-    HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821);
+    HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821,
+    HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V2_821);
   if (semantic.replay_version !== profile.replay_version) {
     throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
       `${eventKey} requires exact build ${profile.replay_version}.`);
@@ -3175,10 +3312,12 @@ function prepareHeroDeathDamageLookupKeyCooccurrenceEvent(semantic, analysis,
   const deathCount = result.death_anchor_count;
   const damageCount = result.damage_packet_count;
   const snapshotCount = result.snapshot_count;
-  if (Object.keys(result).length
-        !== HERO_DEATH_DAMAGE_LOOKUP_RESULT_FIELDS_821.size
+  const fields = profile.id.endsWith('-v3')
+    ? HERO_DEATH_DAMAGE_LOOKUP_V3_RESULT_FIELDS_821
+    : HERO_DEATH_DAMAGE_LOOKUP_RESULT_FIELDS_821;
+  if (Object.keys(result).length !== fields.size
       || Object.keys(result).some((field) =>
-        !HERO_DEATH_DAMAGE_LOOKUP_RESULT_FIELDS_821.has(field))
+        !fields.has(field))
       || result.profile_id !== profile.id
       || result.evidence_status !== profile.evidence_status
       || result.replay_sha256 !== semantic.replay_sha256
@@ -3205,6 +3344,7 @@ function prepareHeroDeathDamageLookupKeyCooccurrenceEvent(semantic, analysis,
       || result.verified_hero_death_route_packet_count < 3 * deathCount
       || result.verified_hero_death_route_packet_count > 4 * deathCount
       || result.input_count !== deathCount + damageCount
+      || !validDamageAssociationV3F32Metadata(result, profile, damage)
       || !isCount(result.matched_victim_key24_packet_count)
       || result.matched_victim_key24_packet_count > damageCount
       || !isCount(result.death_anchor_with_victim_key24_packet_count)
@@ -3272,9 +3412,15 @@ function prepareHeroDeathDamageLookupKeyCooccurrenceEvent(semantic, analysis,
       || (rawPair && (rawPair.status !== 'CANDIDATE'
         || rawPair.profile_id !== damageDependencyAssociationProfile(profile,
           UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
-          UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821).id
+          UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
+          UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821).id
         || rawPair.evidence_status
           !== UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE.evidence_status
+        || !validDamageAssociationV3F32Metadata(rawPair,
+          damageDependencyAssociationProfile(profile,
+            UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
+            UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
+            UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821), damage)
         || rawPair.damage_packet_count !== damageCount
         || rawPair.snapshot_count !== snapshotCount
         || rawPair.canonical_roster_key_count !== 10
@@ -6000,13 +6146,17 @@ function unitApplyDamageRosterKeyRow(row, prepared, lineNumber, state) {
   };
   const profile = damageAssociationProfile(prepared.capabilityResult,
     UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
-    UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821);
+    UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
+    UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821);
   const damageRef = row.unit_apply_damage_raw_packet_ref;
   const statsRef = row.hero_stats_roster_raw_packet_ref;
   const rawParam = row.raw_param;
-  if (Object.keys(row).length !== UNIT_APPLY_DAMAGE_ROSTER_ROW_FIELDS_821.size
+  const fields = profile.id.endsWith('-v3')
+    ? UNIT_APPLY_DAMAGE_ROSTER_V3_ROW_FIELDS_821
+    : UNIT_APPLY_DAMAGE_ROSTER_ROW_FIELDS_821;
+  if (Object.keys(row).length !== fields.size
       || Object.keys(row).some((field) =>
-        !UNIT_APPLY_DAMAGE_ROSTER_ROW_FIELDS_821.has(field))
+        !fields.has(field))
       || row.event_type !== 'UNIT_APPLY_DAMAGE_ROSTER_KEY_CANDIDATE'
       || row.game_version !== profile.replay_version || row.patch !== '16.19'
       || row.build_profile !== profile.id
@@ -6035,7 +6185,8 @@ function unitApplyDamageRosterKeyRow(row, prepared, lineNumber, state) {
       || !validUnitApplyDamageRosterRef(damageRef, prepared.replaySha,
         prepared.sourcePath, 0x005f, rawParam, row.replay_time_ms)
       || !validUnitApplyDamageRosterRef(statsRef, prepared.replaySha,
-        prepared.sourcePath, 0x0089, rawParam)) {
+        prepared.sourcePath, 0x0089, rawParam)
+      || !validDamageAssociationV3F32Row(row, damageRef, profile)) {
     invalid('exact full key, unknown roles, native value or named source references differ');
   }
   const payload = Buffer.from(damageRef.raw_payload_hex, 'hex');
@@ -6087,17 +6238,20 @@ function unitApplyDamageLookupRosterKeyRow(row, prepared, lineNumber, state) {
   };
   const profile = damageAssociationProfile(prepared.capabilityResult,
     UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE,
-    UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821);
+    UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821,
+    UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V2_821);
   const damageRef = row.unit_apply_damage_raw_packet_ref;
   const statsRef = row.hero_stats_roster_raw_packet_ref;
   const rawParam = row.raw_param;
   const key = row.native_callback_lookup_key_u32_0x24_candidate;
   const relation = rawParam === key ? 'EQUAL'
     : rawParam - key === 0x100 ? 'RAW_PARAM_IS_LOOKUP_PLUS_0X100' : 'OTHER';
-  if (Object.keys(row).length
-        !== UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_ROW_FIELDS_821.size
+  const fields = profile.id.endsWith('-v3')
+    ? UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_V3_ROW_FIELDS_821
+    : UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_ROW_FIELDS_821;
+  if (Object.keys(row).length !== fields.size
       || Object.keys(row).some((field) =>
-        !UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_ROW_FIELDS_821.has(field))
+        !fields.has(field))
       || row.event_type !== 'UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_CANDIDATE'
       || row.game_version !== profile.replay_version || row.patch !== '16.19'
       || row.build_profile !== profile.id
@@ -6124,7 +6278,8 @@ function unitApplyDamageLookupRosterKeyRow(row, prepared, lineNumber, state) {
       || !validUnitApplyDamageRosterRef(damageRef, prepared.replaySha,
         prepared.sourcePath, 0x005f, rawParam, row.replay_time_ms)
       || !validUnitApplyDamageRosterRef(statsRef, prepared.replaySha,
-        prepared.sourcePath, 0x0089, key)) {
+        prepared.sourcePath, 0x0089, key)
+      || !validDamageAssociationV3F32Row(row, damageRef, profile)) {
     invalid('native lookup full key, roster label, unknown roles or source references differ');
   }
   const payload = Buffer.from(damageRef.raw_payload_hex, 'hex');
@@ -6174,7 +6329,8 @@ function unitApplyDamageLookup2cRosterKeyRow(row, prepared, lineNumber, state) {
   };
   const profile = damageAssociationProfile(prepared.capabilityResult,
     UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE,
-    UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821);
+    UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821,
+    UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V2_821);
   const damageRef = row.unit_apply_damage_raw_packet_ref;
   const statsRef = row.hero_stats_roster_raw_packet_ref;
   const rawParam = row.raw_param;
@@ -6186,10 +6342,12 @@ function unitApplyDamageLookup2cRosterKeyRow(row, prepared, lineNumber, state) {
   const key24RosterRelation = key24 === key2c ? 'SAME_ROSTER_KEY'
     : key24 >= 0x400000ae && key24 <= 0x400000b7
       ? 'DIFFERENT_ROSTER_KEY' : 'KEY24_NOT_IN_ROSTER';
-  if (Object.keys(row).length
-        !== UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_ROW_FIELDS_821.size
+  const fields = profile.id.endsWith('-v3')
+    ? UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_V3_ROW_FIELDS_821
+    : UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_ROW_FIELDS_821;
+  if (Object.keys(row).length !== fields.size
       || Object.keys(row).some((field) =>
-        !UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_ROW_FIELDS_821.has(field))
+        !fields.has(field))
       || row.event_type !== 'UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_CANDIDATE'
       || row.game_version !== profile.replay_version || row.patch !== '16.19'
       || row.build_profile !== profile.id
@@ -6225,7 +6383,8 @@ function unitApplyDamageLookup2cRosterKeyRow(row, prepared, lineNumber, state) {
       || !validUnitApplyDamageRosterRef(damageRef, prepared.replaySha,
         prepared.sourcePath, 0x005f, rawParam, row.replay_time_ms)
       || !validUnitApplyDamageRosterRef(statsRef, prepared.replaySha,
-        prepared.sourcePath, 0x0089, key2c)) {
+        prepared.sourcePath, 0x0089, key2c)
+      || !validDamageAssociationV3F32Row(row, damageRef, profile)) {
     invalid('native lookup full keys, roster label, unknown roles or source references differ');
   }
   const payload = Buffer.from(damageRef.raw_payload_hex, 'hex');
@@ -6309,7 +6468,8 @@ function heroDeathDamageLookupKeyCooccurrenceRow(row, prepared, lineNumber,
   };
   const profile = damageAssociationProfile(prepared.capabilityResult,
     HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE,
-    HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821);
+    HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821,
+    HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V2_821);
   const deathRefs = row.hero_death_raw_packet_refs;
   const primary = row.hero_death_raw_packet_ref;
   const dieSourceRef = row.hero_death_die_source_raw_packet_ref;
@@ -6423,11 +6583,13 @@ function heroDeathDamageLookupKeyCooccurrenceRow(row, prepared, lineNumber,
       < primary.decompressed_block_offset;
     const relative = isBefore ? 'BEFORE_PRIMARY' : 'AFTER_PRIMARY';
     const dieSourceEqual = dieSource === null ? null : key2c === dieSource;
+    const packetFields = profile.id.endsWith('-v3')
+      ? HERO_DEATH_DAMAGE_LOOKUP_V3_PACKET_FIELDS_821
+      : HERO_DEATH_DAMAGE_LOOKUP_PACKET_FIELDS_821;
     if (!packet || typeof packet !== 'object' || Array.isArray(packet)
-        || Object.keys(packet).length
-          !== HERO_DEATH_DAMAGE_LOOKUP_PACKET_FIELDS_821.size
+        || Object.keys(packet).length !== packetFields.size
         || Object.keys(packet).some((field) =>
-          !HERO_DEATH_DAMAGE_LOOKUP_PACKET_FIELDS_821.has(field))
+          !packetFields.has(field))
         || !Number.isSafeInteger(rawParam) || rawParam <= 0
         || rawParam > 0xffffffff
         || key24 !== victimKey
@@ -6450,7 +6612,8 @@ function heroDeathDamageLookupKeyCooccurrenceRow(row, prepared, lineNumber,
         || damageRef.chunk_file_offset !== primary.chunk_file_offset
         || damageRef.decompressed_block_offset
           === primary.decompressed_block_offset
-        || damageRef.decompressed_block_offset <= previousDamageBlockOffset) {
+        || damageRef.decompressed_block_offset <= previousDamageBlockOffset
+        || !validDamageAssociationV3F32Row(packet, damageRef, profile)) {
       invalid('nested native keys, packet order, raw bytes or same-time chunk differ');
     }
     const payload = Buffer.from(damageRef.raw_payload_hex, 'hex');

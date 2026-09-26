@@ -33,6 +33,11 @@ test('exact 821 native +0x2c lookup key reaches API and CLI with source-bound ro
     const result = decoded.capability_results[CAPABILITY];
     assert.equal(result.status, 'CANDIDATE', result.error);
     assert.equal(result.runtime_image_status, 'MATCHED_USED');
+    assert.match(result.profile_id, /-v3$/);
+    assert.equal(result.native_callback_f32_0x18_full_write_count,
+      result.damage_packet_count);
+    assert.equal(Object.values(result.native_callback_f32_0x18_source_counts)
+      .reduce((sum, count) => sum + count, 0), result.damage_packet_count);
     assert.ok(result.event_count > 0);
     assert.equal(result.matched_lookup_key_packet_count, result.event_count);
     assert.equal(result.unmatched_packet_count + result.event_count,
@@ -48,6 +53,9 @@ test('exact 821 native +0x2c lookup key reaches API and CLI with source-bound ro
         && row.hero_stats_participant_id_candidate === row.hero_raw_param
           - 0x400000ae + 1
         && Number.isSafeInteger(row.native_callback_lookup_key_u32_0x24_candidate)
+        && Number.isFinite(row.native_callback_f32_0x18_candidate)
+        && ['RAW_READER', 'CONSTANT_0'].includes(
+          row.native_callback_f32_0x18_source)
         && typeof row.key24_roster_relation === 'string'
         && row.lookup_resolution_status === 'UNKNOWN'
         && row.actor_assignment_status === 'UNKNOWN'
@@ -80,6 +88,12 @@ test('exact 821 native +0x2c lookup key reaches API and CLI with source-bound ro
     for await (const chunk of fs.createReadStream(path.join(replayDirectory,
       `${EVENT}.jsonl`))) actualHash.update(chunk);
     assert.equal(actualHash.digest('hex'), expectedHash.digest('hex'));
+    const queried = spawnSync(process.execPath, [CLI, 'query-events',
+      replayDirectory, '--event', EVENT, '--limit', '1'], {
+      encoding: 'utf8', timeout: 120000,
+    });
+    assert.equal(queried.status, 0, queried.stderr || queried.stdout);
+    assert.equal(JSON.parse(queried.stderr).scanned_count, result.event_count);
   });
 
 test('missing image leaves independent level candidate but +0x2c association unavailable',

@@ -33,6 +33,11 @@ test('exact 821 death/damage key co-occurrence reaches API and CLI with all pack
     const result = decoded.capability_results[CAPABILITY];
     assert.equal(result.status, 'CANDIDATE', result.error);
     assert.equal(result.runtime_image_status, 'MATCHED_USED');
+    assert.match(result.profile_id, /-v3$/);
+    assert.equal(result.native_callback_f32_0x18_full_write_count,
+      result.damage_packet_count);
+    assert.equal(Object.values(result.native_callback_f32_0x18_source_counts)
+      .reduce((sum, count) => sum + count, 0), result.damage_packet_count);
     assert.ok(result.event_count > 0);
     assert.equal(result.event_count, result.death_anchor_count);
     assert.equal(result.canonical_roster_key_count, 10);
@@ -56,6 +61,9 @@ test('exact 821 death/damage key co-occurrence reaches API and CLI with all pack
         && row.same_time_victim_key24_packet_candidates.every((packet) =>
           packet.native_callback_lookup_key_u32_0x24_candidate
             === row.victim_lookup_roster_key_u32_candidate
+          && Number.isFinite(packet.native_callback_f32_0x18_candidate)
+          && ['RAW_READER', 'CONSTANT_0'].includes(
+            packet.native_callback_f32_0x18_source)
           && packet.die_source_key2c_equal
             === (row.die_source_network_id_candidate === null ? null
               : packet.native_callback_lookup_key_u32_0x2c_candidate
@@ -88,6 +96,12 @@ test('exact 821 death/damage key co-occurrence reaches API and CLI with all pack
     for await (const chunk of fs.createReadStream(path.join(replayDirectory,
       `${EVENT}.jsonl`))) actualHash.update(chunk);
     assert.equal(actualHash.digest('hex'), expectedHash.digest('hex'));
+    const queried = spawnSync(process.execPath, [CLI, 'query-events',
+      replayDirectory, '--event', EVENT, '--limit', '1'], {
+      encoding: 'utf8', timeout: 120000,
+    });
+    assert.equal(queried.status, 0, queried.stderr || queried.stdout);
+    assert.equal(JSON.parse(queried.stderr).scanned_count, result.event_count);
   });
 
 test('missing image leaves death candidate available and association unavailable',

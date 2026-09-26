@@ -9,11 +9,14 @@ const path = require('node:path');
 const test = require('node:test');
 
 const { UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821: profile,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821: v2Profile,
   UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: currentProfile } =
   require('../src/decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const { UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: currentDamageProfile,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: damageProfileV3Id,
-  decodeUnitApplyDamageCallbackF32FromRaw821 } =
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: damageProfileV4Id,
+  decodeUnitApplyDamageCallbackF32FromRaw821,
+  decodeUnitApplyDamageCallbackF32At18FromEncoded821 } =
   require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 const { PROFILES } =
   require('../src/decoders/rofl_16_19_821_float_stats_candidate');
@@ -24,6 +27,7 @@ const CAPABILITY = 'unit_apply_damage_roster_key_pair';
 const SHA = 'a'.repeat(64);
 const SOURCE_PATH = 'synthetic.rofl';
 const PACKET = '71875e460b083dbaef3ba6ec39b975';
+const RAW_F32_18_PACKET = '3706a54411d863b80b68bb01d1ca1e9bde73ec6b75';
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -156,6 +160,50 @@ function mutateResult(directory, mutate) {
   }
 }
 
+function promoteFixtureToV5(directory) {
+  for (const basename of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(directory, basename);
+    const doc = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    const caps = basename === 'semantic_run.json'
+      ? doc.capability_results : doc.semantic.capability_results;
+    const count = caps[CAPABILITY].damage_packet_count;
+    const f32Proof = {
+      evidence_callback_f32_0x18_table_sha256:
+        currentDamageProfile.evidence_callback_f32_0x18_table_sha256,
+      native_callback_f32_0x18_full_write_count: count,
+      native_callback_f32_0x18_source_counts: {
+        RAW_READER: 0, CONSTANT_0: count,
+      },
+    };
+    caps[CAPABILITY].profile_id = currentProfile.id;
+    caps[CAPABILITY].known_limits = [...currentProfile.known_limits];
+    Object.assign(caps[CAPABILITY], structuredClone(f32Proof));
+    const damage = caps.unit_apply_damage_packet;
+    damage.profile_id = currentDamageProfile.id;
+    damage.evidence_callback_u32_0x10_table_sha256 =
+      currentDamageProfile.evidence_callback_u32_0x10_table_sha256;
+    damage.native_callback_u32_0x10_full_write_count = count;
+    damage.native_callback_u32_0x10_source_counts = {
+      RAW_READER: 0, CONSTANT_0: count,
+    };
+    Object.assign(damage, structuredClone(f32Proof));
+    fs.writeFileSync(filename, JSON.stringify(doc));
+  }
+  const events = path.join(directory, `${EVENT}.jsonl`);
+  fs.writeFileSync(events, fs.readFileSync(events, 'utf8').trimEnd()
+    .split('\n').map((line) => {
+      const entry = JSON.parse(line);
+      entry.build_profile = currentProfile.id;
+      entry.header_selector_bits_6_8 = 5;
+      entry.native_callback_f32_0x18_candidate = 0;
+      entry.native_callback_f32_0x18_encoded_bytes_hex = '3e3e3e3e';
+      entry.native_callback_f32_0x18_source = 'CONSTANT_0';
+      entry.native_callback_f32_0x18_raw_offset = null;
+      entry.native_callback_f32_0x18_raw_bytes_hex = null;
+      return JSON.stringify(entry);
+    }).join('\n') + '\n');
+}
+
 test('saved exact 821 roster key pairs retain original rows under raw-param filtering', (t) => {
   const rows = [row(0), row(1, 0x400000af), row(2)];
   const { directory, lines } = fixture(t, rows);
@@ -240,10 +288,10 @@ test('saved v2 association accepts exact v4 damage provenance', (t) => {
     const capabilities = basename === 'semantic_run.json'
       ? doc.capability_results : doc.semantic.capability_results;
     const result = capabilities[CAPABILITY];
-    result.profile_id = currentProfile.id;
-    result.known_limits = [...currentProfile.known_limits];
+    result.profile_id = v2Profile.id;
+    result.known_limits = [...v2Profile.known_limits];
     const damage = capabilities.unit_apply_damage_packet;
-    damage.profile_id = currentDamageProfile.id;
+    damage.profile_id = damageProfileV4Id;
     damage.evidence_callback_u32_0x10_table_sha256 =
       currentDamageProfile.evidence_callback_u32_0x10_table_sha256;
     damage.native_callback_u32_0x10_full_write_count = damage.event_count;
@@ -256,7 +304,7 @@ test('saved v2 association accepts exact v4 damage provenance', (t) => {
   fs.writeFileSync(events, fs.readFileSync(events, 'utf8').trimEnd()
     .split('\n').map((line) => {
       const entry = JSON.parse(line);
-      entry.build_profile = currentProfile.id;
+      entry.build_profile = v2Profile.id;
       return JSON.stringify(entry);
     }).join('\n') + '\n');
   const selected = query(directory, '--raw-param', '0x400000ae', '--limit', '1');
@@ -264,6 +312,86 @@ test('saved v2 association accepts exact v4 damage provenance', (t) => {
   const summary = JSON.parse(selected.stderr);
   assert.equal(summary.scanned_count, 2);
   assert.equal(summary.emitted_count, 1);
+});
+
+test('saved v3 roster association validates +0x18 rows after limit', (t) => {
+  const { directory } = fixture(t, [row(0), row(1, 0x400000af), row(2)]);
+  promoteFixtureToV5(directory);
+  const selected = query(directory, '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(JSON.parse(selected.stderr).scanned_count, 3);
+  const events = path.join(directory, `${EVENT}.jsonl`);
+  const lines = fs.readFileSync(events, 'utf8').trimEnd().split('\n');
+  const last = JSON.parse(lines.at(-1));
+  last.native_callback_f32_0x18_source = 'RAW_READER';
+  lines[lines.length - 1] = JSON.stringify(last);
+  fs.writeFileSync(events, lines.join('\n') + '\n');
+  const rejected = query(directory, '--limit', '1');
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('saved v3 roster association rejects forged +0x18 totals', (t) => {
+  const { directory } = fixture(t);
+  promoteFixtureToV5(directory);
+  mutateResult(directory, (result) => {
+    result.native_callback_f32_0x18_source_counts.CONSTANT_0 += 1;
+  });
+  const rejected = query(directory, '--limit', '1');
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code,
+    'CAPABILITY_METADATA_MISMATCH');
+});
+
+test('saved v3 roster association verifies raw +0x18 bytes after limit', (t) => {
+  const { directory } = fixture(t);
+  promoteFixtureToV5(directory);
+  const events = path.join(directory, `${EVENT}.jsonl`);
+  const lines = fs.readFileSync(events, 'utf8').trimEnd().split('\n');
+  const later = JSON.parse(lines[1]);
+  const payload = Buffer.from(RAW_F32_18_PACKET, 'hex');
+  const ref = later.unit_apply_damage_raw_packet_ref;
+  ref.raw_payload_hex = RAW_F32_18_PACKET;
+  ref.raw_payload_sha256 = sha256(payload);
+  ref.payload_length = payload.length;
+  later.raw_packet_refs[0] = structuredClone(ref);
+  later.native_callback_f32_0x20_candidate =
+    decodeUnitApplyDamageCallbackF32FromRaw821(
+      payload.subarray(13, 17).toString('hex'));
+  later.header_selector_bits_6_8 = 0;
+  later.native_callback_f32_0x18_source = 'RAW_READER';
+  later.native_callback_f32_0x18_raw_offset = 9;
+  later.native_callback_f32_0x18_raw_bytes_hex =
+    payload.subarray(9, 13).toString('hex');
+  later.native_callback_f32_0x18_encoded_bytes_hex =
+    Buffer.from(payload.subarray(9, 13)).reverse().toString('hex');
+  later.native_callback_f32_0x18_candidate =
+    decodeUnitApplyDamageCallbackF32At18FromEncoded821(
+      later.native_callback_f32_0x18_encoded_bytes_hex);
+  lines[1] = JSON.stringify(later);
+  fs.writeFileSync(events, lines.join('\n') + '\n');
+  for (const basename of ['semantic_run.json', 'replay_analysis.json']) {
+    const filename = path.join(directory, basename);
+    const doc = JSON.parse(fs.readFileSync(filename, 'utf8'));
+    const caps = basename === 'semantic_run.json'
+      ? doc.capability_results : doc.semantic.capability_results;
+    for (const capability of [CAPABILITY, 'unit_apply_damage_packet']) {
+      caps[capability].native_callback_f32_0x18_source_counts = {
+        RAW_READER: 1, CONSTANT_0: 1,
+      };
+    }
+    fs.writeFileSync(filename, JSON.stringify(doc));
+  }
+  const selected = query(directory, '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(JSON.parse(selected.stderr).scanned_count, 2);
+
+  later.native_callback_f32_0x18_raw_bytes_hex = '00000000';
+  lines[1] = JSON.stringify(later);
+  fs.writeFileSync(events, lines.join('\n') + '\n');
+  const rejected = query(directory, '--limit', '1');
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
 });
 
 test('saved roster key pair checks every row and source order after output limit', (t) => {

@@ -12,6 +12,8 @@ const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821: DAMAGE_V2_ID,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: DAMAGE_V4_ID,
+  decodeUnitApplyDamageCallbackF32At18FromEncoded821,
   decodeUnitApplyDamageCallbackF32FromRaw821,
   decodeUnitApplyDamageCallbackU32FromRaw821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
@@ -55,6 +57,20 @@ const U32_OUTCOME_FIELDS = [
   'native_callback_u32_0x10_source_counts',
 ];
 const U32_SOURCES = ['RAW_READER', 'CONSTANT_0'];
+const F32_18_ROW_FIELDS = [
+  'header_selector_bits_6_8',
+  'native_callback_f32_0x18_candidate',
+  'native_callback_f32_0x18_encoded_bytes_hex',
+  'native_callback_f32_0x18_source',
+  'native_callback_f32_0x18_raw_offset',
+  'native_callback_f32_0x18_raw_bytes_hex',
+];
+const F32_18_OUTCOME_FIELDS = [
+  'evidence_callback_f32_0x18_table_sha256',
+  'native_callback_f32_0x18_full_write_count',
+  'native_callback_f32_0x18_source_counts',
+];
+const F32_18_SOURCES = ['RAW_READER', 'CONSTANT_0'];
 
 const UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821 = Object.freeze({
   id: 'rofl-16.19.821.7343-kr-unit-apply-damage-roster-key-candidate-v1',
@@ -75,12 +91,21 @@ const UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821 = Object.freeze({
   ]),
 });
 
-const UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE = Object.freeze({
+const UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821 = Object.freeze({
   ...UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
   id: 'rofl-16.19.821.7343-kr-unit-apply-damage-roster-key-candidate-v2',
   known_limits: Object.freeze([
     ...UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821.known_limits.slice(0, -1),
     'Native-gated 0x005f v4 source outcomes are accepted; the +0x10 callback u32 and lookup keys do not change full raw-parameter roster matching or assign excluded aliases.',
+  ]),
+});
+
+const UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE = Object.freeze({
+  ...UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821,
+  id: 'rofl-16.19.821.7343-kr-unit-apply-damage-roster-key-candidate-v3',
+  known_limits: Object.freeze([
+    ...UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821.known_limits.slice(0, -1),
+    'Native-gated 0x005f v5 source outcomes are accepted; the anonymous +0x18 callback f32 does not change full raw-parameter roster matching or assign damage roles.',
   ]),
 });
 
@@ -176,6 +201,7 @@ function validDamageRow(replay, row, damageProfileId) {
   const selector24 = payload[3] & 7;
   const selector0 = payload[0] & 7;
   const selector3 = (payload[0] >>> 3) & 7;
+  const isV5 = damageProfileId === DAMAGE_PROFILE.id;
   if (row.header_selector_bits_24_26 !== selector24
       || row.header_selector_bits_0_2 !== selector0
       || row.header_selector_bits_3_5 !== selector3
@@ -197,7 +223,7 @@ function validDamageRow(replay, row, damageProfileId) {
         || row.native_callback_lookup_key_0x24_raw_param_relation
           !== lookupRelation(row.raw_param, key24)) return false;
   }
-  if (damageProfileId === DAMAGE_PROFILE.id) {
+  if (damageProfileId === DAMAGE_V4_ID || isV5) {
     const expectedU32Source = selector24 === 6 ? 'CONSTANT_0' : 'RAW_READER';
     if (!u32(row.native_callback_u32_0x10_candidate)
         || typeof row.native_callback_u32_0x10_encoded_bytes_hex !== 'string'
@@ -210,6 +236,36 @@ function validDamageRow(replay, row, damageProfileId) {
           && (row.native_callback_u32_0x10_candidate !== 0
             || row.native_callback_u32_0x10_encoded_bytes_hex !== '85858585'))) return false;
   } else if (U32_ROW_FIELDS.some((field) => field in row)) {
+    return false;
+  }
+  if (isV5) {
+    const selector18 = ((payload[0] >>> 6) | (payload[1] << 2)) & 7;
+    const expected18Source = selector18 === 5 ? 'CONSTANT_0'
+      : [0, 2, 3, 6].includes(selector18) ? 'RAW_READER' : null;
+    if (row.header_selector_bits_6_8 !== selector18
+        || expected18Source === null
+        || row.native_callback_f32_0x18_source !== expected18Source
+        || typeof row.native_callback_f32_0x18_encoded_bytes_hex !== 'string'
+        || !/^[0-9a-f]{8}$/.test(row.native_callback_f32_0x18_encoded_bytes_hex)
+        || !Number.isFinite(row.native_callback_f32_0x18_candidate)
+        || !Object.is(decodeUnitApplyDamageCallbackF32At18FromEncoded821(
+          row.native_callback_f32_0x18_encoded_bytes_hex),
+        row.native_callback_f32_0x18_candidate)) return false;
+    if (expected18Source === 'CONSTANT_0') {
+      if (row.native_callback_f32_0x18_encoded_bytes_hex !== '3e3e3e3e'
+          || !Object.is(row.native_callback_f32_0x18_candidate, 0)
+          || row.native_callback_f32_0x18_raw_offset !== null
+          || row.native_callback_f32_0x18_raw_bytes_hex !== null) return false;
+    } else {
+      const offset18 = row.native_callback_f32_0x18_raw_offset;
+      if (!count(offset18, payload.length - 4)
+          || row.native_callback_f32_0x18_raw_bytes_hex
+            !== payload.subarray(offset18, offset18 + 4).toString('hex')
+          || row.native_callback_f32_0x18_encoded_bytes_hex
+            !== Buffer.from(payload.subarray(offset18, offset18 + 4))
+              .reverse().toString('hex')) return false;
+    }
+  } else if (F32_18_ROW_FIELDS.some((field) => field in row)) {
     return false;
   }
   if (expectedSource !== 'RAW_READER') {
@@ -326,10 +382,12 @@ function associateUnitApplyDamageRosterKeys821(replay, {
   unitApplyDamagePacketOutcome, minionsKilledSnapshotOutcome,
   precollected = null,
 } = {}) {
-  const profile = (unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V2_ID
-      || unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V3_ID)
+  const damageProfileId = unitApplyDamagePacketOutcome?.profile_id;
+  const profile = (damageProfileId === DAMAGE_V2_ID || damageProfileId === DAMAGE_V3_ID)
     ? UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821
-    : UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE;
+    : damageProfileId === DAMAGE_V4_ID
+      ? UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821
+      : UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE;
   const base = {
     profile_id: profile.id,
     depends_on: [...profile.depends_on],
@@ -369,8 +427,10 @@ function associateUnitApplyDamageRosterKeys821(replay, {
   const snapshot = minionsKilledSnapshotOutcome;
   const damageIsV2 = damage.profile_id === DAMAGE_V2_ID;
   const damageIsV3 = damage.profile_id === DAMAGE_V3_ID;
-  const damageIsV4 = damage.profile_id === DAMAGE_PROFILE.id;
-  const hasLookupKeys = damageIsV3 || damageIsV4;
+  const damageIsV4 = damage.profile_id === DAMAGE_V4_ID;
+  const damageIsV5 = damage.profile_id === DAMAGE_PROFILE.id;
+  const hasLookupKeys = damageIsV3 || damageIsV4 || damageIsV5;
+  const hasU32 = damageIsV4 || damageIsV5;
   if (damage.status !== 'CANDIDATE' || snapshot.status !== 'CANDIDATE') {
     const priority = ['DECODE_FAILED', 'INCONSISTENT', 'UNSUPPORTED',
       'MISSING_INPUT', 'PROFILE_UNAVAILABLE'];
@@ -409,7 +469,8 @@ function associateUnitApplyDamageRosterKeys821(replay, {
       || NATIVE_SOURCES.reduce((sum, source) =>
         sum + damage.native_callback_f32_source_counts[source], 0) !== damage.event_count
       || (damageIsV2 && LOOKUP_OUTCOME_FIELDS.some((field) => field in damage))
-      || (!damageIsV4 && U32_OUTCOME_FIELDS.some((field) => field in damage))
+      || (!hasU32 && U32_OUTCOME_FIELDS.some((field) => field in damage))
+      || (!damageIsV5 && F32_18_OUTCOME_FIELDS.some((field) => field in damage))
       || (hasLookupKeys && (
         damage.evidence_lookup_key_0x24_table_sha256
           !== DAMAGE_PROFILE.evidence_lookup_key_0x24_table_sha256
@@ -425,7 +486,7 @@ function associateUnitApplyDamageRosterKeys821(replay, {
         || LOOKUP_RELATIONS.reduce((sum, relation) => sum
           + damage.native_callback_lookup_key_0x24_raw_param_relation_counts[
             relation], 0) !== damage.event_count))
-      || (damageIsV4 && (
+      || (hasU32 && (
         damage.evidence_callback_u32_0x10_table_sha256
           !== DAMAGE_PROFILE.evidence_callback_u32_0x10_table_sha256
         || damage.native_callback_u32_0x10_full_write_count !== damage.event_count
@@ -437,6 +498,19 @@ function associateUnitApplyDamageRosterKeys821(replay, {
             MAX_DAMAGE_ROWS))
         || U32_SOURCES.reduce((sum, source) => sum
           + damage.native_callback_u32_0x10_source_counts[source], 0)
+          !== damage.event_count))
+      || (damageIsV5 && (
+        damage.evidence_callback_f32_0x18_table_sha256
+          !== DAMAGE_PROFILE.evidence_callback_f32_0x18_table_sha256
+        || damage.native_callback_f32_0x18_full_write_count !== damage.event_count
+        || !damage.native_callback_f32_0x18_source_counts
+        || Object.keys(damage.native_callback_f32_0x18_source_counts)
+          .sort().join(',') !== [...F32_18_SOURCES].sort().join(',')
+        || F32_18_SOURCES.some((source) =>
+          !count(damage.native_callback_f32_0x18_source_counts[source],
+            MAX_DAMAGE_ROWS))
+        || F32_18_SOURCES.reduce((sum, source) => sum
+          + damage.native_callback_f32_0x18_source_counts[source], 0)
           !== damage.event_count))
       || snapshot.profile_id !== SNAPSHOT_PROFILE.id
       || snapshot.evidence_runtime_image_sha256 !== RUNTIME_IMAGE_SHA256
@@ -491,6 +565,7 @@ function associateUnitApplyDamageRosterKeys821(replay, {
   }
   const sourceCounts = Object.fromEntries(NATIVE_SOURCES.map((source) => [source, 0]));
   const u32SourceCounts = Object.fromEntries(U32_SOURCES.map((source) => [source, 0]));
+  const f32At18SourceCounts = Object.fromEntries(F32_18_SOURCES.map((source) => [source, 0]));
   const lookupRelationCounts = Object.fromEntries(
     LOOKUP_RELATIONS.map((relation) => [relation, 0]));
   const events = [];
@@ -507,7 +582,8 @@ function associateUnitApplyDamageRosterKeys821(replay, {
     if (hasLookupKeys) {
       lookupRelationCounts[row.native_callback_lookup_key_0x24_raw_param_relation] += 1;
     }
-    if (damageIsV4) u32SourceCounts[row.native_callback_u32_0x10_source] += 1;
+    if (hasU32) u32SourceCounts[row.native_callback_u32_0x10_source] += 1;
+    if (damageIsV5) f32At18SourceCounts[row.native_callback_f32_0x18_source] += 1;
     const rosterRow = roster.get(row.raw_param);
     if (!rosterRow) {
       unmatchedCount += 1;
@@ -531,6 +607,8 @@ function associateUnitApplyDamageRosterKeys821(replay, {
       hero_stats_participant_id_candidate: rosterRow.participant_id_candidate,
       native_callback_f32_0x20_candidate: row.native_callback_f32_0x20_candidate,
       native_callback_f32_0x20_source: row.native_callback_f32_0x20_source,
+      ...(damageIsV5 ? Object.fromEntries(F32_18_ROW_FIELDS.map((field) =>
+        [field, row[field]])) : {}),
       pair_basis: 'EXACT_FULL_RAW_PARAM_IN_CANONICAL_HEROSTATS_ROSTER',
       actor_assignment_status: 'UNKNOWN',
       source_target_role_status: 'UNKNOWN',
@@ -550,9 +628,13 @@ function associateUnitApplyDamageRosterKeys821(replay, {
       !== damage.native_callback_lookup_key_0x24_raw_param_relation_counts[relation])) {
     return fail('INCONSISTENT', 'UnitApplyDamage native lookup relation counts differ');
   }
-  if (damageIsV4 && U32_SOURCES.some((source) =>
+  if (hasU32 && U32_SOURCES.some((source) =>
     u32SourceCounts[source] !== damage.native_callback_u32_0x10_source_counts[source])) {
     return fail('INCONSISTENT', 'UnitApplyDamage callback +0x10 source counts differ');
+  }
+  if (damageIsV5 && F32_18_SOURCES.some((source) =>
+    f32At18SourceCounts[source] !== damage.native_callback_f32_0x18_source_counts[source])) {
+    return fail('INCONSISTENT', 'UnitApplyDamage callback +0x18 source counts differ');
   }
   const physical = verifyPhysicalRefs(replay, damage.events, snapshot.events,
     precollected);
@@ -567,6 +649,14 @@ function associateUnitApplyDamageRosterKeys821(replay, {
     replay_sha256: replay.source_sha256,
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
     runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    ...(damageIsV5 ? {
+      evidence_callback_f32_0x18_table_sha256:
+        damage.evidence_callback_f32_0x18_table_sha256,
+      native_callback_f32_0x18_full_write_count:
+        damage.native_callback_f32_0x18_full_write_count,
+      native_callback_f32_0x18_source_counts:
+        { ...damage.native_callback_f32_0x18_source_counts },
+    } : {}),
     dependency_statuses: {
       unit_apply_damage_packet: damage.status,
       hero_minions_killed_snapshot: snapshot.status,
@@ -588,5 +678,6 @@ function associateUnitApplyDamageRosterKeys821(replay, {
 module.exports = {
   UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
   UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821,
   associateUnitApplyDamageRosterKeys821,
 };

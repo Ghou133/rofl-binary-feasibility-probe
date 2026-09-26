@@ -15,6 +15,7 @@ const {
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: DAMAGE_V4_ID,
   decodeUnitApplyDamagePacketCandidates821,
   decodeUnitApplyDamageCallbackF32FromRaw821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
@@ -32,6 +33,7 @@ const {
 const {
   UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE: profile,
   UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821: v1Profile,
+  UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V2_821: v2Profile,
   associateUnitApplyDamageLookup2cRosterKeys821: associate,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_lookup2c_roster_key_candidate');
 
@@ -241,6 +243,40 @@ function fixture({ version = BUILD, missingRosterKey = false,
   return { replay, unitApplyDamagePacketOutcome, minionsKilledSnapshotOutcome };
 }
 
+function withDamageProfile(values, version) {
+  const damage = values.unitApplyDamagePacketOutcome;
+  damage.profile_id = version === 4 ? DAMAGE_V4_ID : DAMAGE_PROFILE.id;
+  damage.evidence_callback_u32_0x10_table_sha256 =
+    DAMAGE_PROFILE.evidence_callback_u32_0x10_table_sha256;
+  damage.native_callback_u32_0x10_full_write_count = damage.event_count;
+  damage.native_callback_u32_0x10_source_counts = {
+    RAW_READER: 0, CONSTANT_0: damage.event_count,
+  };
+  for (const row of damage.events) {
+    row.build_profile = damage.profile_id;
+    row.native_callback_u32_0x10_candidate = 0;
+    row.native_callback_u32_0x10_encoded_bytes_hex = '85858585';
+    row.native_callback_u32_0x10_source = 'CONSTANT_0';
+  }
+  if (version === 5) {
+    damage.evidence_callback_f32_0x18_table_sha256 =
+      DAMAGE_PROFILE.evidence_callback_f32_0x18_table_sha256;
+    damage.native_callback_f32_0x18_full_write_count = damage.event_count;
+    damage.native_callback_f32_0x18_source_counts = {
+      RAW_READER: 0, CONSTANT_0: damage.event_count,
+    };
+    for (const row of damage.events) {
+      row.header_selector_bits_6_8 = 5;
+      row.native_callback_f32_0x18_candidate = 0;
+      row.native_callback_f32_0x18_encoded_bytes_hex = '3e3e3e3e';
+      row.native_callback_f32_0x18_source = 'CONSTANT_0';
+      row.native_callback_f32_0x18_raw_offset = null;
+      row.native_callback_f32_0x18_raw_bytes_hex = null;
+    }
+  }
+  return values;
+}
+
 test('821 native +0x2c roster pairing keeps both independent lookup keys and UNKNOWN roles', () => {
   const values = fixture();
   const rawPair = associateUnitApplyDamageRosterKeys821(values.replay, values);
@@ -338,6 +374,29 @@ test('821 cached +0x24 proof must agree with current Replay inputs', () => {
   assert.equal(associate(values.replay, {
     ...values, validatedRawRosterPairOutcome: alteredRawPair,
   }).status, 'INCONSISTENT');
+});
+
+test('821 +0x2c pairing preserves v4 and binds v5 anonymous +0x18 evidence', () => {
+  const previous = withDamageProfile(fixture(), 4);
+  const oldResult = associate(previous.replay, previous);
+  assert.equal(oldResult.status, 'CANDIDATE', oldResult.error);
+  assert.equal(oldResult.profile_id, v2Profile.id);
+  assert.equal('native_callback_f32_0x18_candidate' in oldResult.events[0], false);
+
+  const values = withDamageProfile(fixture(), 5);
+  const result = associate(values.replay, values);
+  assert.equal(result.status, 'CANDIDATE', result.error);
+  assert.equal(result.profile_id, profile.id);
+  assert.equal(result.native_callback_f32_0x18_full_write_count,
+    result.damage_packet_count);
+  assert.equal(result.events[0].native_callback_f32_0x18_candidate, 0);
+  assert.equal(result.events[0].native_callback_f32_0x18_source, 'CONSTANT_0');
+  assert.equal(result.events[0].semantic_effect_status, 'UNKNOWN');
+
+  const forged = withDamageProfile(fixture(), 5);
+  forged.unitApplyDamagePacketOutcome.events[0]
+    .native_callback_f32_0x18_encoded_bytes_hex = '00000000';
+  assert.equal(associate(forged.replay, forged).status, 'INCONSISTENT');
 });
 
 test('one original KR 821 Replay yields source-bound native +0x2c roster candidates', {

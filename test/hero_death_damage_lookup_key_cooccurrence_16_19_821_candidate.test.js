@@ -22,6 +22,7 @@ const {
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: DAMAGE_V4_ID,
   decodeUnitApplyDamagePacketCandidates821,
   decodeUnitApplyDamageCallbackF32FromRaw821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
@@ -29,6 +30,7 @@ const {
 const {
   HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE: profile,
   HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V1_821: v1Profile,
+  HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_PROFILE_V2_821: v2Profile,
   associateHeroDeathDamageLookupKeyCooccurrence821: associate,
 } = require('../src/decoders/rofl_16_19_821_hero_death_damage_lookup_key_cooccurrence_candidate');
 
@@ -271,6 +273,40 @@ function fixture({ version = BUILD, firstKey24 = VICTIM_KEY,
     minionsKilledSnapshotOutcome };
 }
 
+function withDamageProfile(values, version) {
+  const damage = values.unitApplyDamagePacketOutcome;
+  damage.profile_id = version === 4 ? DAMAGE_V4_ID : DAMAGE_PROFILE.id;
+  damage.evidence_callback_u32_0x10_table_sha256 =
+    DAMAGE_PROFILE.evidence_callback_u32_0x10_table_sha256;
+  damage.native_callback_u32_0x10_full_write_count = damage.event_count;
+  damage.native_callback_u32_0x10_source_counts = {
+    RAW_READER: 0, CONSTANT_0: damage.event_count,
+  };
+  for (const row of damage.events) {
+    row.build_profile = damage.profile_id;
+    row.native_callback_u32_0x10_candidate = 0;
+    row.native_callback_u32_0x10_encoded_bytes_hex = '85858585';
+    row.native_callback_u32_0x10_source = 'CONSTANT_0';
+  }
+  if (version === 5) {
+    damage.evidence_callback_f32_0x18_table_sha256 =
+      DAMAGE_PROFILE.evidence_callback_f32_0x18_table_sha256;
+    damage.native_callback_f32_0x18_full_write_count = damage.event_count;
+    damage.native_callback_f32_0x18_source_counts = {
+      RAW_READER: 0, CONSTANT_0: damage.event_count,
+    };
+    for (const row of damage.events) {
+      row.header_selector_bits_6_8 = 5;
+      row.native_callback_f32_0x18_candidate = 0;
+      row.native_callback_f32_0x18_encoded_bytes_hex = '3e3e3e3e';
+      row.native_callback_f32_0x18_source = 'CONSTANT_0';
+      row.native_callback_f32_0x18_raw_offset = null;
+      row.native_callback_f32_0x18_raw_bytes_hex = null;
+    }
+  }
+  return values;
+}
+
 test('same chunk/ms victim key retains all before/after packets and exact source equality', () => {
   const values = fixture();
   const result = associate(values.replay, values);
@@ -380,6 +416,32 @@ test('same-run route scan reuse preserves rows and rejects foreign or changed so
   values.replay.buffer[0] ^= 1;
   const changed = associate(values.replay, { ...values, precollected: token });
   assert.equal(changed.status, 'DECODE_FAILED');
+});
+
+test('death/damage co-occurrence preserves v4 and source-binds v5 +0x18', () => {
+  const previous = withDamageProfile(fixture(), 4);
+  const oldResult = associate(previous.replay, previous);
+  assert.equal(oldResult.status, 'CANDIDATE', oldResult.error);
+  assert.equal(oldResult.profile_id, v2Profile.id);
+  assert.equal('native_callback_f32_0x18_candidate' in
+    oldResult.events[0].same_time_victim_key24_packet_candidates[0], false);
+
+  const values = withDamageProfile(fixture(), 5);
+  const result = associate(values.replay, values);
+  assert.equal(result.status, 'CANDIDATE', result.error);
+  assert.equal(result.profile_id, profile.id);
+  assert.equal(result.native_callback_f32_0x18_full_write_count,
+    result.damage_packet_count);
+  assert.equal(result.events[0].same_time_victim_key24_packet_candidates[0]
+    .native_callback_f32_0x18_candidate, 0);
+  assert.equal(result.events[0].same_time_victim_key24_packet_candidates[0]
+    .native_callback_f32_0x18_source, 'CONSTANT_0');
+  assert.equal(result.events[0].semantic_effect_status, 'UNKNOWN');
+
+  const forged = withDamageProfile(fixture(), 5);
+  forged.unitApplyDamagePacketOutcome.events[0]
+    .native_callback_f32_0x18_encoded_bytes_hex = '00000000';
+  assert.equal(associate(forged.replay, forged).status, 'INCONSISTENT');
 });
 
 test('one original KR exact-build Replay preserves full source-bound packet multiplicity', {

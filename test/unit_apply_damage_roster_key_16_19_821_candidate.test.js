@@ -17,6 +17,7 @@ const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821: DAMAGE_V2_ID,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: DAMAGE_V4_ID,
   decodeUnitApplyDamagePacketCandidates821,
   decodeUnitApplyDamageCallbackF32FromRaw821,
   decodeUnitApplyDamageLookupKeyFromRaw821,
@@ -27,6 +28,7 @@ const {
 const {
   UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: profile,
   UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821: v1Profile,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821: v2Profile,
   associateUnitApplyDamageRosterKeys821: associate,
 } = require('../src/decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 
@@ -99,9 +101,12 @@ function fixture({ version = BUILD,
   chunks.push({ stream: 1, body: Buffer.concat(damageKeys.map((rawParam, i) =>
     packet(0x005f, rawParam, COMMON_PAYLOAD, 1500 + i * 100))) });
   const replay = replayFromChunks(chunks, version);
-  const damageProfileId = damageProfile === 'v4' ? DAMAGE_PROFILE.id
+  const damageProfileId = damageProfile === 'v5' ? DAMAGE_PROFILE.id
+    : damageProfile === 'v4' ? DAMAGE_V4_ID
     : damageProfile === 'v3' ? DAMAGE_V3_ID : DAMAGE_V2_ID;
-  const hasLookupKeys = damageProfile === 'v3' || damageProfile === 'v4';
+  const hasLookupKeys = ['v3', 'v4', 'v5'].includes(damageProfile);
+  const hasU32 = damageProfile === 'v4' || damageProfile === 'v5';
+  const hasF32At18 = damageProfile === 'v5';
   const damageEvents = [];
   const snapshotEvents = [];
   const lookupRelationCounts = {
@@ -150,6 +155,10 @@ function fixture({ version = BUILD,
       header_selector_bits_24_26: block.payload[3] & 7,
       header_selector_bits_0_2: block.payload[0] & 7,
       header_selector_bits_3_5: (block.payload[0] >>> 3) & 7,
+      ...(hasF32At18 ? {
+        header_selector_bits_6_8:
+          ((block.payload[0] >>> 6) | (block.payload[1] << 2)) & 7,
+      } : {}),
       native_callback_f32_0x20_candidate:
         decodeUnitApplyDamageCallbackF32FromRaw821('083dbaef'),
       native_callback_f32_0x20_source: 'RAW_READER',
@@ -162,10 +171,17 @@ function fixture({ version = BUILD,
         native_callback_lookup_key_0x2c_encoded_bytes_hex: '39e504c3',
         native_callback_lookup_key_0x24_raw_param_relation: lookupRelation,
       } : {}),
-      ...(damageProfile === 'v4' ? {
+      ...(hasU32 ? {
         native_callback_u32_0x10_candidate: 0,
         native_callback_u32_0x10_encoded_bytes_hex: '85858585',
         native_callback_u32_0x10_source: 'CONSTANT_0',
+      } : {}),
+      ...(hasF32At18 ? {
+        native_callback_f32_0x18_candidate: 0,
+        native_callback_f32_0x18_encoded_bytes_hex: '3e3e3e3e',
+        native_callback_f32_0x18_source: 'CONSTANT_0',
+        native_callback_f32_0x18_raw_offset: null,
+        native_callback_f32_0x18_raw_bytes_hex: null,
       } : {}),
       semantic_effect_status: 'UNKNOWN',
       confidence: 'CANDIDATE',
@@ -199,11 +215,19 @@ function fixture({ version = BUILD,
       native_callback_lookup_key_0x24_raw_param_relation_counts:
         lookupRelationCounts,
     } : {}),
-    ...(damageProfile === 'v4' ? {
+    ...(hasU32 ? {
       evidence_callback_u32_0x10_table_sha256:
         DAMAGE_PROFILE.evidence_callback_u32_0x10_table_sha256,
       native_callback_u32_0x10_full_write_count: damageEvents.length,
       native_callback_u32_0x10_source_counts: {
+        RAW_READER: 0, CONSTANT_0: damageEvents.length,
+      },
+    } : {}),
+    ...(hasF32At18 ? {
+      evidence_callback_f32_0x18_table_sha256:
+        DAMAGE_PROFILE.evidence_callback_f32_0x18_table_sha256,
+      native_callback_f32_0x18_full_write_count: damageEvents.length,
+      native_callback_f32_0x18_source_counts: {
         RAW_READER: 0, CONSTANT_0: damageEvents.length,
       },
     } : {}),
@@ -322,7 +346,7 @@ test('821 UnitApplyDamage roster association accepts v4 and checks anonymous +0x
   const values = fixture({ damageProfile: 'v4' });
   const result = associate(values.replay, values);
   assert.equal(result.status, 'CANDIDATE', result.error);
-  assert.equal(result.profile_id, profile.id);
+  assert.equal(result.profile_id, v2Profile.id);
   assert.equal(result.events[0].semantic_effect_status, 'UNKNOWN');
 
   for (const mutate of [
@@ -335,6 +359,40 @@ test('821 UnitApplyDamage roster association accepts v4 and checks anonymous +0x
   ]) {
     const forged = fixture({ damageProfile: 'v4' });
     mutate(forged.unitApplyDamagePacketOutcome);
+    assert.equal(associate(forged.replay, forged).status, 'INCONSISTENT');
+  }
+});
+
+test('821 UnitApplyDamage roster association accepts v5 and binds anonymous +0x18 witness', () => {
+  const values = fixture({ damageProfile: 'v5' });
+  const result = associate(values.replay, values);
+  assert.equal(result.status, 'CANDIDATE', result.error);
+  assert.equal(result.profile_id, profile.id);
+  assert.equal(result.native_callback_f32_0x18_full_write_count, 4);
+  assert.deepEqual(result.native_callback_f32_0x18_source_counts,
+    { RAW_READER: 0, CONSTANT_0: 4 });
+  assert.equal(result.events[0].header_selector_bits_6_8, 5);
+  assert.equal(result.events[0].native_callback_f32_0x18_candidate, 0);
+  assert.equal(result.events[0].native_callback_f32_0x18_raw_offset, null);
+  for (const mutate of [
+    (damage) => { damage.evidence_callback_f32_0x18_table_sha256 = '0'.repeat(64); },
+    (damage) => { damage.native_callback_f32_0x18_full_write_count -= 1; },
+    (damage) => { damage.native_callback_f32_0x18_source_counts.CONSTANT_0 -= 1; },
+    (damage) => { damage.events[0].header_selector_bits_6_8 = 0; },
+    (damage) => { damage.events[0].native_callback_f32_0x18_candidate = 1; },
+    (damage) => { damage.events[0].native_callback_f32_0x18_encoded_bytes_hex = '00000000'; },
+    (damage) => { damage.events[0].native_callback_f32_0x18_source = 'RAW_READER'; },
+    (damage) => { damage.events[0].native_callback_f32_0x18_raw_offset = 1; },
+    (damage) => { damage.events[0].native_callback_f32_0x18_raw_bytes_hex = '00000000'; },
+  ]) {
+    const forged = fixture({ damageProfile: 'v5' });
+    mutate(forged.unitApplyDamagePacketOutcome);
+    assert.equal(associate(forged.replay, forged).status, 'INCONSISTENT');
+  }
+  for (const legacy of ['v2', 'v3', 'v4']) {
+    const forged = fixture({ damageProfile: legacy });
+    forged.unitApplyDamagePacketOutcome.events[0]
+      .native_callback_f32_0x18_candidate = 0;
     assert.equal(associate(forged.replay, forged).status, 'INCONSISTENT');
   }
 });
@@ -396,6 +454,9 @@ test('one original KR 821 Replay yields source-bound full-key associations', {
   const result = associate(replay,
     { unitApplyDamagePacketOutcome, minionsKilledSnapshotOutcome });
   assert.equal(result.status, 'CANDIDATE', result.error);
+  assert.equal(result.profile_id, profile.id);
+  assert.equal(result.native_callback_f32_0x18_full_write_count,
+    result.damage_packet_count);
   assert.equal(result.matched_full_key_packet_count, result.event_count);
   assert.equal(result.matched_full_key_packet_count
     + result.unmatched_packet_count, result.damage_packet_count);
@@ -405,4 +466,13 @@ test('one original KR 821 Replay yields source-bound full-key associations', {
     result.damage_packet_count + result.snapshot_count);
   assert.ok(result.events.every((row) => row.actor_assignment_status === 'UNKNOWN'
     && row.semantic_effect_status === 'UNKNOWN'));
+  const rawAt18 = unitApplyDamagePacketOutcome.events.find((row) =>
+    row.native_callback_f32_0x18_source === 'RAW_READER');
+  assert.ok(rawAt18);
+  const originalRawAt18 = rawAt18.native_callback_f32_0x18_raw_bytes_hex;
+  rawAt18.native_callback_f32_0x18_raw_bytes_hex = '00000000';
+  assert.equal(associate(replay, {
+    unitApplyDamagePacketOutcome, minionsKilledSnapshotOutcome,
+  }).status, 'INCONSISTENT');
+  rawAt18.native_callback_f32_0x18_raw_bytes_hex = originalRawAt18;
 });

@@ -6,15 +6,18 @@ const { isDeepStrictEqual } = require('node:util');
 const {
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
   UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: DAMAGE_V4_ID,
 } = require('./rofl_16_19_821_unit_apply_damage_packet_candidate');
 const {
   UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE: RAW_PAIR_PROFILE,
   UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821: RAW_PAIR_PROFILE_V1,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821: RAW_PAIR_PROFILE_V2,
   associateUnitApplyDamageRosterKeys821,
 } = require('./rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const {
   UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE: KEY24_PAIR_PROFILE,
   UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V1_821: KEY24_PAIR_PROFILE_V1,
+  UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_PROFILE_V2_821: KEY24_PAIR_PROFILE_V2,
   associateUnitApplyDamageLookupRosterKeys821,
 } = require('./rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
 const { RUNTIME_IMAGE_SHA256 } = require('./rofl_16_19_821_runtime_bytes');
@@ -54,7 +57,7 @@ const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821 = Object.freeze({
   ]),
 });
 
-const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE = Object.freeze({
+const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V2_821 = Object.freeze({
   ...UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821,
   id: 'rofl-16.19.821.7343-kr-unit-apply-damage-lookup2c-roster-key-candidate-v2',
   known_limits: Object.freeze([
@@ -62,6 +65,38 @@ const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE = Object.freeze({
     'The complete native-witnessed v4 damage outcome, complete same-Replay roster, and physically source-bound raw-key pair are required.',
   ]),
 });
+const UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE = Object.freeze({
+  ...UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V2_821,
+  id: 'rofl-16.19.821.7343-kr-unit-apply-damage-lookup2c-roster-key-candidate-v3',
+  known_limits: Object.freeze([
+    ...UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821.known_limits.slice(0, -1),
+    'The complete native-witnessed v5 damage outcome, including the anonymous +0x18 f32, complete same-Replay roster, and physically source-bound raw-key pair are required.',
+  ]),
+});
+
+function v5F32Metadata(damage) {
+  return {
+    evidence_callback_f32_0x18_table_sha256:
+      damage.evidence_callback_f32_0x18_table_sha256,
+    native_callback_f32_0x18_full_write_count:
+      damage.native_callback_f32_0x18_full_write_count,
+    native_callback_f32_0x18_source_counts:
+      structuredClone(damage.native_callback_f32_0x18_source_counts),
+  };
+}
+
+function v5F32Row(row) {
+  return {
+    header_selector_bits_6_8: row.header_selector_bits_6_8,
+    native_callback_f32_0x18_candidate: row.native_callback_f32_0x18_candidate,
+    native_callback_f32_0x18_encoded_bytes_hex:
+      row.native_callback_f32_0x18_encoded_bytes_hex,
+    native_callback_f32_0x18_source: row.native_callback_f32_0x18_source,
+    native_callback_f32_0x18_raw_offset: row.native_callback_f32_0x18_raw_offset,
+    native_callback_f32_0x18_raw_bytes_hex:
+      row.native_callback_f32_0x18_raw_bytes_hex,
+  };
+}
 
 function sha(value) {
   return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
@@ -74,7 +109,9 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
 } = {}) {
   const profile = unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V3_ID
     ? UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821
-    : UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE;
+    : unitApplyDamagePacketOutcome?.profile_id === DAMAGE_V4_ID
+      ? UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V2_821
+      : UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE;
   const damage = unitApplyDamagePacketOutcome;
   const snapshot = minionsKilledSnapshotOutcome;
   const base = {
@@ -126,8 +163,8 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
       },
     });
   }
-  if (damage.profile_id !== DAMAGE_PROFILE.id && damage.profile_id !== DAMAGE_V3_ID) {
-    return fail('PROFILE_UNAVAILABLE', 'native +0x2c roster association requires an exact 821 v3 or v4 damage profile');
+  if (![DAMAGE_V3_ID, DAMAGE_V4_ID, DAMAGE_PROFILE.id].includes(damage.profile_id)) {
+    return fail('PROFILE_UNAVAILABLE', 'native +0x2c roster association requires an exact 821 v3, v4, or v5 damage profile');
   }
 
   // Recheck all 0x005f/0x0089 references against the physical Replay even
@@ -144,8 +181,9 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
       dependency_error: rawPair.error ?? null,
     });
   }
-  const expectedRawPair = damage.profile_id === DAMAGE_PROFILE.id
-    ? RAW_PAIR_PROFILE : RAW_PAIR_PROFILE_V1;
+  const expectedRawPair = damage.profile_id === DAMAGE_V3_ID
+    ? RAW_PAIR_PROFILE_V1 : damage.profile_id === DAMAGE_V4_ID
+      ? RAW_PAIR_PROFILE_V2 : RAW_PAIR_PROFILE;
   if (rawPair.profile_id !== expectedRawPair.id) {
     return fail('INCONSISTENT', 'source-bound raw-key roster profile differs');
   }
@@ -165,8 +203,9 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
       dependency_error: key24Pair.error ?? null,
     });
   }
-  const expectedKey24Pair = damage.profile_id === DAMAGE_PROFILE.id
-    ? KEY24_PAIR_PROFILE : KEY24_PAIR_PROFILE_V1;
+  const expectedKey24Pair = damage.profile_id === DAMAGE_V3_ID
+    ? KEY24_PAIR_PROFILE_V1 : damage.profile_id === DAMAGE_V4_ID
+      ? KEY24_PAIR_PROFILE_V2 : KEY24_PAIR_PROFILE;
   if (key24Pair.profile_id !== expectedKey24Pair.id) {
     return fail('INCONSISTENT', 'native +0x24 roster profile differs');
   }
@@ -218,6 +257,7 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
       replay_sha256: replay.source_sha256,
       replay_time_ms: row.replay_time_ms,
       raw_param: row.raw_param,
+      ...(damage.profile_id === DAMAGE_PROFILE.id ? v5F32Row(row) : {}),
       native_callback_lookup_key_u32_0x24_candidate: key24,
       native_callback_lookup_key_0x24_encoded_bytes_hex:
         row.native_callback_lookup_key_0x24_encoded_bytes_hex,
@@ -249,6 +289,7 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
     replay_sha256: replay.source_sha256,
     runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
     runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    ...(damage.profile_id === DAMAGE_PROFILE.id ? v5F32Metadata(damage) : {}),
     dependency_statuses: {
       unit_apply_damage_packet: damage.status,
       hero_minions_killed_snapshot: snapshot.status,
@@ -272,5 +313,6 @@ function associateUnitApplyDamageLookup2cRosterKeys821(replay, {
 module.exports = {
   UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE,
   UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821,
+  UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V2_821,
   associateUnitApplyDamageLookup2cRosterKeys821,
 };
