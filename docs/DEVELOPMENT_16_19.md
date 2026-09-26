@@ -64,6 +64,18 @@ Current progress (older notes below retain their original research context):
   remain cumulative reported candidates; effective healing, individual
   recipient and source remain `UNKNOWN`.
 
+- **ParamsHeal packet source query:** Saved exact-821
+  `params_heal_packet_candidates --verify-source --runtime-image IMAGE`
+  now re-decodes the entire original ROFL through the pinned native
+  candidate decoder and compares its result and every saved row before
+  applying filters or `--limit`. A fresh selected CLI decode of
+  `KR_8392938200.rofl` saved 6,059 reports with zero framing errors;
+  the source query physically checked all 6,059, matched 321 rows for
+  one anonymous u32 key and emitted one. A same-byte relocated Replay
+  passed, while a late row edit with a rewritten manifest hash failed
+  with zero output. Anonymous entity roles and effective healing remain
+  `UNKNOWN`.
+
 - **TargetHero callback key to roster (opt-in candidate):** On exact
   `16.19.821.7343`, select `--events target_hero_roster_key_pair
   --runtime-image IMAGE --event-jsonl-only` or API capability

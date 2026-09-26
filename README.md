@@ -764,6 +764,8 @@ node src/cli.js decode "D:\Replays\example-16.19.820.7193.rofl" `
 
 精确 821 的 `hero_total_heal_snapshot_candidates` 与 `hero_total_units_healed_snapshot_candidates` 也可加 `--verify-source`：从原始 ROFL 重新解码对应累计快照，核对候选数据、结算尾差和全部保存行，`--limit` 不缩小核验范围。同字节回放搬移后可在单场产物上使用 `--source-replay PATH`。这些是累计上报候选值，核验不证明有效治疗、来源或目标。
 
+`params_heal_packet_candidates` 保存查询可加 `--verify-source --runtime-image PATH`，从完整原始 821 回放和精确镜像重新运行 ParamsHeal 原生解码，核对能力结果与全部保存行，包括 `--limit` 后的行。单场同字节副本可用 `--source-replay PATH`。`--opaque-u32 VALUE` 仍只筛选两个匿名字段；查询通过不确认施法者、接收者或有效治疗。
+
 `shielding_params_roster_key_pair_candidates` 的保存查询核对整场两项来源事件流、十人阵容、每行两个独立键的命中或未命中状态，包括 `--limit` 后的行。`--opaque-u32 VALUE` 可匹配 `+0x08` 或 `+0x0c`；字段角色未确认，因此不接受 `--participant`。加 `--verify-source --runtime-image PATH` 时，查询还会核对固定镜像 SHA，从完整原始 ROFL 重新执行原生 ShieldingParams 解码，并逐行比对两项来源流与配对结果；单场同字节搬移可配 `--source-replay PATH`。镜像、回放或任何一行不符都会失败且不输出部分结果。
 
 先运行 `node src/cli.js query-events "work\16-19-821-batch" --list-events` 可得到实际保存的候选事件键、每场精确 build、能力状态和声明行数。`SAVED` 且声明行数为 0 与 `UNAVAILABLE`、`NOT_REQUESTED` 分开显示。目录清单会校验 Replay 元数据；批量目录还核对清单中所列事件文件的 SHA-256。此命令不扫描 JSONL 行，返回的声明行数和文件散列不代表逐行内容已通过 `--event` 查询校验。

@@ -7,6 +7,8 @@ const readline = require('node:readline');
 const { isDeepStrictEqual } = require('node:util');
 const { parseReplayFile, walkBlocks } = require('./rofl');
 const { decodeSemanticReplay } = require('./semantic_api');
+const { PARAMS_HEAL_PACKET_CANDIDATE_PROFILE_821 } =
+  require('./decoders/rofl_16_19_821_params_heal_packet_candidate');
 const { HERO_ROSTER_METADATA_BRIDGE_821_PROFILE } =
   require('./decoders/rofl_16_19_821_roster_metadata_bridge_candidate');
 const { SHIELDING_PARAMS_PACKET_PAIR_821_PROFILE } =
@@ -221,6 +223,7 @@ const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
   'hero_roster_metadata_bridge_candidates',
   'hero_total_heal_snapshot_candidates',
   'hero_total_units_healed_snapshot_candidates',
+  'params_heal_packet_candidates',
   'target_hero_roster_key_pair_candidates',
   'shielding_params_roster_key_pair_candidates',
   'set_spell_level_packet_candidates',
@@ -3713,6 +3716,7 @@ const HERO_HEAL_SNAPSHOT_EVENTS_821 = Object.freeze({
   hero_total_heal_snapshot_candidates: 'hero_total_heal_snapshot',
   hero_total_units_healed_snapshot_candidates: 'hero_total_units_healed_snapshot',
 });
+const PARAMS_HEAL_EVENT_821 = 'params_heal_packet_candidates';
 const ROSTER_BRIDGE_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'hero_raw_param', 'participant_id_candidate',
@@ -3917,6 +3921,85 @@ function prepareHeroHealSnapshotSourceVerification(prepared, sourceReplay) {
       { source_replay: resolved });
   }
   return { kind: 'HERO_HEAL_SNAPSHOT', rows, sourceReplay: resolved };
+}
+
+function prepareParamsHealSourceVerification(prepared, sourceReplay,
+  runtimeImage, pythonExecutable) {
+  const profile = PARAMS_HEAL_PACKET_CANDIDATE_PROFILE_821;
+  if (prepared.eventKey !== PARAMS_HEAL_EVENT_821
+      || prepared.replayVersion !== profile.replay_version
+      || prepared.capabilityStatus !== 'CANDIDATE') {
+    throw new EventQueryError('UNSUPPORTED_SOURCE_VERIFICATION',
+      'ParamsHeal source verification requires an exact-821 candidate.');
+  }
+  const saved = prepared.capabilityResult;
+  const mirrored = prepared[PREPARED_REPLAY_METADATA]?.analysis?.semantic
+    ?.capability_results?.[profile.capability];
+  if (saved.profile_id !== profile.id
+      || saved.input_packet_id !== profile.replay_block_packet_id
+      || saved.child_event_id !== profile.child_event_id
+      || saved.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || saved.runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || saved.runtime_image_status !== 'MATCHED_USED'
+      || saved.runtime_image_used !== true
+      || saved.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_PARAMS_HEAL_REPORT'
+      || saved.input_count !== prepared.declaredCount
+      || saved.event_count !== prepared.declaredCount
+      || !isCount(saved.input_count) || saved.input_count === 0
+      || saved.input_count > 20_000
+      || !isDeepStrictEqual(saved.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(mirrored, saved)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'Saved ParamsHeal metadata differs from its exact-build native candidate profile.');
+  }
+  if (typeof runtimeImage !== 'string' || runtimeImage.trim() === '') {
+    throw new EventQueryError('MISSING_RUNTIME_IMAGE',
+      'ParamsHeal source verification requires --runtime-image for the exact-build mapped image.');
+  }
+  const filename = sourceReplay ?? prepared.sourcePath;
+  if (typeof filename !== 'string' || filename.trim() === '') {
+    throw new EventQueryError('MISSING_SOURCE_REPLAY',
+      'No original ROFL path is available; supply --source-replay for this Replay.');
+  }
+  const resolved = path.resolve(filename);
+  let replay;
+  try {
+    replay = parseReplayFile(resolved);
+  } catch (error) {
+    throw new EventQueryError(error.code === 'INPUT_READ_ERROR'
+      ? 'SOURCE_REPLAY_READ_FAILED' : 'SOURCE_REPLAY_INVALID',
+    `Cannot verify original ROFL: ${error.message}`,
+    { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  if (replay.header.version !== prepared.replayVersion
+      || replay.source_sha256 !== prepared.replaySha) {
+    throw new EventQueryError('SOURCE_REPLAY_IDENTITY_MISMATCH',
+      'Original ROFL build or SHA-256 differs from saved Replay identity.',
+      { source_replay: resolved });
+  }
+  let decoded;
+  try {
+    decoded = decodeSemanticReplay(replay, {
+      capabilities: [profile.capability],
+      runtimeImagePath: path.resolve(runtimeImage), pythonExecutable,
+    });
+  } catch (error) {
+    throw new EventQueryError('SOURCE_REPLAY_DECODE_FAILED',
+      `Cannot re-decode original ParamsHeal packets: ${error.message}`,
+      { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  const result = decoded.capability_results?.[profile.capability];
+  const rows = decoded.events?.[PARAMS_HEAL_EVENT_821];
+  if (result?.status !== 'CANDIDATE'
+      || !isDeepStrictEqual(result, saved)
+      || !Array.isArray(rows) || rows.length !== prepared.declaredCount) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Physical ROFL or pinned image differs from saved ParamsHeal native result.',
+      { source_replay: resolved, source_status: result?.status ?? null });
+  }
+  return { kind: 'PARAMS_HEAL_PACKET', rows, sourceReplay: resolved };
 }
 
 function prepareRosterBridgeInventory(artifactDirectory, semantic, analysis,
@@ -11236,6 +11319,9 @@ async function streamEventQuery(prepared, options, emitLine) {
       : Object.hasOwn(HERO_HEAL_SNAPSHOT_EVENTS_821, prepared.eventKey)
         ? prepareHeroHealSnapshotSourceVerification(prepared,
           options.sourceReplay)
+      : prepared.eventKey === PARAMS_HEAL_EVENT_821
+        ? prepareParamsHealSourceVerification(prepared,
+          options.sourceReplay, options.runtimeImage, options.pythonExecutable)
       : prepared.eventKey === TARGET_HERO_ROSTER_PAIR_EVENT_821
         ? { kind: 'TARGET_HERO_ROSTER_PAIR' }
       : prepared.eventKey === SHIELDING_PARAMS_ROSTER_PAIR_EVENT_821
@@ -11712,6 +11798,16 @@ async function streamEventQuery(prepared, options, emitLine) {
           `Saved SetSpellLevel V2 row ${lineNumber} differs from the physical ROFL.`,
           { line_number: lineNumber });
       }
+      if (sourceReplayVerification?.kind === 'PARAMS_HEAL_PACKET') {
+        const canonical = sourceReplayVerification.rows[lineNumber - 1];
+        if (!canonical || !isDeepStrictEqual(row,
+          normalizeReplaySourcePaths(canonical, prepared.sourcePath ?? null))) {
+          throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+            `Saved ParamsHeal row ${lineNumber} differs from physical ROFL native decoding.`,
+            { line_number: lineNumber,
+              source_replay: sourceReplayVerification.sourceReplay });
+        }
+      }
       let sourceCastNestedFields = null;
       if (sourceReplayVerification
           && prepared.eventKey === 'cast_spell_ans_packet_candidates') {
@@ -11803,6 +11899,7 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (sourceReplayVerification
           && sourceReplayVerification.kind !== 'ROSTER_BRIDGE'
           && sourceReplayVerification.kind !== 'HERO_HEAL_SNAPSHOT'
+          && sourceReplayVerification.kind !== 'PARAMS_HEAL_PACKET'
           && sourceReplayVerification.kind !== 'TARGET_HERO_ROSTER_PAIR'
           && sourceReplayVerification.kind !== 'SHIELDING_PARAMS_ROSTER_PAIR'
           && sourceReplayVerification.kind !== 'ANONYMOUS_029C_ROSTER_PAIR'
@@ -12102,6 +12199,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   if (sourceReplayVerification
       && sourceReplayVerification.kind !== 'ROSTER_BRIDGE'
       && sourceReplayVerification.kind !== 'HERO_HEAL_SNAPSHOT'
+      && sourceReplayVerification.kind !== 'PARAMS_HEAL_PACKET'
       && sourceReplayVerification.kind !== 'TARGET_HERO_ROSTER_PAIR'
       && sourceReplayVerification.kind !== 'SHIELDING_PARAMS_ROSTER_PAIR'
       && sourceReplayVerification.kind !== 'ANONYMOUS_029C_ROSTER_PAIR'
