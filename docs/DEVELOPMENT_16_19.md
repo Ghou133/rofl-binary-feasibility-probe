@@ -4,6 +4,30 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **UnitApplyDamage anonymous callback u32 at +0x1c (staged V6):** On the
+  pinned `16.19.821.7343` mapped image (SHA-256
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`),
+  the callback reads object `+0x1c` at RVA `0x2ce2f8`, decodes its four
+  bytes with helper `0x251df0` (complete table SHA-256
+  `5acd891ce46e85484de06fa22f6cece25e6bfcc4c258094863c98d225ea3dc18`),
+  and forwards the word to `0x2827c0`. The exact deserializer selects
+  its write branch using header bits 12..14. The opt-in V6 packet decoder
+  checks every final four-byte write, callback transform, native raw-reader
+  call and exact variable-length raw span. The exact `0xe81ec0` reader
+  rederives the value from the protected two- or three-byte raw span;
+  V5 remains the active CLI/API
+  and saved-query profile. Original KR Replays `KR_8392938200` and
+  `KR_8393872512` yielded 125,182/125,182 fully consumed packets and
+  +0x1c full writes. The first had 61,535 constant-zero and 3,289
+  raw-reader rows (472 two-byte, 2,817 three-byte spans); the second had
+  60,358 constant-zero rows. Selectors 1/2/3/4/5/7 took their respective
+  native raw reader branches in the first Replay; selector 0 wrote zero.
+  Selector 6 has a static constant-`0xffffffff` branch in the image but
+  occurred in none of the 11 supplied KR Replays and is rejected by V6.
+  V6 is packet-local and is not a selected CLI/API or saved-query capability
+  until the four damage associations and saved V5 validation migrate with
+  explicit historical profile IDs. The u32 has no proven actor, type,
+  amount, source, target, or gameplay-effect meaning.
 - **Objective-steal OnEvent packet markers (isolated development branch):**
   The exact 821 image names `0x040a` child `0x00be`
   `OnKillDragonSteal` and child `0x00d6` `OnKillWormSteal` at
