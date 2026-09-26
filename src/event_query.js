@@ -212,6 +212,9 @@ const { CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821,
   decodeProtectedChangeMissileTargetVectorF32, expectedProtectedVector,
   isObservedChangeMissileTargetPayload } =
   require('./decoders/rofl_16_19_821_change_missile_target_packet_candidate');
+const { MISSILE_KEY_COOCCURRENCE_821_PROFILE,
+  recomputeSavedMissileKeyCooccurrence821 } =
+  require('./decoders/rofl_16_19_821_missile_key_cooccurrence_candidate');
 const { SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821,
   decodeProtectedSetDimensionMissileArgumentU8,
   isObservedSetDimensionMissilePayload } =
@@ -243,6 +246,7 @@ const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
   'target_hero_packet_candidates',
   'force_create_missile_packet_candidates',
   'change_missile_target_packet_candidates',
+  'missile_key_cooccurrence_candidates',
   'unit_apply_damage_packet_candidates',
   'set_dimension_missile_packet_candidates',
   'anonymous_029c_packet_candidates',
@@ -794,6 +798,8 @@ const OPAQUE_U32_FIELDS_821 = Object.freeze({
     Object.freeze(['native_callback_comparison_key_u32']),
   change_missile_target_packet_candidates:
     Object.freeze(['native_callback_comparison_key_u32']),
+  missile_key_cooccurrence_candidates:
+    Object.freeze(['change_packet_header_u32']),
   npc_buff_add_packet_candidates: Object.freeze(['opaque_u32_0x10']),
   npc_buff_remove_packet_candidates: Object.freeze(['opaque_u32_0x10']),
   npc_buff_update_num_counter_packet_candidates:
@@ -3751,6 +3757,22 @@ const PARAMS_HEAL_ROSTER_PAIR_EVENT_821 =
 const ANONYMOUS_029C_ROSTER_PAIR_EVENT_821 = 'anonymous_029c_roster_key_pair_candidates';
 const SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821 =
   'set_spell_level_roster_key_pair_candidates';
+const MISSILE_KEY_COOCCURRENCE_EVENT_821 =
+  'missile_key_cooccurrence_candidates';
+const MISSILE_KEY_COOCCURRENCE_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'change_packet_header_u32',
+  'change_packet_callback_comparison_key_u32',
+  'force_preceding_equal_key_count',
+  'zero_header_raw_preceding_equal_key_count',
+  'force_older_preceding_equal_key_count', 'force_future_equal_key_count',
+  'force_future_equal_key_within_window_count',
+  'plus_0x100_control_preceding_count', 'preceding_lag_ms',
+  'association_status', 'force_packet_ref', 'change_packet_ref',
+  'live_receiver_status', 'missile_identity_status', 'owner_status',
+  'target_status', 'creation_effect_status', 'target_change_effect_status',
+  'causality_status', 'confidence', 'semantic_status',
+]);
 const SET_SPELL_LEVEL_ROSTER_PAIR_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
   'replay_time_ms', 'raw_param', 'hero_raw_param',
@@ -4389,6 +4411,377 @@ function normalizeReplaySourcePaths(value, savedPath) {
   return Object.fromEntries(Object.entries(value).map(([key, item]) =>
     [key, key === 'source_path' ? savedPath
       : normalizeReplaySourcePaths(item, savedPath)]));
+}
+
+function prepareMissileKeyCooccurrenceEvent(artifactDirectory, semantic,
+  analysis, result) {
+  const profile = MISSILE_KEY_COOCCURRENCE_821_PROFILE;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${profile.capability} requires exact build ${profile.replay_version}.`);
+  }
+  if (result && !['CANDIDATE', 'MISSING_INPUT', 'PROFILE_UNAVAILABLE',
+    'DECODE_FAILED', 'UNSUPPORTED'].includes(result.status)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'Missile key co-occurrence must remain candidate or unavailable.');
+  }
+  if (result?.status !== 'CANDIDATE') return null;
+  const force = prepareEventQueryFromDocuments(artifactDirectory,
+    'force_create_missile_packet_candidates', semantic, analysis);
+  const change = prepareEventQueryFromDocuments(artifactDirectory,
+    'change_missile_target_packet_candidates', semantic, analysis);
+  if (force.declaredCount > 40_000 || change.declaredCount > 20_000) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Missile native source count exceeds its exact-build association bound.');
+  }
+  if (result.profile_id !== profile.id
+      || result.evidence_status !== profile.evidence_status
+      || result.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || result.input_packet_id !== 0x040c
+      || result.input_count !== change.declaredCount
+      || result.event_count !== analysis.event_counts?.[MISSILE_KEY_COOCCURRENCE_EVENT_821]
+      || result.event_count !== change.declaredCount
+      || result.force_source_count !== force.declaredCount
+      || result.change_source_count !== change.declaredCount
+      || result.precedence_window_ms !== 2000
+      || !isDeepStrictEqual(result.dependency_statuses, {
+        force_create_missile_packet: 'CANDIDATE',
+        change_missile_target_packet: 'CANDIDATE',
+      })
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || result.force_native_input_sha256
+        !== force.capabilityResult.native_input_sha256
+      || result.force_native_output_sha256
+        !== force.capabilityResult.native_output_sha256
+      || result.change_native_input_sha256
+        !== change.capabilityResult.native_input_sha256
+      || result.change_native_output_sha256
+        !== change.capabilityResult.native_output_sha256
+      || !isDeepStrictEqual(
+        analysis.semantic?.capability_results?.[profile.capability], result)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'Missile key pair metadata differs from its exact-build native sources.');
+  }
+  const outputRoot = path.dirname(path.dirname(artifactDirectory));
+  const relative = `replays/${path.basename(artifactDirectory)}`;
+  const manifest = readArtifactJson(outputRoot, 'manifest.json');
+  const hashes = manifest.output_hashes_excluding_manifest;
+  if (!hashes || typeof hashes !== 'object' || Array.isArray(hashes)) {
+    throw new EventQueryError('INVALID_BATCH_METADATA',
+      'Missile key pair requires manifest-hashed Replay artifacts.');
+  }
+  for (const source of [force, change]) {
+    checkBatchHash(hashes, `${relative}/${source.eventKey}.jsonl`,
+      source.inputPath);
+  }
+  return { force, change };
+}
+
+function prepareUnavailableMissileKeyCooccurrenceReplay(artifactDirectory,
+  semantic, analysis, hashes, relative) {
+  const profile = MISSILE_KEY_COOCCURRENCE_821_PROFILE;
+  const pair = semantic.capability_results?.[profile.capability];
+  const change = semantic.capability_results?.change_missile_target_packet;
+  if (semantic.replay_version !== profile.replay_version
+      || !semantic.requested_capabilities?.includes(profile.capability)
+      || !semantic.requested_capabilities?.includes('force_create_missile_packet')
+      || !semantic.requested_capabilities?.includes('change_missile_target_packet')
+      || pair?.status !== 'PROFILE_UNAVAILABLE'
+      || pair.profile_id !== profile.id
+      || pair.evidence_status !== profile.evidence_status
+      || pair.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || !isDeepStrictEqual(pair.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(pair.dependency_statuses, {
+        force_create_missile_packet: 'CANDIDATE',
+        change_missile_target_packet: 'PROFILE_UNAVAILABLE',
+      })
+      || !isDeepStrictEqual(analysis.semantic?.capability_results?.[profile.capability],
+        pair)
+      || change?.status !== 'PROFILE_UNAVAILABLE'
+      || ![CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821.id,
+        CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821.id]
+        .includes(change.profile_id)
+      || change.evidence_status
+        !== (change.profile_id
+          === CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821.id
+          ? CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821.evidence_status
+          : CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821.evidence_status)
+      || change.evidence_runtime_image_sha256
+        !== profile.evidence_runtime_image_sha256
+      || change.input_packet_id !== 0x040c
+      || change.input_count !== 0 || change.event_count !== null
+      || change.runtime_image_status !== 'NOT_CHECKED'
+      || change.runtime_image_used !== false
+      || change.error !== 'KR 0x040c packet route is absent'
+      || !isDeepStrictEqual(analysis.semantic?.capability_results
+        ?.change_missile_target_packet, change)
+      || Object.hasOwn(analysis.event_counts ?? {},
+        MISSILE_KEY_COOCCURRENCE_EVENT_821)
+      || Object.hasOwn(analysis.event_counts ?? {},
+        'change_missile_target_packet_candidates')
+      || Object.hasOwn(analysis.event_jsonl_files ?? {},
+        MISSILE_KEY_COOCCURRENCE_EVENT_821)
+      || Object.hasOwn(analysis.event_jsonl_files ?? {},
+        'change_missile_target_packet_candidates')
+      || fs.existsSync(path.join(artifactDirectory,
+        `${MISSILE_KEY_COOCCURRENCE_EVENT_821}.jsonl`))
+      || fs.existsSync(path.join(artifactDirectory,
+        'change_missile_target_packet_candidates.jsonl'))) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'Unavailable missile key Replay does not record the absent Change route.');
+  }
+  const force = prepareEventQueryFromDocuments(artifactDirectory,
+    'force_create_missile_packet_candidates', semantic, analysis);
+  if (force.declaredCount > 40_000) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Unavailable missile Force source exceeds the association bound.');
+  }
+  checkBatchHash(hashes, `${relative}/${force.eventKey}.jsonl`, force.inputPath);
+  const expected = recomputeSavedMissileKeyCooccurrence821({
+    header: { version: semantic.replay_version },
+    source_sha256: semantic.replay_sha256,
+  }, { forceCreateMissilePacketOutcome: force.capabilityResult,
+    changeMissileTargetPacketOutcome: change });
+  const { events, ...expectedResult } = expected;
+  if (events !== null || !isDeepStrictEqual(expectedResult, pair)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'Unavailable missile key metadata differs from dependency statuses.');
+  }
+  return { force, changeResult: change, pairResult: pair,
+    sourcePath: analysis.source_path, replaySha: semantic.replay_sha256,
+    replayVersion: semantic.replay_version };
+}
+
+async function verifyUnavailableMissileKeyCooccurrenceReplay(saved, options) {
+  const changeProfile = saved.changeResult.profile_id
+    === CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821.id
+    ? 'v2' : 'v1';
+  const { decoded, sourceReplay } = decodeMissileKeyPhysicalSource(saved,
+    null, options.runtimeImage, options.pythonExecutable, changeProfile);
+  for (const [capability, expected] of [
+    ['force_create_missile_packet', saved.force.capabilityResult],
+    ['change_missile_target_packet', saved.changeResult],
+    ['missile_key_cooccurrence', saved.pairResult],
+  ]) {
+    if (!isDeepStrictEqual(decoded.capability_results?.[capability], expected)) {
+      throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+        `Unavailable Replay physical ${capability} metadata differs from saved status.`,
+        { source_replay: sourceReplay });
+    }
+  }
+  const forceRows = decoded.events?.force_create_missile_packet_candidates;
+  if (!Array.isArray(forceRows)
+      || forceRows.length !== saved.force.declaredCount
+      || decoded.events?.change_missile_target_packet_candidates?.length
+      || decoded.events?.[MISSILE_KEY_COOCCURRENCE_EVENT_821]?.length) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Unavailable Replay native source rows differ from physical ROFL.',
+      { source_replay: sourceReplay });
+  }
+  await readMissileNativeSource(saved.force, forceRows);
+}
+
+function missileRefPosition(ref) {
+  return [ref.chunk_index, ref.decompressed_block_offset];
+}
+
+async function readMissileNativeSource(prepared, physicalRows = null) {
+  const rows = [];
+  const state = { positions: new Set(),
+    nativeInputHash: crypto.createHash('sha256'),
+    nativeOutputHash: crypto.createHash('sha256') };
+  const input = fs.createReadStream(prepared.inputPath, { encoding: 'utf8' });
+  const lines = readline.createInterface({ input, crlfDelay: Infinity });
+  try {
+    for await (const line of lines) {
+      const lineNumber = rows.length + 1;
+      if (lineNumber > prepared.declaredCount) {
+        throw new EventQueryError('EVENT_COUNT_MISMATCH',
+          'Missile native source has rows beyond its declared count.');
+      }
+      let row;
+      try { row = JSON.parse(line); } catch (error) {
+        throw new EventQueryError('INVALID_EVENT_ROW',
+          `Invalid missile native source JSONL line ${lineNumber}: ${error.message}.`);
+      }
+      if (prepared.eventKey === 'force_create_missile_packet_candidates') {
+        forceCreateMissilePacketRow(row, prepared, lineNumber, state);
+      } else {
+        changeMissileTargetPacketRow(row, prepared, lineNumber, state);
+      }
+      if (rows.length) {
+        const previous = missileRefPosition(rows[rows.length - 1].raw_packet_ref);
+        const current = missileRefPosition(row.raw_packet_ref);
+        if (current[0] < previous[0]
+            || (current[0] === previous[0] && current[1] <= previous[1])
+            || row.replay_time_ms < rows[rows.length - 1].replay_time_ms) {
+          throw new EventQueryError('INVALID_EVENT_ROW',
+            `Reordered missile native source at line ${lineNumber}.`);
+        }
+      }
+      if (physicalRows && !isDeepStrictEqual(row,
+        normalizeReplaySourcePaths(physicalRows[lineNumber - 1],
+          prepared.sourcePath ?? null))) {
+        throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+          `Missile native source line ${lineNumber} differs from physical ROFL.`);
+      }
+      rows.push(row);
+    }
+  } finally {
+    lines.close();
+    input.destroy();
+  }
+  if (rows.length !== prepared.declaredCount
+      || state.positions.size !== rows.length
+      || state.nativeInputHash.digest('hex')
+        !== prepared.capabilityResult.native_input_sha256
+      || state.nativeOutputHash.digest('hex')
+        !== prepared.capabilityResult.native_output_sha256
+      || (physicalRows && physicalRows.length !== rows.length)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Complete missile native source rows or ordered witness hashes differ.');
+  }
+  return rows;
+}
+
+function decodeMissileKeyPhysicalSource(prepared, sourceReplay, runtimeImage,
+  pythonExecutable, changeProfile) {
+  if (typeof runtimeImage !== 'string' || runtimeImage.trim() === '') {
+    throw new EventQueryError('MISSING_RUNTIME_IMAGE',
+      'Missile key source verification requires --runtime-image.');
+  }
+  const filename = sourceReplay ?? prepared.sourcePath;
+  if (typeof filename !== 'string' || filename.trim() === '') {
+    throw new EventQueryError('MISSING_SOURCE_REPLAY',
+      'No original ROFL path is available; supply --source-replay.');
+  }
+  const resolved = path.resolve(filename);
+  let replay;
+  try { replay = parseReplayFile(resolved); } catch (error) {
+    throw new EventQueryError(error.code === 'INPUT_READ_ERROR'
+      ? 'SOURCE_REPLAY_READ_FAILED' : 'SOURCE_REPLAY_INVALID',
+    `Cannot verify original ROFL: ${error.message}`,
+    { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  if (replay.header.version !== prepared.replayVersion
+      || replay.source_sha256 !== prepared.replaySha) {
+    throw new EventQueryError('SOURCE_REPLAY_IDENTITY_MISMATCH',
+      'Original ROFL build or SHA-256 differs from saved Replay identity.',
+      { source_replay: resolved });
+  }
+  let decoded;
+  try {
+    decoded = decodeSemanticReplay(replay, {
+      capabilities: ['missile_key_cooccurrence'],
+      runtimeImagePath: path.resolve(runtimeImage), pythonExecutable,
+      changeMissileTargetProfile: changeProfile,
+    });
+  } catch (error) {
+    throw new EventQueryError('SOURCE_REPLAY_DECODE_FAILED',
+      `Cannot re-decode original missile sources: ${error.message}`,
+      { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  return { decoded, sourceReplay: resolved };
+}
+
+function prepareMissileKeyPhysicalSource(prepared, sourceReplay,
+  runtimeImage, pythonExecutable) {
+  const { force, change } = prepared.missileKeyCooccurrenceSources;
+  const changeProfile = change.capabilityResult.profile_id
+    === CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_V2_821.id
+    ? 'v2' : 'v1';
+  const { decoded, sourceReplay: resolved } = decodeMissileKeyPhysicalSource(
+    prepared, sourceReplay, runtimeImage, pythonExecutable, changeProfile);
+  for (const [capability, saved] of [
+    ['force_create_missile_packet', force.capabilityResult],
+    ['change_missile_target_packet', change.capabilityResult],
+    ['missile_key_cooccurrence', prepared.capabilityResult],
+  ]) {
+    if (decoded.capability_results?.[capability]?.status !== 'CANDIDATE'
+        || !isDeepStrictEqual(decoded.capability_results[capability], saved)) {
+      throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+        `Physical ROFL or pinned image differs from saved ${capability} metadata.`,
+        { source_replay: resolved });
+    }
+  }
+  const forceRows = decoded.events?.force_create_missile_packet_candidates;
+  const changeRows = decoded.events?.change_missile_target_packet_candidates;
+  const pairRows = decoded.events?.[MISSILE_KEY_COOCCURRENCE_EVENT_821];
+  if (!Array.isArray(forceRows) || forceRows.length !== force.declaredCount
+      || !Array.isArray(changeRows) || changeRows.length !== change.declaredCount
+      || !Array.isArray(pairRows) || pairRows.length !== prepared.declaredCount) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Physical missile source or pair event stream is incomplete.',
+      { source_replay: resolved });
+  }
+  return { kind: 'MISSILE_KEY_COOCCURRENCE',
+    forceRows, changeRows, pairRows };
+}
+
+async function prepareMissileKeyCooccurrenceRows(prepared, physical = null) {
+  const { force, change } = prepared.missileKeyCooccurrenceSources;
+  const forceRows = await readMissileNativeSource(force, physical?.forceRows);
+  const changeRows = await readMissileNativeSource(change, physical?.changeRows);
+  const chunks = new Map();
+  const positions = new Set();
+  for (const row of [...forceRows, ...changeRows]) {
+    const ref = row.raw_packet_ref;
+    const existing = chunks.get(ref.chunk_index);
+    if (existing && (existing.chunk_id !== ref.chunk_id
+        || existing.offset !== ref.chunk_file_offset)) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        'Missile native sources disagree about a chunk identity.');
+    }
+    chunks.set(ref.chunk_index,
+      { chunk_id: ref.chunk_id, offset: ref.chunk_file_offset });
+    const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+    if (positions.has(position)) {
+      throw new EventQueryError('INVALID_EVENT_ROW',
+        'Missile native sources reuse a physical packet position.');
+    }
+    positions.add(position);
+  }
+  const outcome = recomputeSavedMissileKeyCooccurrence821({
+    header: { version: prepared.replayVersion }, source_sha256: prepared.replaySha,
+  }, {
+    forceCreateMissilePacketOutcome: { ...force.capabilityResult, events: forceRows },
+    changeMissileTargetPacketOutcome: { ...change.capabilityResult,
+      events: changeRows },
+  });
+  const { events: expectedRows, ...expectedResult } = outcome;
+  if (outcome.status !== 'CANDIDATE'
+      || !isDeepStrictEqual(expectedResult, prepared.capabilityResult)
+      || expectedRows.length !== prepared.declaredCount) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'Missile key pair counts or negatives differ from complete native sources.',
+      { source_status: outcome.status, source_error: outcome.error ?? null,
+        mismatched_fields: Object.keys(prepared.capabilityResult).filter((key) =>
+          !isDeepStrictEqual(prepared.capabilityResult[key], expectedResult[key])) });
+  }
+  return { expectedRows, physicalRows: physical?.pairRows ?? null,
+    savedPath: prepared.sourcePath ?? null };
+}
+
+function missileKeyCooccurrenceRow(row, lineNumber, state) {
+  if (!state) return;
+  if (!exactFields(row, MISSILE_KEY_COOCCURRENCE_ROW_FIELDS_821)
+      || !isDeepStrictEqual(row, state.expectedRows[lineNumber - 1])) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Missile key pair line ${lineNumber} differs from complete native sources.`,
+      { line_number: lineNumber });
+  }
+  if (state.physicalRows && !isDeepStrictEqual(row,
+    normalizeReplaySourcePaths(state.physicalRows[lineNumber - 1], state.savedPath))) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      `Missile key pair line ${lineNumber} differs from physical ROFL.`,
+      { line_number: lineNumber });
+  }
 }
 
 function prepareShieldingParamsPhysicalSource(prepared, sourceReplay,
@@ -6020,6 +6413,10 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   const setSpellLevelRosterPairSources = eventKey === SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821
     ? prepareSetSpellLevelRosterPairEvent(artifactDirectory, semantic, analysis,
       capabilityResult) : null;
+  const missileKeyCooccurrenceSources =
+    eventKey === MISSILE_KEY_COOCCURRENCE_EVENT_821
+      ? prepareMissileKeyCooccurrenceEvent(artifactDirectory, semantic,
+        analysis, capabilityResult) : null;
   if (eventKey === 'force_create_missile_packet_candidates') {
     prepareForceCreateMissilePacketEvent(semantic, analysis, eventKey,
       capabilityResult);
@@ -6132,6 +6529,12 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
     throw new EventQueryError('UNSAFE_ARTIFACT', `${fileName} must be a regular file.`,
       { filename: inputPath });
   }
+  if (eventKey === MISSILE_KEY_COOCCURRENCE_EVENT_821) {
+    const outputRoot = path.dirname(path.dirname(artifactDirectory));
+    const manifest = readArtifactJson(outputRoot, 'manifest.json');
+    checkBatchHash(manifest.output_hashes_excluding_manifest ?? {},
+      `replays/${path.basename(artifactDirectory)}/${fileName}`, inputPath);
+  }
   const bracketSources = associationConfig?.minionBracket ? {
     packet: prepareEventQueryFromDocuments(artifactDirectory,
       'increment_minion_kills_packet_candidates', semantic, analysis),
@@ -6164,6 +6567,7 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
     paramsHealRosterPairSources,
     anonymous029cRosterPairSources,
     setSpellLevelRosterPairSources,
+    missileKeyCooccurrenceSources,
     rosterBridgeState: eventKey === ROSTER_BRIDGE_EVENT_821
       ? prepareRosterBridgeInventory(artifactDirectory, semantic, analysis,
         capabilityResult) : null,
@@ -6202,6 +6606,7 @@ function checkPreparedBatchHashes(relative, prepared, checkHash) {
     ...Object.values(prepared.paramsHealRosterPairSources ?? {}),
     ...Object.values(prepared.anonymous029cRosterPairSources ?? {}),
     ...Object.values(prepared.setSpellLevelRosterPairSources ?? {}),
+    ...Object.values(prepared.missileKeyCooccurrenceSources ?? {}),
   ].filter(Boolean);
   for (const source of sources) {
     checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
@@ -6313,8 +6718,13 @@ function prepareBatchEventQuery(directory, eventKey) {
     checkHash(`${relative}/replay_analysis.json`,
       path.join(replayDirectory, 'replay_analysis.json'));
     if (prepared) checkPreparedBatchHashes(relative, prepared, checkHash);
+    const unavailableMissileSources = unavailable
+      && eventKey === MISSILE_KEY_COOCCURRENCE_EVENT_821
+      ? prepareUnavailableMissileKeyCooccurrenceReplay(replayDirectory,
+        semantic, analysis, hashes, relative) : null;
     return { relative, replayDirectory, replaySha: entry.sha256,
       replayVersion: entry.version, prepared, unavailable,
+      unavailableMissileSources,
       ...(eventKey == null ? { semantic, analysis } : {}) };
   });
   const physical = fs.readdirSync(replayRoot, { withFileTypes: true });
@@ -11824,6 +12234,9 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
       : prepared.eventKey === SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821
         ? prepareSetSpellLevelPhysicalSource(prepared,
           options.sourceReplay, options.runtimeImage, options.pythonExecutable)
+      : prepared.eventKey === MISSILE_KEY_COOCCURRENCE_EVENT_821
+        ? prepareMissileKeyPhysicalSource(prepared,
+          options.sourceReplay, options.runtimeImage, options.pythonExecutable)
       : prepared.eventKey === 'set_spell_level_packet_candidates'
         ? prepareSetSpellLevelPacketPhysicalSource(prepared,
           options.sourceReplay, options.runtimeImage, options.pythonExecutable)
@@ -11847,6 +12260,10 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
   const setSpellLevelRosterPairState = prepared.setSpellLevelRosterPairSources
     ? await prepareSetSpellLevelRosterPairRows(prepared,
       sourceReplayVerification?.kind === 'SET_SPELL_LEVEL_ROSTER_PAIR'
+        ? sourceReplayVerification : null) : null;
+  const missileKeyCooccurrenceState = prepared.missileKeyCooccurrenceSources
+    ? await prepareMissileKeyCooccurrenceRows(prepared,
+      sourceReplayVerification?.kind === 'MISSILE_KEY_COOCCURRENCE'
         ? sourceReplayVerification : null) : null;
   const rosterBridgeState = prepared.rosterBridgeState
     ? { players: prepared.rosterBridgeState.players,
@@ -11912,7 +12329,8 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
         SHIELDING_PARAMS_ROSTER_PAIR_EVENT_821,
         PARAMS_HEAL_ROSTER_PAIR_EVENT_821,
         ANONYMOUS_029C_ROSTER_PAIR_EVENT_821,
-        SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821].includes(prepared.eventKey)) {
+        SET_SPELL_LEVEL_ROSTER_PAIR_EVENT_821,
+        MISSILE_KEY_COOCCURRENCE_EVENT_821].includes(prepared.eventKey)) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
       '--participant cannot assign an actor or target to a roster-key equality; use --opaque-u32 for the anonymous key.');
   }
@@ -12382,6 +12800,8 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
         anonymous029cRosterPairState);
       setSpellLevelRosterPairRow(row, prepared, lineNumber,
         setSpellLevelRosterPairState);
+      missileKeyCooccurrenceRow(row, lineNumber,
+        missileKeyCooccurrenceState);
       if (forceCreateMissileState) {
         forceCreateMissilePacketRow(row, prepared, lineNumber,
           forceCreateMissileState);
@@ -12406,7 +12826,8 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
           && sourceReplayVerification.kind !== 'PARAMS_HEAL_ROSTER_PAIR'
           && sourceReplayVerification.kind !== 'ANONYMOUS_029C_ROSTER_PAIR'
           && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_PACKET'
-          && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_ROSTER_PAIR') {
+          && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_ROSTER_PAIR'
+          && sourceReplayVerification.kind !== 'MISSILE_KEY_COOCCURRENCE') {
         updateSourcePacketHash(sourceReplayVerification.savedHash,
           sourcePacketFieldsFromRef(row.raw_packet_ref,
             sourceReplayVerification.payloadMode));
@@ -12708,6 +13129,7 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
       && sourceReplayVerification.kind !== 'ANONYMOUS_029C_ROSTER_PAIR'
       && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_PACKET'
       && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_ROSTER_PAIR'
+      && sourceReplayVerification.kind !== 'MISSILE_KEY_COOCCURRENCE'
       && sourceReplayVerification.savedHash.digest('hex')
         !== sourceReplayVerification.sourceDigest) {
     throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
@@ -12789,6 +13211,13 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
           && scannedCount !== setSpellLevelRosterPairState.physicalRows.length))) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
       'SetSpellLevel roster pair rows differ from complete source streams.');
+  }
+  if (missileKeyCooccurrenceState
+      && (scannedCount !== missileKeyCooccurrenceState.expectedRows.length
+        || (missileKeyCooccurrenceState.physicalRows
+          && scannedCount !== missileKeyCooccurrenceState.physicalRows.length))) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Missile key pair rows differ from complete native source streams.');
   }
   if (anonymous029cRosterPairState
       && (anonymous029cRosterPairState.positions.size !== scannedCount
@@ -13372,8 +13801,17 @@ async function streamBatchEventQueryUnstaged(prepared, options, emitLine) {
     const identity = { artifact_directory: replay.relative,
       replay_sha256: replay.replaySha, replay_version: replay.replayVersion };
     if (replay.unavailable) {
+      if (replay.unavailableMissileSources) {
+        await readMissileNativeSource(replay.unavailableMissileSources.force);
+        if (options.verifySource) {
+          await verifyUnavailableMissileKeyCooccurrenceReplay(
+            replay.unavailableMissileSources, options);
+        }
+      }
       replayResults.push({ ...identity, query_status: 'UNAVAILABLE',
-        source_provenance_status: 'NOT_VERIFIED',
+        source_provenance_status: options.verifySource
+          && replay.unavailableMissileSources
+          ? 'SOURCE_REPLAY_VERIFIED' : 'NOT_VERIFIED',
         ...replay.unavailable });
       continue;
     }

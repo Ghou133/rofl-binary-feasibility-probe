@@ -232,6 +232,8 @@ identity, owner, resolved target, target change and effect are unknown.
 missile_key_cooccurrence compares 0x040c packet-header u32 with physically
 preceding 0x0087 native callback u32 within 2000 ms. All unmatched and
 ambiguous Change rows remain visible; no missile identity or effect is inferred.
+Saved pair queries filter the complete header with --opaque-u32; --verify-source
+requires the same-build --runtime-image and re-decodes both native streams.
 --change-missile-target-v2 also exposes an anonymous native f32 triplet from
 object +0x10/+0x14/+0x18; it does not establish a target position.
 set_dimension_missile_packet emits an exact-821 game packet-local callback u8
@@ -831,6 +833,7 @@ function parseArgs(argv) {
       'target_hero_roster_key_pair_candidates',
       'force_create_missile_packet_candidates',
       'change_missile_target_packet_candidates',
+      'missile_key_cooccurrence_candidates',
       'set_dimension_missile_packet_candidates',
       'anonymous_029c_packet_candidates',
       'anonymous_029c_roster_key_pair_candidates',

@@ -150,9 +150,9 @@ function validOutcome(outcome, profile, maximum) {
     && outcome.runtime_image_sha256 === IMAGE_SHA256;
 }
 
-function associateMissileKeyCooccurrence821(replay, {
+function associateMissileKeyCooccurrence821Internal(replay, {
   forceCreateMissilePacketOutcome, changeMissileTargetPacketOutcome,
-} = {}) {
+} = {}, savedSourceOnly = false) {
   const profile = MISSILE_KEY_COOCCURRENCE_821_PROFILE;
   const dependencies = {
     force_create_missile_packet: forceCreateMissilePacketOutcome?.status ?? 'UNEXECUTED',
@@ -175,8 +175,10 @@ function associateMissileKeyCooccurrence821(replay, {
   if (replay?.header?.version !== BUILD) {
     return fail('UNSUPPORTED', `${CAPABILITY} requires ${BUILD}`);
   }
-  const sourceError = replaySourceError(replay);
-  if (sourceError) return fail('DECODE_FAILED', `Replay source failed: ${sourceError}`);
+  if (!savedSourceOnly) {
+    const sourceError = replaySourceError(replay);
+    if (sourceError) return fail('DECODE_FAILED', `Replay source failed: ${sourceError}`);
+  }
   for (const [name, status] of Object.entries(dependencies)) {
     if (status !== 'CANDIDATE') {
       return fail(status === 'UNEXECUTED' ? 'MISSING_INPUT' : status,
@@ -195,9 +197,9 @@ function associateMissileKeyCooccurrence821(replay, {
   for (let i = 0; i < force.events.length; i += 1) {
     const row = force.events[i];
     if (row.event_type !== 'FORCE_CREATE_MISSILE_PACKET_CANDIDATE'
-        || !validSourceRow(replay, row, FORCE_PROFILE, 0x0087,
+        || (!savedSourceOnly && !validSourceRow(replay, row, FORCE_PROFILE, 0x0087,
           isObservedForceCreateMissilePayload,
-          decodeProtectedForceCreateMissileComparisonKeyU32)
+          decodeProtectedForceCreateMissileComparisonKeyU32))
         || row.live_receiver_lookup_status !== 'UNKNOWN'
         || row.creation_effect_status !== 'UNKNOWN'
         || (i > 0 && (comparePosition(force.events[i - 1].raw_packet_ref,
@@ -209,9 +211,9 @@ function associateMissileKeyCooccurrence821(replay, {
   for (let i = 0; i < change.events.length; i += 1) {
     const row = change.events[i];
     if (row.event_type !== 'CHANGE_MISSILE_TARGET_PACKET_CANDIDATE'
-        || !validSourceRow(replay, row, changeProfile, 0x040c,
+        || (!savedSourceOnly && !validSourceRow(replay, row, changeProfile, 0x040c,
           isObservedChangeMissileTargetPayload,
-          decodeProtectedChangeMissileTargetComparisonKeyU32)
+          decodeProtectedChangeMissileTargetComparisonKeyU32))
         || row.live_receiver_comparison_status !== 'UNKNOWN'
         || row.target_change_effect_status !== 'UNKNOWN'
         || (i > 0 && (comparePosition(change.events[i - 1].raw_packet_ref,
@@ -357,7 +359,18 @@ function associateMissileKeyCooccurrence821(replay, {
   };
 }
 
+function associateMissileKeyCooccurrence821(replay, outcomes) {
+  return associateMissileKeyCooccurrence821Internal(replay, outcomes);
+}
+
+// Query-only recomputation after complete saved source rows have passed their
+// own exact-build validators. This deliberately makes no physical-source claim.
+function recomputeSavedMissileKeyCooccurrence821(replayIdentity, outcomes) {
+  return associateMissileKeyCooccurrence821Internal(replayIdentity, outcomes, true);
+}
+
 module.exports = {
   MISSILE_KEY_COOCCURRENCE_821_PROFILE,
   associateMissileKeyCooccurrence821,
+  recomputeSavedMissileKeyCooccurrence821,
 };
