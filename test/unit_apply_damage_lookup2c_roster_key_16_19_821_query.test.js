@@ -7,6 +7,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { promoteSavedAssociationV4 } =
+  require('./helpers/damage_association_v4_saved');
 
 const { UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V1_821: profile,
   UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_PROFILE_V2_821: v2Profile,
@@ -532,4 +534,22 @@ test('saved v3 +0x2c roster query rejects forged +0x18 source totals', (t) => {
   const rejected = query(directory, '--limit', '1');
   assert.equal(rejected.status, 2, rejected.stderr);
   assert.equal(JSON.parse(rejected.stderr).code, 'CAPABILITY_METADATA_MISMATCH');
+});
+
+test('saved v4 +0x2c roster validates raw +0x1c row after limit', (t) => {
+  const { directory } = fixture(t);
+  promoteFixtureToV5(directory);
+  promoteSavedAssociationV4(directory, EVENT, { rawRowIndex: 1 });
+  const selected = query(directory, '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(JSON.parse(selected.stderr).scanned_count, defaultRows().length);
+  const events = path.join(directory, `${EVENT}.jsonl`);
+  const lines = fs.readFileSync(events, 'utf8').trimEnd().split('\n');
+  const later = JSON.parse(lines[1]);
+  later.native_callback_u32_0x1c_raw_call_rva = '0xf4a742';
+  lines[1] = JSON.stringify(later);
+  fs.writeFileSync(events, `${lines.join('\n')}\n`);
+  const rejected = query(directory, '--limit', '1');
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
 });

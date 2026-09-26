@@ -20,6 +20,8 @@ const { UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: currentDamageProfile,
   require('../src/decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
 const { PROFILES } =
   require('../src/decoders/rofl_16_19_821_float_stats_candidate');
+const { promoteSavedAssociationV4 } =
+  require('./helpers/damage_association_v4_saved');
 
 const CLI = path.resolve(__dirname, '../src/cli.js');
 const EVENT = 'unit_apply_damage_roster_key_candidates';
@@ -424,4 +426,48 @@ test('saved roster key pair checks every row and source order after output limit
   const wrongOrder = query(reordered.directory, '--raw-param', '0x400000ae');
   assert.equal(wrongOrder.status, 2, wrongOrder.stderr);
   assert.equal(JSON.parse(wrongOrder.stderr).code, 'INVALID_EVENT_ROW');
+});
+
+test('saved v4 roster query validates raw +0x1c span after output limit', (t) => {
+  const make = () => {
+    const saved = fixture(t, [row(0), row(1, 0x400000af), row(2)]);
+    promoteFixtureToV5(saved.directory);
+    promoteSavedAssociationV4(saved.directory, EVENT, { rawRowIndex: 1 });
+    return saved;
+  };
+  const valid = make();
+  const selected = query(valid.directory, '--limit', '1');
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(JSON.parse(selected.stderr).scanned_count, 3);
+  for (const mutate of [
+    (entry) => { entry.header_selector_bits_12_14 = 6; },
+    (entry) => { entry.native_callback_u32_0x1c_candidate += 1; },
+    (entry) => { entry.native_callback_u32_0x1c_encoded_bytes_hex = '00000000'; },
+    (entry) => { entry.native_callback_u32_0x1c_source = 'CONSTANT_0'; },
+    (entry) => { entry.native_callback_u32_0x1c_raw_call_rva = '0xf4a742'; },
+    (entry) => { entry.native_callback_u32_0x1c_raw_offset = 8; },
+    (entry) => { entry.native_callback_u32_0x1c_raw_bytes_hex = '00f100'; },
+  ]) {
+    const saved = make();
+    const file = path.join(saved.directory, `${EVENT}.jsonl`);
+    const rows = fs.readFileSync(file, 'utf8').trimEnd().split('\n')
+      .map((line) => JSON.parse(line));
+    mutate(rows[1]);
+    fs.writeFileSync(file, `${rows.map((entry) => JSON.stringify(entry)).join('\n')}\n`);
+    const rejected = query(saved.directory, '--limit', '1');
+    assert.equal(rejected.status, 2, rejected.stderr);
+    assert.equal(JSON.parse(rejected.stderr).code, 'INVALID_EVENT_ROW');
+  }
+  for (const mutate of [
+    (result) => { result.evidence_callback_u32_0x1c_table_sha256 = '0'.repeat(64); },
+    (result) => { result.native_callback_u32_0x1c_full_write_count -= 1; },
+    (result) => { result.native_callback_u32_0x1c_source_counts.RAW_READER += 1; },
+  ]) {
+    const saved = make();
+    mutateResult(saved.directory, mutate);
+    const rejected = query(saved.directory, '--limit', '1');
+    assert.equal(rejected.status, 2, rejected.stderr);
+    assert.equal(JSON.parse(rejected.stderr).code,
+      'CAPABILITY_METADATA_MISMATCH');
+  }
 });
