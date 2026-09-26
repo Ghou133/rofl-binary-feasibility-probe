@@ -272,7 +272,7 @@ Options:
   --jobs <1|2>                  Exact-821 batch with --events and --event-jsonl-only (default: 1)
   --event <key>                 Exact 16.19 candidate JSONL key (query-events)
   --list-events                 List saved 16.19 candidate keys and declared counts (query-events)
-  --verify-source               Check supported exact-821 packet rows against the original ROFL
+  --verify-source               Check supported exact-821 rows against the original ROFL
   --source-replay <path>        Original ROFL override for one Replay with --verify-source
   --json                        Emit only machine-readable JSON (capabilities)
   --python <command>            Python command with Unicorn installed (default: python)

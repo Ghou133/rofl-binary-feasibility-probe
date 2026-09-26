@@ -125,6 +125,15 @@ function associateHeroRosterMetadataBridge821(replay, outcomes) {
   if (players.length !== 10) {
     return fail('MISSING_INPUT', 'Replay metadata must contain exactly ten player rows');
   }
+  if (physicalTail.stats.some((row, index) =>
+    row?.TEAM !== (index < 5 ? '100' : '200'))) {
+    return fail('DECODE_FAILED',
+      'Replay metadata raw TEAM must be exact canonical 100/200 in five-player row order');
+  }
+  if (physicalTail.stats.some((row) =>
+    typeof row?.SKIN !== 'string' || row.SKIN.trim().length === 0)) {
+    return fail('MISSING_INPUT', 'Replay metadata raw SKIN must be a nonblank string');
+  }
   if (players.some((row, index) => row.metadata_index !== index
       || typeof row.champion !== 'string' || row.champion.length === 0
       || ![100, 200].includes(row.team_id)

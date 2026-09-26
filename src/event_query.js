@@ -6,6 +6,9 @@ const path = require('node:path');
 const readline = require('node:readline');
 const { isDeepStrictEqual } = require('node:util');
 const { parseReplayFile, walkBlocks } = require('./rofl');
+const { decodeSemanticReplay } = require('./semantic_api');
+const { HERO_ROSTER_METADATA_BRIDGE_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_roster_metadata_bridge_candidate');
 const { CHAMPION_DIE_HERO_DEATH_PAIR_821_PROFILE } =
   require('./decoders/rofl_16_19_821_champion_die_hero_death_pair_candidate');
 const { CHAMPION_KILL_DIE_HERO_DEATH_PAIR_821_PROFILE } =
@@ -198,6 +201,7 @@ const { SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821,
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
 const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
+  'hero_roster_metadata_bridge_candidates',
   'cast_spell_ans_packet_candidates',
   'show_health_bar_packet_candidates',
   'notify_contextual_situation_packet_candidates',
@@ -3505,6 +3509,220 @@ function prepareNamedMultiGroupAssociation(semantic, analysis, eventKey,
 
 const PREPARED_REPLAY_METADATA = Symbol('prepared replay metadata');
 
+const ROSTER_BRIDGE_EVENT_821 = 'hero_roster_metadata_bridge_candidates';
+const ROSTER_BRIDGE_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'hero_raw_param', 'participant_id_candidate',
+  'metadata_index_candidate', 'champion_metadata', 'team_id_metadata',
+  'team_metadata', 'role_metadata', 'observed_deaths_candidate',
+  'observed_source_kills_candidate', 'observed_assists_candidate',
+  'metadata_kills', 'metadata_deaths', 'metadata_assists', 'metadata_sha256',
+  'stats_json_sha256', 'observation_kind', 'confidence', 'semantic_status',
+  'roster_to_metadata_status', 'per_packet_actor_status', 'field_confidence',
+  'raw_packet_ref', 'known_limits',
+]);
+const ROSTER_BRIDGE_REF_FIELDS_821 = new Set([
+  'source_path', 'replay_sha256', 'chunk_index', 'chunk_id', 'chunk_stream',
+  'chunk_file_offset', 'decompressed_block_offset',
+  'decompressed_payload_offset', 'packet_id', 'replay_time_ms',
+  'payload_length', 'raw_param', 'raw_payload_sha256',
+]);
+
+function exactFields(value, fields) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    && Object.keys(value).length === fields.size
+    && Object.keys(value).every((field) => fields.has(field));
+}
+
+function prepareRosterBridgeSourceVerification(prepared, sourceReplay) {
+  const filename = sourceReplay ?? prepared.sourcePath;
+  if (typeof filename !== 'string' || filename.trim() === '') {
+    throw new EventQueryError('MISSING_SOURCE_REPLAY',
+      'No original ROFL path is available; supply --source-replay for this Replay.');
+  }
+  const resolved = path.resolve(filename);
+  let replay;
+  try {
+    replay = parseReplayFile(resolved);
+  } catch (error) {
+    throw new EventQueryError(error.code === 'INPUT_READ_ERROR'
+      ? 'SOURCE_REPLAY_READ_FAILED' : 'SOURCE_REPLAY_INVALID',
+    `Cannot verify original ROFL: ${error.message}`,
+    { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  if (replay.header.version !== prepared.replayVersion
+      || replay.source_sha256 !== prepared.replaySha) {
+    throw new EventQueryError('SOURCE_REPLAY_IDENTITY_MISMATCH',
+      'Original ROFL build or SHA-256 differs from saved Replay identity.',
+      { source_replay: resolved });
+  }
+  let decoded;
+  try {
+    decoded = decodeSemanticReplay(replay,
+      { capabilities: ['hero_roster_metadata_bridge'] });
+  } catch (error) {
+    throw new EventQueryError('SOURCE_REPLAY_FRAMING_FAILED',
+      `Cannot decode original ROFL bridge: ${error.message}`,
+      { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  const result = decoded.capability_results?.hero_roster_metadata_bridge;
+  const rows = decoded.events?.[ROSTER_BRIDGE_EVENT_821];
+  if (result?.status !== 'CANDIDATE'
+      || result.metadata_sha256 !== prepared.capabilityResult.metadata_sha256
+      || result.stats_json_sha256 !== prepared.capabilityResult.stats_json_sha256
+      || !Array.isArray(rows) || rows.length !== 10) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Physical ROFL tail statsJson or HeroStats bridge differs from saved candidate metadata.',
+      { source_replay: resolved, source_status: result?.status ?? null });
+  }
+  return { kind: 'ROSTER_BRIDGE', rows, sourceReplay: resolved };
+}
+
+function prepareRosterBridgeInventory(artifactDirectory, semantic, analysis,
+  result) {
+  const profile = HERO_ROSTER_METADATA_BRIDGE_821_PROFILE;
+  if (semantic.replay_version !== profile.replay_version
+      || result?.status !== 'CANDIDATE'
+      || result.profile_id !== profile.id
+      || result.evidence_status !== profile.evidence_status
+      || result.input_packet_id !== 0x0089
+      || result.event_count !== 10
+      || result.metadata_player_count !== 10
+      || result.unique_kda_match_count !== 10
+      || !REPLAY_SHA.test(result.metadata_sha256)
+      || !REPLAY_SHA.test(result.stats_json_sha256)
+      || !profile.depends_on.every((name) =>
+        result.dependency_statuses?.[name] === 'CANDIDATE')) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'Saved roster bridge lacks its exact-build ten-player candidate metadata.');
+  }
+  const replayParent = path.dirname(artifactDirectory);
+  const outputRoot = path.dirname(replayParent);
+  const replayName = path.basename(artifactDirectory);
+  if (path.basename(replayParent) !== 'replays'
+      || !/^[A-Za-z0-9._-]+$/.test(replayName)) {
+    throw new EventQueryError('MISSING_METADATA',
+      'Roster bridge query requires its manifest-hashed Replay artifact directory.');
+  }
+  const manifest = readArtifactJson(outputRoot, 'manifest.json');
+  const relative = `replays/${replayName}`;
+  const entry = manifest.replay_inputs?.find((item) =>
+    item?.artifact_directory === relative);
+  if (entry?.sha256 !== semantic.replay_sha256
+      || entry?.version !== semantic.replay_version
+      || !manifest.output_hashes_excluding_manifest
+      || typeof manifest.output_hashes_excluding_manifest !== 'object') {
+    throw new EventQueryError('ARTIFACT_IDENTITY_MISMATCH',
+      'Roster bridge manifest differs from saved Replay identity.');
+  }
+  const hashes = manifest.output_hashes_excluding_manifest;
+  for (const filename of ['semantic_run.json', 'replay_analysis.json',
+    'rofl_inventory.json', `${ROSTER_BRIDGE_EVENT_821}.jsonl`]) {
+    checkBatchHash(hashes, `${relative}/${filename}`,
+      path.join(artifactDirectory, filename));
+  }
+  const inventory = readArtifactJson(artifactDirectory, 'rofl_inventory.json');
+  const players = inventory.metadata?.players;
+  if (inventory.sha256 !== semantic.replay_sha256
+      || inventory.replay_version !== semantic.replay_version
+      || inventory.metadata?.stats_player_count !== 10
+      || !Array.isArray(players) || players.length !== 10
+      || players.some((player, index) =>
+        player?.metadata_index !== index
+        || typeof player.champion !== 'string' || player.champion.length === 0
+        || player.team_id !== (index < 5 ? 100 : 200)
+        || player.team !== (index < 5 ? 'blue' : 'red')
+        || player.role_status !== 'VERIFIED_FROM_METADATA'
+        || !['top', 'jungle', 'mid', 'adc', 'support'].includes(player.role)
+        || !isCount(player.aggregate_stats?.kills)
+        || !isCount(player.aggregate_stats?.deaths)
+        || !isCount(player.aggregate_stats?.assists))) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'Manifest-hashed roster inventory is incomplete or differs from Replay identity.');
+  }
+  const signatures = players.map((player) => [
+    player.aggregate_stats.kills, player.aggregate_stats.deaths,
+    player.aggregate_stats.assists].join('/'));
+  if (new Set(signatures).size !== 10) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      'Manifest-hashed roster inventory has ambiguous K/D/A signatures.');
+  }
+  if (analysis.event_counts?.[ROSTER_BRIDGE_EVENT_821] !== 10) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Roster bridge must save exactly ten candidate rows.');
+  }
+  return { players };
+}
+
+function rosterBridgeRow(row, prepared, lineNumber, state) {
+  if (!state) return;
+  const profile = HERO_ROSTER_METADATA_BRIDGE_821_PROFILE;
+  const index = lineNumber - 1;
+  const player = state.players[index];
+  const ref = row.raw_packet_ref;
+  const expectedConfidence = {
+    hero_raw_param: 'VERIFIED_DIRECT',
+    champion_metadata: 'VERIFIED_FROM_METADATA',
+    team_metadata: 'VERIFIED_FROM_METADATA',
+    role_metadata: 'VERIFIED_FROM_METADATA',
+    participant_id_candidate: profile.evidence_status,
+    metadata_index_candidate: profile.evidence_status,
+    per_packet_actor_status: 'UNKNOWN',
+  };
+  if (!player || !exactFields(row, ROSTER_BRIDGE_ROW_FIELDS_821)
+      || !exactFields(ref, ROSTER_BRIDGE_REF_FIELDS_821)
+      || row.event_type !== 'HERO_ROSTER_METADATA_BRIDGE_CANDIDATE'
+      || row.game_version !== prepared.replayVersion || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.replay_sha256 !== prepared.replaySha
+      || row.participant_id_candidate !== index + 1
+      || row.metadata_index_candidate !== index
+      || row.hero_raw_param !== 0x400000ae + index
+      || row.champion_metadata !== player.champion
+      || row.team_id_metadata !== player.team_id
+      || row.team_metadata !== player.team
+      || row.role_metadata !== player.role
+      || row.observed_source_kills_candidate !== player.aggregate_stats.kills
+      || row.observed_deaths_candidate !== player.aggregate_stats.deaths
+      || row.observed_assists_candidate !== player.aggregate_stats.assists
+      || row.metadata_kills !== player.aggregate_stats.kills
+      || row.metadata_deaths !== player.aggregate_stats.deaths
+      || row.metadata_assists !== player.aggregate_stats.assists
+      || row.metadata_sha256 !== prepared.capabilityResult.metadata_sha256
+      || row.stats_json_sha256 !== prepared.capabilityResult.stats_json_sha256
+      || row.observation_kind !== 'LATEST_KEYFRAME_ROSTER_AND_REPLAY_METADATA_JOIN'
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== profile.evidence_status
+      || row.roster_to_metadata_status !== profile.evidence_status
+      || row.per_packet_actor_status !== 'UNKNOWN'
+      || !isDeepStrictEqual(row.field_confidence, expectedConfidence)
+      || !isDeepStrictEqual(row.known_limits, profile.known_limits)
+      || ref.source_path !== (prepared.sourcePath ?? null)
+      || ref.replay_sha256 !== prepared.replaySha
+      || ref.chunk_stream !== 'keyframe'
+      || !isCount(ref.chunk_index) || !isCount(ref.chunk_id)
+      || !isCount(ref.chunk_file_offset)
+      || !isCount(ref.decompressed_block_offset)
+      || !isCount(ref.decompressed_payload_offset)
+      || ref.packet_id !== 0x0089
+      || ref.replay_time_ms !== row.replay_time_ms
+      || !isCount(ref.payload_length) || ref.payload_length === 0
+      || ref.raw_param !== row.hero_raw_param
+      || !REPLAY_SHA.test(ref.raw_payload_sha256)) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Roster bridge row ${lineNumber} differs from its manifest-hashed inventory or candidate profile.`,
+      { line_number: lineNumber });
+  }
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (state.seen.has(index) || state.positions.has(position)) {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Duplicate roster bridge row or HeroStats reference at line ${lineNumber}.`,
+      { line_number: lineNumber });
+  }
+  state.seen.add(index);
+  state.positions.add(position);
+}
+
 function prepareEventQuery(directory, eventKey) {
   if (typeof eventKey !== 'string' || !EVENT_KEY.test(eventKey)) {
     throw new EventQueryError('INVALID_EVENT_KEY',
@@ -3756,6 +3974,9 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
     exactBlobPacketConfig, bracketSources, experienceIntervalSource,
     levelExperienceBracketSources,
     objectiveBountyTurretPairSources,
+    rosterBridgeState: eventKey === ROSTER_BRIDGE_EVENT_821
+      ? prepareRosterBridgeInventory(artifactDirectory, semantic, analysis,
+        capabilityResult) : null,
     sourcePath: analysis.source_path,
     episodeAssistNativeStatus: associationConfig?.episode
       ? semantic.capability_results?.hero_assist?.native_child_identity_status : null,
@@ -9315,7 +9536,12 @@ async function streamEventQuery(prepared, options, emitLine) {
       '--source-replay requires --verify-source.');
   }
   const sourceReplayVerification = options.verifySource
-    ? prepareSourceReplayVerification(prepared, options.sourceReplay) : null;
+    ? (prepared.eventKey === ROSTER_BRIDGE_EVENT_821
+      ? prepareRosterBridgeSourceVerification(prepared, options.sourceReplay)
+      : prepareSourceReplayVerification(prepared, options.sourceReplay)) : null;
+  const rosterBridgeState = prepared.rosterBridgeState
+    ? { players: prepared.rosterBridgeState.players,
+      seen: new Set(), positions: new Set() } : null;
   const { fromMs = null, toMs = null, participant = null,
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     contextualSituation = null,
@@ -9713,6 +9939,20 @@ async function streamEventQuery(prepared, options, emitLine) {
           `Event JSONL line ${lineNumber} has a different Replay SHA-256.`,
           { line_number: lineNumber });
       }
+      rosterBridgeRow(row, prepared, lineNumber, rosterBridgeState);
+      if (sourceReplayVerification?.kind === 'ROSTER_BRIDGE') {
+        const canonical = sourceReplayVerification.rows[lineNumber - 1];
+        if (!canonical || !isDeepStrictEqual(row, {
+          ...canonical,
+          raw_packet_ref: { ...canonical.raw_packet_ref,
+            source_path: prepared.sourcePath ?? null },
+        })) {
+          throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+            `Saved roster bridge row ${lineNumber} differs from physical ROFL tail or HeroStats reference.`,
+            { line_number: lineNumber,
+              source_replay: sourceReplayVerification.sourceReplay });
+        }
+      }
       let sourceCastNestedFields = null;
       if (sourceReplayVerification
           && prepared.eventKey === 'cast_spell_ans_packet_candidates') {
@@ -9790,7 +10030,8 @@ async function streamEventQuery(prepared, options, emitLine) {
         setDimensionMissilePacketRow(row, prepared, lineNumber,
           setDimensionMissileState);
       }
-      if (sourceReplayVerification) {
+      if (sourceReplayVerification
+          && sourceReplayVerification.kind !== 'ROSTER_BRIDGE') {
         updateSourcePacketHash(sourceReplayVerification.savedHash,
           sourcePacketFieldsFromRef(row.raw_packet_ref,
             sourceReplayVerification.payloadMode));
@@ -10063,6 +10304,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       'JSONL row count disagrees with event_counts and the capability result.',
       { scanned_count: scannedCount, declared_event_count: prepared.declaredCount });
   }
+  if (rosterBridgeState && rosterBridgeState.seen.size !== 10) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Saved roster bridge does not contain all ten distinct roster keys.');
+  }
   if (castV9State) {
     if (castV9State.rows.length) {
       const digest = castV9BatchDigest(castV9State.rows, true);
@@ -10079,6 +10324,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     }
   }
   if (sourceReplayVerification
+      && sourceReplayVerification.kind !== 'ROSTER_BRIDGE'
       && sourceReplayVerification.savedHash.digest('hex')
         !== sourceReplayVerification.sourceDigest) {
     throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
