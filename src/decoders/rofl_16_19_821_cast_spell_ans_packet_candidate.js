@@ -71,7 +71,7 @@ const CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821 = Object.freeze({
   ...CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821,
   id: CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_ID_821,
   evidence_nested_u32_0x4c_transform_sha256: NESTED_U32_0X4C_TRANSFORM_SHA256,
-  evidence_scope: 'V6 retains V5 fields and adds exact 821 native callback nested +0x3c (packet +0x4c) anonymous u32 with protected raw bytes',
+  evidence_scope: '63496/63496 exact 821 native CastSpellAns packets in 11 original KR Replays fully consumed; V6 retains V5 fields and adds protected packet +0x4c anonymous callback u32',
   known_limits: Object.freeze([
     ...CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821.known_limits,
     'The nested +0x3c callback u32 is anonymous; its value proves no caster, spell, target or action.',

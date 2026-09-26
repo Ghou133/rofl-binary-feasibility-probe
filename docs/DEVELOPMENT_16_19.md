@@ -14,7 +14,7 @@ Current progress (older notes below retain their original research context):
   both transforms invert each other for all 256 byte values. The callback
   transform SHA-256 is
   `ad5ff48a6d097a43b6880bcafd30d0f8ef7f30f3988c049e1add1261f626eb4c`.
-  Opt-in `castPacketProfile: 'v6'` retains every V5 field and adds
+  CLI `--cast-packet-v6` or API `castPacketProfile: 'v6'` retains every V5 field and adds
   `raw_u32_0x4c_hex` and `opaque_u32_0x4c`. V4 remains the default; V5
   retains its historical profile identity. Three original KR Replays
   produced 5,980/5,980, 5,713/5,713 and 5,561/5,561 V6 candidates,
@@ -23,6 +23,17 @@ Current progress (older notes below retain their original research context):
   and decoded words; one-byte truncate and append controls fail full native
   consumption. The word is anonymous: no caster, spell, target, action or
   gameplay effect is inferred.
+  The integrated selected CLI batch on all 11 exact-build KR Replays then
+  returned `CANDIDATE` in 11/11, zero framing errors, and 63,496/63,496
+  V6 rows. Saved batch `--cast-nested-u32-0x4c 1073742460 --limit 1`
+  completed 11/11, checked every 63,496 row, matched one and emitted its
+  original JSONL line. V3/V4/V5 saved artifacts report the second u32
+  unavailable; V6 queries also validate the historical V5 field. Private
+  Replay, image and output files remain outside Git.
+  Focused direct/native tests with those private inputs passed 18/18 with
+  zero skips; saved-query tests passed 14/14. The public `npm test` run
+  exited 0 with 1,092 Node passes, 100 declared private-input skips, and
+  19 Python unittest passes.
 - **CastSpellAns nested anonymous u32 at +0x1c (opt-in packet V5):** The
   pinned `16.19.821.7343` image callback RVA `0x8d77ed..0x8d785a` reads
   nested `+0x0c` (packet object `+0x1c`), converts its protected bytes with
@@ -110,6 +121,13 @@ Current progress (older notes below retain their original research context):
   tests pass 3/3 (0 skipped), including foreign-child, truncation and wrong
   image controls. No additional child field was promoted; the blob remains
   opaque pending an exact-build child conversion or callback-argument trace.
+  A further bounded trace found only the first dispatch hop: receive RVA
+  `0x4ce432` places the blob pointer in a wrapper, then `0x4ccf10` passes
+  it through listener dispatch RVA `0x4ccc80`. The listener calls are
+  indirect, and no observed path converts this blob into callback
+  `0x2ce720`'s typed argument. Its helper checks type tags `0x35/0x3b/0x3d`,
+  whereas both native blobs start with `0x1d5`. This is additional negative
+  evidence, not a child-field decode.
 - **UnitApplyDamage anonymous callback f32 v5:** The pinned 821 native
   deserializer writes callback object `+0x18` from a protected raw f32 reader
   for header selector 0/2/3/6, or constant zero for selector 5. The output
