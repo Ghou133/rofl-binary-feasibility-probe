@@ -161,6 +161,8 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.equal(resolveCapability(BUILD, 'hero_death_timer').status, 'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'force_create_missile_packet').status,
     'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'target_hero_roster_key_pair').status,
+    'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'change_missile_target_packet').status,
     'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'set_dimension_missile_packet').status,
@@ -223,6 +225,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'cooldown_broadcast_packet',
       'item_charges_packet',
       'target_hero_packet',
+      'target_hero_roster_key_pair',
       'force_create_missile_packet',
       'change_missile_target_packet',
       'set_dimension_missile_packet',
@@ -237,6 +240,10 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'EXACT_IMAGE_REQUIRED');
   assert.equal(queried.force_create_missile_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.target_hero_roster_key_pair.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.target_hero_roster_key_pair.output,
+    'target_hero_roster_key_pair_candidates');
   assert.equal(queried.change_missile_target_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
   assert.equal(queried.set_dimension_missile_packet.runtime_image_requirement,
