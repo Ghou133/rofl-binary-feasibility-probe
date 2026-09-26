@@ -180,6 +180,10 @@ const { FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821,
   decodeProtectedForceCreateMissileComparisonKeyU32,
   isObservedForceCreateMissilePayload } =
   require('./decoders/rofl_16_19_821_force_create_missile_packet_candidate');
+const { SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821,
+  decodeProtectedSetDimensionMissileArgumentU8,
+  isObservedSetDimensionMissilePayload } =
+  require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
@@ -192,6 +196,7 @@ const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
   'target_hero_packet_candidates',
   'force_create_missile_packet_candidates',
   'unit_apply_damage_packet_candidates',
+  'set_dimension_missile_packet_candidates',
 ]);
 const CIRCULAR_MOVEMENT_RESTRICTION_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
@@ -306,6 +311,17 @@ const FORCE_CREATE_MISSILE_ROW_FIELDS_821 = new Set([
   'causality_status', 'confidence', 'semantic_status', 'raw_packet_ref',
 ]);
 const FORCE_CREATE_MISSILE_REF_FIELDS_821 =
+  NOTIFY_CONTEXTUAL_SITUATION_REF_FIELDS_821;
+const SET_DIMENSION_MISSILE_ROW_FIELDS_821 = new Set([
+  'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
+  'replay_time_ms', 'raw_param', 'packet_name_candidate',
+  'native_protected_dimension_byte_hex', 'native_callback_argument_u8',
+  'native_callback_witness_status', 'live_receiver_status',
+  'source_actor_status', 'owner_status', 'missile_identity_status',
+  'target_status', 'dimension_change_status', 'gameplay_effect_status',
+  'causality_status', 'confidence', 'semantic_status', 'raw_packet_ref',
+]);
+const SET_DIMENSION_MISSILE_REF_FIELDS_821 =
   NOTIFY_CONTEXTUAL_SITUATION_REF_FIELDS_821;
 const OBJECTIVE_STEAL_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
@@ -2109,6 +2125,121 @@ function forceCreateMissilePacketRow(row, prepared, lineNumber, state) {
   state.nativeOutputHash.update(Buffer.from(protectedHex, 'hex')).update(key);
 }
 
+function prepareSetDimensionMissilePacketEvent(semantic, analysis, eventKey, result) {
+  const profile = SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821;
+  if (semantic.replay_version !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
+      `${eventKey} requires exact build ${profile.replay_version}.`);
+  }
+  if (result && !['CANDIDATE', 'MISSING_INPUT', 'PROFILE_UNAVAILABLE',
+    'DECODE_FAILED', 'UNSUPPORTED'].includes(result.status)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} must remain a candidate or declared unavailable.`);
+  }
+  if (result?.status !== 'CANDIDATE') return;
+  if (result.profile_id !== profile.id
+      || result.input_packet_id !== profile.replay_block_packet_id
+      || result.evidence_status !== profile.evidence_status
+      || result.evidence_runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_sha256 !== profile.evidence_runtime_image_sha256
+      || result.runtime_image_status !== 'MATCHED_USED'
+      || result.runtime_image_used !== true
+      || !isCount(result.input_count) || result.input_count === 0
+      || result.event_count !== result.input_count
+      || result.event_count !== analysis.event_counts?.[eventKey]
+      || !isCount(result.scanned_block_count)
+      || result.scanned_block_count < result.event_count
+      || !isDeepStrictEqual(result.known_limits, [...profile.known_limits])
+      || !isDeepStrictEqual(result.event_field_confidence, {
+        replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
+        native_callback_argument_u8: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+      })
+      || result.native_witness_status !== 'FULLY_CONSUMED_ALL'
+      || result.native_full_success_count !== result.event_count
+      || result.native_batch_count !== Math.ceil(result.event_count / 10_000)
+      || !REPLAY_SHA.test(result.native_input_sha256 ?? '')
+      || !REPLAY_SHA.test(result.native_output_sha256 ?? '')
+      || !isDeepStrictEqual(
+        analysis.semantic?.capability_results?.[profile.capability], result)) {
+    throw new EventQueryError('CAPABILITY_METADATA_MISMATCH',
+      `${profile.capability} identity or native witness counts differ.`);
+  }
+}
+
+function setDimensionMissilePacketRow(row, prepared, lineNumber, state) {
+  if (prepared.eventKey !== 'set_dimension_missile_packet_candidates') return;
+  const invalid = (reason) => {
+    throw new EventQueryError('INVALID_EVENT_ROW',
+      `Invalid set-dimension-missile packet row at JSONL line ${lineNumber}: ${reason}.`);
+  };
+  const profile = SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821;
+  const ref = row.raw_packet_ref;
+  const rowFields = Object.keys(row);
+  const refFields = ref && typeof ref === 'object' && !Array.isArray(ref)
+    ? Object.keys(ref) : [];
+  const payloadHex = ref?.raw_payload_hex;
+  const protectedHex = row.native_protected_dimension_byte_hex;
+  if (rowFields.length !== SET_DIMENSION_MISSILE_ROW_FIELDS_821.size
+      || rowFields.some((field) => !SET_DIMENSION_MISSILE_ROW_FIELDS_821.has(field))
+      || refFields.length !== SET_DIMENSION_MISSILE_REF_FIELDS_821.size
+      || refFields.some((field) => !SET_DIMENSION_MISSILE_REF_FIELDS_821.has(field))
+      || row.event_type !== 'SET_DIMENSION_MISSILE_PACKET_CANDIDATE'
+      || row.game_version !== profile.replay_version || row.patch !== '16.19'
+      || row.build_profile !== profile.id
+      || row.packet_name_candidate !== profile.packet_name
+      || row.semantic_status !== profile.evidence_status
+      || row.native_callback_witness_status !== 'STOPPED_BEFORE_RECEIVER_METHOD'
+      || row.live_receiver_status !== 'UNKNOWN'
+      || row.source_actor_status !== 'UNKNOWN'
+      || row.owner_status !== 'UNKNOWN'
+      || row.missile_identity_status !== 'UNKNOWN'
+      || row.target_status !== 'UNKNOWN'
+      || row.dimension_change_status !== 'UNKNOWN'
+      || row.gameplay_effect_status !== 'UNKNOWN'
+      || row.causality_status !== 'UNKNOWN'
+      || row.confidence !== 'CANDIDATE'
+      || row.replay_sha256 !== prepared.replaySha
+      || !Number.isSafeInteger(row.replay_time_ms) || row.replay_time_ms < 0
+      || !Number.isSafeInteger(row.raw_param) || row.raw_param < 0
+      || row.raw_param > 0xffffffff
+      || !/^[0-9a-f]{2}$/.test(protectedHex ?? '')
+      || row.native_callback_argument_u8
+        !== decodeProtectedSetDimensionMissileArgumentU8(protectedHex)
+      || ref?.source_path !== prepared.sourcePath
+      || ref.replay_sha256 !== prepared.replaySha
+      || ref.chunk_stream !== 'game_chunk'
+      || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
+      || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
+      || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_block_offset)
+      || ref.decompressed_block_offset < 0
+      || !Number.isSafeInteger(ref.decompressed_payload_offset)
+      || ref.decompressed_payload_offset <= ref.decompressed_block_offset
+      || ref.packet_id !== profile.replay_block_packet_id
+      || ref.replay_time_ms !== row.replay_time_ms
+      || ref.raw_param !== row.raw_param
+      || typeof payloadHex !== 'string'
+      || !/^(?:[0-9a-f]{2})+$/.test(payloadHex)
+      || !isObservedSetDimensionMissilePayload(Buffer.from(payloadHex, 'hex'))
+      || ref.payload_length !== payloadHex.length / 2
+      || !REPLAY_SHA.test(ref.raw_payload_sha256 ?? '')) {
+    invalid('exact-build profile, packet shape, callback byte, or provenance differs');
+  }
+  const payload = Buffer.from(payloadHex, 'hex');
+  if (ref.raw_payload_sha256 !== crypto.createHash('sha256').update(payload).digest('hex')) {
+    invalid('raw payload SHA-256 differs');
+  }
+  const position = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+  if (state.positions.has(position)) invalid('duplicate raw packet position');
+  state.positions.add(position);
+  const header = Buffer.alloc(8);
+  header.writeUInt32LE(row.raw_param, 0);
+  header.writeUInt32LE(payload.length, 4);
+  state.nativeInputHash.update(header).update(payload);
+  state.nativeOutputHash.update(Buffer.from(protectedHex, 'hex'))
+    .update(Buffer.from([row.native_callback_argument_u8]));
+}
+
 function prepareFaceDirectionRosterPairEvent(semantic, analysis, eventKey, result) {
   const profile = FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE;
   if (semantic.replay_version !== profile.replay_version) {
@@ -3340,6 +3471,10 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   }
   if (eventKey === 'force_create_missile_packet_candidates') {
     prepareForceCreateMissilePacketEvent(semantic, analysis, eventKey,
+      capabilityResult);
+  }
+  if (eventKey === 'set_dimension_missile_packet_candidates') {
+    prepareSetDimensionMissilePacketEvent(semantic, analysis, eventKey,
       capabilityResult);
   }
   if (eventKey === 'face_direction_keyframe_roster_pair_candidates') {
@@ -9202,6 +9337,10 @@ async function streamEventQuery(prepared, options, emitLine) {
     === 'force_create_missile_packet_candidates'
     ? { positions: new Set(), nativeInputHash: crypto.createHash('sha256'),
       nativeOutputHash: crypto.createHash('sha256') } : null;
+  const setDimensionMissileState = prepared.eventKey
+    === 'set_dimension_missile_packet_candidates'
+    ? { positions: new Set(), nativeInputHash: crypto.createHash('sha256'),
+      nativeOutputHash: crypto.createHash('sha256') } : null;
   const firstBloodAssistPacketPositions = prepared.eventKey
     === 'first_blood_assist_event_packet_candidates'
     ? new Set(prepared.capabilityResult.excluded_same_length_foreign_packet_refs
@@ -9337,6 +9476,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       if (forceCreateMissileState) {
         forceCreateMissilePacketRow(row, prepared, lineNumber,
           forceCreateMissileState);
+      }
+      if (setDimensionMissileState) {
+        setDimensionMissilePacketRow(row, prepared, lineNumber,
+          setDimensionMissileState);
       }
       if (sourceReplayVerification) {
         updateSourcePacketHash(sourceReplayVerification.savedHash,
@@ -9673,6 +9816,15 @@ async function streamEventQuery(prepared, options, emitLine) {
           !== prepared.capabilityResult.native_output_sha256)) {
     throw new EventQueryError('EVENT_COUNT_MISMATCH',
       'Force-create-missile raw packet count or ordered native input/output SHA-256 differs from capability metadata.');
+  }
+  if (setDimensionMissileState
+      && (setDimensionMissileState.positions.size !== scannedCount
+        || setDimensionMissileState.nativeInputHash.digest('hex')
+          !== prepared.capabilityResult.native_input_sha256
+        || setDimensionMissileState.nativeOutputHash.digest('hex')
+          !== prepared.capabilityResult.native_output_sha256)) {
+    throw new EventQueryError('EVENT_COUNT_MISMATCH',
+      'Set-dimension-missile raw packet count or ordered native input/output SHA-256 differs from capability metadata.');
   }
   if (objectiveStealChildCounts
       && !isDeepStrictEqual(objectiveStealChildCounts,

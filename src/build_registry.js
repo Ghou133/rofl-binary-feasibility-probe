@@ -107,6 +107,8 @@ const targetHeroPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_target_hero_packet_candidate');
 const forceCreateMissilePacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_force_create_missile_packet_candidate');
+const setDimensionMissilePacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
 const unitApplyDamageRosterKeyPair1619821 =
   require('./decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
 const unitApplyDamageLookupRosterKeyPair1619821 =
@@ -628,6 +630,7 @@ const BUILD_PROFILES = deepFreeze({
       item_charges_packet: 0x0437,
       target_hero_packet: 0x0265,
       force_create_missile_packet: 0x0087,
+      set_dimension_missile_packet: 0x008a,
       unit_apply_damage_roster_key_pair: 0x005f,
       unit_apply_damage_lookup_roster_key_pair: 0x005f,
       unit_apply_damage_lookup2c_roster_key_pair: 0x005f,
@@ -766,6 +769,8 @@ const BUILD_PROFILES = deepFreeze({
         targetHeroPacketCandidate1619821.TARGET_HERO_PACKET_CANDIDATE_PROFILE_821,
       force_create_missile_packet:
         forceCreateMissilePacketCandidate1619821.FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821,
+      set_dimension_missile_packet:
+        setDimensionMissilePacketCandidate1619821.SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821,
       unit_apply_damage_roster_key_pair:
         unitApplyDamageRosterKeyPair1619821.UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
       unit_apply_damage_lookup_roster_key_pair:
@@ -894,6 +899,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_EXACT_821_NATIVE_TARGET_HERO_CALLBACK_KEY',
       force_create_missile_packet:
         forceCreateMissilePacketCandidate1619821.FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821.evidence_status,
+      set_dimension_missile_packet:
+        setDimensionMissilePacketCandidate1619821.SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821.evidence_status,
       unit_apply_damage_roster_key_pair:
         unitApplyDamageRosterKeyPair1619821.UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE.evidence_status,
       unit_apply_damage_lookup_roster_key_pair:
@@ -979,6 +986,7 @@ const BUILD_PROFILES = deepFreeze({
       item_charges_packet: 'exact 821 game route 0x0437 PKT_S2C_SetItemCharges_s native callback u8/u16 arguments before receiver method; no proven item identity, charges, slot, owner, receiver state or effect',
       target_hero_packet: 'exact 821 game route 0x0265 PKT_AI_TargetHeroS2C_s native callback u32 from object +0x10 before receiver-dependent call; no proven source actor, resolved target object, target state, or effect',
       force_create_missile_packet: 'exact 821 game route 0x0087 PKT_S2C_ForceCreateMissile_s packet-local native callback comparison u32 from object +0x10 before synthetic receiver comparison; live receiver, missile identity, owner, target, creation, effect and causality unknown',
+      set_dimension_missile_packet: 'exact 821 game route 0x008a PKT_SetDimensionMissile_s packet-local callback u8 from object +0x14 before receiver method; live receiver, missile identity, owner, target, actual dimension change, effect and causality unknown',
       unit_apply_damage_roster_key_pair: 'full 0x005f raw-param equality with the exact 821 ten-member HeroStats roster key, retaining both packet refs; candidate participant label only, with +0x100 aliases and actor/source/target/effect unknown',
       unit_apply_damage_lookup_roster_key_pair: 'native +0x24 callback lookup key equality with the exact 821 ten-member HeroStats roster key, retaining raw key relation and both packet refs; candidate roster label only, with lookup success and actor/source/target/effect unknown',
       unit_apply_damage_lookup2c_roster_key_pair: 'native +0x2c callback lookup key equality with the exact 821 ten-member HeroStats roster key, retaining both packet refs; candidate roster label only, with lookup success and actor/source/target/effect unknown',
@@ -1043,6 +1051,7 @@ const BUILD_PROFILES = deepFreeze({
       'item_charges_packet',
       'target_hero_packet',
       'force_create_missile_packet',
+      'set_dimension_missile_packet',
       'unit_apply_damage_roster_key_pair',
       'unit_apply_damage_lookup_roster_key_pair',
       'unit_apply_damage_lookup2c_roster_key_pair',
