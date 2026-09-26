@@ -4,6 +4,28 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **ShieldingParams fields to roster keys (opt-in candidate):** Exact-821
+  `--events shielding_params_roster_key_pair --runtime-image IMAGE
+  --event-jsonl-only` and the matching API capability compare native
+  child `+0x08` and `+0x0c` u32 values independently with the same-Replay
+  ten-key HeroStats roster. Eleven KR Replays produced 2,778 pairs:
+  `+0x08` matched 2,778, `+0x0c` matched 2,770, and eight `+0x0c`
+  values remained explicit nonmatches. Both source packet refs and the
+  unmatched values are retained. Field roles and actual shield effects
+  remain `UNKNOWN`.
+
+- **Anonymous `0x029c` header key to roster (opt-in candidate):** Exact-821
+  `--events anonymous_029c_roster_key_pair --runtime-image IMAGE
+  --event-jsonl-only` and the matching API capability compare only the
+  native full-u32 *packet header* with the same-Replay ten-key roster.
+  Among 457,095 native packets across 11 KR Replays, 25,391 matched;
+  414,057 zero headers and 17,647 nonroster nonzero headers were excluded,
+  including 2,346 roster-key `+0x100` aliases. The independent object
+  `+0x14` u32 is never substituted for the header. Saved queries can use
+  `--opaque-u32 VALUE --verify-source`; `--participant` is rejected because
+  packet actor and target roles remain `UNKNOWN`. The physical source check
+  scans every row before applying `--limit`.
+
 - **Healing counter snapshot source query:** Saved exact-821
   `hero_total_heal_snapshot_candidates` and
   `hero_total_units_healed_snapshot_candidates` can now use `--verify-source`.
