@@ -4,10 +4,22 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Integrated 821 provenance and 0x0087 validation (2026-09-26):** After
+  merging the opt-in ForceCreateMissile candidate with saved-query source
+  verification, `npm test` passed 1,166 of 1,288 Node tests across 42 groups,
+  with zero failures and 122 declared skips; 19 Python unittests passed.
+  Seven focused query files passed 122/122 without skips. The pinned exact
+  image passed the four focused 0x0087 candidate tests without skips. A saved
+  query over original `KR_8393821675.rofl` checked all 14,353 candidate rows
+  against the source ROFL, returned `SOURCE_REPLAY_VERIFIED`, and emitted one
+  unchanged row. A later time/offset-only forgery after `--limit 1` failed
+  `SOURCE_PROVENANCE_MISMATCH` with zero stdout bytes. `npm run test:all`
+  and other operating systems were not tested in this integration run.
 - **Optional saved-row source verification (2026-09-26):** `query-events
   --verify-source` now reopens the original exact-821 ROFL for the packet-local
   NotifyContextualSituation, item-group V1/V2, cooldown broadcast, item-charges,
-  target-hero, and ForceCreateMissile candidate streams. It checks the full Replay build/SHA-256,
+  target-hero, and ForceCreateMissile candidate streams. It checks the full
+  Replay build/SHA-256,
   strict packet framing, ordered stream/chunk IDs and offsets, timestamp,
   parameter, payload, and total count before publishing stdout. A single
   Replay may use `--source-replay PATH` when the same bytes were moved; batch
