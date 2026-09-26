@@ -211,6 +211,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'show_health_bar_packet',
       'notify_contextual_situation_packet',
       'item_group_data_broadcast_packet',
+      'cooldown_broadcast_packet',
       'unit_apply_damage_roster_key_pair',
       'unit_apply_damage_lookup_roster_key_pair',
       'unit_apply_damage_lookup2c_roster_key_pair',

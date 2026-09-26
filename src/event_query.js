@@ -1589,7 +1589,7 @@ function cooldownBroadcastPacketRow(row, prepared, lineNumber, state) {
         !== decodeProtectedCooldownLookupKeyU32(protectedHex)
       || ref?.source_path !== prepared.sourcePath
       || ref.replay_sha256 !== prepared.replaySha
-      || !['game', 'keyframe'].includes(ref.chunk_stream)
+      || !['game_chunk', 'keyframe'].includes(ref.chunk_stream)
       || !Number.isSafeInteger(ref.chunk_index) || ref.chunk_index < 0
       || !Number.isSafeInteger(ref.chunk_id) || ref.chunk_id < 0
       || !Number.isSafeInteger(ref.chunk_file_offset) || ref.chunk_file_offset < 0

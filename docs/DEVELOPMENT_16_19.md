@@ -35,6 +35,28 @@ Current progress (older notes below retain their original research context):
   state change and gameplay effect remain `UNKNOWN`. The private image,
   Replays and generated JSONL stay ignored outside Git. Focused exact-image
   Node and Python tests passed 11/11 and 5/5 without skips.
+- **SetCooldown_Broadcast callback lookup key (opt-in candidate):** The exact
+  KR `16.19.821.7343` route `0x039d` maps through factory case `0xf09d3f`,
+  constructor `0xe99ba0`, deserializer `0xf1a4e0`, and callback `0x2bbc90`
+  in the pinned runtime image (SHA-256
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`).
+  The callback reads packet object `+0x10` and forms a lookup key before
+  calling `0x98a840`. Strict framing of 11 original exact-build KR Replays
+  found 182,482 route packets across game and keyframe streams and eight
+  observed payload lengths, with zero framing errors. An independent native
+  pass fully consumed all 182,482 packets and captured one lookup key per
+  packet; ordered raw-input and native-output SHA-256 values were retained
+  for each Replay. The bounded CLI/API decoder verifies the exact image,
+  native full consumption, object identity, callback key, and both digests
+  before emitting `cooldown_broadcast_packet_candidates`. One real CLI
+  smoke emitted 19,714/19,714 rows in two native batches; its input/output
+  hashes matched the independent full gate. A saved query validated all
+  19,714 rows after `--limit 1`, matched 2,507 keys equal to zero, and
+  emitted one unchanged row. Truncated and appended packet controls failed
+  full native consumption. The key remains packet-local: actual cooldown,
+  slot, actor, target, receiver lookup result and effect are `UNKNOWN`.
+  This route is opt-in and does not enter default semantic output. The image,
+  original Replays, full-gate record and CLI output remain ignored outside Git.
 - **SetItemGroupData_Broadcast packet lookup key (opt-in candidate):** Exact
   KR `16.19.821.7343` keyframe route `0x013f` is a packet factory route,
   separate from `0x040a` OnEvent child IDs. The pinned runtime image SHA-256
