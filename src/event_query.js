@@ -68,7 +68,9 @@ const { LOOKUP_TABLE_SHA256, decodeRuntimeCountByte } =
   require('./decoders/rofl_16_19_821_runtime_bytes');
 const { CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821,
   CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821,
-  decodeNestedBits, decodeCastSpellAnsNestedU32FromRaw821 } =
+  CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821,
+  decodeNestedBits, decodeCastSpellAnsNestedU32FromRaw821,
+  decodeCastSpellAnsNestedU32At4cFromRaw821 } =
   require('./decoders/rofl_16_19_821_cast_spell_ans_packet_candidate');
 const { CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE_PROFILE_821,
   decodeCircularMovementRestrictionPayload821 } =
@@ -2856,9 +2858,11 @@ function castSpellAnsOpaqueI32(row, lineNumber) {
 function prepareCastSpellAnsNestedBits(prepared) {
   const result = prepared.capabilityResult;
   const profile = result?.profile_id
-      === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821.id
-    ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821
-    : CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821;
+      === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821.id
+    ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821
+    : result?.profile_id === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821.id
+      ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821
+      : CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821;
   if (prepared.eventKey !== 'cast_spell_ans_packet_candidates'
       || prepared.replayVersion !== profile.replay_version) {
     throw new EventQueryError('UNSUPPORTED_FILTER',
@@ -2884,9 +2888,12 @@ function prepareCastSpellAnsNestedBits(prepared) {
         !== profile.evidence_nested_float_inverse_sha256
       || result.evidence_nested_byte_inverse_sha256
         !== profile.evidence_nested_byte_inverse_sha256
-      || (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821
+      || (profile !== CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821
         && result.evidence_nested_u32_transform_sha256
           !== profile.evidence_nested_u32_transform_sha256)
+      || (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821
+        && result.evidence_nested_u32_0x4c_transform_sha256
+          !== profile.evidence_nested_u32_0x4c_transform_sha256)
       || result.runtime_image_status !== 'MATCHED_USED'
       || result.runtime_image_used !== true
       || result.evidence_status !== 'CANDIDATE_EXACT_RUNTIME_PACKET_FIELDS'
@@ -2916,16 +2923,38 @@ function prepareCastSpellAnsNestedU32(prepared) {
   prepareCastSpellAnsNestedBits(prepared);
 }
 
+function prepareCastSpellAnsNestedU32At4c(prepared) {
+  const profile = CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821;
+  if (prepared.eventKey !== 'cast_spell_ans_packet_candidates'
+      || prepared.replayVersion !== profile.replay_version) {
+    throw new EventQueryError('UNSUPPORTED_FILTER',
+      '--cast-nested-u32-0x4c requires an exact 16.19.821.7343 CastSpellAns packet candidate event.');
+  }
+  const profileId = prepared.capabilityResult?.profile_id;
+  if ([CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821.id,
+    CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821.id.replace(/-v4$/, '-v3'),
+    CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821.id].includes(profileId)) {
+    throw new EventQueryError('CAST_NESTED_U32_0X4C_UNAVAILABLE',
+      'This CastSpellAns artifact predates the second nested callback u32 field.',
+      { cast_nested_u32_0x4c_checked_count: 0,
+        cast_nested_u32_0x4c_unavailable_count: prepared.declaredCount,
+        capability_status: prepared.capabilityStatus });
+  }
+  prepareCastSpellAnsNestedBits(prepared);
+}
+
 function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
   const invalid = (reason) => {
     throw new EventQueryError('INVALID_EVENT_ROW',
       `Invalid CastSpellAns nested callback bits at JSONL line ${lineNumber}: ${reason}.`,
       { line_number: lineNumber });
   };
-  const profile = prepared.capabilityResult.profile_id
-      === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821.id
-    ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821
-    : CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821;
+  const profileId = prepared.capabilityResult.profile_id;
+  const profile = profileId === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821.id
+    ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821
+    : profileId === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821.id
+      ? CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821
+      : CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821;
   const ref = row.raw_packet_ref;
   if (row.event_type !== 'NPC_CAST_SPELL_ANS_PACKET_CANDIDATE'
       || row.game_version !== profile.replay_version || row.patch !== '16.19'
@@ -2960,7 +2989,7 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
       || value !== decodeNestedBits(raw)) {
     invalid('raw byte and decoded value differ from the pinned 821 transform');
   }
-  if (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V5_821) {
+  if (profile !== CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_821) {
     const rawU32 = row.raw_u32_0x1c_hex;
     const nestedU32 = row.opaque_u32_0x1c;
     if (typeof rawU32 !== 'string' || !/^[0-9a-f]{8}$/.test(rawU32)
@@ -2969,9 +2998,20 @@ function castSpellAnsNestedBits(row, prepared, lineNumber, packetPositions) {
         || nestedU32 !== decodeCastSpellAnsNestedU32FromRaw821(rawU32)) {
       invalid('raw nested u32 and decoded value differ from the pinned 821 transform');
     }
-    return { bits: value, u32: nestedU32 };
+    if (profile === CAST_SPELL_ANS_PACKET_CANDIDATE_PROFILE_V6_821) {
+      const rawAt4c = row.raw_u32_0x4c_hex;
+      const valueAt4c = row.opaque_u32_0x4c;
+      if (typeof rawAt4c !== 'string' || !/^[0-9a-f]{8}$/.test(rawAt4c)
+          || !Number.isSafeInteger(valueAt4c) || valueAt4c < 0
+          || valueAt4c > 0xffffffff
+          || valueAt4c !== decodeCastSpellAnsNestedU32At4cFromRaw821(rawAt4c)) {
+        invalid('raw +0x4c u32 and decoded value differ from the pinned 821 transform');
+      }
+      return { bits: value, u32: nestedU32, u32At4c: valueAt4c };
+    }
+    return { bits: value, u32: nestedU32, u32At4c: null };
   }
-  return { bits: value, u32: null };
+  return { bits: value, u32: null, u32At4c: null };
 }
 
 function validUnitApplyDamageRosterRef(ref, replaySha, sourcePath, packetId,
@@ -7331,7 +7371,7 @@ function validateFilters(options) {
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
-    castNestedBits = null, castNestedU32 = null,
+    castNestedBits = null, castNestedU32 = null, castNestedU32At4c = null,
     damageCallbackF32Available = false,
     damageCallbackF32At18Raw = false,
     damageLookupKey24 = null, damageLookupKey2c = null,
@@ -7385,6 +7425,7 @@ function validateFilters(options) {
     ['opaqueI32', opaqueI32, -0x80000000, 0x7fffffff],
     ['castNestedBits', castNestedBits, 0, 0xff],
     ['castNestedU32', castNestedU32, 0, 0xffffffff],
+    ['castNestedU32At4c', castNestedU32At4c, 0, 0xffffffff],
     ['packetRecordCount', packetRecordCount, 0, 1],
     ['showHealthZeroFlag', showHealthZeroFlag, 0, 1],
     ['levelAfter', levelAfter, 1, 20],
@@ -7412,7 +7453,7 @@ async function streamEventQuery(prepared, options, emitLine) {
     killerParticipant = null, assistingParticipant = null, rawParam = null,
     itemId = null, previousItemId = null, slot = null,
     opaqueU32 = null, opaquePair = null, opaqueI32 = null,
-    castNestedBits = null, castNestedU32 = null,
+    castNestedBits = null, castNestedU32 = null, castNestedU32At4c = null,
     damageCallbackF32Available = false,
     damageCallbackF32At18Raw = false,
     damageLookupKey24 = null, damageLookupKey2c = null,
@@ -7523,6 +7564,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   }
   if (castNestedBits != null) prepareCastSpellAnsNestedBits(prepared);
   if (castNestedU32 != null) prepareCastSpellAnsNestedU32(prepared);
+  if (castNestedU32At4c != null) prepareCastSpellAnsNestedU32At4c(prepared);
   const damageLookupKeysRequested = damageLookupKey24 != null
     || damageLookupKey2c != null;
   const damagePacketCheck = damageCallbackF32Available || damageLookupKeysRequested
@@ -7577,6 +7619,7 @@ async function streamEventQuery(prepared, options, emitLine) {
   let opaqueI32AvailableCount = 0;
   let castNestedBitsCheckedCount = 0;
   let castNestedU32CheckedCount = 0;
+  let castNestedU32At4cCheckedCount = 0;
   const castNestedBitsPacketPositions = new Set();
   let damageCallbackF32AvailableCount = 0;
   let damageCallbackF32UnavailableCount = 0;
@@ -7815,11 +7858,13 @@ async function streamEventQuery(prepared, options, emitLine) {
         : opaquePairValue(row, lineNumber, opaquePairFields);
       const opaqueI32Field = opaqueI32 == null ? null
         : castSpellAnsOpaqueI32(row, lineNumber);
-      const nestedFields = castNestedBits == null && castNestedU32 == null ? null
+      const nestedFields = castNestedBits == null && castNestedU32 == null
+        && castNestedU32At4c == null ? null
         : castSpellAnsNestedBits(row, prepared, lineNumber,
           castNestedBitsPacketPositions);
       if (castNestedBits != null) castNestedBitsCheckedCount += 1;
       if (castNestedU32 != null) castNestedU32CheckedCount += 1;
+      if (castNestedU32At4c != null) castNestedU32At4cCheckedCount += 1;
       const damageCallbackF32 = damagePacketCheck
         ? unitApplyDamageCallbackF32(row, prepared, lineNumber,
           damagePacketPositions, damageShapeFamilies, damageNativeInputHash,
@@ -7910,6 +7955,8 @@ async function streamEventQuery(prepared, options, emitLine) {
           || (opaqueI32 != null && opaqueI32Field.value !== opaqueI32)
           || (castNestedBits != null && nestedFields.bits !== castNestedBits)
           || (castNestedU32 != null && nestedFields.u32 !== castNestedU32)
+          || (castNestedU32At4c != null
+            && nestedFields.u32At4c !== castNestedU32At4c)
           || (damageCallbackF32Available && !damageCallbackF32)
           || (damageLookupKey24 != null
             && row.native_callback_lookup_key_u32_0x24_candidate
@@ -8281,6 +8328,10 @@ async function streamEventQuery(prepared, options, emitLine) {
       cast_nested_u32_checked_count: castNestedU32CheckedCount,
       cast_nested_u32_unavailable_count: 0,
     }),
+    ...(castNestedU32At4c == null ? {} : {
+      cast_nested_u32_0x4c_checked_count: castNestedU32At4cCheckedCount,
+      cast_nested_u32_0x4c_unavailable_count: 0,
+    }),
     ...(damageCallbackF32Available ? {
       damage_callback_f32_available_count: damageCallbackF32AvailableCount,
       damage_callback_f32_unavailable_count: damageCallbackF32UnavailableCount,
@@ -8335,6 +8386,8 @@ async function streamEventQuery(prepared, options, emitLine) {
       ...(opaqueI32 == null ? {} : { opaque_i32: opaqueI32 }),
       ...(castNestedBits == null ? {} : { cast_nested_bits: castNestedBits }),
       ...(castNestedU32 == null ? {} : { cast_nested_u32: castNestedU32 }),
+      ...(castNestedU32At4c == null ? {}
+        : { cast_nested_u32_0x4c: castNestedU32At4c }),
       ...(damageCallbackF32Available ? { damage_callback_f32_available: true } : {}),
       ...(damageLookupKey24 == null ? {}
         : { damage_lookup_key24: damageLookupKey24 }),
@@ -8402,6 +8455,8 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
   let castNestedBitsUnavailableCount = 0;
   let castNestedU32CheckedCount = 0;
   let castNestedU32UnavailableCount = 0;
+  let castNestedU32At4cCheckedCount = 0;
+  let castNestedU32At4cUnavailableCount = 0;
   let damageCallbackF32CheckedCount = 0;
   let damageCallbackF32AvailableCount = 0;
   let damageCallbackF32UnavailableCount = 0;
@@ -8444,6 +8499,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
             'OPAQUE_PAIR_UNAVAILABLE',
             'OPAQUE_I32_UNAVAILABLE', 'CAST_NESTED_BITS_UNAVAILABLE',
             'CAST_NESTED_U32_UNAVAILABLE',
+            'CAST_NESTED_U32_0X4C_UNAVAILABLE',
             'CHILD_EVENT_ID_UNAVAILABLE'].includes(error.code)) {
         throw error;
       }
@@ -8455,6 +8511,10 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       if (error.code === 'CAST_NESTED_U32_UNAVAILABLE') {
         castNestedU32UnavailableCount += error.details.cast_nested_u32_unavailable_count;
       }
+      if (error.code === 'CAST_NESTED_U32_0X4C_UNAVAILABLE') {
+        castNestedU32At4cUnavailableCount +=
+          error.details.cast_nested_u32_0x4c_unavailable_count;
+      }
       continue;
     }
     completedCount += 1;
@@ -8465,6 +8525,9 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
     }
     if (options.castNestedU32 != null) {
       castNestedU32CheckedCount += summary.cast_nested_u32_checked_count;
+    }
+    if (options.castNestedU32At4c != null) {
+      castNestedU32At4cCheckedCount += summary.cast_nested_u32_0x4c_checked_count;
     }
     if (options.damageCallbackF32Available) {
       damageCallbackF32CheckedCount += summary.damage_callback_f32_checked_count;
@@ -8511,6 +8574,11 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       ...(options.castNestedU32 == null ? {} : {
         cast_nested_u32_checked_count: summary.cast_nested_u32_checked_count,
         cast_nested_u32_unavailable_count: 0,
+      }),
+      ...(options.castNestedU32At4c == null ? {} : {
+        cast_nested_u32_0x4c_checked_count:
+          summary.cast_nested_u32_0x4c_checked_count,
+        cast_nested_u32_0x4c_unavailable_count: 0,
       }),
       ...(options.damageCallbackF32Available ? {
         damage_callback_f32_checked_count: summary.damage_callback_f32_checked_count,
@@ -8583,6 +8651,14 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
       cast_nested_u32_unavailable_replay_count:
         replayResults.filter((replay) =>
           replay.code === 'CAST_NESTED_U32_UNAVAILABLE').length,
+    }),
+    ...(options.castNestedU32At4c == null ? {} : {
+      cast_nested_u32_0x4c_checked_count: castNestedU32At4cCheckedCount,
+      cast_nested_u32_0x4c_unavailable_count:
+        castNestedU32At4cUnavailableCount,
+      cast_nested_u32_0x4c_unavailable_replay_count:
+        replayResults.filter((replay) =>
+          replay.code === 'CAST_NESTED_U32_0X4C_UNAVAILABLE').length,
     }),
     ...(options.damageCallbackF32Available ? {
       damage_callback_f32_checked_count: damageCallbackF32CheckedCount,

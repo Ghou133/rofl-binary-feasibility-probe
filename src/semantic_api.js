@@ -2190,8 +2190,8 @@ function decode1619821(replay, profile, options = {}) {
   }
   const capabilities = [...new Set(requested)];
   const castPacketProfile = options.castPacketProfile ?? 'v4';
-  if (castPacketProfile !== 'v4' && castPacketProfile !== 'v5') {
-    throw new TypeError('exact 821 CastSpellAns packet profile must be v4 or v5');
+  if (!['v4', 'v5', 'v6'].includes(castPacketProfile)) {
+    throw new TypeError('exact 821 CastSpellAns packet profile must be v4, v5 or v6');
   }
   const damagePacketProfile = options.damagePacketProfile ?? 'v5';
   if (damagePacketProfile !== 'v5' && damagePacketProfile !== 'v6') {
