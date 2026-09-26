@@ -45,8 +45,10 @@ Current progress (older notes below retain their original research context):
   found 182,482 route packets across game and keyframe streams and eight
   observed payload lengths, with zero framing errors. An independent native
   pass fully consumed all 182,482 packets and captured one lookup key per
-  packet; ordered raw-input and native-output SHA-256 values were retained
-  for each Replay. The bounded CLI/API decoder verifies the exact image,
+  packet; ordered raw-input and native-output SHA-256 values are retained
+  for each Replay in
+  [the source-bound evidence summary](evidence/cooldown_broadcast_821_native_gate.json).
+  The bounded CLI/API decoder verifies the exact image,
   native full consumption, object identity, callback key, and both digests
   before emitting `cooldown_broadcast_packet_candidates`. One real CLI
   smoke emitted 19,714/19,714 rows in two native batches; its input/output
