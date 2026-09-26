@@ -76,6 +76,8 @@ const { decodeReviveAllyEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
 const { decodeFirstBloodAssistEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_first_blood_assist_event_packet_candidate');
+const { decodeObjectiveStealEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_objective_steal_event_packet_candidate');
 const { decodeTurretDieEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_turret_die_event_packet_candidate');
 const { decodeDampenerDieEventPacketCandidates821 } =
@@ -2334,6 +2336,12 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    objective_steal_event_packet: (input, collected) =>
+      decodeObjectiveStealEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     turret_die_event_packet: (input, collected) =>
       decodeTurretDieEventPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2509,6 +2517,7 @@ function decode1619821(replay, profile, options = {}) {
     resurrect_event_packet: 'resurrect_event_packet_candidates',
     revive_ally_event_packet: 'revive_ally_event_packet_candidates',
     first_blood_assist_event_packet: 'first_blood_assist_event_packet_candidates',
+    objective_steal_event_packet: 'objective_steal_event_packet_candidates',
     turret_die_event_packet: 'turret_die_event_packet_candidates',
     dampener_die_event_packet: 'dampener_die_event_packet_candidates',
     turret_first_blood_event_packet: 'turret_first_blood_event_packet_candidates',
@@ -2572,6 +2581,7 @@ function decode1619821(replay, profile, options = {}) {
     'resurrect_event_packet',
     'revive_ally_event_packet',
     'first_blood_assist_event_packet',
+    'objective_steal_event_packet',
     'turret_die_event_packet',
     'dampener_die_event_packet',
     'turret_first_blood_event_packet',
@@ -2698,6 +2708,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'resurrect_event_packet'
         || capability === 'revive_ally_event_packet'
         || capability === 'first_blood_assist_event_packet'
+        || capability === 'objective_steal_event_packet'
         || capability === 'turret_die_event_packet'
         || capability === 'dampener_die_event_packet'
         || capability === 'turret_first_blood_event_packet'
@@ -2790,6 +2801,8 @@ function decode1619821(replay, profile, options = {}) {
                       ? '0x040a/child_002c'
                     : capability === 'first_blood_assist_event_packet'
                       ? '0x040a/child_0017'
+                    : capability === 'objective_steal_event_packet'
+                      ? '0x040a/child_00be_00d6'
                      : capability === 'turret_die_event_packet'
                        ? '0x040a/child_003b'
                      : capability === 'dampener_die_event_packet'
@@ -2821,6 +2834,8 @@ function decode1619821(replay, profile, options = {}) {
                 : capability === 'revive_ally_event_packet'
                   ? result.event_count
                 : capability === 'first_blood_assist_event_packet'
+                  ? result.event_count
+                : capability === 'objective_steal_event_packet'
                   ? result.event_count
                  : capability === 'turret_die_event_packet'
                    ? result.event_count

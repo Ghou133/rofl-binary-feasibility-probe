@@ -4,6 +4,25 @@ Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Objective-steal OnEvent packet markers (isolated development branch):**
+  The exact 821 image names `0x040a` child `0x00be`
+  `OnKillDragonSteal` and child `0x00d6` `OnKillWormSteal` at
+  name-table entry RVAs `0x1ef90e0` and `0x1ef94a0`. The selected
+  `objective_steal_event_packet` CLI/API route requires the pinned image,
+  game-stream 133-byte parent, native full consumption, exact child and
+  encoded IDs, and the observed 124-byte native child blob. It preserves
+  the opaque blob/hash and original packet reference. Real selected CLI
+  runs on `KR_8393872512` and `KR_8394041123` each emitted one
+  `CANDIDATE` row with zero framing errors (children `0x00d6` and
+  `0x00be`, respectively). `KR_8392938200` had no 133-byte parent and
+  returned `PROFILE_UNAVAILABLE` with zero framing errors; its CLI exit
+  code was 1 for that unavailable status. Focused synthetic route/API/CLI
+  tests passed 4/4. The earlier exact-image census found only these two
+  133-byte parents among 11 supplied KR Replays; the new CLI route was
+  run on the two positive Replays and one absent control, not all 11.
+  The image labels and packet presence do not prove an actual steal,
+  objective state change, actor, target, or gameplay effect. Local outputs
+  remain ignored under `artifacts/16_19_development/objective_steal_real_821/`.
 - **UnitApplyDamage anonymous callback f32 v5:** The pinned 821 native
   deserializer writes callback object `+0x18` from a protected raw f32 reader
   for header selector 0/2/3/6, or constant zero for selector 5. The output

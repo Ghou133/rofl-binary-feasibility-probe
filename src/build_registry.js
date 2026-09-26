@@ -51,6 +51,8 @@ const reviveAllyEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
 const firstBloodAssistEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_first_blood_assist_event_packet_candidate');
+const objectiveStealEventPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_objective_steal_event_packet_candidate');
 const turretDieEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_turret_die_event_packet_candidate');
 const dampenerDieEventPacketCandidate1619821 =
@@ -586,6 +588,7 @@ const BUILD_PROFILES = deepFreeze({
       resurrect_event_packet: 0x040a,
       revive_ally_event_packet: 0x040a,
       first_blood_assist_event_packet: 0x040a,
+      objective_steal_event_packet: 0x040a,
       turret_die_event_packet: 0x040a,
       dampener_die_event_packet: 0x040a,
       turret_first_blood_event_packet: 0x040a,
@@ -689,6 +692,8 @@ const BUILD_PROFILES = deepFreeze({
         reviveAllyEventPacketCandidate1619821.REVIVE_ALLY_EVENT_PACKET_821_PROFILE,
       first_blood_assist_event_packet:
         firstBloodAssistEventPacketCandidate1619821.FIRST_BLOOD_ASSIST_EVENT_PACKET_821_PROFILE,
+      objective_steal_event_packet:
+        objectiveStealEventPacketCandidate1619821.OBJECTIVE_STEAL_EVENT_PACKET_821_PROFILE,
       turret_die_event_packet:
         turretDieEventPacketCandidate1619821.TURRET_DIE_EVENT_PACKET_821_PROFILE,
       dampener_die_event_packet:
@@ -806,6 +811,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_NATIVE_ON_REVIVE_ALLY_NAMED_PACKET_FIELD',
       first_blood_assist_event_packet:
         'CANDIDATE_821_NATIVE_ON_FIRST_BLOOD_ASSIST_NAMED_PACKET_MARKER',
+      objective_steal_event_packet:
+        'CANDIDATE_821_NATIVE_OBJECTIVE_STEAL_NAMED_PACKET_MARKERS',
       turret_die_event_packet:
         'CANDIDATE_821_NATIVE_ON_TURRET_DIE_NAMED_PACKET_BLOB',
       dampener_die_event_packet:
@@ -902,6 +909,7 @@ const BUILD_PROFILES = deepFreeze({
       resurrect_event_packet: 'exact 821 native 0x040a OnEvent child 0x002d registration and OnResurrect name table; native child +0x04/+0x08 u32 remain anonymous; no resurrection, actor, or state transition inference',
       revive_ally_event_packet: 'exact 821 native 0x040a OnEvent child 0x002c registration and OnReviveAlly name table; native child +0x04 u32 remains anonymous; no revive effect, actor, or state transition inference',
       first_blood_assist_event_packet: 'exact 821 native 0x040a OnEvent child 0x0017 full consumption and OnFirstBloodAssist image name table; child blob is opaque; no first-blood, assist, actor, or effect inference',
+      objective_steal_event_packet: 'exact 821 native 0x040a OnEvent children 0x00be/0x00d6 full consumption and OnKillDragonSteal/OnKillWormSteal image labels; child blobs are opaque; no actual steal, objective state, actor, or gameplay effect inference',
       turret_die_event_packet: 'exact 821 native 0x040a OnEvent child 0x003b full consumption and OnTurretDie image name table; native child blob remains anonymous; no actual turret death, structure, actor, or state transition inference',
       dampener_die_event_packet: 'exact 821 native 0x040a OnEvent child 0x0035 full consumption and OnDampenerDie image name table; native child blob remains anonymous; no actual dampener death, structure, actor, or state transition inference',
       turret_first_blood_event_packet: 'exact 821 native 0x040a OnEvent child 0x003d full consumption and OnTurretFirstBlood image name table; native child blob remains anonymous; no actual first turret death, structure, actor, or state transition inference',
@@ -961,6 +969,7 @@ const BUILD_PROFILES = deepFreeze({
       'resurrect_event_packet',
       'revive_ally_event_packet',
       'first_blood_assist_event_packet',
+      'objective_steal_event_packet',
       'turret_die_event_packet',
       'dampener_die_event_packet',
       'turret_first_blood_event_packet',
