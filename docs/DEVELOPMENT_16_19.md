@@ -1,6 +1,23 @@
 # 16.19 development progress
 
 2026-10-02 continuation: [Runnable quick start](QUICK_START_16_19.md).
+Death, assist, timer, observed-return and joined death-episode saved streams now
+support complete original-source verification for exact `16.19.821.7343`.
+The query independently re-decodes all rows and full capability metadata before
+applying limits, filters or output callbacks. Relocated original files can be
+provided with `--source-replay`; all nested saved packet paths stay unchanged in
+output. Native assist claims require the matching image and fresh child witness;
+static timer/return fields still remain `runtime_image_used: false` when an image
+was supplied but unused. The latter `PROVIDED_NOT_USED` metadata previously
+prevented even ordinary queries on native-assist episode artifacts and is now
+accepted without promoting a native witness. Fresh source queries checked all
+71 deaths, 71 assists, 71 timers, 66 returns and 71 joined episodes from one
+original KR Replay, plus its native-assist episode and assist forms. The focused
+final death-source suite reported 20 pass, one missing-private-input skip, zero
+fail. Negative controls include late timer forgery after a one-row limit, rewritten
+batch manifests, forged capability metadata, wrong Replay identities, missing and
+wrong runtime images, and no callback or file output on verification failure.
+
 `capabilities --events` now preflights only selected names in request order;
 unregistered names remain explicit and cause exit code 2. Shared Python/Unicorn
 checks execute once per preflight request and are refreshed on the next request.

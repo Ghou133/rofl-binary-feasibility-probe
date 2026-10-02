@@ -22,7 +22,7 @@ output. It does not verify the runtime image hash or prove event semantics.
 ```powershell
 node src/cli.js decode "D:\Replays\example.rofl" --events hero_death,hero_assist,hero_death_timer,hero_respawn,hero_roster_metadata_bridge --event-jsonl-only --out-dir "work\episodes"
 node src/cli.js query-events "work\episodes" --list-events
-node src/cli.js query-events "work\episodes" --event hero_death_episode_candidates --limit 10 --output "work\episodes-preview.jsonl"
+node src/cli.js query-events "work\episodes" --event hero_death_episode_candidates --verify-source --limit 10 --output "work\episodes-preview.jsonl"
 ```
 
 For `16.19.820.7193`, start with `--events hero_death`. Capabilities are bound to
@@ -30,6 +30,16 @@ the complete build; 821-only names are not borrowed for 820 or unknown builds.
 The 821 example preserves matched deaths, assist lists, timer fields, observed
 returns or end-of-Replay nonreturns, plus a separately gated roster bridge.
 It never predicts respawn from a timer. All these results remain candidates.
+
+The exact-821 `hero_death_candidates`, `hero_assist_candidates`,
+`hero_death_timer_candidates`, `hero_respawn_candidates`, and joined episode
+streams support `--verify-source`. This independently checks the original ROFL
+identity, re-decodes every row and checks the complete capability metadata before
+emitting filtered or limited output. It requires no runtime image for static
+candidate observations. If assist child identities were natively witnessed
+during decode, provide the matching `--runtime-image` again; missing or mismatched
+images fail the query without emitting partial output. Source verification does
+not promote these observations to confirmed gameplay semantics.
 
 Outputs include `acceptance_summary.json`, `manifest.json`, and per-Replay
 `semantic_run.json` and candidate JSONL files under `replays/`.

@@ -227,7 +227,15 @@ const { ANONYMOUS_029C_ROSTER_KEY_PAIR_821_PROFILE } =
 
 const EVENT_KEY = /^[a-z][a-z0-9_]*_candidates$/;
 const REPLAY_SHA = /^[a-f0-9]{64}$/;
+const DEATH_SOURCE_CAPABILITIES_821 = Object.freeze({
+  hero_death_candidates: 'hero_death',
+  hero_assist_candidates: 'hero_assist',
+  hero_death_timer_candidates: 'hero_death_timer',
+  hero_respawn_candidates: 'hero_respawn',
+  hero_death_episode_candidates: 'hero_death_episode',
+});
 const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
+  ...Object.keys(DEATH_SOURCE_CAPABILITIES_821),
   'hero_roster_metadata_bridge_candidates',
   'hero_total_heal_snapshot_candidates',
   'hero_total_units_healed_snapshot_candidates',
@@ -2944,7 +2952,8 @@ function prepareHeroDeathEpisodeAssociation(semantic, analysis, eventKey,
         || (dependency === 'hero_death_timer'
           && (result.matched_death_core_count !== association.death_count
             || result.runtime_image_used !== false
-            || result.runtime_image_status !== 'STATIC_EXACT_821_RUNTIME_TRANSFORM'))
+            || !['STATIC_EXACT_821_RUNTIME_TRANSFORM', 'PROVIDED_NOT_USED']
+              .includes(result.runtime_image_status)))
         || (dependency === 'hero_respawn'
           && (result.matched_death_core_count !== association.death_count
             || result.input_count !== expectedCount
@@ -2953,7 +2962,8 @@ function prepareHeroDeathEpisodeAssociation(semantic, analysis, eventKey,
             || result.unpaired_final_deaths.length
               !== association.terminal_unobserved_count
             || result.runtime_image_used !== false
-            || result.runtime_image_status !== 'EXACT_821_ROUTE_CALLBACK_PROVEN_STATIC'))) {
+            || !['EXACT_821_ROUTE_CALLBACK_PROVEN_STATIC', 'PROVIDED_NOT_USED']
+              .includes(result.runtime_image_status)))) {
       throw new EventQueryError('ASSOCIATION_METADATA_MISMATCH',
         `${dependency} identity or count disagrees with ${profile.capability}.`,
         { capability: dependency, association: profile.capability });
@@ -3847,6 +3857,89 @@ function exactFields(value, fields) {
   return value && typeof value === 'object' && !Array.isArray(value)
     && Object.keys(value).length === fields.size
     && Object.keys(value).every((field) => fields.has(field));
+}
+
+function prepareDeathCandidateSourceVerification(prepared, sourceReplay,
+  runtimeImage, pythonExecutable) {
+  const capability = DEATH_SOURCE_CAPABILITIES_821[prepared.eventKey];
+  const episode = capability === 'hero_death_episode';
+  if (!capability
+      || prepared.replayVersion !== HERO_DEATH_EPISODE_821_PROFILE.replay_version
+      || prepared.capabilityStatus !== 'CANDIDATE') {
+    throw new EventQueryError('UNSUPPORTED_SOURCE_VERIFICATION',
+      'Death candidate source verification requires registered exact-821 candidate streams.');
+  }
+  const filename = sourceReplay ?? prepared.sourcePath;
+  if (typeof filename !== 'string' || filename.trim() === '') {
+    throw new EventQueryError('MISSING_SOURCE_REPLAY',
+      'No original ROFL path is available; supply --source-replay for this Replay.');
+  }
+  const resolved = path.resolve(filename);
+  let replay;
+  try {
+    replay = parseReplayFile(resolved);
+  } catch (error) {
+    throw new EventQueryError(error.code === 'INPUT_READ_ERROR'
+      ? 'SOURCE_REPLAY_READ_FAILED' : 'SOURCE_REPLAY_INVALID',
+    `Cannot verify original ROFL: ${error.message}`,
+    { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  if (replay.header.version !== prepared.replayVersion
+      || replay.source_sha256 !== prepared.replaySha) {
+    throw new EventQueryError('SOURCE_REPLAY_IDENTITY_MISMATCH',
+      'Original ROFL build or SHA-256 differs from saved candidate identity.',
+      { source_replay: resolved });
+  }
+  const nativeAssist = (episode ? prepared.episodeAssistNativeStatus
+    : capability === 'hero_assist' ? prepared.capabilityResult.native_child_identity_status
+      : null) === 'MATCHED_USED';
+  if (nativeAssist && !runtimeImage) {
+    throw new EventQueryError('MISSING_SOURCE_RUNTIME_IMAGE',
+      'Candidates with native assist child witnesses require --runtime-image for source verification.');
+  }
+  let decoded;
+  try {
+    decoded = decodeSemanticReplay(replay, {
+      capabilities: episode ? [...HERO_DEATH_EPISODE_821_PROFILE.depends_on] : [capability],
+      ...(nativeAssist ? { runtimeImagePath: runtimeImage, pythonExecutable } : {}),
+    });
+  } catch (error) {
+    throw new EventQueryError('SOURCE_REPLAY_FRAMING_FAILED',
+      `Cannot decode original ROFL ${capability}: ${error.message}`,
+      { source_replay: resolved, cause_code: error.code ?? null });
+  }
+  const result = episode ? decoded.candidate_associations?.hero_death_episode
+    : decoded.capability_results?.[capability];
+  const rows = decoded.events?.[prepared.eventKey];
+  if (result?.status !== 'CANDIDATE'
+      || (episode && !isDeepStrictEqual(result, prepared.capabilityResult))
+      || !Array.isArray(rows) || rows.length !== prepared.declaredCount) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Physical ROFL candidate result differs from saved metadata or row count.',
+      { source_replay: resolved, source_status: result?.status ?? null });
+  }
+  const saved = prepared[PREPARED_REPLAY_METADATA].semantic;
+  for (const dependency of episode ? HERO_DEATH_EPISODE_821_PROFILE.depends_on : [capability]) {
+    const fresh = normalizeReplaySourcePaths(decoded.capability_results?.[dependency],
+      prepared.sourcePath);
+    const prior = saved.capability_results?.[dependency];
+    // Supplying an unused image is operational metadata, not a new field witness.
+    if (fresh?.runtime_image_used !== true && prior?.runtime_image_used !== true
+        && ['STATIC_EXACT_821_RUNTIME_TRANSFORM',
+          'EXACT_821_ROUTE_CALLBACK_PROVEN_STATIC', 'PROVIDED_NOT_USED']
+          .includes(fresh?.runtime_image_status)
+        && ['STATIC_EXACT_821_RUNTIME_TRANSFORM',
+          'EXACT_821_ROUTE_CALLBACK_PROVEN_STATIC', 'PROVIDED_NOT_USED']
+          .includes(prior?.runtime_image_status)) {
+      fresh.runtime_image_status = prior.runtime_image_status;
+    }
+    if (!isDeepStrictEqual(fresh, prior)) {
+      throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+        `Physical ROFL ${dependency} metadata differs from the saved candidate.`,
+        { source_replay: resolved, capability: dependency });
+    }
+  }
+  return { kind: 'DEATH_CANDIDATE', rows, sourceReplay: resolved };
 }
 
 function prepareRosterBridgeSourceVerification(prepared, sourceReplay) {
@@ -12215,7 +12308,10 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
       '--source-replay requires --verify-source.');
   }
   const sourceReplayVerification = options.verifySource
-    ? (prepared.eventKey === ROSTER_BRIDGE_EVENT_821
+    ? (Object.hasOwn(DEATH_SOURCE_CAPABILITIES_821, prepared.eventKey)
+      ? prepareDeathCandidateSourceVerification(prepared, options.sourceReplay,
+        options.runtimeImage, options.pythonExecutable)
+      : prepared.eventKey === ROSTER_BRIDGE_EVENT_821
       ? prepareRosterBridgeSourceVerification(prepared, options.sourceReplay)
       : Object.hasOwn(HERO_HEAL_SNAPSHOT_EVENTS_821, prepared.eventKey)
         ? prepareHeroHealSnapshotSourceVerification(prepared,
@@ -12681,6 +12777,13 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
           { line_number: lineNumber });
       }
       rosterBridgeRow(row, prepared, lineNumber, rosterBridgeState);
+      if (sourceReplayVerification?.kind === 'DEATH_CANDIDATE'
+          && !isDeepStrictEqual(row, normalizeReplaySourcePaths(
+            sourceReplayVerification.rows[lineNumber - 1], prepared.sourcePath))) {
+        throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+          `Saved ${prepared.eventKey} row ${lineNumber} differs from the physical ROFL.`,
+          { line_number: lineNumber, source_replay: sourceReplayVerification.sourceReplay });
+      }
       if (sourceReplayVerification?.kind === 'ROSTER_BRIDGE') {
         const canonical = sourceReplayVerification.rows[lineNumber - 1];
         if (!canonical || !isDeepStrictEqual(row, {
@@ -12818,6 +12921,7 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
         anonymous029cPacketRow(row, prepared, lineNumber, anonymous029cState);
       }
       if (sourceReplayVerification
+          && sourceReplayVerification.kind !== 'DEATH_CANDIDATE'
           && sourceReplayVerification.kind !== 'ROSTER_BRIDGE'
           && sourceReplayVerification.kind !== 'HERO_HEAL_SNAPSHOT'
           && sourceReplayVerification.kind !== 'PARAMS_HEAL_PACKET'
@@ -13120,6 +13224,7 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
     }
   }
   if (sourceReplayVerification
+      && sourceReplayVerification.kind !== 'DEATH_CANDIDATE'
       && sourceReplayVerification.kind !== 'ROSTER_BRIDGE'
       && sourceReplayVerification.kind !== 'HERO_HEAL_SNAPSHOT'
       && sourceReplayVerification.kind !== 'PARAMS_HEAL_PACKET'
