@@ -139,6 +139,8 @@ const heroRosterMetadataBridge1619821 =
   require('./decoders/rofl_16_19_821_roster_metadata_bridge_candidate');
 const damageFloatCandidate1619821 =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
+const damageIntervalsCandidate1619821 =
+  require('./decoders/rofl_16_19_821_damage_keyframe_intervals_candidate');
 const timeStatsCandidate1619821 =
   require('./decoders/rofl_16_19_821_time_stats_candidate');
 const healStatsCandidate1619821 =
@@ -596,6 +598,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_gold_earned_snapshot: 0x0089,
       hero_gold_spent_snapshot: 0x0089,
       hero_damage_totals_snapshot: 0x0089,
+      hero_damage_keyframe_intervals: 0x0089,
       hero_damage_taken_from_champions_snapshot: 0x0089,
       hero_damage_self_mitigated_snapshot: 0x0089,
       hero_structure_objective_damage_snapshot: 0x0089,
@@ -694,6 +697,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_gold_spent_snapshot: floatStatsCandidate1619821.PROFILES.hero_gold_spent_snapshot,
       hero_damage_totals_snapshot:
         damageFloatCandidate1619821.PROFILES.hero_damage_totals_snapshot,
+      hero_damage_keyframe_intervals:
+        damageIntervalsCandidate1619821.DAMAGE_KEYFRAME_INTERVALS_821_PROFILE,
       hero_damage_taken_from_champions_snapshot:
         damageFloatCandidate1619821.PROFILES.hero_damage_taken_from_champions_snapshot,
       hero_damage_self_mitigated_snapshot:
@@ -851,6 +856,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_gold_earned_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_EARNED_TAIL',
       hero_gold_spent_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_SPENT_TAIL',
       hero_damage_totals_snapshot: 'CANDIDATE_821_NATIVE_F32_DAMAGE_TOTALS_TAILS',
+      hero_damage_keyframe_intervals: 'CANDIDATE_821_SAMPLED_DAMAGE_COUNTER_ENDPOINT_DIFFERENCE',
       hero_damage_taken_from_champions_snapshot:
         'CANDIDATE_821_NATIVE_F32_DAMAGE_TAKEN_FROM_CHAMPIONS_TAIL',
       hero_damage_self_mitigated_snapshot:
@@ -1078,6 +1084,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
+      'hero_damage_keyframe_intervals',
       'hero_damage_self_mitigated_snapshot',
       'hero_structure_objective_damage_snapshot',
       'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',

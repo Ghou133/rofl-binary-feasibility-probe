@@ -1,5 +1,44 @@
 # 16.19 development progress
 
+2026-10-02 damage continuation: opt-in `hero_damage_keyframe_intervals` now
+decodes four existing exact-821 cumulative counter candidates into adjacent
+participant observation windows through CLI/API. It preserves both packet refs,
+protected field bytes, f32 endpoint differences, integer-floor differences and
+unchanged windows. Final-tail gaps are separate; no change time, attack or health
+effect is invented. All 11 supplied KR Replays returned `CANDIDATE`, with zero
+framing errors: 3,270 source packets, 327 keyframes and 3,160 windows (3,077 with
+at least one changed counter and 83 unchanged).
+
+Selecting this capability together with `unit_apply_damage_packet` additionally
+emits `hero_damage_packet_keyframe_window_candidates` and the corresponding
+`candidate_associations.hero_damage_packet_keyframe_windows` summary. Fresh
+native V5/V6 outcomes with the pinned image are grouped independently by full
+`+0x24` and `+0x2c` key equality, in strict open windows; anonymous `+0x20`
+sums are compared with all four sampled deltas and rotated-key controls. Missing
+native inputs retain static windows and make the additional comparison unavailable.
+This is an internal calculator over freshly decoded outcomes, not a saved-source
+verifier. Packet source streams remain available alongside window output.
+
+Fresh integrated CLI runs on two original exact-821 Replays yielded 64,824 and
+60,358 native V6 packet candidates and 320/310 window comparisons, with zero
+framing errors and exact image `MATCHED_USED`. For `+0x24` versus the candidate
+TOTAL_DAMAGE_TAKEN delta, 292/295 and 274/275 positive windows matched within a
+fixed absolute tolerance of 0.1; rotated participant controls matched 0/570.
+For `+0x2c` versus TOTAL_DAMAGE_DEALT, 272/308 and 270/306 matched, again zero
+rotated controls. The former is a new counter-correspondence lead, not confirmation
+of damage roles, effective amount or health loss. Of its four unmatched windows,
+two residuals correspond to excluded exact-endpoint packets; the remaining
+adjacent-window residual pair is approximately +/-4.875 beside a packet one
+millisecond after the keyframe. Ordering is unresolved and no timestamp is changed.
+The two runs excluded 20/17 exact-endpoint packets and retained 2,073/1,823 packets
+outside sampled windows. Native/source artifacts and detailed comparisons stay local.
+
+Focused decoder/API/CLI/calculator tests: 12 passed, zero failed or skipped.
+Entrypoint/registry/shared-scan regressions: 53 passed, zero failed or skipped.
+No full public/private suite or older-build acceptance was repeated for this change.
+The next semantic gate is independent exact-build packet-linked receiver/health
+evidence; cumulative Replay-tail labels themselves remain candidates.
+
 2026-10-02 continuation: [Runnable quick start](QUICK_START_16_19.md).
 Death, assist, timer, observed-return and joined death-episode saved streams now
 support complete original-source verification for exact `16.19.821.7343`.

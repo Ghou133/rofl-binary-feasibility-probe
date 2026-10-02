@@ -32,6 +32,8 @@ const { assessHeroFloatSnapshotTail821, assessHeroJungleMinionsTail821 } =
   require('./decoders/rofl_16_19_821_float_stats_candidate');
 const { assessHeroKillStatsTail821 } =
   require('./decoders/rofl_16_19_821_kill_stats_candidate');
+const { DAMAGE_KEYFRAME_INTERVALS_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_damage_keyframe_intervals_candidate');
 const { PROFILES: DAMAGE_PROFILES_821 } =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
 const { PROFILES: TIME_PROFILES_821 } =
@@ -1389,6 +1391,13 @@ function parseOne1619(replay, options, started) {
     for (const source of ['unit_apply_damage_packet', 'hero_minions_killed_snapshot',
       ...(options.events.includes('hero_death_damage_lookup_key_cooccurrence')
         ? ['hero_death'] : [])]) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (is821 && options.semantic !== false
+      && options.events?.includes('hero_damage_keyframe_intervals')) {
+    for (const source of ['hero_damage_totals_snapshot',
+      'hero_damage_taken_from_champions_snapshot']) {
       if (!selected821.includes(source)) selected821.push(source);
     }
   }
@@ -2797,6 +2806,13 @@ function capabilityQuery(replay, options = {}) {
             ] };
           })()
         : profile.game_version === '16.19.821.7343'
+          && capability === 'hero_damage_keyframe_intervals'
+          ? { required_fields: DAMAGE_KEYFRAME_INTERVALS_821_PROFILE.fields.map((field) => {
+            const assessed = assessHeroStatsTail821(replay, field.replay_tail_field);
+            return { field: field.replay_tail_field, status: assessed.status,
+              error: assessed.error ?? assessed.missing_input ?? null };
+          }) }
+        : profile.game_version === '16.19.821.7343'
           && capability === 'hero_death_damage_lookup_key_cooccurrence'
           ? (() => {
             const death = assessHeroDeathTail821(replay);
@@ -3631,6 +3647,7 @@ function capabilityQuery(replay, options = {}) {
               'unit_apply_damage_lookup2c_roster_key_candidates',
             hero_death_damage_lookup_key_cooccurrence:
               'hero_death_damage_lookup_key_cooccurrence_candidates',
+            hero_damage_keyframe_intervals: 'hero_damage_keyframe_interval_candidates',
             face_direction_keyframe_roster_pair:
               'face_direction_keyframe_roster_pair_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',

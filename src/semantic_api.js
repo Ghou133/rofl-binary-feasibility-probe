@@ -173,6 +173,10 @@ const { RUNTIME_IMAGE_SHA256: RUNTIME_IMAGE_SHA256_821 } =
   require('./decoders/rofl_16_19_821_runtime_bytes');
 const { decodeHeroDamageSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
+const { decodeHeroDamageKeyframeIntervalsCandidates821 } =
+  require('./decoders/rofl_16_19_821_damage_keyframe_intervals_candidate');
+const { compareDamagePacketKeyframeWindows821 } =
+  require('./decoders/rofl_16_19_821_damage_window_reconciliation_candidate');
 const { decodeHeroTimeSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_time_stats_candidate');
 const { decodeHeroHealSnapshotCandidates821 } =
@@ -2314,6 +2318,7 @@ function decode1619821(replay, profile, options = {}) {
       decodeHeroFloatSnapshotCandidates821(input, 'hero_gold_spent_snapshot', collected),
     hero_damage_totals_snapshot: (input, collected) =>
       decodeHeroDamageSnapshotCandidates821(input, 'hero_damage_totals_snapshot', collected),
+    hero_damage_keyframe_intervals: decodeHeroDamageKeyframeIntervalsCandidates821,
     hero_damage_taken_from_champions_snapshot: (input, collected) =>
       decodeHeroDamageSnapshotCandidates821(input,
         'hero_damage_taken_from_champions_snapshot', collected),
@@ -2646,6 +2651,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
     hero_gold_spent_snapshot: 'hero_gold_spent_snapshot_candidates',
     hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
+    hero_damage_keyframe_intervals: 'hero_damage_keyframe_interval_candidates',
     hero_damage_taken_from_champions_snapshot:
       'hero_damage_taken_from_champions_snapshot_candidates',
     hero_damage_self_mitigated_snapshot:
@@ -2796,6 +2802,8 @@ function decode1619821(replay, profile, options = {}) {
     'hero_death_damage_lookup_key_cooccurrence');
   const supported = [...new Set([
     ...capabilities.filter((capability) => sharedScanCapabilities.has(capability)),
+    ...(capabilities.includes('hero_damage_keyframe_intervals')
+      ? ['hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot'] : []),
     ...(rosterMetadataSelected ? ['hero_death', 'hero_assist',
       'hero_deaths_snapshot', 'hero_champion_kills_snapshot', 'hero_assists_snapshot'] : []),
     ...(facePairSelected ? ['face_direction_packet', 'hero_minions_killed_snapshot'] : []),
@@ -3525,6 +3533,22 @@ function decode1619821(replay, profile, options = {}) {
       }
     } catch (error) {
       candidateAssociations.increment_minion_keyframe_bracket = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_damage_keyframe_intervals')
+      && capabilities.includes('unit_apply_damage_packet')) {
+    try {
+      const comparison = compareDamagePacketKeyframeWindows821(replay,
+        outcomes.unit_apply_damage_packet, outcomes.hero_damage_keyframe_intervals);
+      const { events: comparisonEvents, ...summary } = comparison;
+      candidateAssociations.hero_damage_packet_keyframe_windows = summary;
+      if (comparison.status === 'CANDIDATE') {
+        events.hero_damage_packet_keyframe_window_candidates = comparisonEvents;
+      }
+    } catch (error) {
+      candidateAssociations.hero_damage_packet_keyframe_windows = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }

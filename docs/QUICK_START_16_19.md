@@ -46,6 +46,57 @@ Outputs include `acceptance_summary.json`, `manifest.json`, and per-Replay
 `CANDIDATE` and `PARTIAL` do not mean confirmed semantics. Missing inputs and
 unavailable routes remain explicit; they are not zero-event results.
 
+## Sampled damage counter windows (exact KR 821)
+
+```powershell
+node src/cli.js decode "D:\Replays\example.rofl" --events hero_damage_keyframe_intervals --event-jsonl-only --out-dir "work\damage-windows"
+```
+
+The selected capability needs no runtime image. Its
+`hero_damage_keyframe_interval_candidates.jsonl` contains one row for each
+candidate participant and adjacent pair of complete keyframes. `counters`
+contains the previous/current decoded f32 values and their differences for
+`TOTAL_DAMAGE_DEALT_TO_CHAMPIONS`, `TOTAL_DAMAGE_DEALT`, `TOTAL_DAMAGE_TAKEN`
+and `TOTAL_DAMAGE_TAKEN_FROM_CHAMPIONS`. The field labels and participant
+mapping inherit the existing exact-build candidate evidence.
+
+Both endpoint times, protected field bytes and original packet references are
+retained. `replay_time_ms` is the current observation endpoint; intervening
+change times are unresolved. Zero differences are emitted as sampled unchanged
+endpoints. Final-tail gaps are reported in `semantic_run.json` and never filled
+with invented intervals. These windows are useful for a sampled damage timeline
+and packet-field comparisons; they establish no attack, actor, health effect or
+effective damage. `endpoint_floor_difference_candidate` subtracts the two
+integer endpoint floors; it is different from flooring the f32 delta.
+
+```javascript
+const decoded = decodeSemanticReplay(parseReplayFile(replayPath), {
+  capabilities: ['hero_damage_keyframe_intervals'],
+});
+const windows = decoded.events?.hero_damage_keyframe_interval_candidates;
+console.log(decoded.capability_results.hero_damage_keyframe_intervals, windows);
+```
+
+Consume the decode JSONL or API rows directly. This stream is not yet registered
+with the saved `query-events` command.
+
+To compare the windows with native anonymous packet fields, select both inputs:
+
+```powershell
+node src/cli.js decode "D:\Replays\example.rofl" --events hero_damage_keyframe_intervals,unit_apply_damage_packet --damage-packet-v6 --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" --event-jsonl-only --out-dir "work\damage-packet-windows"
+```
+
+This additionally produces `hero_damage_packet_keyframe_window_candidates.jsonl`
+and `candidate_associations.hero_damage_packet_keyframe_windows` in the API and
+`semantic_run.json`. Each native lookup key (`+0x24` and `+0x2c`) is grouped
+independently by full equality with the candidate participant key. The output
+compares anonymous `+0x20` sums with all four counter deltas and a rotated-key
+control, retaining packet counts and first/last refs. It uses strict open
+intervals and reports packets at exact endpoints or beyond the last keyframe
+separately. Small discrepancies are measured; no combat role or effective
+damage is assigned. A missing native image leaves the static windows available
+and marks this additional comparison unavailable.
+
 ## Native heal and missile key observations (exact KR 821)
 
 ```powershell
