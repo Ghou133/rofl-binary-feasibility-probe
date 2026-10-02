@@ -138,7 +138,7 @@ function usage() {
 
 Usage:
   node src/cli.js inspect <file.rofl> [--out-dir artifacts]
-  node src/cli.js capabilities <file.rofl> [--json]
+  node src/cli.js capabilities <file.rofl> [--events <names>] [--json]
   node src/cli.js decode <file.rofl> [--out-dir artifacts]
   node src/cli.js analyze <file.rofl> [--out-dir artifacts]
   node src/cli.js batch <file.rofl|directory> [more inputs ...] [--out-dir artifacts]
@@ -2628,6 +2628,11 @@ function pythonUnicornDependency(command) {
 function capabilityQuery(replay, options = {}) {
   const resolved = resolveBuildProfile(replay);
   const profile = resolved.profile;
+  const requested = options.events == null ? null : [...new Set(options.events)];
+  const selected = requested === null ? null : new Set(requested);
+  let pythonDependency;
+  const getPythonDependency = () => (pythonDependency ??=
+    pythonUnicornDependency(options.python ?? options.pythonExecutable));
   const document = {
     schema_version: 1,
     command: 'capabilities',
@@ -2647,6 +2652,10 @@ function capabilityQuery(replay, options = {}) {
       ?? (profile?.runtime_profile?.image_sha256 ? 'EXACT_IMAGE_HASH_REGISTERED' : null),
     capabilities: [],
     unlisted_capability_status: 'NOT_REGISTERED_FOR_EXACT_BUILD',
+    ...(requested === null ? {} : {
+      requested_capabilities: requested,
+      unregistered_requested_capabilities: [...requested],
+    }),
   };
   if (!profile) return document;
 
@@ -2703,6 +2712,7 @@ function capabilityQuery(replay, options = {}) {
   ];
   for (const [profileKey, status] of classifications) {
     for (const capability of profile[profileKey] ?? []) {
+      if (selected !== null && !selected.has(capability)) continue;
       const applicable = status !== 'UNSUPPORTED' && status !== 'UNVERIFIED';
       const perCapabilityInputsAssessed = applicable
         && ['16.19.820.7193', '16.19.821.7343'].includes(profile.game_version);
@@ -2955,7 +2965,7 @@ function capabilityQuery(replay, options = {}) {
             'unit_apply_damage_lookup_roster_key_pair',
             'unit_apply_damage_lookup2c_roster_key_pair'].includes(capability)
             || capability === 'hero_death_damage_lookup_key_cooccurrence'
-            ? [pythonUnicornDependency(options.python ?? options.pythonExecutable)] : []),
+            ? [getPythonDependency()] : []),
           ...(['face_direction_keyframe_roster_pair',
             'unit_apply_damage_roster_key_pair',
             'unit_apply_damage_lookup_roster_key_pair',
@@ -3683,6 +3693,13 @@ function capabilityQuery(replay, options = {}) {
       });
     }
   }
+  if (requested !== null) {
+    const byName = new Map(document.capabilities.map((row) => [row.capability, row]));
+    document.capabilities = requested.filter((name) => byName.has(name))
+      .map((name) => byName.get(name));
+    document.unregistered_requested_capabilities = requested
+      .filter((name) => !byName.has(name));
+  }
   return document;
 }
 
@@ -3728,8 +3745,12 @@ function runCapabilitiesCommand(parsed) {
     if (result.status === 'UNSUPPORTED_VERSION') {
       process.stdout.write(`No exact build profile is registered for ${result.game_version}.\n`);
     }
+    if (result.unregistered_requested_capabilities?.length) {
+      process.stdout.write(`Not registered for this exact build: ${result.unregistered_requested_capabilities.join(', ')}.\n`);
+    }
   }
-  return result.status === 'UNSUPPORTED_VERSION' ? 2 : 0;
+  return result.status === 'UNSUPPORTED_VERSION'
+    || result.unregistered_requested_capabilities?.length ? 2 : 0;
 }
 
 async function runQueryEventsCommand(parsed) {

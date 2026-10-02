@@ -46,6 +46,70 @@ function fixture(t, version = '16.15.801.3452') {
   return input;
 }
 
+test('selected capability preflight checks only requested inputs and preserves request order', (t) => {
+  const cli = loadCli();
+  t.mock.method(require('node:child_process'), 'spawnSync', () => {
+    throw new Error('unselected native dependency must not be probed');
+  });
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.821.7343');
+  const result = cli.capabilityQuery(replay, {
+    events: ['hero_respawn', 'hero_death', 'hero_death'],
+  });
+  assert.deepEqual(result.requested_capabilities, ['hero_respawn', 'hero_death']);
+  assert.deepEqual(result.capabilities.map((row) => row.capability),
+    ['hero_respawn', 'hero_death']);
+  assert.deepEqual(result.unregistered_requested_capabilities, []);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(result.packet_framing_inspected, false);
+  assert.ok(result.capabilities.every((row) => row.status === 'CANDIDATE'));
+  assert.ok(result.capabilities.every((row) => !row.required_inputs
+    .some((input) => input.name === 'python_unicorn')));
+});
+
+test('capability preflight probes shared native Python dependency once per request', (t) => {
+  const cli = loadCli();
+  let calls = 0;
+  t.mock.method(require('node:child_process'), 'spawnSync', (command, args) => {
+    calls += 1;
+    assert.equal(command, 'test-python');
+    assert.deepEqual(args, ['-B', '-c', 'import unicorn']);
+    return { status: 1, stderr: "No module named 'unicorn'" };
+  });
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.821.7343');
+  const result = cli.capabilityQuery(replay, {
+    events: ['unit_apply_damage_packet', 'show_health_bar_packet'], python: 'test-python',
+  });
+  assert.equal(calls, 1);
+  assert.ok(result.capabilities.every((row) => row.missing_inputs.includes('python_unicorn')));
+  cli.capabilityQuery(replay, { events: ['unit_apply_damage_packet'], python: 'test-python' });
+  assert.equal(calls, 2); // Dependency state is refreshed across separate requests.
+});
+
+test('selected capability CLI reports unregistered exact-build names with nonzero exit', async (t) => {
+  const cli = loadCli();
+  const input = fixture(t, '16.19.820.7193');
+  let output = '';
+  t.mock.method(process.stdout, 'write', (chunk) => { output += String(chunk); return true; });
+  const code = await cli.main(['capabilities', input, '--events',
+    'hero_death,missile_key_cooccurrence', '--json']);
+  assert.equal(code, 2);
+  const result = JSON.parse(output);
+  assert.equal(result.game_version, '16.19.820.7193');
+  assert.deepEqual(result.capabilities.map((row) => row.capability), ['hero_death']);
+  assert.deepEqual(result.unregistered_requested_capabilities, ['missile_key_cooccurrence']);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(fs.existsSync(path.join(path.dirname(input), 'artifacts')), false);
+});
+
+test('unknown exact builds retain requested names without borrowing registered profiles', (t) => {
+  const cli = loadCli();
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.9999.9999');
+  const result = cli.capabilityQuery(replay, { events: ['hero_death'] });
+  assert.equal(result.status, 'UNSUPPORTED_VERSION');
+  assert.deepEqual(result.capabilities, []);
+  assert.deepEqual(result.unregistered_requested_capabilities, ['hero_death']);
+});
+
 test('the legacy sampling option remains parseable without changing prefix output', (t) => {
   const cli = loadCli();
   const input = fixture(t);

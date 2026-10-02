@@ -1,8 +1,10 @@
 # AI / developer handoff
 
-Protocol research remains `SOURCE_FROZEN_DURING_MIGRATION`; the semantic baseline
-is 2026-08-21. Authorized maintenance does not promote fields, delete evidence,
-reopen research, or create a second active implementation.
+The published semantic baseline remains the historical 2026-08-21
+`SOURCE_FROZEN_DURING_MIGRATION` snapshot. As recorded in `AGENTS.md`, the user
+has authorized continued 16.19 development, CLI/API integration and field research.
+Development candidates do not promote published semantics, delete evidence, or
+create a second protocol authority.
 
 ## Start here
 
@@ -10,10 +12,14 @@ Read [README](README.md), [public maintenance](docs/PUBLIC_DEVELOPMENT.md),
 [AGENTS](AGENTS.md), then only the relevant source/tests. Ownership and state are
 in [PROJECT_CHARTER](PROJECT_CHARTER.md) and `project_contract.json`.
 
-The legacy CLI calls `src/semantic_pipeline.js` and supports semantic analysis of
-**16.15.801.3452 only**. The library's separate `src/semantic_api.js` contains
-16.16 exact-build surfaces; the CLI does not automatically dispatch to them.
-Do not remove version checks or feed one build into another decoder.
+The legacy CLI calls `src/semantic_pipeline.js` for **16.15.801.3452**. For
+**16.19.820.7193** and **16.19.821.7343**, `decode`/`batch` dispatch explicit
+`--events` selections through `src/semantic_api.js`; candidate output remains
+separate from confirmed semantics. Read [the 16.19 quick start](docs/QUICK_START_16_19.md)
+for runnable CLI/API examples and saved-query verification. `capabilities --events`
+preflights selected names and reports unregistered names with exit code 2.
+The library's 16.16 surfaces are still not dispatched by the CLI. Preserve full
+build gates and do not feed one build into another decoder.
 
 Container fixes belong in `src/rofl.js`; raw analysis in `src/analysis.js`; command
 orchestration in `src/cli.js`; execution-scoped reports in `src/cli_report.js`;

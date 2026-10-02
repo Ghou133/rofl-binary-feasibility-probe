@@ -1,5 +1,17 @@
 # 16.19 development progress
 
+2026-10-02 continuation: [Runnable quick start](QUICK_START_16_19.md).
+`capabilities --events` now preflights only selected names in request order;
+unregistered names remain explicit and cause exit code 2. Shared Python/Unicorn
+checks execute once per preflight request and are refreshed on the next request.
+The focused CLI regression suite passed 34/34 tests. Fresh local 821 CLI checks
+scanned 2,048,130 blocks for the death/assist/timer/respawn/roster path and
+1,263,849 blocks for native heal/missile pairs, with zero framing errors. The
+saved native pair queries physically verified all 6,145 heal pair rows and all
+176 missile pair rows before applying a three-row output limit. These counts
+describe two original local Replays, not an independent corpus or semantic
+promotion. Full game effects and confirmed actor assignments remain unknown.
+
 Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
@@ -47,8 +59,11 @@ Current progress (older notes below retain their original research context):
   its source packet ref, including nonroster and asymmetric reports. Field
   roles, packet actor, and effective healing remain `UNKNOWN`. The complete
   native ParamsHeal source stream also passed physical source verification
-  for all 70,698 reports in these 11 Replays. The pair has no saved-query
-  interface yet.
+  for all 70,698 reports in these 11 Replays. Saved pair queries now support
+  `params_heal_roster_key_pair_candidates`, both anonymous keys via
+  `--opaque-u32`, and complete physical source verification with
+  `--verify-source --runtime-image IMAGE` before output limits. Participant
+  filters are rejected because anonymous field roles remain unknown.
 
 - **Bounded output hashing:** Batch manifest hashing now opens at most eight
   output streams at once and waits for each stream to close before reusing
