@@ -314,6 +314,8 @@ Options:
   --killer-participant <1..10>  Candidate killer in exact-821 death, assist or episode rows
   --assisting-participant <1..10>  Member of exact-821 assist or episode candidate list
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
+  --slot-change-index <0..255>  Internal slot index on exact-821 slot requests/roster associations
+  --slot-change-operation <1|2|6|7>  Exact observed callback operation selector on those streams
   --contextual-situation <text>  Exact UTF-8 contextual situation string on an 821 packet candidate
   --item-id <uint32|0xhex>     Exact 821 inventory record item ID, including saved associations
   --previous-item-id <uint32|0xhex>  Previous endpoint item ID in an exact-821 keyframe interval difference
@@ -421,6 +423,8 @@ function parseArgs(argv) {
     spellTimerReceiverSlot: null,
     spellLevelReceiverIndex: null,
     spellLevelClampedScalar: null,
+    slotChangeIndex: null,
+    slotChangeOperation: null,
     damageCallbackF32Available: false,
     damageCallbackU32At10: null,
     damageCallbackU32At1c: null,
@@ -612,6 +616,8 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'killer-participant') options.killerParticipant = queryInteger(value, key);
       else if (command === 'query-events' && key === 'assisting-participant') options.assistingParticipant = queryInteger(value, key);
       else if (command === 'query-events' && key === 'raw-param') options.rawParam = queryRawParam(value);
+      else if (command === 'query-events' && key === 'slot-change-index') options.slotChangeIndex = queryUint32(value,key);
+      else if (command === 'query-events' && key === 'slot-change-operation') options.slotChangeOperation = queryUint32(value,key);
       else if (command === 'query-events' && key === 'contextual-situation') options.contextualSituation = value;
       else if (command === 'query-events' && key === 'item-id') options.itemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'previous-item-id') options.previousItemId = queryUint32(value, key);
@@ -3882,6 +3888,8 @@ async function runQueryEventsCommand(parsed) {
       spellTimerReceiverSlot: options.spellTimerReceiverSlot,
       spellLevelReceiverIndex: options.spellLevelReceiverIndex,
       spellLevelClampedScalar: options.spellLevelClampedScalar,
+      slotChangeIndex: options.slotChangeIndex,
+      slotChangeOperation: options.slotChangeOperation,
       damageCallbackF32Available: options.damageCallbackF32Available,
       damageCallbackU32At10: options.damageCallbackU32At10,
       damageCallbackU32At1c: options.damageCallbackU32At1c,

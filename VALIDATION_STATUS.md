@@ -14,6 +14,15 @@ actual-image Python methods then passed); no full public graph or old-client
 regression was repeated in this stage. See
 [the current evidence boundary](docs/SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md).
 
+The adjacent saved-query stage passed 126 focused/regression Node tests with the
+authorized real saved run and image present, zero failures/skips. All 11 saved
+roster streams (94,390 rows) were checked with complete 115,290-request dependencies,
+then verified by fresh exact-image native re-decode. Only three filtered rows were
+emitted while every later row/Replay was still checked. Tests distinguish coherent
+saved substitutions from original native output; late failures emit no partial
+Library API or CLI stdout. Query source verification reproduces candidate output,
+not live receiver state. See the saved-query section in the evidence document.
+
 The historical validation entries below retain their original dates and scopes.
 
 ## 2026-09-23 公开源码快照检查

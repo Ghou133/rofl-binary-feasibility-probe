@@ -145,8 +145,18 @@ function associateSpellSlotChangeRosterKeys821(replay, {
       if ([...byKey.keys()].some(key => (key&255)===(row.raw_param&255))) lowByte++;
       continue;
     }
-    events.push({event_type:'SPELL_SLOT_CHANGE_ROSTER_KEY_PAIR_CANDIDATE',
-      game_version:BUILD,patch:'16.19',build_profile:profile.id,replay_sha256:replay.source_sha256,
+    events.push(spellSlotChangeRosterKeyPairRow821(row, matched));
+  }
+  return {...base,status:'CANDIDATE',input_count:request.input_count,event_count:events.length,events,
+    matched_header_count:events.length,nonroster_header_count:unmatched,
+    plus_0x100_alias_excluded_count:plus100,low_byte_alias_excluded_count:lowByte,
+    runtime_image_sha256:request.runtime_image_sha256};
+}
+
+// Shared output constructor; callers validate complete request and roster sources.
+function spellSlotChangeRosterKeyPairRow821(row, matched) {
+  return {event_type:'SPELL_SLOT_CHANGE_ROSTER_KEY_PAIR_CANDIDATE',
+      game_version:BUILD,patch:'16.19',build_profile:SPELL_SLOT_CHANGE_ROSTER_KEY_PAIR_821_PROFILE.id,replay_sha256:row.replay_sha256,
       replay_time_ms:row.replay_time_ms,stream_tag:row.stream_tag,native_packet_id:row.native_packet_id,
       raw_param:row.raw_param,hero_raw_param:matched.hero_raw_param,
       participant_id_candidate:matched.participant_id_candidate,metadata_index_candidate:matched.metadata_index_candidate,
@@ -161,12 +171,7 @@ function associateSpellSlotChangeRosterKeys821(replay, {
       actual_application_status:'NOT_OBSERVED',semantic_effect_status:'UNKNOWN',
       confidence:'CANDIDATE',semantic_status:EVIDENCE,
       metadata_sha256:matched.metadata_sha256,stats_json_sha256:matched.stats_json_sha256,
-      raw_packet_ref:structuredClone(row.raw_packet_ref),roster_keyframe_packet_ref:structuredClone(matched.raw_packet_ref)});
-  }
-  return {...base,status:'CANDIDATE',input_count:request.input_count,event_count:events.length,events,
-    matched_header_count:events.length,nonroster_header_count:unmatched,
-    plus_0x100_alias_excluded_count:plus100,low_byte_alias_excluded_count:lowByte,
-    runtime_image_sha256:request.runtime_image_sha256};
+      raw_packet_ref:structuredClone(row.raw_packet_ref),roster_keyframe_packet_ref:structuredClone(matched.raw_packet_ref)};
 }
 
-module.exports = {SPELL_SLOT_CHANGE_ROSTER_KEY_PAIR_821_PROFILE,associateSpellSlotChangeRosterKeys821};
+module.exports = {SPELL_SLOT_CHANGE_ROSTER_KEY_PAIR_821_PROFILE,associateSpellSlotChangeRosterKeys821,spellSlotChangeRosterKeyPairRow821};

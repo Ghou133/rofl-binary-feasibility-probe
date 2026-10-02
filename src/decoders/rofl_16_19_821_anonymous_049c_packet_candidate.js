@@ -60,6 +60,10 @@ const SPELL_SLOT_CHANGE_REQUEST_821_PROFILE = Object.freeze({
 });
 
 function sha(bytes) { return crypto.createHash('sha256').update(bytes).digest('hex'); }
+function isObservedSlotChangeShape821(packetId, streamTag, payloadLength) {
+  const lengths = packetId === 0x049c ? LENGTHS : SIBLING_LENGTHS[packetId];
+  return lengths?.[streamTag]?.has(payloadLength) === true;
+}
 
 function callbackRequestError(row) {
   const request = row.callback_request_candidate;
@@ -166,8 +170,7 @@ function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
   try {
     const observe = (block, chunk) => {
       if (!routes.includes(block.packet_id)) return;
-      const lengths = block.packet_id === 0x049c ? LENGTHS : SIBLING_LENGTHS[block.packet_id];
-      if (!lengths[chunk.stream_tag]?.has(block.payload.length)
+      if (!isObservedSlotChangeShape821(block.packet_id, chunk.stream_tag, block.payload.length)
           || !Number.isSafeInteger(block.param >>> 0) || (block.param >>> 0) === 0) {
         throw new Error(`slot-change route 0x${block.packet_id.toString(16)} is outside observed stream/length/raw-param scope`);
       }
@@ -274,4 +277,5 @@ function decodeSpellSlotChangeRequestCandidates821(replay, options = {}) {
   return decodeAnonymous049cPacketCandidates821(replay, {...options, includeSlotSiblings:true});
 }
 module.exports = { ANONYMOUS_049C_PACKET_821_PROFILE, SPELL_SLOT_CHANGE_REQUEST_821_PROFILE,
-  decodeAnonymous049cPacketCandidates821, decodeSpellSlotChangeRequestCandidates821, callbackRequestError };
+  decodeAnonymous049cPacketCandidates821, decodeSpellSlotChangeRequestCandidates821, callbackRequestError,
+  isObservedSlotChangeShape821 };

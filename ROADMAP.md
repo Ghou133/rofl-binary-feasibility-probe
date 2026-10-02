@@ -11,6 +11,11 @@ independently anchored offline receiver/state witness; the module-only image
 cannot supply it. Preserve the runnable release and avoid repeating missing-state
 research. Old-client reruns are not a prerequisite to this branch.
 
+Saved slot request and roster-association queries are now connected to complete
+source validation, internal index/operation filters and optional full native
+source re-decode. This makes the existing candidate output usable without
+repeating the missing receiver-state research.
+
 The historical roadmap below remains a record of its original baseline.
 
 更新：2026-09-23。这里描述的是后续工作入口和验收条件，不表示任务已实施。当前仓库状态为 `SOURCE_FROZEN_DURING_MIGRATION`；长期开发进入 `lol-inference-lab/replay/`，本仓库保留为可比较的源码快照。任何跨项目接口、能力等级或资产状态变更先按 V2 架构门禁处理。

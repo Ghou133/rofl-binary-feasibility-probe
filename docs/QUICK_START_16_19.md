@@ -159,6 +159,21 @@ remain in the complete request stream. This is a candidate key association,
 not actor/receiver confirmation, applied state or a Q/W/E/R mapping. See
 [association details and remaining inputs](SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md).
 
+Saved slot requests and associations can now be queried without re-decoding:
+
+```powershell
+node src/cli.js query-events "work\slot-roster" --event spell_slot_change_roster_key_pair_candidates --participant 1 --slot-change-index 4 --slot-change-operation 2 --from-ms 0 --to-ms 300000 --limit 10 --output "work\slot-preview.jsonl"
+```
+
+The request and original regular-only event keys also support time, raw-param,
+slot-change index and operation filters. Participant selection is available only
+on the candidate roster association. All rows/dependencies are checked even after
+the output limit. Add `--verify-source --runtime-image PATH` to re-decode the
+original exact-build Replay and native image and check every saved value.
+Ordinary queries report `SAVED_ONLY_UNVERIFIED`; fresh native verification retains
+candidate identity/effect boundaries. See
+[query details](SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md#query-saved-requests-and-associations).
+
 ## API and batches
 
 ```javascript

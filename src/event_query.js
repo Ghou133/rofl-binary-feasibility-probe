@@ -259,6 +259,9 @@ const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
   'set_dimension_missile_packet_candidates',
   'anonymous_029c_packet_candidates',
   'anonymous_029c_roster_key_pair_candidates',
+  'anonymous_049c_packet_candidates',
+  'spell_slot_change_request_candidates',
+  'spell_slot_change_roster_key_pair_candidates',
 ]);
 const CIRCULAR_MOVEMENT_RESTRICTION_ROW_FIELDS_821 = new Set([
   'event_type', 'game_version', 'patch', 'build_profile', 'replay_sha256',
@@ -1088,6 +1091,11 @@ class EventQueryError extends Error {
     this.details = details;
   }
 }
+
+const slotChangeQuery = require('./slot_change_event_query').createSlotChangeQuery({
+  EventQueryError,readArtifactJson,checkBatchHash,prepareEventQueryFromDocuments,
+  streamEventQuery,normalizeReplaySourcePaths,
+});
 
 function readArtifactJson(directory, basename) {
   const filename = path.join(directory, basename);
@@ -6672,6 +6680,7 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   };
   Object.defineProperty(prepared, PREPARED_REPLAY_METADATA,
     { value: { semantic, analysis, inventoryIntervalSource: null } });
+  slotChangeQuery.prepare(prepared,semantic,analysis);
   return prepared;
 }
 
@@ -6700,6 +6709,7 @@ function checkPreparedBatchHashes(relative, prepared, checkHash) {
     ...Object.values(prepared.anonymous029cRosterPairSources ?? {}),
     ...Object.values(prepared.setSpellLevelRosterPairSources ?? {}),
     ...Object.values(prepared.missileKeyCooccurrenceSources ?? {}),
+    ...Object.values(prepared.slotChangeSources ?? {}),
   ].filter(Boolean);
   for (const source of sources) {
     checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
@@ -12293,7 +12303,7 @@ async function stageVerifiedRows(produce, emitLine) {
 }
 
 async function streamEventQuery(prepared, options, emitLine) {
-  if (options.verifySource) {
+  if (options.verifySource || slotChangeQuery.supports(prepared.eventKey)) {
     return stageVerifiedRows(
       (stageLine) => streamEventQueryUnstaged(prepared, options, stageLine),
       emitLine);
@@ -12303,6 +12313,15 @@ async function streamEventQuery(prepared, options, emitLine) {
 
 async function streamEventQueryUnstaged(prepared, options, emitLine) {
   validateFilters(options);
+  if (slotChangeQuery.supports(prepared.eventKey)) {
+    if (options.sourceReplay != null && !options.verifySource) {
+      throw new EventQueryError('INVALID_FILTER','--source-replay requires --verify-source.');
+    }
+    return slotChangeQuery.stream(prepared,options,emitLine);
+  }
+  if (options.slotChangeIndex != null || options.slotChangeOperation != null) {
+    throw new EventQueryError('UNSUPPORTED_FILTER','Slot-change filters require a slot request or roster-association stream.');
+  }
   if (options.sourceReplay != null && !options.verifySource) {
     throw new EventQueryError('INVALID_FILTER',
       '--source-replay requires --verify-source.');
@@ -13818,7 +13837,7 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
 }
 
 async function streamBatchEventQuery(prepared, options, emitLine) {
-  if (options.verifySource) {
+  if (options.verifySource || slotChangeQuery.supports(prepared.eventKey)) {
     return stageVerifiedRows(
       (stageLine) => streamBatchEventQueryUnstaged(prepared, options, stageLine),
       emitLine);
@@ -14156,6 +14175,10 @@ async function streamBatchEventQueryUnstaged(prepared, options, emitLine) {
     replay_count: prepared.replays.length, completed_replay_count: completedCount,
     unavailable_replay_count: prepared.replays.length - completedCount,
     ...(castBatchWitnessCheck ? { native_witness_check: castBatchWitnessCheck } : {}),
+    ...(slotChangeQuery.supports(prepared.eventKey) ? {
+      native_witness_check: options.verifySource ? 'FRESH_EXACT_IMAGE_REDECODE'
+        : 'PERSISTED_REQUEST_FIELDS_AND_COMPLETE_DEPENDENCIES',
+    } : {}),
     scanned_count: scannedCount, matched_count: matchedCount,
     ...(options.castNestedBits == null ? {} : {
       cast_nested_bits_checked_count: castNestedBitsCheckedCount,

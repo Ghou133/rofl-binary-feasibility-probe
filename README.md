@@ -12,6 +12,8 @@ Use `--events spell_slot_change_roster_key_pair` to place matched requests besid
 candidate participant/champion/team metadata through exact full header-key
 equality. [Association scope and remaining inputs](docs/SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md)
 explain why this does not confirm the packet actor or successful application.
+Saved slot queries support time, candidate participant, internal index and
+operation filtering, with optional full exact-image source re-decode verification.
 
 精确版本绑定的《英雄联盟》`.rofl` 回放研究工具：解析容器和数据包，输出带来源、证据等级和明确边界的语义事实。
 

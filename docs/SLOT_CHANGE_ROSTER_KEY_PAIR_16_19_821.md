@@ -27,7 +27,41 @@ control bytes. Gated byte and counted-word requests retain their existing bounds
 `spell_slot_change_request_candidates.jsonl` retains **all** input requests,
 including unmatched keys. `hero_roster_metadata_bridge_candidates.jsonl`
 retains the ten candidate roster records. Direct JSONL/API use is supported;
-this association has no saved `query-events` registration.
+the saved-query entry is described below.
+
+## Query saved requests and associations
+
+```powershell
+node src/cli.js query-events "work\slot-roster" --event spell_slot_change_roster_key_pair_candidates --participant 1 --from-ms 0 --to-ms 300000 --slot-change-index 4 --slot-change-operation 2 --limit 10 --output "work\slot-preview.jsonl"
+node src/cli.js query-events "work\slot-roster" --event spell_slot_change_roster_key_pair_candidates --verify-source --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" --limit 10 --output "work\slot-verified.jsonl"
+```
+
+Single Replay artifact directories and complete decode/batch output roots work.
+Queries also accept `spell_slot_change_request_candidates` and the original
+regular-only `anonymous_049c_packet_candidates`. Time, full `--raw-param`,
+`--slot-change-index` (0..255) and `--slot-change-operation` (1/2/6/7) filters
+apply to all three streams. `--participant` applies only to the roster association
+and means its candidate participant, not a confirmed actor. Use the distinct
+slot-change index option; inventory `--slot` is unrelated. Selector 1 is a byte
+request, 2 a name request, 6 a gated byte request, and 7 a counted-word request.
+
+Every query checks manifest hashes, complete row counts, native profile binding,
+request field consistency and candidate boundaries. Association queries also
+check the entire request stream, the ten-way roster and excluded-key counts.
+`--limit` restricts output only; all later rows and Replays are still checked.
+Library API calls stage output until validation completes; the CLI removes its
+new output on failure and does not publish partial stdout. Original JSONL rows
+are returned without changing confidence, references or field order.
+
+Ordinary queries need only the saved output and report `SAVED_ONLY_UNVERIFIED`.
+Manifest hashes and coherent field checks do not authenticate native values
+against original packets. `--verify-source` additionally requires the original
+Replay and exact runtime image, re-decodes all selected native packets and roster
+dependencies, and compares every saved result/row before filtering. It reports
+`FRESH_EXACT_IMAGE_REDECODE`; this verifies reproduction of the candidate decoder,
+not live receiver state or confirmed gameplay semantics. A single Replay query
+can use `--source-replay` to relocate an unchanged original file. Batch queries
+use each recorded source path. Missing/wrong inputs fail explicitly.
 
 ## Join and evidence boundary
 

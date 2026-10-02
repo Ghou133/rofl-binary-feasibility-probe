@@ -38,6 +38,12 @@ actor, live receiver, application or Q/W/E/R identity. Read
 [the association and remaining-input assessment](docs/SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md)
 before continuing this branch. The current module image has no receiver heap;
 do not repeat that missing-state research or require old-client reruns.
+Saved slot request/association queries now validate complete sources and support
+internal index/operation filters. `src/slot_change_event_query.js` owns that query
+validation; it reuses the decoder's output constructor and observed-shape gate.
+`--verify-source` requires the exact image and freshly re-decodes all source rows,
+including unmatched requests. Saved-only consistency is explicitly unverified;
+do not describe its hashes as native-output authentication.
 
 Container fixes belong in `src/rofl.js`; raw analysis in `src/analysis.js`; command
 orchestration in `src/cli.js`; execution-scoped reports in `src/cli_report.js`;

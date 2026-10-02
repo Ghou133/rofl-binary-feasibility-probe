@@ -103,7 +103,8 @@ node src/cli.js decode "D:\Replays\example.rofl" --events spell_slot_change_requ
 Read `spell_slot_change_request_candidates.jsonl`, or select
 `capabilities: ['spell_slot_change_request']` through `decodeSemanticReplay`.
 Each record retains its `native_packet_id`, registered class, stream tag and
-complete original source reference. No saved `query-events` support is claimed.
+complete original source reference. Saved queries now validate the complete
+regular/family request stream; see [filters and native verification](SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md#query-saved-requests-and-associations).
 
 | Route / registered class suffix | Factory / constructor / deserializer | Observed operations |
 | --- | --- | --- |
