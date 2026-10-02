@@ -17,6 +17,10 @@ const LENGTHS = Object.freeze({
   1: new Set([5, 6, ...Array.from({ length: 32 }, (_, index) => index + 9), 42, 48, 49, 52]),
   2: new Set([5, 6, ...Array.from({ length: 28 }, (_, index) => index + 10), 39, 49, 52]),
 });
+const CLASSES = Object.freeze({ 0x049c: 'PKT_ChangeSlotSpellData_s',
+  0x028e: 'PKT_ChangeSlotSpellData_Summoner_s', 0x0375: 'PKT_ChangeSlotSpellData_OwnerOnly_s' });
+const SIBLING_LENGTHS = { 0x028e: { 1: new Set([17,18,19,21,22,32,33,34,46]),
+  2: new Set([17,18,19,21,22,32,33,34,46]) }, 0x0375: { 2: new Set([5,6,9,10]) } };
 const ANONYMOUS_049C_PACKET_821_PROFILE = Object.freeze({
   id: PROFILE_ID, replay_version: BUILD, capability: CAPABILITY,
   status: 'CANDIDATE', enabled: true, replay_block_packet_id: 0x049c,
@@ -36,6 +40,24 @@ const ANONYMOUS_049C_PACKET_821_PROFILE = Object.freeze({
     'The candidate is opt-in and bound to the complete 16.19.821.7343 build and pinned runtime image.',
   ]),
 });
+const SPELL_SLOT_CHANGE_REQUEST_821_PROFILE = Object.freeze({
+  ...ANONYMOUS_049C_PACKET_821_PROFILE,
+  id: 'rofl-16.19.821.7343-kr-spell-slot-change-request-native-candidate-v1',
+  capability: 'spell_slot_change_request', packet_name: 'EXACT_821_SLOT_CHANGE_PACKET_FAMILY',
+  replay_block_packet_id: null, replay_block_packet_ids: Object.freeze([0x049c, 0x028e, 0x0375]),
+  native_constructor_rva: null, native_deserializer_rva: null,
+  native_routes: Object.freeze([
+    Object.freeze({packet_id:0x049c,packet_name:CLASSES[0x049c],constructor_rva:'0xe9a6c0',deserializer_rva:'0x10d0d30'}),
+    Object.freeze({packet_id:0x028e,packet_name:CLASSES[0x028e],constructor_rva:'0xe9a670',deserializer_rva:'0x10d0bd0'}),
+    Object.freeze({packet_id:0x0375,packet_name:CLASSES[0x0375],constructor_rva:'0xe9a620',deserializer_rva:'0x10d0a70'}),
+  ]),
+  evidence_status: 'CANDIDATE_EXACT_821_NATIVE_SLOT_CHANGE_REQUEST',
+  known_limits: Object.freeze([
+    ...ANONYMOUS_049C_PACKET_821_PROFILE.known_limits,
+    'Exact Summoner 0x028e and OwnerOnly 0x0375 registrations/deserializers are independently pinned. Their class names do not prove current delivery audience or actor identity.',
+    'OwnerOnly selector 6 requests a gated +0xe8 byte write; selector 7 requests a counted four-byte vector change. Field meanings, word type/units and applied state remain unknown.',
+  ]),
+});
 
 function sha(bytes) { return crypto.createHash('sha256').update(bytes).digest('hex'); }
 
@@ -45,10 +67,13 @@ function callbackRequestError(row) {
   if (!/^[0-9a-f]{8}$/.test(fields?.['0x1c'] ?? '') || !/^[0-9a-f]{2}$/.test(fields?.['0x18'] ?? '')
       || !/^(?:[0-9a-f]{2})*$/.test(row.native_byte_vector_hex ?? '')) return 'callback source fields differ';
   const operation = Buffer.from(fields['0x1c'], 'hex').readUInt32LE();
+  const packetId = row.native_packet_id ?? 0x049c;
+  const observed = { 0x049c: [1,2], 0x028e: [2], 0x0375: [6,7] }[packetId];
+  if (!observed) return 'foreign slot-change packet route';
   if (!request || request.operation_selector !== operation || request.application_status !== 'NOT_OBSERVED') {
     return 'callback operation/application witness differs';
   }
-  if (operation !== 1 && operation !== 2) {
+  if (!observed.includes(operation)) {
     return request.status === 'UNOBSERVED_OPERATION' ? null : 'unobserved operation was claimed decoded';
   }
   const ror = (byte, count) => ((byte >>> count) | (byte << (8 - count))) & 255;
@@ -56,7 +81,7 @@ function callbackRequestError(row) {
   const exchanged = (((raw & 0xd5) << 1) | ((raw >>> 1) & 0x55)) & 255;
   const slot = (ror(ror((exchanged + 0x68) & 255, 6) ^ 255, 6) - 2) & 255;
   if (request.status !== 'CANDIDATE_STATIC_RECEIVE_DATAFLOW'
-      || request.registered_packet_class !== 'PKT_ChangeSlotSpellData_s'
+      || request.registered_packet_class !== CLASSES[packetId]
       || request.registered_receiver_class !== 'AIBaseClient'
       || request.slot_index !== slot || request.receiver_entity_status !== 'UNKNOWN'
       || request.value_decode_witness !== 'NATIVE_PACKET_ONLY_CALLBACK_PREFIX') {
@@ -68,6 +93,22 @@ function callbackRequestError(row) {
       && request.callback_stop_rva === '0x24ec26' && request.requested_u8 === vector[0]
       && request.receiver_field_offset === '0x2f' && request.receiver_field_meaning === 'UNKNOWN'
       && request.native_lookup_index === (slot <= 63 ? slot : 0) ? null : 'callback byte-write witness differs';
+  }
+  if (operation === 6) {
+    return vector.length === 1 && request.operation_kind === 'SLOT_GATED_BYTE_FIELD_WRITE_REQUEST'
+      && request.callback_stop_rva === '0x24ed5e' && request.requested_u8 === vector[0]
+      && request.receiver_field_offset === '0xe8' && request.receiver_field_meaning === 'UNKNOWN'
+      && request.callee_has_state_gate === true ? null : 'callback gated byte-write witness differs';
+  }
+  if (operation === 7) {
+    const words = request.requested_words_u32;
+    return vector.length === 5 && vector[0] === 1
+      && request.operation_kind === 'SLOT_DWORD_VECTOR_CHANGE_REQUEST' && request.callback_stop_rva === '0x24ed7b'
+      && request.requested_word_count === vector[0] && Array.isArray(words) && words.length === vector[0]
+      && words.every((word,i) => word === vector.readUInt32LE(1+i*4))
+      && request.word_decode_witness === 'NATIVE_CALLEE_PACKET_ONLY_VECTOR_CONSTRUCTION'
+      && request.nested_holder_vector_offset === '0x40' && request.word_meaning === 'UNKNOWN'
+      && request.callee_has_state_gate === true ? null : 'callback counted word-vector witness differs';
   }
   const name = vector.subarray(0, -1);
   const ascii = name.length && name.every((byte) => byte >= 32 && byte <= 126) ? name.toString('ascii') : null;
@@ -90,8 +131,10 @@ function callbackRequestError(row) {
 }
 
 function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
-  const profile = ANONYMOUS_049C_PACKET_821_PROFILE;
-  const base = { profile_id: profile.id, input_packet_id: 0x049c,
+  const includeSiblings = options.includeSlotSiblings === true;
+  const profile = includeSiblings ? SPELL_SLOT_CHANGE_REQUEST_821_PROFILE : ANONYMOUS_049C_PACKET_821_PROFILE;
+  const routes = includeSiblings ? [0x049c, 0x028e, 0x0375] : [0x049c];
+  const base = { profile_id: profile.id, ...(includeSiblings ? {input_packet_ids:routes} : {input_packet_id:0x049c}),
     packet_name: profile.packet_name, registered_receiver_class: profile.registered_receiver_class,
     native_callback_rva: profile.native_callback_rva,
     evidence_runtime_image_sha256: IMAGE_SHA256,
@@ -122,32 +165,33 @@ function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
   const packets = [];
   try {
     const observe = (block, chunk) => {
-      if (block.packet_id !== 0x049c) return;
-      if (!LENGTHS[chunk.stream_tag]?.has(block.payload.length)
+      if (!routes.includes(block.packet_id)) return;
+      const lengths = block.packet_id === 0x049c ? LENGTHS : SIBLING_LENGTHS[block.packet_id];
+      if (!lengths[chunk.stream_tag]?.has(block.payload.length)
           || !Number.isSafeInteger(block.param >>> 0) || (block.param >>> 0) === 0) {
-        throw new Error('0x049c source packet is outside observed stream/length/raw-param scope');
+        throw new Error(`slot-change route 0x${block.packet_id.toString(16)} is outside observed stream/length/raw-param scope`);
       }
-      if (packets.length >= 30_000) throw new Error('0x049c packet count exceeds bounded scope');
-      packets.push({ packet_id: 0x049c, stream_tag: chunk.stream_tag,
+      if (packets.length >= 30_000) throw new Error('selected slot-change packet count exceeds bounded scope');
+      packets.push({ packet_id: block.packet_id, stream_tag: chunk.stream_tag,
         raw_param: block.param >>> 0, payload_hex: block.payload.toString('hex'),
         raw_packet_ref: { source_path: replay.source_path ?? null,
           replay_sha256: replay.source_sha256, chunk_index: chunk.index,
           chunk_id: chunk.chunk_id, chunk_stream: chunk.stream,
           chunk_file_offset: chunk.offset, decompressed_block_offset: block.offset,
-          decompressed_payload_offset: block.payload_offset, packet_id: 0x049c,
+          decompressed_payload_offset: block.payload_offset, packet_id: block.packet_id,
           replay_time_ms: block.timestamp_ms, raw_param: block.param >>> 0,
           payload_length: block.payload.length, raw_payload_sha256: sha(block.payload) } });
     };
     if (options.precollected) {
-      const source = rowsFor821Capability(replay, options.precollected, CAPABILITY);
+      const source = rowsFor821Capability(replay, options.precollected, profile.capability);
       if (source.error) throw new Error(source.error);
-      if (source.observed_packet_count_minimum) throw new Error('0x049c route exceeds bounded scope');
+      if (source.observed_packet_count_minimum) throw new Error('selected slot-change route exceeds bounded scope');
       for (const row of source.rows) observe(row.block, row.chunk);
     } else {
       walkBlocks(replay, observe, { strict: true });
     }
   } catch (error) { return fail('DECODE_FAILED', error.message); }
-  if (!packets.length) return fail('PROFILE_UNAVAILABLE', 'no observed exact-821 0x049c route');
+  if (!packets.length) return fail('PROFILE_UNAVAILABLE', 'no observed exact-821 selected slot-change route');
   const events = [];
   let printable = 0;
   const inputHash = crypto.createHash('sha256');
@@ -159,7 +203,7 @@ function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
     inputHash.update(input);
     const run = childProcess.spawnSync(options.pythonExecutable ?? 'python',
       [path.resolve(__dirname, '../../scripts/decode_anonymous_049c_packet_16_19_821.py'),
-        '--image', options.runtimeImagePath], {
+        '--image', options.runtimeImagePath, ...(includeSiblings ? ['--include-slot-siblings'] : [])], {
         input, encoding: 'utf8', timeout: 120000, maxBuffer: 32 * 1024 * 1024,
         windowsHide: true,
       });
@@ -170,7 +214,8 @@ function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
       return fail('DECODE_FAILED', 'native helper returned invalid JSON');
     }
     if (result.replay_version !== BUILD || result.runtime_image_sha256 !== IMAGE_SHA256
-        || result.callback_packet_class !== profile.packet_name || result.callback_body_rva !== profile.native_callback_rva
+        || result.callback_packet_class !== CLASSES[0x049c] || result.callback_body_rva !== profile.native_callback_rva
+        || result.slot_siblings_enabled !== includeSiblings
         || result.memory_compatibility?.operation !== 'MEMSET_ONLY'
         || result.memory_compatibility?.leaf_rva !== profile.memory_compatibility_leaf_rva
         || result.memory_compatibility?.prefix_sha256 !== MEMSET_PREFIX_SHA256
@@ -180,6 +225,7 @@ function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
     for (const [index, row] of result.rows.entries()) {
       const source = batch[index];
       if (row.index !== index || row.status !== 'NATIVE_ACCEPTED'
+          || row.native_packet_id !== source.packet_id
           || row.deserialize_return_al !== 1 || row.bytes_consumed !== source.payload_hex.length / 2
           || !Number.isSafeInteger(row.native_byte_vector_length)
           || row.native_byte_vector_length < 0 || row.native_byte_vector_length > 64
@@ -204,8 +250,8 @@ function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
       const callbackError = callbackRequestError(row);
       if (callbackError) return fail('INCONSISTENT', callbackError);
       const { index: _index, status: _status, ...fields } = row;
-      events.push({ event_type: 'ANONYMOUS_049C_PACKET_CANDIDATE',
-        game_version: BUILD, patch: '16.19', build_profile: PROFILE_ID,
+      events.push({ event_type: includeSiblings ? 'SPELL_SLOT_CHANGE_REQUEST_CANDIDATE' : 'ANONYMOUS_049C_PACKET_CANDIDATE',
+        game_version: BUILD, patch: '16.19', build_profile: profile.id,
         replay_sha256: replay.source_sha256,
         replay_time_ms: source.raw_packet_ref.replay_time_ms,
         raw_param: source.raw_param, stream_tag: source.stream_tag,
@@ -224,4 +270,8 @@ function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
     runtime_image_sha256: imageSha, events };
 }
 
-module.exports = { ANONYMOUS_049C_PACKET_821_PROFILE, decodeAnonymous049cPacketCandidates821, callbackRequestError };
+function decodeSpellSlotChangeRequestCandidates821(replay, options = {}) {
+  return decodeAnonymous049cPacketCandidates821(replay, {...options, includeSlotSiblings:true});
+}
+module.exports = { ANONYMOUS_049C_PACKET_821_PROFILE, SPELL_SLOT_CHANGE_REQUEST_821_PROFILE,
+  decodeAnonymous049cPacketCandidates821, decodeSpellSlotChangeRequestCandidates821, callbackRequestError };

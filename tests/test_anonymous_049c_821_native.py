@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from decode_anonymous_049c_packet_16_19_821 import (
     create_emulator, decode_packet, PROFILE, callback_request, check_callback_identity, CALLBACK_SPANS,
+    check_sibling_identity, SIBLING_SPANS, SIBLING_PROFILES, PACKET_CLASSES,
 )
 from decode_mapview_inventory_16_19_821 import read_image, make_emulator
 import emulate_exact_packet_decoder as exact
@@ -144,6 +145,36 @@ class Native049cTests(unittest.TestCase):
             expected = bytearray(original)
             expected[0x2f] = value
             self.assertEqual(bytes(emulator.emulator.mem_read(slot, len(original))), bytes(expected))
+
+    def test_original_sibling_shapes_callback_requests_and_native_controls(self):
+        sample_path = os.environ.get('ROFL_821_SLOT_SIBLING_SAMPLES')
+        if not sample_path:
+            self.skipTest('authorized exact-821 sibling representatives absent')
+        data = json.loads(Path(sample_path).read_text(encoding='utf-8'))
+        self.assertEqual(data['build'], '16.19.821.7343')
+        samples = [sample for group in data['groups'] for sample in group['samples']]
+        self.assertTrue(samples)
+        emulator, context = create_emulator(self.image, True)
+        kinds = set()
+        for sample in samples:
+            row = decode_packet(emulator, context, sample, True)
+            request = row['callback_request_candidate']
+            self.assertEqual(request['registered_packet_class'], PACKET_CLASSES[sample['packet_id']])
+            self.assertEqual(request['application_status'], 'NOT_OBSERVED')
+            self.assertEqual(request['receiver_entity_status'], 'UNKNOWN')
+            kinds.add(request['operation_kind'])
+            payload = bytes.fromhex(sample['payload_hex'])
+            for changed in (payload[:-1], payload+b'\0'):
+                context['raw_param'] = sample['raw_param']
+                native = emulator.decode(changed, SIBLING_PROFILES[sample['packet_id']])
+                self.assertFalse(native['deserialize_return_al'] == 1 and native['fully_consumed'])
+        self.assertEqual(kinds, {'SLOT_NAME_CHANGE_REQUEST','SLOT_GATED_BYTE_FIELD_WRITE_REQUEST',
+                                'SLOT_DWORD_VECTOR_CHANGE_REQUEST'})
+        for begin, _, _ in SIBLING_SPANS:
+            changed = bytearray(self.image)
+            changed[begin] ^= 1
+            with self.assertRaises(ValueError):
+                check_sibling_identity(changed)
 
 
 if __name__ == '__main__':

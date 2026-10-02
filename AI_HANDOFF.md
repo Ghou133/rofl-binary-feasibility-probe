@@ -26,6 +26,11 @@ packet-only native callback requests: slot index, name-change bytes/hash or
 `+0x2f` byte-write intent. Read [its receive-dataflow evidence](docs/NATIVE_049C_CALLBACK_16_19_821.md)
 before extending it. Actual receiver/entity and application are unobserved;
 neither callback return success nor static writes prove a Replay effect.
+The adjacent `spell_slot_change_request` capability covers the regular route
+plus exact `0x028e` Summoner and `0x0375` OwnerOnly variants. OwnerOnly words are
+native-copied raw bit presentations with unknown type/units; its observed data
+is keyframe-only. Preserve separate route/class identities and request/effect
+boundaries when extending this family.
 
 Container fixes belong in `src/rofl.js`; raw analysis in `src/analysis.js`; command
 orchestration in `src/cli.js`; execution-scoped reports in `src/cli_report.js`;

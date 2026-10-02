@@ -142,6 +142,14 @@ established. The name hash can collide. Consume the JSONL/API directly; this
 stream is not registered with saved `query-events`. See the
 [callback evidence and remaining gates](NATIVE_049C_CALLBACK_16_19_821.md).
 
+For the complete observed regular/Summoner/OwnerOnly family, use
+`--events spell_slot_change_request` with the same runtime image. Read
+`spell_slot_change_request_candidates.jsonl`. This adds exact routes `0x028e`
+and `0x0375`, including gated byte-write and counted word-vector requests.
+The owner class suffix does not prove a recipient; word type/units, actor and
+actual application remain unknown. The original `anonymous_049c_packet`
+selection retains only `0x049c`.
+
 ## API and batches
 
 ```javascript

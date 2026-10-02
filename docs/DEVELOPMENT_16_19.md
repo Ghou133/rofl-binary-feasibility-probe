@@ -1,5 +1,25 @@
 # 16.19 development progress
 
+2026-10-02 adjacent slot-change family: `spell_slot_change_request` is now a
+usable opt-in CLI/API surface for independently pinned regular `0x049c`,
+Summoner `0x028e` and OwnerOnly `0x0375`. All three registered typed closures
+call the same packet-reading callback, but each native constructor/deserializer
+is executed separately. The legacy `anonymous_049c_packet` selection remains
+regular-only. In addition to name and `+0x2f` byte-write requests, the family
+exposes OwnerOnly selector-6 gated `+0xe8` byte-write requests and selector-7
+counted word-vector requests. The latter executes native packet-only callee
+vector construction before its receiver lookup; exactly one copied word is
+observed. Type/units, audience, actor and actual application are not confirmed.
+
+Fresh serial unified CLI runs on all 11 existing KR Replays accepted 115,290
+packets: regular 107,059, Summoner 6,790, OwnerOnly 1,441. Their request counts
+are 112,861 name / 988 regular-byte / 506 gated-byte / 935 word-vector, all
+`CANDIDATE`, exact image `MATCHED_USED`, zero framing errors. OwnerOnly data
+occurs only in keyframes and is not emitted as cast/action effects. An additional
+66 original sibling representatives and 132 malformed native controls pass;
+current relevant tests passed 19 Node / 6 Python methods, zero failures/skips.
+See [the registration and per-operation evidence](NATIVE_049C_CALLBACK_16_19_821.md).
+
 2026-10-02 0x049c V2 receive-dataflow continuation: exact registration now binds
 the regular `PKT_ChangeSlotSpellData_s` closure to `AIBaseClient`, numeric route
 `0x049c`, thunk `0x2bbe30` and callback `0x24ebb0`. The factory, typed closure,

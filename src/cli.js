@@ -1319,6 +1319,7 @@ function parseOne1619(replay, options, started) {
       'set_dimension_missile_packet',
       'anonymous_029c_packet',
       'anonymous_049c_packet',
+      'spell_slot_change_request',
       'unit_apply_damage_packet',
       'show_health_bar_packet',
     ].includes(name)))] : [];
@@ -2786,6 +2787,7 @@ function capabilityQuery(replay, options = {}) {
              || capability === 'set_dimension_missile_packet'
              || capability === 'anonymous_029c_packet'
              || capability === 'anonymous_049c_packet'
+             || capability === 'spell_slot_change_request'
              || capability === 'anonymous_029c_roster_key_pair'
             || capability === 'unit_apply_damage_packet'
             || capability === 'show_health_bar_packet'
@@ -2978,7 +2980,7 @@ function capabilityQuery(replay, options = {}) {
           ? [dependencies[0], options.runtimeImage
             ? fileInputDependency('exact_runtime_image', options.runtimeImage)
             : { name: 'exact_runtime_image', status: 'MISSING', path: null },
-          ...(['unit_apply_damage_packet', 'show_health_bar_packet', 'anonymous_049c_packet',
+          ...(['unit_apply_damage_packet', 'show_health_bar_packet', 'anonymous_049c_packet', 'spell_slot_change_request',
             'unit_apply_damage_roster_key_pair',
             'unit_apply_damage_lookup_roster_key_pair',
             'unit_apply_damage_lookup2c_roster_key_pair'].includes(capability)
@@ -3639,6 +3641,7 @@ function capabilityQuery(replay, options = {}) {
             anonymous_029c_packet:
               'anonymous_029c_packet_candidates',
             anonymous_049c_packet: 'anonymous_049c_packet_candidates',
+            spell_slot_change_request: 'spell_slot_change_request_candidates',
             anonymous_029c_roster_key_pair:
               'anonymous_029c_roster_key_pair_candidates',
             unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',

@@ -7,6 +7,7 @@ const { replaySourceError } = require('./replay_source_integrity');
 const BUILD = '16.19.821.7343';
 const CAPABILITIES = new Set([
   'anonymous_049c_packet',
+  'spell_slot_change_request',
   'hero_death', 'hero_death_timer', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
   'hero_assists_snapshot', 'hero_missions_minions_killed_snapshot',
   'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
@@ -145,6 +146,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const heroStatsRows = [];
   const rows = {
     anonymous_049c_packet: [],
+    spell_slot_change_request: [],
     hero_death: [],
     hero_death_timer: [],
     hero_respawn: [],
@@ -294,6 +296,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let setDimensionMissilePacketCount = 0;
   let anonymous029cPacketCount = 0;
   let anonymous049cPacketCount = 0;
+  let spellSlotChangeRequestCount = 0;
   let finished = false;
   // Capability selection is fixed for this walk. Cache the packet-route
   // decisions instead of probing the Set for every framed block.
@@ -347,6 +350,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsSetDimensionMissile = selected.has('set_dimension_missile_packet');
   const selectsAnonymous029c = selected.has('anonymous_029c_packet');
   const selectsAnonymous049c = selected.has('anonymous_049c_packet');
+  const selectsSlotChange = selected.has('spell_slot_change_request');
   const selectsHeroLevelState = selected.has('hero_level_state');
   return Object.freeze({
     observe(block, chunk) {
@@ -682,6 +686,12 @@ function create821ScanCollector(replay, selectedCapabilities) {
           rows.anonymous_049c_packet.push(copyRow(block, chunk));
         }
       }
+      if (selectsSlotChange && [0x049c,0x028e,0x0375].includes(block.packet_id)) {
+        spellSlotChangeRequestCount += 1;
+        if (rows.spell_slot_change_request.length < 30_000) {
+          rows.spell_slot_change_request.push(copyRow(block, chunk));
+        }
+      }
       if (selectsHeroStats && (chunk.stream_tag === 2 || chunk.stream_tag === 3)
           && block.packet_id === 0x0089) {
         heroStatsRows.push(copyRow(block, chunk));
@@ -751,6 +761,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         setDimensionMissilePacketCount,
         anonymous029cPacketCount,
         anonymous049cPacketCount,
+        spellSlotChangeRequestCount,
         error: token.error,
       });
       return token;
@@ -1117,6 +1128,10 @@ function rowsFor821Capability(replay, token, capability) {
   if (capability === 'anonymous_049c_packet' && bound.anonymous049cPacketCount > 30_000) {
     return { observed_packet_count_minimum: bound.anonymous049cPacketCount,
       scanned_block_count: bound.blockCount };
+  }
+  if (capability === 'spell_slot_change_request' && bound.spellSlotChangeRequestCount > 30_000) {
+    return { observed_packet_count_minimum:bound.spellSlotChangeRequestCount,
+      error:'slot-change family exceeds bounded scope' };
   }
   return {
     rows: bound.rows[capability].map((row) => copyRow(row.block, row.chunk)),

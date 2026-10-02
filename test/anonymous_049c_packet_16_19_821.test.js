@@ -6,7 +6,8 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const { replayFromChunks } = require('./helpers/synthetic_replay');
-const { decodeAnonymous049cPacketCandidates821: decode, callbackRequestError } =
+const { decodeAnonymous049cPacketCandidates821: decode, decodeSpellSlotChangeRequestCandidates821: decodeFamily,
+  callbackRequestError } =
   require('../src/decoders/rofl_16_19_821_anonymous_049c_packet_candidate');
 const { collect821Routes, rowsFor821Capability } =
   require('../src/decoders/rofl_16_19_821_scan');
@@ -126,5 +127,58 @@ test('0x049c unsupported callback selectors cannot be claimed as decoded request
     application_status: 'NOT_OBSERVED' };
   assert.equal(callbackRequestError(row), null);
   row.callback_request_candidate.status = 'CANDIDATE_STATIC_RECEIVE_DATAFLOW';
+  assert.ok(callbackRequestError(row));
+});
+
+test('slot-change family is exact-821 opt-in with native dependency and null unavailable events', () => {
+  const cap = 'spell_slot_change_request';
+  assert.ok(resolveBuildProfile(BUILD).profile.candidate_capabilities.includes(cap));
+  assert.ok(!resolveBuildProfile('16.19.820.7193').profile.candidate_capabilities.includes(cap));
+  const query = capabilityQuery(fixture(), {events:[cap]}).capabilities[0];
+  assert.equal(query.output, 'spell_slot_change_request_candidates');
+  assert.ok(query.missing_inputs.includes('exact_runtime_image'));
+  assert.ok(query.required_inputs.some(input => /python/i.test(input.name)));
+  assert.equal(decodeFamily(fixture()).status,'MISSING_INPUT');
+  assert.equal(decodeSemanticReplay(fixture(),{capabilities:[cap]}).events,null);
+});
+
+test('slot-change family shared scan binds all three routes and retains the legacy selection', () => {
+  const packet = (id,length) => {
+    const head=Buffer.alloc(15);head.writeFloatLE(1,1);head.writeUInt32LE(length,5);
+    head.writeUInt16LE(id,9);head.writeUInt32LE(0x400000ae,11);
+    return Buffer.concat([head,Buffer.alloc(length)]);
+  };
+  const replay=replayFromChunks([{stream:1,body:Buffer.concat([packet(0x049c,5),packet(0x028e,19)])},
+    {stream:2,body:packet(0x0375,5)}],BUILD);
+  const token=collect821Routes(replay,[CAP,'spell_slot_change_request']);
+  assert.deepEqual(rowsFor821Capability(replay,token,'spell_slot_change_request').rows.map(r=>r.block.packet_id),
+    [0x049c,0x028e,0x0375]);
+  assert.equal(rowsFor821Capability(replay,token,CAP).rows.length,1);
+  assert.ok(rowsFor821Capability(replay,collect821Routes(replay,[CAP]),'spell_slot_change_request').error);
+});
+
+test('OwnerOnly callback requests reject audience guesses, gated-field and word-vector disagreement', () => {
+  const row=callbackFixture(1);row.native_packet_id=0x0375;
+  row.native_nested_field_bytes_hex['0x1c']='06000000';
+  row.callback_request_candidate={...row.callback_request_candidate,
+    registered_packet_class:'PKT_ChangeSlotSpellData_OwnerOnly_s',operation_selector:6,
+    operation_kind:'SLOT_GATED_BYTE_FIELD_WRITE_REQUEST',callback_stop_rva:'0x24ed5e',
+    receiver_field_offset:'0xe8',callee_has_state_gate:true};
+  assert.equal(callbackRequestError(row),null);
+  row.callback_request_candidate.receiver_field_offset='0x2f';
+  assert.ok(callbackRequestError(row));
+  row.native_nested_field_bytes_hex['0x1c']='07000000';row.native_byte_vector_hex='0100000040';
+  row.callback_request_candidate={...row.callback_request_candidate,operation_selector:7,
+    operation_kind:'SLOT_DWORD_VECTOR_CHANGE_REQUEST',callback_stop_rva:'0x24ed7b',
+    requested_word_count:1,requested_words_u32:[0x40000000],nested_holder_vector_offset:'0x40',
+    word_meaning:'UNKNOWN',word_decode_witness:'NATIVE_CALLEE_PACKET_ONLY_VECTOR_CONSTRUCTION'};
+  assert.equal(callbackRequestError(row),null);
+  row.callback_request_candidate.requested_words_u32[0]++;
+  assert.ok(callbackRequestError(row));
+  row.callback_request_candidate.requested_words_u32[0]--;
+  row.native_byte_vector_hex='00';
+  assert.ok(callbackRequestError(row));
+  row.native_byte_vector_hex='0100000040';
+  row.callback_request_candidate.registered_packet_class='PKT_ChangeSlotSpellData_Summoner_s';
   assert.ok(callbackRequestError(row));
 });

@@ -6,6 +6,8 @@ Exact KR 821 `--events anonymous_049c_packet --runtime-image PATH` also exposes
 [slot-change request dataflow](docs/NATIVE_049C_CALLBACK_16_19_821.md): native slot
 index, requested name/hash or byte-field write, with actual receiver and effect
 explicitly unobserved.
+Use `--events spell_slot_change_request` for the independently pinned regular,
+Summoner and OwnerOnly family, including gated byte and word-vector requests.
 
 精确版本绑定的《英雄联盟》`.rofl` 回放研究工具：解析容器和数据包，输出带来源、证据等级和明确边界的语义事实。
 
