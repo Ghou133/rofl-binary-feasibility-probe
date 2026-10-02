@@ -12,7 +12,7 @@ const BUILD = '16.19.821.7343';
 const IMAGE_SHA256 = '35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325';
 const MEMSET_PREFIX_SHA256 = '961ec6b7a19ad835ada16a4cd076ebd87c7038c770e0ca8db6cf0aa6b04b3d38';
 const CAPABILITY = 'anonymous_049c_packet';
-const PROFILE_ID = 'rofl-16.19.821.7343-kr-anonymous-049c-native-byte-vector-candidate-v1';
+const PROFILE_ID = 'rofl-16.19.821.7343-kr-049c-native-callback-request-candidate-v2';
 const LENGTHS = Object.freeze({
   1: new Set([5, 6, ...Array.from({ length: 32 }, (_, index) => index + 9), 42, 48, 49, 52]),
   2: new Set([5, 6, ...Array.from({ length: 28 }, (_, index) => index + 10), 39, 49, 52]),
@@ -20,15 +20,17 @@ const LENGTHS = Object.freeze({
 const ANONYMOUS_049C_PACKET_821_PROFILE = Object.freeze({
   id: PROFILE_ID, replay_version: BUILD, capability: CAPABILITY,
   status: 'CANDIDATE', enabled: true, replay_block_packet_id: 0x049c,
-  evidence_status: 'CANDIDATE_EXACT_821_NATIVE_049C_BYTE_VECTOR',
+  evidence_status: 'CANDIDATE_EXACT_821_NATIVE_049C_CALLBACK_REQUEST',
+  packet_name: 'PKT_ChangeSlotSpellData_s', registered_receiver_class: 'AIBaseClient',
+  native_callback_rva: '0x24ebb0',
   stream_tags: Object.freeze([1, 2]), evidence_runtime_image_sha256: IMAGE_SHA256,
   native_constructor_rva: '0xe9a6c0', native_deserializer_rva: '0x10d0d30',
   memory_compatibility_operation: 'MEMSET_ONLY',
   memory_compatibility_leaf_rva: '0x1a653c3',
   memory_compatibility_prefix_sha256: MEMSET_PREFIX_SHA256,
   known_limits: Object.freeze([
-    'The exact native numeric 0x049c constructor/deserializer yields anonymous nested field bytes and a dynamic byte vector; field roles are not assigned.',
-    'Printable ASCII is a reversible presentation of decoded vector bytes. A recognizable token does not prove a spell identity, slot, owner, successful change, cast or effect.',
+    'Exact-image registration binds numeric 0x049c to AIBaseClient/PKT_ChangeSlotSpellData_s. Packet-only callback execution witnesses the slot index and arguments for the two observed operation branches.',
+    'Selector 2 requests a name change; selector 1 requests a byte write to slot object +0x2f whose gameplay meaning remains unknown. Neither proves successful application, actor identity, cast or effect.',
     'Only a pinned AVX memset leaf is replaced with its host-memory fill semantics; no packet field decoder, receiver, game lookup or gameplay callback is stubbed.',
     'Game and keyframe packets retain their original timestamps and raw parameters; no participant mapping or lifecycle is inferred.',
     'The candidate is opt-in and bound to the complete 16.19.821.7343 build and pinned runtime image.',
@@ -37,9 +39,61 @@ const ANONYMOUS_049C_PACKET_821_PROFILE = Object.freeze({
 
 function sha(bytes) { return crypto.createHash('sha256').update(bytes).digest('hex'); }
 
+function callbackRequestError(row) {
+  const request = row.callback_request_candidate;
+  const fields = row.native_nested_field_bytes_hex;
+  if (!/^[0-9a-f]{8}$/.test(fields?.['0x1c'] ?? '') || !/^[0-9a-f]{2}$/.test(fields?.['0x18'] ?? '')
+      || !/^(?:[0-9a-f]{2})*$/.test(row.native_byte_vector_hex ?? '')) return 'callback source fields differ';
+  const operation = Buffer.from(fields['0x1c'], 'hex').readUInt32LE();
+  if (!request || request.operation_selector !== operation || request.application_status !== 'NOT_OBSERVED') {
+    return 'callback operation/application witness differs';
+  }
+  if (operation !== 1 && operation !== 2) {
+    return request.status === 'UNOBSERVED_OPERATION' ? null : 'unobserved operation was claimed decoded';
+  }
+  const ror = (byte, count) => ((byte >>> count) | (byte << (8 - count))) & 255;
+  const raw = parseInt(fields['0x18'], 16);
+  const exchanged = (((raw & 0xd5) << 1) | ((raw >>> 1) & 0x55)) & 255;
+  const slot = (ror(ror((exchanged + 0x68) & 255, 6) ^ 255, 6) - 2) & 255;
+  if (request.status !== 'CANDIDATE_STATIC_RECEIVE_DATAFLOW'
+      || request.registered_packet_class !== 'PKT_ChangeSlotSpellData_s'
+      || request.registered_receiver_class !== 'AIBaseClient'
+      || request.slot_index !== slot || request.receiver_entity_status !== 'UNKNOWN'
+      || request.value_decode_witness !== 'NATIVE_PACKET_ONLY_CALLBACK_PREFIX') {
+    return 'callback binding/index witness differs';
+  }
+  const vector = Buffer.from(row.native_byte_vector_hex, 'hex');
+  if (operation === 1) {
+    return vector.length === 1 && request.operation_kind === 'SLOT_BYTE_FIELD_WRITE_REQUEST'
+      && request.callback_stop_rva === '0x24ec26' && request.requested_u8 === vector[0]
+      && request.receiver_field_offset === '0x2f' && request.receiver_field_meaning === 'UNKNOWN'
+      && request.native_lookup_index === (slot <= 63 ? slot : 0) ? null : 'callback byte-write witness differs';
+  }
+  const name = vector.subarray(0, -1);
+  const ascii = name.length && name.every((byte) => byte >= 32 && byte <= 126) ? name.toString('ascii') : null;
+  // Independent check against the pinned native comparison hash. Bytes above
+  // 127 follow its sign-extended char addition; only ASCII A-Z are folded.
+  let nameHash = 0;
+  for (const byte of name) {
+    const folded = byte >= 65 && byte <= 90 ? byte + 32 : byte;
+    nameHash = ((nameHash << 4) + (folded < 128 ? folded : folded - 256)) >>> 0;
+    const high = nameHash & 0xf0000000;
+    if (high) nameHash = (nameHash ^ high ^ (high >>> 24)) >>> 0;
+  }
+  return vector.length >= 2 && vector.at(-1) === 0 && !name.includes(0)
+    && request.operation_kind === 'SLOT_NAME_CHANGE_REQUEST' && request.callback_stop_rva === '0x24ecdf'
+    && request.requested_name_bytes_hex === name.toString('hex') && request.requested_name_ascii === ascii
+    && request.native_name_comparison_hash_u32 === nameHash
+    && Array.isArray(request.anonymous_control_bytes) && request.anonymous_control_bytes.length === 3
+    && request.anonymous_control_bytes.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+    ? null : 'callback name-change witness differs';
+}
+
 function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
   const profile = ANONYMOUS_049C_PACKET_821_PROFILE;
   const base = { profile_id: profile.id, input_packet_id: 0x049c,
+    packet_name: profile.packet_name, registered_receiver_class: profile.registered_receiver_class,
+    native_callback_rva: profile.native_callback_rva,
     evidence_runtime_image_sha256: IMAGE_SHA256,
     memory_compatibility_operation: profile.memory_compatibility_operation,
     memory_compatibility_leaf_rva: profile.memory_compatibility_leaf_rva,
@@ -106,7 +160,7 @@ function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
     const run = childProcess.spawnSync(options.pythonExecutable ?? 'python',
       [path.resolve(__dirname, '../../scripts/decode_anonymous_049c_packet_16_19_821.py'),
         '--image', options.runtimeImagePath], {
-        input, encoding: 'utf8', timeout: 120000, maxBuffer: 16 * 1024 * 1024,
+        input, encoding: 'utf8', timeout: 120000, maxBuffer: 32 * 1024 * 1024,
         windowsHide: true,
       });
     if (run.error || run.status !== 0) return fail('DECODE_FAILED',
@@ -116,6 +170,7 @@ function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
       return fail('DECODE_FAILED', 'native helper returned invalid JSON');
     }
     if (result.replay_version !== BUILD || result.runtime_image_sha256 !== IMAGE_SHA256
+        || result.callback_packet_class !== profile.packet_name || result.callback_body_rva !== profile.native_callback_rva
         || result.memory_compatibility?.operation !== 'MEMSET_ONLY'
         || result.memory_compatibility?.leaf_rva !== profile.memory_compatibility_leaf_rva
         || result.memory_compatibility?.prefix_sha256 !== MEMSET_PREFIX_SHA256
@@ -146,6 +201,8 @@ function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
         return fail('INCONSISTENT', 'native 0x049c field bytes/text presentation differ');
       }
       if (isPrintable) printable += 1;
+      const callbackError = callbackRequestError(row);
+      if (callbackError) return fail('INCONSISTENT', callbackError);
       const { index: _index, status: _status, ...fields } = row;
       events.push({ event_type: 'ANONYMOUS_049C_PACKET_CANDIDATE',
         game_version: BUILD, patch: '16.19', build_profile: PROFILE_ID,
@@ -167,4 +224,4 @@ function decodeAnonymous049cPacketCandidates821(replay, options = {}) {
     runtime_image_sha256: imageSha, events };
 }
 
-module.exports = { ANONYMOUS_049C_PACKET_821_PROFILE, decodeAnonymous049cPacketCandidates821 };
+module.exports = { ANONYMOUS_049C_PACKET_821_PROFILE, decodeAnonymous049cPacketCandidates821, callbackRequestError };

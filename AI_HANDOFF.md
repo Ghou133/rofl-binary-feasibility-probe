@@ -21,6 +21,12 @@ preflights selected names and reports unregistered names with exit code 2.
 The library's 16.16 surfaces are still not dispatched by the CLI. Preserve full
 build gates and do not feed one build into another decoder.
 
+The exact-821 `anonymous_049c_packet` V2 surface retains its raw vectors and adds
+packet-only native callback requests: slot index, name-change bytes/hash or
+`+0x2f` byte-write intent. Read [its receive-dataflow evidence](docs/NATIVE_049C_CALLBACK_16_19_821.md)
+before extending it. Actual receiver/entity and application are unobserved;
+neither callback return success nor static writes prove a Replay effect.
+
 Container fixes belong in `src/rofl.js`; raw analysis in `src/analysis.js`; command
 orchestration in `src/cli.js`; execution-scoped reports in `src/cli_report.js`;
 packaging in `scripts/package_handoff.py`. Preserve research-v3/v4 and existing

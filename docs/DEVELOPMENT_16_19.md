@@ -1,5 +1,31 @@
 # 16.19 development progress
 
+2026-10-02 0x049c V2 receive-dataflow continuation: exact registration now binds
+the regular `PKT_ChangeSlotSpellData_s` closure to `AIBaseClient`, numeric route
+`0x049c`, thunk `0x2bbe30` and callback `0x24ebb0`. The factory, typed closure,
+route registration and downstream field/name paths are independently pinned;
+the earlier anonymous V1 limitation below remains a historical record.
+
+The unchanged `anonymous_049c_packet` CLI/API selection now emits
+`callback_request_candidate`: native callback-prefix slot index and branch
+arguments, selector-2 requested name bytes and native comparison hash, or
+selector-1 requested byte for slot-object field `+0x2f`. The callback prefix stops
+before receiver lookup or downstream execution; no actual receiver is supplied.
+Every request preserves entity `UNKNOWN` and application `NOT_OBSERVED`.
+The `+0x2f` gameplay label, three control-byte roles and Q/W/E/R mapping remain
+unknown; a hash can collide. See [the bounded evidence chain](NATIVE_049C_CALLBACK_16_19_821.md).
+
+Fresh native CLI runs across all 11 existing exact KR Replays produced 106,071
+name-change requests (95,956 game / 10,115 keyframe) and 988 byte-write requests
+(836 game / 152 keyframe), all candidate, exact image used, zero framing errors.
+Final JS/source-field guards accepted all 107,059 saved rows; prior native fields
+and packet refs were unchanged. A separate fresh single-Replay final-code run
+accepted 12,552 rows with the independent hash guard. Focused Node tests passed
+16/16 and actual-image Python tests passed 5/5, zero skips/failures. Native tests
+cover all 256 encoded indices for both branches, each control byte's 256 values,
+registration mutations and a synthetic `+0x2f` setter with surrounding sentinels.
+Synthetic objects prove the instruction/dataflow behavior, not Replay effects.
+
 2026-10-02 numeric 0x049c continuation: the previous ChangeSlotSpellData-route
 stop-loss below is retained as historical negative evidence. The partial native
 failure was reproduced at exact image RVA `0x1a65492` (`vinsertf128`), inside an

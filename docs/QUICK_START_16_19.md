@@ -129,9 +129,18 @@ The exact-image decoder now uses a pinned, bounded host-memory implementation of
 that fill operation. Packet deserialization still executes the captured native
 code; no receiver, game lookup or gameplay callback is substituted.
 
-This is an opt-in packet/vector candidate. Recognizable text does not establish
-a spell identifier, slot, owner, successful change, cast or effect. Consume the
-JSONL/API directly; this stream is not registered with saved `query-events`.
+V2 additionally emits `callback_request_candidate`. Exact-image registration
+binds the route to `AIBaseClient` / `PKT_ChangeSlotSpellData_s`; the native
+packet-only callback prefix decodes `slot_index` and its operation arguments.
+`SLOT_NAME_CHANGE_REQUEST` exposes the requested name bytes/ASCII and native
+comparison hash. `SLOT_BYTE_FIELD_WRITE_REQUEST` exposes the requested byte and
+slot-object field offset `0x2f`, whose gameplay meaning remains unknown.
+
+Both retain `receiver_entity_status: UNKNOWN` and `application_status:
+NOT_OBSERVED`. No Q/W/E/R mapping, owner, successful change, cast or effect is
+established. The name hash can collide. Consume the JSONL/API directly; this
+stream is not registered with saved `query-events`. See the
+[callback evidence and remaining gates](NATIVE_049C_CALLBACK_16_19_821.md).
 
 ## API and batches
 
