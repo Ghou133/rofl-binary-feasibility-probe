@@ -7,6 +7,7 @@ const os=require('node:os');
 const path=require('node:path');
 const test=require('node:test');
 const {prepareEventQuery,streamEventQuery}=require('../src/event_query');
+const {parseArgs}=require('../src/cli');
 const {SPELL_SLOT_CHANGE_REQUEST_821_PROFILE:PROFILE}=
   require('../src/decoders/rofl_16_19_821_anonymous_049c_packet_candidate');
 const CLI=path.resolve(__dirname,'../src/cli.js'), EVENT='spell_slot_change_request_candidates';
@@ -75,6 +76,12 @@ function fixture(t) {
   save();return {root,dir,rows,result,semantic,analysis,manifest,save};
 }
 function failed(run,code) {assert.equal(run.status,2,run.stderr);assert.equal(run.stdout,'');assert.equal(JSON.parse(run.stderr).code,code);}
+test('list-events rejects both slot request filters instead of silently ignoring them',()=>{
+  for(const option of ['--slot-change-index','--slot-change-operation']) {
+    assert.throws(()=>parseArgs(['query-events','unused-artifact','--list-events',option,'2']),
+      /--list-events cannot be combined/);
+  }
+});
 test('saved query filters time, full header and internal slot/operation without changing row bytes',t=>{
   const f=fixture(t),run=cli(f.root,EVENT,'--from-ms','1500','--to-ms','2500','--slot-change-index','0',
     '--slot-change-operation','2','--raw-param','0x400000af','--limit','1');

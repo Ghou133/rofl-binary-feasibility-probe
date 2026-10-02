@@ -44,6 +44,14 @@ validation; it reuses the decoder's output constructor and observed-shape gate.
 `--verify-source` requires the exact image and freshly re-decodes all source rows,
 including unmatched requests. Saved-only consistency is explicitly unverified;
 do not describe its hashes as native-output authentication.
+The source package has also passed independent-extraction CLI acceptance of
+decode, static/native source verification, limits and error handling. `--list-events`
+rejects both slot filters; it must not silently ignore them. Dependency checks and
+interpreter selection are documented in the quick start. This delivery is usable
+without a running game. With the available module-only image, further application
+or gameplay identity claims require lawful exact-build packet-to-receiver/slot
+bindings and before/after object-state evidence; preserve the current candidate
+boundary and wait for those inputs rather than repeating missing-heap research.
 
 Container fixes belong in `src/rofl.js`; raw analysis in `src/analysis.js`; command
 orchestration in `src/cli.js`; execution-scoped reports in `src/cli_report.js`;

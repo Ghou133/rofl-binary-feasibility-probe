@@ -3,7 +3,19 @@
 Use Node >=22.15.0 (native Zstd required). Container inspection and the
 death/assist/respawn candidate path need no game client or Python installation.
 Native packet candidates additionally need a legally obtained matching runtime
-image, Python, and Unicorn (`requirements.txt`). Inputs remain local.
+image, Python, and Unicorn (`requirements.txt`). Inputs remain local. Check that
+your selected Python command can import Unicorn before native decoding:
+
+```powershell
+node --version
+python -c "import unicorn; print(unicorn.__version__)"
+```
+
+The replay CLI needs no `npm install`. If dependencies are absent, install the
+project's `requirements.txt` in your own Python environment. If the interpreter
+is named differently, pass `--python "C:\Path\To\python.exe"` to native decode
+and source verification. Missing native inputs/dependencies leave that capability
+unavailable; inspect `semantic_run.json` rather than treating it as zero events.
 
 ## Inspect the build and selected inputs
 
@@ -138,8 +150,8 @@ slot-object field offset `0x2f`, whose gameplay meaning remains unknown.
 
 Both retain `receiver_entity_status: UNKNOWN` and `application_status:
 NOT_OBSERVED`. No Q/W/E/R mapping, owner, successful change, cast or effect is
-established. The name hash can collide. Consume the JSONL/API directly; this
-stream is not registered with saved `query-events`. See the
+established. The name hash can collide. Consume the JSONL/API directly or use
+the saved slot query described below. See the
 [callback evidence and remaining gates](NATIVE_049C_CALLBACK_16_19_821.md).
 
 For the complete observed regular/Summoner/OwnerOnly family, use

@@ -23,6 +23,20 @@ saved substitutions from original native output; late failures emit no partial
 Library API or CLI stdout. Query source verification reproduces candidate output,
 not live receiver state. See the saved-query section in the evidence document.
 
+Source-package acceptance additionally ran the documented offline paths from a
+new independent temporary extraction, without npm installation or development
+artifacts: 14 CLI cases and 16 checks passed. The exact-821 native decode produced
+13,314 requests and 10,816 candidate associations; static death-episode source
+verification checked 71 rows without an image. Filtered saved queries scanned the
+complete 10,816-row stream while emitting only three rows; fresh native source
+verification preserved candidate markers. Missing Python/image, invalid filters,
+and existing output files produced explicit failures without successful zero
+counts or damaged output. Acceptance exposed and fixed `--list-events` silently
+ignoring the new slot filters, with a parsing regression test. The focused query
+suite then passed 7 portable tests, with 1 explicit private-fixture skip; actual
+native behavior was separately exercised in source-package acceptance. No full
+test graph or older-client rerun was added for this argument-parsing fix.
+
 The historical validation entries below retain their original dates and scopes.
 
 ## 2026-09-23 公开源码快照检查

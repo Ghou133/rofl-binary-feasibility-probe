@@ -746,7 +746,7 @@ function parseArgs(argv) {
         'castNestedU32At4c', 'castNestedF32AtA0', 'castNestedU32At28',
         'spellTimerReceiverSlot',
         'spellLevelReceiverIndex',
-        'spellLevelClampedScalar', 'damageCallbackF32Available',
+        'spellLevelClampedScalar', 'slotChangeIndex', 'slotChangeOperation', 'damageCallbackF32Available',
         'damageCallbackU32At10', 'damageCallbackU32At1c',
         'damageCallbackF32At18Raw', 'damageLookupKey24', 'damageLookupKey2c',
         'dieSourceKey2cMatch', 'showHealthZeroFlag', 'packetRecordCount',
