@@ -6,6 +6,7 @@ const { replaySourceError } = require('./replay_source_integrity');
 
 const BUILD = '16.19.821.7343';
 const CAPABILITIES = new Set([
+  'anonymous_049c_packet',
   'hero_death', 'hero_death_timer', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
   'hero_assists_snapshot', 'hero_missions_minions_killed_snapshot',
   'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
@@ -143,6 +144,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   }
   const heroStatsRows = [];
   const rows = {
+    anonymous_049c_packet: [],
     hero_death: [],
     hero_death_timer: [],
     hero_respawn: [],
@@ -291,6 +293,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let changeMissileTargetPacketCount = 0;
   let setDimensionMissilePacketCount = 0;
   let anonymous029cPacketCount = 0;
+  let anonymous049cPacketCount = 0;
   let finished = false;
   // Capability selection is fixed for this walk. Cache the packet-route
   // decisions instead of probing the Set for every framed block.
@@ -343,6 +346,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsChangeMissileTarget = selected.has('change_missile_target_packet');
   const selectsSetDimensionMissile = selected.has('set_dimension_missile_packet');
   const selectsAnonymous029c = selected.has('anonymous_029c_packet');
+  const selectsAnonymous049c = selected.has('anonymous_049c_packet');
   const selectsHeroLevelState = selected.has('hero_level_state');
   return Object.freeze({
     observe(block, chunk) {
@@ -672,6 +676,12 @@ function create821ScanCollector(replay, selectedCapabilities) {
           rows.anonymous_029c_packet.push(copyRow(block, chunk));
         }
       }
+      if (selectsAnonymous049c && block.packet_id === 0x049c) {
+        anonymous049cPacketCount += 1;
+        if (rows.anonymous_049c_packet.length < 30_000) {
+          rows.anonymous_049c_packet.push(copyRow(block, chunk));
+        }
+      }
       if (selectsHeroStats && (chunk.stream_tag === 2 || chunk.stream_tag === 3)
           && block.packet_id === 0x0089) {
         heroStatsRows.push(copyRow(block, chunk));
@@ -740,6 +750,7 @@ function create821ScanCollector(replay, selectedCapabilities) {
         changeMissileTargetPacketCount,
         setDimensionMissilePacketCount,
         anonymous029cPacketCount,
+        anonymous049cPacketCount,
         error: token.error,
       });
       return token;
@@ -1102,6 +1113,10 @@ function rowsFor821Capability(replay, token, capability) {
       observed_packet_count_minimum: bound.anonymous029cPacketCount,
       scanned_block_count: bound.blockCount,
     };
+  }
+  if (capability === 'anonymous_049c_packet' && bound.anonymous049cPacketCount > 30_000) {
+    return { observed_packet_count_minimum: bound.anonymous049cPacketCount,
+      scanned_block_count: bound.blockCount };
   }
   return {
     rows: bound.rows[capability].map((row) => copyRow(row.block, row.chunk)),

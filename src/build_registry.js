@@ -121,6 +121,8 @@ const missileKeyCooccurrence1619821 =
   require('./decoders/rofl_16_19_821_missile_key_cooccurrence_candidate');
 const setDimensionMissilePacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
+const anonymous049cPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_anonymous_049c_packet_candidate');
 const anonymous029cPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_anonymous_029c_packet_candidate');
 const anonymous029cRosterKeyPair1619821 =
@@ -660,6 +662,7 @@ const BUILD_PROFILES = deepFreeze({
       missile_key_cooccurrence: 0x040c,
       set_dimension_missile_packet: 0x008a,
       anonymous_029c_packet: 0x029c,
+      anonymous_049c_packet: 0x049c,
       anonymous_029c_roster_key_pair: 0x029c,
       unit_apply_damage_roster_key_pair: 0x005f,
       unit_apply_damage_lookup_roster_key_pair: 0x005f,
@@ -817,6 +820,8 @@ const BUILD_PROFILES = deepFreeze({
         missileKeyCooccurrence1619821.MISSILE_KEY_COOCCURRENCE_821_PROFILE,
       set_dimension_missile_packet:
         setDimensionMissilePacketCandidate1619821.SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821,
+      anonymous_049c_packet:
+        anonymous049cPacketCandidate1619821.ANONYMOUS_049C_PACKET_821_PROFILE,
       anonymous_029c_packet:
         anonymous029cPacketCandidate1619821.ANONYMOUS_029C_PACKET_CANDIDATE_PROFILE_821,
       anonymous_029c_roster_key_pair:
@@ -966,6 +971,8 @@ const BUILD_PROFILES = deepFreeze({
         missileKeyCooccurrence1619821.MISSILE_KEY_COOCCURRENCE_821_PROFILE.evidence_status,
       set_dimension_missile_packet:
         setDimensionMissilePacketCandidate1619821.SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821.evidence_status,
+      anonymous_049c_packet:
+        anonymous049cPacketCandidate1619821.ANONYMOUS_049C_PACKET_821_PROFILE.evidence_status,
       anonymous_029c_packet:
         anonymous029cPacketCandidate1619821.ANONYMOUS_029C_PACKET_CANDIDATE_PROFILE_821.evidence_status,
       anonymous_029c_roster_key_pair:
@@ -1139,6 +1146,7 @@ const BUILD_PROFILES = deepFreeze({
       'missile_key_cooccurrence',
       'set_dimension_missile_packet',
       'anonymous_029c_packet',
+      'anonymous_049c_packet',
       'anonymous_029c_roster_key_pair',
       'unit_apply_damage_roster_key_pair',
       'unit_apply_damage_lookup_roster_key_pair',

@@ -111,6 +111,28 @@ correspondence; healing effectiveness, actor roles, missile identity, target
 change, and gameplay effects remain unknown. A Replay without the needed missile
 route reports `PROFILE_UNAVAILABLE`, including in a mixed `PARTIAL` batch.
 
+## Native 0x049c byte vectors (exact KR 821)
+
+```powershell
+node src/cli.js decode "D:\Replays\example.rofl" --events anonymous_049c_packet --runtime-image "D:\Capture\LeagueOfLegends_16.19.821.7343.memory.bin" --event-jsonl-only --out-dir "work\native-049c"
+```
+
+`anonymous_049c_packet_candidates.jsonl` exposes exact native nested field bytes,
+the dynamic byte-vector length and hexadecimal bytes, plus
+`native_byte_vector_ascii_candidate` when the content is printable ASCII (an
+optional final NUL is reported separately). Nontext content remains opaque.
+Game and keyframe packets keep their original timestamps, raw parameters and
+packet references. Select the same capability name through `decodeSemanticReplay`.
+
+Long packet shapes previously hit an unsupported AVX instruction inside memset.
+The exact-image decoder now uses a pinned, bounded host-memory implementation of
+that fill operation. Packet deserialization still executes the captured native
+code; no receiver, game lookup or gameplay callback is substituted.
+
+This is an opt-in packet/vector candidate. Recognizable text does not establish
+a spell identifier, slot, owner, successful change, cast or effect. Consume the
+JSONL/API directly; this stream is not registered with saved `query-events`.
+
 ## API and batches
 
 ```javascript

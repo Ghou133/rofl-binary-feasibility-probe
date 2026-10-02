@@ -1,5 +1,42 @@
 # 16.19 development progress
 
+2026-10-02 numeric 0x049c continuation: the previous ChangeSlotSpellData-route
+stop-loss below is retained as historical negative evidence. The partial native
+failure was reproduced at exact image RVA `0x1a65492` (`vinsertf128`), inside an
+AVX memset implementation. A pinned host-memory fill at leaf `0x1a653c3` now
+implements that memory operation only; no packet decoder or game lookup is
+stubbed. The captured image file is unchanged. The prefix hash is
+`961ec6b7a19ad835ada16a4cd076ebd87c7038c770e0ca8db6cf0aa6b04b3d38`.
+An isolated-emulator test against the same image's native SSE path agrees for
+36 size/fill combinations including 0/33/47/256-byte fills, with untouched
+sentinels and matching return values.
+
+The numeric factory case `0xf0cfeb` allocates `0x38` bytes and calls constructor
+`0xe9a6c0`; its exact vtable `0x1ba8de8` binds deserializer `0x10d0d30`.
+142 representatives spanning 38 lengths and 71 game/keyframe shape pairs now
+return AL=1 with full consumption. Real native one-byte truncation and append
+controls reject acceptance/full-consumption in 142/142 cases each. All original
+failure evidence remains local; failures were not treated as invalid Replay data.
+
+Opt-in CLI/API capability `anonymous_049c_packet` exposes three anonymous nested
+field byte regions and the native dynamic byte vector, with a reversible printable
+ASCII presentation where available. This intentionally uses the numeric name:
+no field role or gameplay label is promoted from the historical route-name clue.
+All 11 original KR Replays returned `CANDIDATE`, exact image `MATCHED_USED`, zero
+framing errors: 107,059/107,059 fully consumed native packets, 106,071 printable
+ASCII candidates and 988 opaque vectors. The new route reuses the CLI strict scan
+and preserves original packet refs, stream tags, raw parameters and timestamps.
+Focused Node tests passed 13/13; two exact-image Python test methods passed with
+the existing image and representative corpus (zero skips). Without those optional
+inputs the native tests explicitly skip. These outputs do not establish a spell,
+slot, owner, successful change, cast or gameplay effect. The files remain local
+under `artifacts/resume-native-049c-batch/`.
+
+The preceding damage-role confirmation attempt was stopped at its actual input
+boundary: the existing capture manifest covers module memory only; independent
+packet-linked receiver heap or health observations are absent from that evidence.
+No live capture was attempted and no amount/role/fatal-packet semantics promoted.
+
 2026-10-02 damage continuation: opt-in `hero_damage_keyframe_intervals` now
 decodes four existing exact-821 cumulative counter candidates into adjacent
 participant observation windows through CLI/API. It preserves both packet refs,
