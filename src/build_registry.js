@@ -123,6 +123,8 @@ const setDimensionMissilePacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
 const anonymous049cPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_anonymous_049c_packet_candidate');
+const spellSlotRosterPair1619821 =
+  require('./decoders/rofl_16_19_821_spell_slot_change_roster_key_pair_candidate');
 const anonymous029cPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_anonymous_029c_packet_candidate');
 const anonymous029cRosterKeyPair1619821 =
@@ -664,6 +666,7 @@ const BUILD_PROFILES = deepFreeze({
       anonymous_029c_packet: 0x029c,
       anonymous_049c_packet: 0x049c,
       spell_slot_change_request: Object.freeze([0x049c,0x028e,0x0375]),
+      spell_slot_change_roster_key_pair: Object.freeze([0x049c,0x028e,0x0375,0x0089]),
       anonymous_029c_roster_key_pair: 0x029c,
       unit_apply_damage_roster_key_pair: 0x005f,
       unit_apply_damage_lookup_roster_key_pair: 0x005f,
@@ -825,6 +828,8 @@ const BUILD_PROFILES = deepFreeze({
         anonymous049cPacketCandidate1619821.ANONYMOUS_049C_PACKET_821_PROFILE,
       spell_slot_change_request:
         anonymous049cPacketCandidate1619821.SPELL_SLOT_CHANGE_REQUEST_821_PROFILE,
+      spell_slot_change_roster_key_pair:
+        spellSlotRosterPair1619821.SPELL_SLOT_CHANGE_ROSTER_KEY_PAIR_821_PROFILE,
       anonymous_029c_packet:
         anonymous029cPacketCandidate1619821.ANONYMOUS_029C_PACKET_CANDIDATE_PROFILE_821,
       anonymous_029c_roster_key_pair:
@@ -978,6 +983,8 @@ const BUILD_PROFILES = deepFreeze({
         anonymous049cPacketCandidate1619821.ANONYMOUS_049C_PACKET_821_PROFILE.evidence_status,
       spell_slot_change_request:
         anonymous049cPacketCandidate1619821.SPELL_SLOT_CHANGE_REQUEST_821_PROFILE.evidence_status,
+      spell_slot_change_roster_key_pair:
+        spellSlotRosterPair1619821.SPELL_SLOT_CHANGE_ROSTER_KEY_PAIR_821_PROFILE.evidence_status,
       anonymous_029c_packet:
         anonymous029cPacketCandidate1619821.ANONYMOUS_029C_PACKET_CANDIDATE_PROFILE_821.evidence_status,
       anonymous_029c_roster_key_pair:
@@ -1153,6 +1160,7 @@ const BUILD_PROFILES = deepFreeze({
       'anonymous_029c_packet',
       'anonymous_049c_packet',
       'spell_slot_change_request',
+      'spell_slot_change_roster_key_pair',
       'anonymous_029c_roster_key_pair',
       'unit_apply_damage_roster_key_pair',
       'unit_apply_damage_lookup_roster_key_pair',

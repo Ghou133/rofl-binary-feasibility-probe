@@ -155,6 +155,8 @@ const { decodeSetDimensionMissilePacketCandidates821 } =
   require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
 const { decodeAnonymous049cPacketCandidates821, decodeSpellSlotChangeRequestCandidates821 } =
   require('./decoders/rofl_16_19_821_anonymous_049c_packet_candidate');
+const { associateSpellSlotChangeRosterKeys821 } =
+  require('./decoders/rofl_16_19_821_spell_slot_change_roster_key_pair_candidate');
 const { decodeAnonymous029cPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_anonymous_029c_packet_candidate');
 const { associateAnonymous029cRosterKeyPair821 } =
@@ -2227,6 +2229,11 @@ function decode1619821(replay, profile, options = {}) {
     throw new TypeError('16.19 capabilities must be an array of nonempty names');
   }
   const capabilities = [...new Set(requested)];
+  if (capabilities.includes('spell_slot_change_roster_key_pair')) {
+    for (const source of ['spell_slot_change_request','hero_roster_metadata_bridge']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
   if (capabilities.includes('target_hero_roster_key_pair')) {
     for (const source of ['target_hero_packet', 'hero_roster_metadata_bridge']) {
       if (!capabilities.includes(source)) capabilities.push(source);
@@ -2732,6 +2739,7 @@ function decode1619821(replay, profile, options = {}) {
     anonymous_029c_packet: 'anonymous_029c_packet_candidates',
     anonymous_049c_packet: 'anonymous_049c_packet_candidates',
     spell_slot_change_request: 'spell_slot_change_request_candidates',
+    spell_slot_change_roster_key_pair: 'spell_slot_change_roster_key_pair_candidates',
     anonymous_029c_roster_key_pair: 'anonymous_029c_roster_key_pair_candidates',
     unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
     unit_apply_damage_lookup_roster_key_pair:
@@ -2851,6 +2859,12 @@ function decode1619821(replay, profile, options = {}) {
           'hero_death', 'hero_assist', 'hero_deaths_snapshot',
           'hero_champion_kills_snapshot', 'hero_assists_snapshot',
         ].map((name) => [name, decodeCapability(name)])));
+      } else if (capability === 'spell_slot_change_roster_key_pair') {
+        outcome = associateSpellSlotChangeRosterKeys821(replay, {
+          spellSlotChangeRequestOutcome:decodeCapability('spell_slot_change_request'),
+          heroRosterMetadataBridgeOutcome:decodeCapability('hero_roster_metadata_bridge'),
+          precollected:candidate821Scan,
+        });
       } else if (capability === 'target_hero_roster_key_pair') {
         outcome = associateTargetHeroRosterKeyPair821(replay, {
           targetHeroPacketOutcome: decodeCapability('target_hero_packet'),
@@ -2998,6 +3012,7 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'anonymous_029c_packet'
         || capability === 'anonymous_049c_packet'
         || capability === 'spell_slot_change_request'
+        || capability === 'spell_slot_change_roster_key_pair'
         || capability === 'anonymous_029c_roster_key_pair'
         || capability === 'unit_apply_damage_roster_key_pair'
         || capability === 'unit_apply_damage_lookup_roster_key_pair'
@@ -3044,6 +3059,7 @@ function decode1619821(replay, profile, options = {}) {
   for (const [capability, result] of Object.entries(capabilityResults)) {
     if (result.status !== 'CANDIDATE') continue;
     if (capability === 'hero_roster_metadata_bridge'
+        || capability === 'spell_slot_change_roster_key_pair'
         || capability === 'missile_key_cooccurrence'
         || capability === 'params_heal_roster_key_pair'
         || capability === 'target_hero_roster_key_pair'

@@ -8,6 +8,10 @@ index, requested name/hash or byte-field write, with actual receiver and effect
 explicitly unobserved.
 Use `--events spell_slot_change_request` for the independently pinned regular,
 Summoner and OwnerOnly family, including gated byte and word-vector requests.
+Use `--events spell_slot_change_roster_key_pair` to place matched requests beside
+candidate participant/champion/team metadata through exact full header-key
+equality. [Association scope and remaining inputs](docs/SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md)
+explain why this does not confirm the packet actor or successful application.
 
 精确版本绑定的《英雄联盟》`.rofl` 回放研究工具：解析容器和数据包，输出带来源、证据等级和明确边界的语义事实。
 

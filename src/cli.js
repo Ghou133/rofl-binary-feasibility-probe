@@ -1336,6 +1336,12 @@ function parseOne1619(replay, options, started) {
       if (!selected821.includes(source)) selected821.push(source);
     }
   }
+  if (options.semantic !== false && options.events?.includes('spell_slot_change_roster_key_pair')) {
+    for (const source of ['spell_slot_change_request','hero_death','hero_assist',
+      'hero_deaths_snapshot','hero_champion_kills_snapshot','hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
   if (options.semantic !== false && Array.isArray(options.events)
       && options.events.includes('target_hero_roster_key_pair')) {
     for (const source of ['target_hero_packet', 'hero_death', 'hero_assist',
@@ -1444,6 +1450,8 @@ function parseOne1619(replay, options, started) {
   };
   if (options.semantic !== false) {
     const requested = [...new Set([...(options.events ?? []),
+      ...(options.events?.includes('spell_slot_change_roster_key_pair')
+        ? ['spell_slot_change_request','hero_roster_metadata_bridge'] : []),
       ...(options.events?.includes('missile_key_cooccurrence')
         ? ['force_create_missile_packet', 'change_missile_target_packet'] : []),
       ...(options.events?.includes('target_hero_roster_key_pair')
@@ -2788,6 +2796,7 @@ function capabilityQuery(replay, options = {}) {
              || capability === 'anonymous_029c_packet'
              || capability === 'anonymous_049c_packet'
              || capability === 'spell_slot_change_request'
+             || capability === 'spell_slot_change_roster_key_pair'
              || capability === 'anonymous_029c_roster_key_pair'
             || capability === 'unit_apply_damage_packet'
             || capability === 'show_health_bar_packet'
@@ -2839,6 +2848,7 @@ function capabilityQuery(replay, options = {}) {
             error: assessment.error ?? assessment.missing_input ?? null })) }
         : profile.game_version === '16.19.821.7343'
           && (capability === 'hero_roster_metadata_bridge'
+            || capability === 'spell_slot_change_roster_key_pair'
             || capability === 'params_heal_roster_key_pair'
             || capability === 'target_hero_roster_key_pair'
             || capability === 'set_spell_level_roster_key_pair'
@@ -2980,7 +2990,7 @@ function capabilityQuery(replay, options = {}) {
           ? [dependencies[0], options.runtimeImage
             ? fileInputDependency('exact_runtime_image', options.runtimeImage)
             : { name: 'exact_runtime_image', status: 'MISSING', path: null },
-          ...(['unit_apply_damage_packet', 'show_health_bar_packet', 'anonymous_049c_packet', 'spell_slot_change_request',
+          ...(['unit_apply_damage_packet', 'show_health_bar_packet', 'anonymous_049c_packet', 'spell_slot_change_request', 'spell_slot_change_roster_key_pair',
             'unit_apply_damage_roster_key_pair',
             'unit_apply_damage_lookup_roster_key_pair',
             'unit_apply_damage_lookup2c_roster_key_pair'].includes(capability)
@@ -3642,6 +3652,7 @@ function capabilityQuery(replay, options = {}) {
               'anonymous_029c_packet_candidates',
             anonymous_049c_packet: 'anonymous_049c_packet_candidates',
             spell_slot_change_request: 'spell_slot_change_request_candidates',
+            spell_slot_change_roster_key_pair: 'spell_slot_change_roster_key_pair_candidates',
             anonymous_029c_roster_key_pair:
               'anonymous_029c_roster_key_pair_candidates',
             unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',

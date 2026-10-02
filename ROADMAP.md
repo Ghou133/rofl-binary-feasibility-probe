@@ -1,5 +1,18 @@
 # 开发路线与待补全项
 
+## Active 16.19 continuation, 2026-10-02
+
+The authorized exact-821 development branch now provides native slot-change
+family requests and a full-header-key candidate roster association through the
+CLI/API. [Current scope and remaining inputs](docs/SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md)
+record the useful association completed with existing offline inputs. Receiver
+application, gate outcomes and gameplay field/slot labels remain pending an
+independently anchored offline receiver/state witness; the module-only image
+cannot supply it. Preserve the runnable release and avoid repeating missing-state
+research. Old-client reruns are not a prerequisite to this branch.
+
+The historical roadmap below remains a record of its original baseline.
+
 更新：2026-09-23。这里描述的是后续工作入口和验收条件，不表示任务已实施。当前仓库状态为 `SOURCE_FROZEN_DURING_MIGRATION`；长期开发进入 `lol-inference-lab/replay/`，本仓库保留为可比较的源码快照。任何跨项目接口、能力等级或资产状态变更先按 V2 架构门禁处理。
 
 ## 当前基线

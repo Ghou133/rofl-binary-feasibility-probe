@@ -31,6 +31,13 @@ plus exact `0x028e` Summoner and `0x0375` OwnerOnly variants. OwnerOnly words ar
 native-copied raw bit presentations with unknown type/units; its observed data
 is keyframe-only. Preserve separate route/class identities and request/effect
 boundaries when extending this family.
+`spell_slot_change_roster_key_pair` associates complete fresh requests with the
+same Replay's ten-way candidate roster using only full-u32 header equality.
+It retains both source references and request intent; it does not promote packet
+actor, live receiver, application or Q/W/E/R identity. Read
+[the association and remaining-input assessment](docs/SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md)
+before continuing this branch. The current module image has no receiver heap;
+do not repeat that missing-state research or require old-client reruns.
 
 Container fixes belong in `src/rofl.js`; raw analysis in `src/analysis.js`; command
 orchestration in `src/cli.js`; execution-scoped reports in `src/cli_report.js`;

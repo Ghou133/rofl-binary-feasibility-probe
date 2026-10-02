@@ -150,6 +150,15 @@ The owner class suffix does not prove a recipient; word type/units, actor and
 actual application remain unknown. The original `anonymous_049c_packet`
 selection retains only `0x049c`.
 
+For a candidate participant/champion/team/role context beside each matched
+request, use `--events spell_slot_change_roster_key_pair` with the same image.
+Read `spell_slot_change_roster_key_pair_candidates.jsonl`; the complete request
+and ten-key roster dependency JSONL files are also emitted. Matching requires
+full-u32 header equality, never low-byte or `+0x100` aliases. Nonroster requests
+remain in the complete request stream. This is a candidate key association,
+not actor/receiver confirmation, applied state or a Q/W/E/R mapping. See
+[association details and remaining inputs](SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md).
+
 ## API and batches
 
 ```javascript

@@ -1,5 +1,21 @@
 # 当前验证状态
 
+## Active exact-821 continuation, 2026-10-02
+
+`spell_slot_change_roster_key_pair` passed 37 focused Node tests (zero
+failures/skips), including native-family, roster-bridge and shared-scan regression
+coverage. Fresh CLI processing of all 11 existing KR 16.19.821.7343 Replays used
+the pinned runtime image, with zero framing errors: 115,290 complete requests,
+94,390 full-key candidate roster associations and 20,900 unmatched requests.
+The complete dependency output and matched request/roster source fields were
+compared row by row. No packet actor, live receiver or application was promoted.
+The native decoder is unchanged from the preceding stage (19 Node and 6
+actual-image Python methods then passed); no full public graph or old-client
+regression was repeated in this stage. See
+[the current evidence boundary](docs/SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md).
+
+The historical validation entries below retain their original dates and scopes.
+
 ## 2026-09-23 公开源码快照检查
 
 本节是公开准备时的新运行结果，不替代下文 2026-08-21 的 exact-build 语义 attestation，也不表示从公开仓库重建了原始语料。
