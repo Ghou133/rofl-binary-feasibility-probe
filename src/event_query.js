@@ -10,6 +10,7 @@ const { finished } = require('node:stream/promises');
 const { isDeepStrictEqual } = require('node:util');
 const { parseReplayFile, walkBlocks } = require('./rofl');
 const { decodeSemanticReplay } = require('./semantic_api');
+const damageFilters = require('./damage_query_filters');
 const { PARAMS_HEAL_PACKET_CANDIDATE_PROFILE_821 } =
   require('./decoders/rofl_16_19_821_params_heal_packet_candidate');
 const { PARAMS_HEAL_ROSTER_KEY_PAIR_821_PROFILE } =
@@ -12366,6 +12367,7 @@ async function stageVerifiedRows(produce, emitLine) {
 
 async function streamEventQuery(prepared, options, emitLine) {
   if (options.verifySource || slotChangeQuery.supports(prepared.eventKey)
+      || prepared.eventKey === 'unit_apply_damage_packet_candidates'
       || damageIntervalQuery.supports(prepared.eventKey)
       || damageWindowQuery.supports(prepared.eventKey)
       || prepared.capabilityResult?.profile_id === COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id) {
@@ -12378,6 +12380,7 @@ async function streamEventQuery(prepared, options, emitLine) {
 
 async function streamEventQueryUnstaged(prepared, options, emitLine) {
   validateFilters(options);
+  damageFilters.validate(options,prepared.eventKey,(code,message)=>{throw new EventQueryError(code,message);});
   if (damageWindowQuery.supports(prepared.eventKey)) {
     return damageWindowQuery.stream(prepared,options,emitLine);
   }
@@ -12631,7 +12634,9 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
   if (spellLevelCallbackRequested) prepareSetSpellLevelCallbackFields(prepared);
   const damageLookupKeysRequested = damageLookupKey24 != null
     || damageLookupKey2c != null;
-  const damagePacketCheck = damageCallbackF32Available || damageLookupKeysRequested
+  const savedDamagePacketCheck = prepared.eventKey === 'unit_apply_damage_packet_candidates'
+    && prepared.capabilityStatus === 'CANDIDATE';
+  const damagePacketCheck = savedDamagePacketCheck || damageCallbackF32Available || damageLookupKeysRequested
     || damageCallbackU32At10 != null || damageCallbackF32At18Raw
     || damageCallbackU32At1c != null
     || (sourceReplayVerification
@@ -12640,7 +12645,7 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
   if (damageCallbackF32At18Raw) prepareUnitApplyDamageF32At18Raw(prepared);
   if (damageCallbackU32At10 != null) prepareUnitApplyDamageCallbackU32At10(prepared);
   if (damageLookupKeysRequested) prepareUnitApplyDamageLookupKeys(prepared);
-  else if (damageCallbackF32Available
+  else if (savedDamagePacketCheck || damageCallbackF32Available
       || (sourceReplayVerification
         && prepared.eventKey === 'unit_apply_damage_packet_candidates')) {
     prepareUnitApplyDamageCallbackF32(prepared);
@@ -13819,7 +13824,7 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
       spell_level_callback_checked_count: spellLevelCallbackCheckedCount,
       spell_level_callback_unavailable_count: 0,
     } : {}),
-    ...(damageCallbackF32Available ? {
+    ...(damagePacketCheck ? {
       damage_callback_f32_available_count: damageCallbackF32AvailableCount,
       damage_callback_f32_unavailable_count: damageCallbackF32UnavailableCount,
       damage_callback_f32_checked_count: scannedCount,
@@ -13918,6 +13923,7 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
 
 async function streamBatchEventQuery(prepared, options, emitLine) {
   if (options.verifySource || slotChangeQuery.supports(prepared.eventKey)
+      || prepared.eventKey === 'unit_apply_damage_packet_candidates'
       || damageIntervalQuery.supports(prepared.eventKey)
       || damageWindowQuery.supports(prepared.eventKey)
       || prepared.replays.some(row=>row.prepared?.capabilityResult?.profile_id
@@ -13931,6 +13937,7 @@ async function streamBatchEventQuery(prepared, options, emitLine) {
 
 async function streamBatchEventQueryUnstaged(prepared, options, emitLine) {
   validateFilters(options);
+  damageFilters.validate(options,prepared.eventKey,(code,message)=>{throw new EventQueryError(code,message);});
   if (options.sourceReplay != null) {
     throw new EventQueryError('UNSUPPORTED_SOURCE_REPLAY_OVERRIDE',
       '--source-replay applies to one Replay artifact; batch verification uses each saved source path.');
@@ -14109,7 +14116,7 @@ async function streamBatchEventQueryUnstaged(prepared, options, emitLine) {
         || options.spellLevelClampedScalar != null) {
       spellLevelCallbackCheckedCount += summary.spell_level_callback_checked_count;
     }
-    if (options.damageCallbackF32Available) {
+    if (summary.damage_callback_f32_checked_count != null) {
       damageCallbackF32CheckedCount += summary.damage_callback_f32_checked_count;
       damageCallbackF32AvailableCount += summary.damage_callback_f32_available_count;
       damageCallbackF32UnavailableCount += summary.damage_callback_f32_unavailable_count;
@@ -14192,7 +14199,7 @@ async function streamBatchEventQueryUnstaged(prepared, options, emitLine) {
               summary.spell_level_callback_checked_count,
             spell_level_callback_unavailable_count: 0,
           }),
-      ...(options.damageCallbackF32Available ? {
+      ...(summary.damage_callback_f32_checked_count != null ? {
         damage_callback_f32_checked_count: summary.damage_callback_f32_checked_count,
         damage_callback_f32_available_count: summary.damage_callback_f32_available_count,
         damage_callback_f32_unavailable_count: summary.damage_callback_f32_unavailable_count,
@@ -14337,7 +14344,7 @@ async function streamBatchEventQueryUnstaged(prepared, options, emitLine) {
             replayResults.filter((replay) =>
               replay.code === 'SPELL_LEVEL_CALLBACK_UNAVAILABLE').length,
         }),
-    ...(options.damageCallbackF32Available ? {
+    ...(options.damageCallbackF32Available || prepared.eventKey === 'unit_apply_damage_packet_candidates' ? {
       damage_callback_f32_checked_count: damageCallbackF32CheckedCount,
       damage_callback_f32_available_count: damageCallbackF32AvailableCount,
       damage_callback_f32_unavailable_count: damageCallbackF32UnavailableCount,

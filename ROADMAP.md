@@ -9,7 +9,9 @@ strict open endpoints, anonymous key roles and rotated-key controls.
 The next Oct-7 increment completes the missing saved damage interval query surface,
 including full original-source re-decode without a runtime image. [Current use](docs/DAMAGE_INTERVAL_QUERY_16_19_821.md)
 is available independently of receiver heap. Native packet/window comparison remains
-decode/API-only; true per-hit damage/heal/shield effects still need observed affected state.
+available through saved CLI/API queries and numeric screens; true per-hit
+damage/heal/shield effects still need observed affected state. Unfiltered native
+damage queries now validate complete fields/counts/digests before emitting rows.
 
 2026-10-07: native cooldown V2 packet arguments and full source queries now work
 without synthetic receiver evidence. [Remaining decisive inputs](docs/COOLDOWN_REQUEST_FIELDS_16_19_821.md)

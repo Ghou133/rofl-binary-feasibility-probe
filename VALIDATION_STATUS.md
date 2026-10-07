@@ -2,6 +2,17 @@
 
 ## Active exact-821 continuation, 2026-10-02
 
+The final Oct-7 damage query/filter regression checked 52 focused cases: 51 passed,
+zero failed; one historical saved-V3 private fixture was explicitly skipped.
+All 24 current interval/window/filter cases ran with the exact image, zero skips.
+Unfiltered native packet queries now validate complete profile fields, ordered input
+digest and source counts, staging single/batch output even without native filters.
+The real Replay's 64,824 packets passed this strengthened saved validation; its
+320 windows produced 292 positive TOTAL_DAMAGE_TAKEN / lookup_0x24 / 0.1 matches.
+The 11-Replay static batch checked all 3,160 intervals under global limit=1 and
+found 2,479 TOTAL_DAMAGE_TAKEN deltas >=100. These are numeric candidate screens,
+not confirmed target/effective-damage observations. No new heap capture was executed.
+
 Oct-7 packet/window query: 19 focused interval/window tests passed without skips.
 One real Replay's 64,824 native damage requests and 320 sampled windows passed
 full source reproduction; 20 endpoint and 2,073 outside-window packets remain

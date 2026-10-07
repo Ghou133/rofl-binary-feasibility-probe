@@ -5,6 +5,7 @@ const readline = require('node:readline');
 const {isDeepStrictEqual} = require('node:util');
 const {parseReplayFile} = require('./rofl');
 const {decodeSemanticReplay} = require('./semantic_api');
+const damageFilters = require('./damage_query_filters');
 const {DAMAGE_PACKET_KEYFRAME_WINDOW_PROFILE_821: PROFILE,compareDamagePacketKeyframeWindows821: compare} =
   require('./decoders/rofl_16_19_821_damage_window_reconciliation_candidate');
 const {UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: PACKET,
@@ -16,21 +17,6 @@ const SOURCE_EVENTS = {unit_apply_damage_packet:'unit_apply_damage_packet_candid
 const RESULT_KEYS = ['profile_id','replay_sha256','required_capabilities','known_limits','status',
   'native_packet_count','sampled_counter_window_count','exact_endpoint_time_packets_excluded',
   'packets_outside_sampled_windows','positive_counter_comparisons','event_count'];
-const PACKET_ROW_KEYS = ['event_type','game_version','patch','build_profile','replay_sha256','replay_time_ms',
-  'raw_param','packet_name_candidate','header_selector_bits_24_26','header_selector_bits_0_2',
-  'header_selector_bits_3_5','header_selector_bits_6_8','native_callback_u32_0x10_candidate',
-  'native_callback_u32_0x10_encoded_bytes_hex','native_callback_u32_0x10_source',
-  'native_callback_f32_0x18_candidate','native_callback_f32_0x18_encoded_bytes_hex',
-  'native_callback_f32_0x18_source','native_callback_f32_0x18_raw_offset','native_callback_f32_0x18_raw_bytes_hex',
-  'callback_f32_0x20_candidate','callback_f32_0x20_status','callback_f32_0x20_raw_bytes_hex',
-  'native_callback_f32_0x20_candidate','native_callback_f32_0x20_source','native_callback_f32_0x20_raw_offset',
-  'native_callback_f32_0x20_raw_bytes_hex','native_callback_lookup_key_u32_0x24_candidate',
-  'native_callback_lookup_key_0x24_encoded_bytes_hex','native_callback_lookup_key_u32_0x2c_candidate',
-  'native_callback_lookup_key_0x2c_encoded_bytes_hex','native_callback_lookup_key_0x24_raw_param_relation',
-  'semantic_effect_status','confidence','semantic_status','raw_packet_ref'];
-const PACKET_V6_KEYS = [...PACKET_ROW_KEYS,'header_selector_bits_12_14','native_callback_u32_0x1c_candidate',
-  'native_callback_u32_0x1c_encoded_bytes_hex','native_callback_u32_0x1c_source',
-  'native_callback_u32_0x1c_raw_call_rva','native_callback_u32_0x1c_raw_offset','native_callback_u32_0x1c_raw_bytes_hex'];
 const count = value => Number.isSafeInteger(value) && value >= 0;
 const shape = (value,keys) => value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).length === keys.length && keys.every(key=>Object.hasOwn(value,key));
@@ -118,7 +104,7 @@ function createDamageWindowQuery({EventQueryError,prepareEventQueryFromDocuments
   }
 
   async function stream(prepared,options,emitLine) {
-    const allowed = new Set(['fromMs','toMs','participant','rawParam','limit','verifySource','sourceReplay','runtimeImage','pythonExecutable']);
+    const allowed = new Set(['fromMs','toMs','participant','rawParam','limit','verifySource','sourceReplay','runtimeImage','pythonExecutable',...damageFilters.FILTER_KEYS]);
     for (const [key,value] of Object.entries(options)) {
       if (!allowed.has(key) && value != null && value !== false) fail('UNSUPPORTED_FILTER',key+' is not supported on damage packet/window comparisons.');
     }
@@ -131,12 +117,6 @@ function createDamageWindowQuery({EventQueryError,prepareEventQueryFromDocuments
       const source = prepared.damageWindowSources[capability], rows = [];
       await streamEventQuery(source,{},line=>{
         const row = JSON.parse(line);
-        if (capability==='unit_apply_damage_packet' && (!shape(row,
-          source.capabilityResult.profile_id===PACKET_V6.id?PACKET_V6_KEYS:PACKET_ROW_KEYS)
-          || row.semantic_effect_status!=='UNKNOWN' || row.confidence!=='CANDIDATE'
-          || row.semantic_status!==PACKET.evidence_status)) {
-          fail('INVALID_EVENT_ROW','Native damage dependency fields or effect boundary differ.');
-        }
         if (fresh && !isDeepStrictEqual(row,normalizeReplaySourcePaths(fresh.events[SOURCE_EVENTS[capability]][rows.length],prepared.sourcePath??null))) {
           fail('SOURCE_PROVENANCE_MISMATCH','Complete source dependency row differs: '+capability+' line '+(rows.length+1)+'.');
         }
@@ -171,7 +151,8 @@ function createDamageWindowQuery({EventQueryError,prepareEventQueryFromDocuments
         if ((options.fromMs!=null && row.replay_time_ms<options.fromMs)
             || (options.toMs!=null && row.replay_time_ms>options.toMs)
             || (options.participant!=null && row.participant_id_candidate!==options.participant)
-            || (options.rawParam!=null && rawParam!==options.rawParam)) continue;
+            || (options.rawParam!=null && rawParam!==options.rawParam)
+            || !damageFilters.matches(row,options)) continue;
         matched++;
         if (options.limit==null || emitted<options.limit) {await emitLine(line+'\n');emitted++;}
       }
@@ -186,7 +167,7 @@ function createDamageWindowQuery({EventQueryError,prepareEventQueryFromDocuments
       scanned_count:scanned,matched_count:matched,emitted_count:emitted,rows_unmodified:true,
       packet_time_window:'STRICT_OPEN_ENDPOINTS',semantic_effect_status:'UNKNOWN',
       filters:{from_ms:options.fromMs??null,to_ms:options.toMs??null,participant:options.participant??null,
-        raw_param:options.rawParam??null,limit:options.limit??null}};
+        raw_param:options.rawParam??null,limit:options.limit??null,...damageFilters.summary(options)}};
   }
   return {supports,association,prepare,stream};
 }

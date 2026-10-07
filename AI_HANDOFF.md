@@ -8,6 +8,12 @@ create a second protocol authority.
 
 ## Start here
 
+The completed follow-up adds cumulative-counter thresholds and anonymous-window
+error screens to both CLI/API, preserving fractional/zero thresholds and unknown
+roles. It also fixes unfiltered native damage queries skipping full saved-field
+validation: every candidate packet now checks its complete native fields/digest
+before single/batch output is released. See the comparison guide for API names.
+
 The next Oct-7 increment adds [saved packet/window comparison queries](docs/DAMAGE_WINDOW_QUERY_16_19_821.md),
 recomputing the complete native packet and sampled-interval dependencies. A real
 Replay's 64,824 native packets and 320 windows passed complete source reproduction.

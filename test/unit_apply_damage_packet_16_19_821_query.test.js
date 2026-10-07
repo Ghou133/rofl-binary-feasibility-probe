@@ -913,6 +913,50 @@ test('query-events rejects a changed ordered native input digest after scanning 
   assert.equal(fs.existsSync(output), false);
 });
 
+test('unfiltered saved queries retain all V1/V6 shapes and validate complete native counts', async (t) => {
+  for (const [rows, legacyAvailable] of [[[row(0), row(1, OTHER_PACKET)], 1],
+    [[v6Row(0), v6Row(1, RAW_U32_1C_PACKET)], 0]]) {
+    const saved = fixture(t, rows), emitted = [];
+    const summary = await streamEventQuery(prepareEventQuery(saved.directory, EVENT),
+      {}, line => emitted.push(line));
+    assert.deepEqual(emitted.map(line => line.trimEnd()), saved.lines);
+    assert.equal(summary.scanned_count, 2);
+    assert.equal(summary.damage_callback_f32_available_count, legacyAvailable);
+    assert.equal(summary.damage_callback_f32_unavailable_count, 2 - legacyAvailable);
+  }
+});
+
+test('unfiltered saved CLI/API reject later native fields without emitting a limited prefix', async (t) => {
+  for (const mutate of [
+    entry => { entry.native_callback_u32_0x1c_encoded_bytes_hex = '00000000'; },
+    entry => { entry.native_callback_lookup_key_u32_0x24_candidate += 1; },
+    entry => { entry.semantic_effect_status = 'APPLIED'; },
+  ]) {
+    const rows = [v6Row(0), v6Row(1, RAW_U32_1C_PACKET)];
+    mutate(rows[1]);
+    const saved = fixture(t, rows), emitted = [];
+    await assert.rejects(streamEventQuery(prepareEventQuery(saved.directory, EVENT),
+      { limit: 1 }, line => emitted.push(line)), { code: 'INVALID_EVENT_ROW' });
+    assert.deepEqual(emitted, []);
+    const result = command(saved.directory, '--limit', '1');
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(result.stdout, '');
+    assert.equal(JSON.parse(result.stderr).code, 'INVALID_EVENT_ROW');
+  }
+});
+
+test('unfiltered saved queries reject the final input digest before any API output', async (t) => {
+  const saved = fixture(t, [v6Row(0), v6Row(1, RAW_U32_1C_PACKET)]);
+  const file = path.join(saved.directory, 'semantic_run.json');
+  const semantic = JSON.parse(fs.readFileSync(file, 'utf8'));
+  semantic.capability_results[CAPABILITY].native_input_sha256 = '0'.repeat(64);
+  fs.writeFileSync(file, JSON.stringify(semantic));
+  const emitted = [];
+  await assert.rejects(streamEventQuery(prepareEventQuery(saved.directory, EVENT),
+    { limit: 1 }, line => emitted.push(line)), { code: 'EVENT_COUNT_MISMATCH' });
+  assert.deepEqual(emitted, []);
+});
+
 test('CLI rejects the UnitApplyDamage filter for unrelated event keys', (t) => {
   const { directory } = fixture(t, [row(0)]);
   const unrelated = spawnSync(process.execPath,

@@ -67,13 +67,20 @@ test('late comparison sum/control/role edits cannot bypass limits or saved depen
   }
 });
 
-test('late packet and sampled counter dependency edits are checked even for zero matched windows',native,t=>{
+test('late packet and sampled counter dependency edits are checked even for zero matched windows',native,async t=>{
   for(const [event,edit] of [
     ['unit_apply_damage_packet_candidates',row=>row.semantic_effect_status='APPLIED'],
+    ['unit_apply_damage_packet_candidates',row=>row.native_callback_lookup_key_u32_0x24_candidate++],
     [INTERVAL,row=>row.counters.TOTAL_DAMAGE_TAKEN.endpoint_delta_f32_candidate++]]){
     const f=fixture(t),file=path.join(f.dir,event+'.jsonl'),rows=readRows(file);
     edit(rows.at(-1));fs.writeFileSync(file,rows.map(JSON.stringify).join('\n')+'\n');refresh(f);
     error(query(f,'--from-ms','999999','--limit','1'),'INVALID_EVENT_ROW');
+    if(event==='unit_apply_damage_packet_candidates'){
+      const emitted=[];
+      await assert.rejects(streamBatchEventQuery(prepareBatchEventQuery(f.run,event),
+        {limit:1},line=>emitted.push(line)),{code:'INVALID_EVENT_ROW'});
+      assert.deepEqual(emitted,[]);
+    }
   }
 });
 

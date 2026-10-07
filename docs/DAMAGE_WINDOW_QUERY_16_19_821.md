@@ -34,7 +34,7 @@ not a successful live receiver call or health effect. Missing/wrong images,
 incomplete dependencies, stale manifest hashes, false role/effect fields or
 late row corruption cannot produce partial output.
 
-Supported initial filters are candidate `--participant`, complete candidate
+Supported filters are candidate `--participant`, complete candidate
 hero key `--raw-param`, inclusive current-endpoint `--from-ms`/`--to-ms`,
 and `--limit`. Source path overrides work on a single Replay artifact and only
 normalize paths; full SHA/build/positions/values remain checked. A supplied but
@@ -51,9 +51,16 @@ control and 0.1 screen are evidence comparisons, not acceptance criteria.
 Fresh validation: one existing real KR Replay's **64,824** native damage packets
 and **320** sampled intervals passed complete-source reproduction. **20** exact
 endpoint packets and **2,073** outside-window packets remained excluded.
-Final saved-query reconciliation additionally checked every current native row
-schema/effect marker. 19 focused interval/window query tests passed without
-failures/skips, including V5/V6, source overrides, missing image/dependencies,
+Final saved-query reconciliation additionally checks every protected native field,
+input digest, profile-specific source count and effect marker. Native packet queries
+perform this full validation by default, including queries without native filters;
+they retain all rows instead of selecting only the legacy available-f32 shape.
+Both single and batch queries stage output until the complete validation passes.
+The historical summary's `damage_callback_f32_available_count` still describes
+the narrow legacy saved-f32 shape; it does not count availability of the native
+V2+ anonymous f32 field. On the real Replay this is 684 legacy-shape rows and
+64,140 other shapes, while all 64,824 native packets passed complete validation.
+Focused interval/window query tests cover V5/V6, source overrides, missing image/dependencies,
 coherent position/reference substitution, full-stream late falsification and
 checked one-keyframe zero comparisons. Fixtures around existing observed packet
 bodies are generated protocol tests, not live-state evidence. Prior 182,482
@@ -62,3 +69,26 @@ cooldown requests and the full old-client graph were not rerun.
 ```powershell
 npm run test:16-19-damage-windows
 ```
+
+Counter and anonymous-sum screens are now available on unchanged candidate rows:
+
+```powershell
+node src/cli.js query-events "work\damage-comparison" --event hero_damage_packet_keyframe_window_candidates --damage-counter TOTAL_DAMAGE_TAKEN --damage-min-delta 5.25 --limit 10
+node src/cli.js query-events "work\damage-comparison" --event hero_damage_packet_keyframe_window_candidates --damage-counter TOTAL_DAMAGE_TAKEN --window-key lookup_0x24 --window-max-error 0.1 --limit 10
+```
+
+`--damage-changed` selects any positive delta among the four cumulative counters.
+`--damage-counter` selects a positive delta of the named counter; adding
+`--damage-min-delta` changes this to an inclusive threshold (explicit zero is valid).
+Names are `TOTAL_DAMAGE_DEALT_TO_CHAMPIONS`, `TOTAL_DAMAGE_DEALT`,
+`TOTAL_DAMAGE_TAKEN`, and `TOTAL_DAMAGE_TAKEN_FROM_CHAMPIONS`.
+`--window-key` requires a nonempty anonymous group for `lookup_0x24` or `lookup_0x2c`.
+`--window-max-error` also requires a counter and keeps inclusive absolute differences
+between the anonymous sum and that counter delta. Decimal thresholds retain normal
+double precision; they are not rounded to on-wire f32 values. All requested screens
+combine with AND and run after complete validation, even if no rows match.
+API options are `damageChanged`, `damageCounter`, `damageMinDelta`, `windowKey`,
+and `windowMaxError`; summaries report their values. The real Replay has 292 windows
+passing the positive `TOTAL_DAMAGE_TAKEN` / `lookup_0x24` / 0.1 screen. A small
+difference does not identify a target or validate effective damage; rotated controls
+and unknown roles remain in each returned row.

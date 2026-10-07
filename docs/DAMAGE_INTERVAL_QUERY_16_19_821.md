@@ -23,6 +23,13 @@ The query filters inclusive `--from-ms`/`--to-ms` by the **current keyframe
 endpoint**, not an invented change time or window-overlap rule. `--participant`
 selects the candidate participant; `--raw-param` compares the complete observed
 hero header u32. It accepts `--limit`, `--output` and `--verify-source`.
+`--damage-changed` selects any positive delta of the four counters;
+`--damage-counter TOTAL_DAMAGE_TAKEN` selects that counter's positive deltas.
+Adding `--damage-min-delta 5.25` applies an inclusive threshold; explicit zero
+includes zero deltas. API names are `damageChanged`, `damageCounter` and
+`damageMinDelta`. Thresholds stay double precision, and full validation still
+checks every row before filtered output. Packet/window key/error screens belong
+only to the comparison stream and are rejected here.
 Combat-role, native packet, inventory and slot-change filters are unsupported.
 
 ```javascript

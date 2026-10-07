@@ -5,6 +5,7 @@ const readline = require('node:readline');
 const {isDeepStrictEqual} = require('node:util');
 const {parseReplayFile} = require('./rofl');
 const {decodeSemanticReplay} = require('./semantic_api');
+const damageFilters = require('./damage_query_filters');
 const {DAMAGE_KEYFRAME_INTERVALS_821_PROFILE: PROFILE} =
   require('./decoders/rofl_16_19_821_damage_keyframe_intervals_candidate');
 const {decodeHeroDamageFieldBytes821} =
@@ -191,7 +192,7 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
   }
 
   async function stream(prepared,options,emitLine) {
-    const allowed = new Set(['fromMs','toMs','participant','rawParam','limit','verifySource','sourceReplay']);
+    const allowed = new Set(['fromMs','toMs','participant','rawParam','limit','verifySource','sourceReplay',...damageFilters.FILTER_KEYS]);
     for (const [key,value] of Object.entries(options)) {
       if (!allowed.has(key) && value != null && value !== false) fail('UNSUPPORTED_FILTER',key+' is not supported on sampled damage intervals.');
     }
@@ -218,7 +219,8 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
         if ((options.fromMs != null && row.replay_time_ms < options.fromMs)
             || (options.toMs != null && row.replay_time_ms > options.toMs)
             || (options.participant != null && row.participant_id_candidate !== options.participant)
-            || (options.rawParam != null && row.hero_raw_param !== options.rawParam)) continue;
+            || (options.rawParam != null && row.hero_raw_param !== options.rawParam)
+            || !damageFilters.matches(row,options)) continue;
         matched++;
         if (options.limit == null || emitted < options.limit) {await emitLine(line+'\n');emitted++;}
       }
@@ -238,7 +240,7 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
       source_provenance_status:verified?'SOURCE_REPLAY_VERIFIED':'SAVED_ONLY_UNVERIFIED',
       ...(verified?{source_replay:verified.source}:{}),
       filters:{from_ms:options.fromMs??null,to_ms:options.toMs??null,participant:options.participant??null,
-        raw_param:options.rawParam??null,limit:options.limit??null}};
+        raw_param:options.rawParam??null,limit:options.limit??null,...damageFilters.summary(options)}};
   }
   return {supports,prepare,stream};
 }

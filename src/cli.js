@@ -8,6 +8,7 @@ const path = require('node:path');
 const { finished } = require('node:stream/promises');
 const { Worker } = require('node:worker_threads');
 const { rawAnchorChainStatus, renderAcceptanceReport } = require('./cli_report');
+const damageQueryFilters = require('./damage_query_filters');
 const { resolveBuildProfile } = require('./build_registry');
 const {
   analyzeReplayWithCandidateRoutes,
@@ -317,6 +318,11 @@ Options:
   --killer-participant <1..10>  Candidate killer in exact-821 death, assist or episode rows
   --assisting-participant <1..10>  Member of exact-821 assist or episode candidate list
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
+  --damage-changed             Only sampled intervals with at least one positive counter delta
+  --damage-counter <field>     Select positive deltas of an exact-821 cumulative counter candidate
+  --damage-min-delta <number>  Inclusive nonnegative threshold; requires --damage-counter (zero valid)
+  --window-key <lookup_0x24|lookup_0x2c>  Comparison windows with packets in this anonymous key group
+  --window-max-error <number>  Inclusive absolute sum-minus-delta screen; requires key and counter
   --slot-change-index <0..255>  Internal slot index on exact-821 slot requests/roster associations
   --slot-change-operation <1|2|6|7>  Exact observed callback operation selector on those streams
   --contextual-situation <text>  Exact UTF-8 contextual situation string on an 821 packet candidate
@@ -429,6 +435,11 @@ function parseArgs(argv) {
     slotChangeIndex: null,
     slotChangeOperation: null,
     damageCallbackF32Available: false,
+    damageChanged: false,
+    damageCounter: null,
+    damageMinDelta: null,
+    windowKey: null,
+    windowMaxError: null,
     damageCallbackU32At10: null,
     damageCallbackU32At1c: null,
     damageCallbackF32At18Raw: false,
@@ -561,6 +572,10 @@ function parseArgs(argv) {
       options.damageCallbackF32Available = true;
       continue;
     }
+    if (command === 'query-events' && token === '--damage-changed') {
+      options.damageChanged = true;
+      continue;
+    }
     if (command === 'query-events' && token === '--damage-callback-f32-0x18-raw') {
       options.damageCallbackF32At18Raw = true;
       continue;
@@ -648,6 +663,10 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'damage-callback-u32-0x10') options.damageCallbackU32At10 = queryUint32(value, key);
       else if (command === 'query-events' && key === 'damage-callback-u32-0x1c') options.damageCallbackU32At1c = queryUint32(value, key);
       else if (command === 'query-events' && key === 'damage-lookup-key24') options.damageLookupKey24 = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'damage-counter') options.damageCounter = value;
+      else if (command === 'query-events' && key === 'damage-min-delta') options.damageMinDelta = damageQueryFilters.parseNonnegative(value,key);
+      else if (command === 'query-events' && key === 'window-key') options.windowKey = value;
+      else if (command === 'query-events' && key === 'window-max-error') options.windowMaxError = damageQueryFilters.parseNonnegative(value,key);
       else if (command === 'query-events' && key === 'damage-lookup-key2c') options.damageLookupKey2c = queryUint32(value, key);
       else if (command === 'query-events' && key === 'die-source-key2c-match') options.dieSourceKey2cMatch = value;
       else if (command === 'query-events' && key === 'show-health-zero-flag') options.showHealthZeroFlag = queryInteger(value, key, true);
@@ -752,6 +771,7 @@ function parseArgs(argv) {
     }
     if (options.listEvents) {
       const filterKeys = ['fromMs', 'toMs', 'participant', 'killerParticipant',
+        ...damageQueryFilters.FILTER_KEYS,
         'assistingParticipant', 'rawParam', 'contextualSituation', 'itemId', 'previousItemId', 'slot',
         'opaqueU32', 'itemGroupCallbackU8', 'itemChargesSelectorU8', 'itemChargesValueU16',
         'opaquePair', 'opaqueI32', 'castNestedBits', 'castNestedU32',
@@ -773,6 +793,7 @@ function parseArgs(argv) {
     if (options.participant !== null && options.participant > 10) {
       throw new Error('--participant must be in 1..10');
     }
+    damageQueryFilters.validate(options,options.event,(_code,message)=>{throw new Error(message);});
     if (options.killerParticipant !== null
         && (options.killerParticipant > 10
           || !['hero_death_candidates', 'hero_assist_candidates',
@@ -3904,6 +3925,11 @@ async function runQueryEventsCommand(parsed) {
       slotChangeIndex: options.slotChangeIndex,
       slotChangeOperation: options.slotChangeOperation,
       damageCallbackF32Available: options.damageCallbackF32Available,
+      damageChanged: options.damageChanged,
+      damageCounter: options.damageCounter,
+      damageMinDelta: options.damageMinDelta,
+      windowKey: options.windowKey,
+      windowMaxError: options.windowMaxError,
       damageCallbackU32At10: options.damageCallbackU32At10,
       damageCallbackU32At1c: options.damageCallbackU32At1c,
       damageCallbackF32At18Raw: options.damageCallbackF32At18Raw,
