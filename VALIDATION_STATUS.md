@@ -2,6 +2,14 @@
 
 ## Active exact-821 continuation, 2026-10-02
 
+The follow-on Oct-7 saved damage interval query passed 22 focused decoder/query/snapshot
+tests, plus 86 shared CLI/cooldown-V2 query regressions, zero failures/skips.
+Complete original-source queries reproduced 3,160 sampled intervals
+across all 11 authorized KR Replays, with zero framing errors, under global limit=1.
+No runtime image or heap acquisition was needed; cooldown's prior 182,482 rows were
+not repeated. [Scope and verification](docs/DAMAGE_INTERVAL_QUERY_16_19_821.md) preserve
+the candidate labels and unresolved change times.
+
 2026-10-07 cooldown V2 continuation: 31 focused Node tests and 3 actual-image
 Python methods passed without failures/skips. Fresh serial native decode of all
 11 existing KR Replays accepted 182,482 packet requests with zero framing errors;

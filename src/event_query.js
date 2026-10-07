@@ -236,6 +236,7 @@ const DEATH_SOURCE_CAPABILITIES_821 = Object.freeze({
   hero_death_episode_candidates: 'hero_death_episode',
 });
 const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
+  'hero_damage_keyframe_interval_candidates',
   ...Object.keys(DEATH_SOURCE_CAPABILITIES_821),
   'hero_roster_metadata_bridge_candidates',
   'hero_total_heal_snapshot_candidates',
@@ -1099,6 +1100,9 @@ class EventQueryError extends Error {
 const slotChangeQuery = require('./slot_change_event_query').createSlotChangeQuery({
   EventQueryError,readArtifactJson,checkBatchHash,prepareEventQueryFromDocuments,
   streamEventQuery,normalizeReplaySourcePaths,
+});
+const damageIntervalQuery = require('./damage_interval_event_query').createDamageIntervalQuery({
+  EventQueryError,normalizeReplaySourcePaths,
 });
 
 function readArtifactJson(directory, basename) {
@@ -6461,7 +6465,9 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   const associationConfig = ASSOCIATION_EVENTS_821[eventKey] ?? null;
   const exactPacketProfile = EXACT_PACKET_EVENTS_821[eventKey] ?? null;
   const exactBlobPacketConfig = EXACT_BLOB_PACKET_EVENTS_821[eventKey] ?? null;
-  const capability = eventKey === 'unit_apply_damage_roster_key_candidates'
+  const capability = eventKey === 'hero_damage_keyframe_interval_candidates'
+    ? 'hero_damage_keyframe_intervals'
+    : eventKey === 'unit_apply_damage_roster_key_candidates'
     ? 'unit_apply_damage_roster_key_pair'
     : eventKey === 'unit_apply_damage_lookup_roster_key_candidates'
       ? 'unit_apply_damage_lookup_roster_key_pair'
@@ -6722,6 +6728,7 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   Object.defineProperty(prepared, PREPARED_REPLAY_METADATA,
     { value: { semantic, analysis, inventoryIntervalSource: null } });
   slotChangeQuery.prepare(prepared,semantic,analysis);
+  damageIntervalQuery.prepare(prepared,semantic,analysis);
   return prepared;
 }
 
@@ -12345,6 +12352,7 @@ async function stageVerifiedRows(produce, emitLine) {
 
 async function streamEventQuery(prepared, options, emitLine) {
   if (options.verifySource || slotChangeQuery.supports(prepared.eventKey)
+      || damageIntervalQuery.supports(prepared.eventKey)
       || prepared.capabilityResult?.profile_id === COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id) {
     return stageVerifiedRows(
       (stageLine) => streamEventQueryUnstaged(prepared, options, stageLine),
@@ -12355,6 +12363,9 @@ async function streamEventQuery(prepared, options, emitLine) {
 
 async function streamEventQueryUnstaged(prepared, options, emitLine) {
   validateFilters(options);
+  if (damageIntervalQuery.supports(prepared.eventKey)) {
+    return damageIntervalQuery.stream(prepared,options,emitLine);
+  }
   if (slotChangeQuery.supports(prepared.eventKey)) {
     if (options.sourceReplay != null && !options.verifySource) {
       throw new EventQueryError('INVALID_FILTER','--source-replay requires --verify-source.');
@@ -13889,6 +13900,7 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
 
 async function streamBatchEventQuery(prepared, options, emitLine) {
   if (options.verifySource || slotChangeQuery.supports(prepared.eventKey)
+      || damageIntervalQuery.supports(prepared.eventKey)
       || prepared.replays.some(row=>row.prepared?.capabilityResult?.profile_id
         === COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id)) {
     return stageVerifiedRows(

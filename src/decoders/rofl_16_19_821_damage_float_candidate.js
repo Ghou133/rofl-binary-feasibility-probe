@@ -115,13 +115,19 @@ function assessHeroDamageSnapshotTail821(replay, capability) {
 function decodeField(payload, selectedField) {
   const offset = selectedField.blob_f32le_offset_candidate;
   const rawOffsets = Array.from({ length: 4 }, (_, i) => 1262 - offset - i);
-  const decoded = Buffer.from(rawOffsets.map((rawOffset) =>
-    decodeRuntimeCountByte(payload[rawOffset])));
+  const rawHex = Buffer.from(rawOffsets.slice().reverse()
+    .map((rawOffset) => payload[rawOffset])).toString('hex');
   return {
-    value: decoded.readFloatLE(0),
-    raw_hex: Buffer.from(rawOffsets.slice().reverse()
-      .map((rawOffset) => payload[rawOffset])).toString('hex'),
+    value: decodeHeroDamageFieldBytes821(rawHex),
+    raw_hex: rawHex,
   };
+}
+
+function decodeHeroDamageFieldBytes821(rawHex) {
+  if (typeof rawHex !== 'string' || !/^[0-9a-f]{8}$/.test(rawHex)) return null;
+  const decoded = Buffer.from([...Buffer.from(rawHex, 'hex')].reverse()
+    .map(decodeRuntimeCountByte));
+  return decoded.readFloatLE(0);
 }
 
 function decodeHeroDamageSnapshotCandidates821(replay, capability, precollected = null) {
@@ -276,6 +282,7 @@ function decodeHeroDamageSnapshotCandidates821(replay, capability, precollected 
 
 module.exports = {
   PROFILES,
+  decodeHeroDamageFieldBytes821,
   assessHeroDamageSnapshotTail821,
   decodeHeroDamageSnapshotCandidates821,
 };

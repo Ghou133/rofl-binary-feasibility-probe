@@ -89,8 +89,10 @@ const windows = decoded.events?.hero_damage_keyframe_interval_candidates;
 console.log(decoded.capability_results.hero_damage_keyframe_intervals, windows);
 ```
 
-Consume the decode JSONL or API rows directly. This stream is not yet registered
-with the saved `query-events` command.
+Query the saved stream with `--event hero_damage_keyframe_interval_candidates`,
+`--participant`, endpoint time bounds and `--verify-source`. No runtime image is
+required. See [the damage interval query guide](DAMAGE_INTERVAL_QUERY_16_19_821.md)
+for complete validation and the sampled-candidate boundary.
 
 To compare the windows with native anonymous packet fields, select both inputs:
 

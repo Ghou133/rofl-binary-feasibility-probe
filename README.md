@@ -2,6 +2,10 @@
 
 Runnable 16.19 CLI/API examples: [Quick start](docs/QUICK_START_16_19.md).
 
+Exact KR 821 sampled damage counter intervals now support
+[saved CLI/API queries and complete source re-decode](docs/DAMAGE_INTERVAL_QUERY_16_19_821.md),
+without a runtime image. The values remain sampled endpoint candidates.
+
 Exact KR 821 `--events cooldown_broadcast_packet --cooldown-packet-v2` adds
 [four native f32 request arguments and a control byte](docs/COOLDOWN_REQUEST_FIELDS_16_19_821.md),
 with complete saved-query/native source verification. Actual cooldown, receiver

@@ -8,6 +8,12 @@ create a second protocol authority.
 
 ## Start here
 
+The follow-on Oct-7 milestone connects saved `hero_damage_keyframe_interval_candidates`
+queries, participant/full-header/endpoint filters and complete static source re-decode.
+All 3,160 intervals across 11 Replays passed. [Query scope](docs/DAMAGE_INTERVAL_QUERY_16_19_821.md)
+keeps cumulative sampled differences separate from effective damage or event times.
+No new process/heap capture was performed. This is independent of missing receiver state.
+
 2026-10-07 continuation adds opt-in `cooldownPacketProfile: 'v2'` /
 `--cooldown-packet-v2`: original packet-only native code recovers four f32 request
 arguments and one control byte without a receiver object. All 182,482 requests
