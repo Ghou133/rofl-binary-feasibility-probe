@@ -1,5 +1,7 @@
 # ROFL Analyzer
 
+> **项目已停止主动开发（2026-10-07，用户决定）。** 已完成的源码、测试和离线入口保留；不再自主研究新字段、适配新 build 或采集客户端状态。精确 16.19 输出仍是 `CANDIDATE`，未知接收对象与实际效果仍为 `UNKNOWN`，不是完整可靠战报。详见 [最终成果与停止开发边界](docs/PROJECT_STOPPED_20261007.md)。
+
 Runnable 16.19 CLI/API examples: [Quick start](docs/QUICK_START_16_19.md).
 
 Exact KR 821 sampled damage counter intervals now support
@@ -26,7 +28,7 @@ operation filtering, with optional full exact-image source re-decode verificatio
 
 精确版本绑定的《英雄联盟》`.rofl` 回放研究工具：解析容器和数据包，输出带来源、证据等级和明确边界的语义事实。
 
-> **当前开发分支：16.19。** `codex/16-19-development` 已获授权继续适配、接通 CLI/API 并研究新字段。`16.19.820.7193` 与 `16.19.821.7343` 的死亡候选输出仍是实验结果，不是已发布的可靠语义能力。2026-08-21 的公开语义基线及 `SOURCE_FROZEN_DURING_MIGRATION` 记录保留为历史状态；本分支不覆盖旧版证据。
+> **保留的开发成果：16.19。** `16.19.820.7193` 与 `16.19.821.7343` 的精确 build 候选及 CLI/API 已保留，原持续开发授权已被 2026-10-07 的停止决定取代。2026-08-21 的公开语义基线及 `SOURCE_FROZEN_DURING_MIGRATION` 记录保留为历史状态；不覆盖旧版证据。
 
 [使用与维护](docs/PUBLIC_DEVELOPMENT.md) · [代码结构](ARCHITECTURE.md) · [路线图](ROADMAP.md) · [历史验证记录](VALIDATION_STATUS.md) · [AI 接手入口](AI_HANDOFF.md)
 

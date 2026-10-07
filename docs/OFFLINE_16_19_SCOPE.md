@@ -1,6 +1,11 @@
 # Useful offline scope with the existing 16.19 inputs
 
-The next useful work is protocol coverage and correct observation timelines, not
+**Historical scope; active development stopped on 2026-10-07.** The decisions
+below describe completed work and its then-current gaps, not authorization to
+continue. [Final scope](PROJECT_STOPPED_20261007.md) supersedes acquisition and
+continuation suggestions. Existing candidates and original evidence are retained.
+
+The continuation focused on protocol coverage and correct observation timelines, not
 more query flags. Existing exact module/Replay evidence supports the following
 choices; missing independent state is not silently replaced by nearby-build code.
 
@@ -69,5 +74,6 @@ summary availability and unobserved tail gaps are usable deliverables today.
 It cannot yet provide a faithful visual replay, player-position map, combat
 attribution/effective-damage log or a successful cast/cooldown timeline. Candidate
 death/return labels also retain their own profile limitations. Map/behavior/UI
-truth remains outside this parser's ownership. Obtaining new exact-build state
-evidence is the next input decision; no new process or heap capture was performed.
+truth remains outside this parser's ownership. New process/heap acquisition is
+not part of the stopped project. Existing missing state remains unknown; no new
+process or heap capture was performed during this continuation.

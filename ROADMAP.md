@@ -1,6 +1,13 @@
 # 开发路线与待补全项
 
-## Active 16.19 continuation, 2026-10-02
+## Project stopped, 2026-10-07
+
+The user ended active development. The remaining items below are historical
+research gaps, not an active work queue. Preserve completed source, tests and
+offline CLI/API entry points. Do not resume automatically.
+See [the final scope and unresolved capabilities](docs/PROJECT_STOPPED_20261007.md).
+
+## Completed 16.19 continuation, 2026-10-02 through 2026-10-07
 
 The protocol-first Oct-7 follow-up adapts the sampled-counter timeline to exact
 HN 820 with independently pinned route/transform evidence and three original

@@ -192,6 +192,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
+      'hero_damage_keyframe_intervals',
       'hero_damage_self_mitigated_snapshot',
       'hero_structure_objective_damage_snapshot',
       'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
@@ -244,6 +245,9 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'missile_key_cooccurrence',
       'set_dimension_missile_packet',
       'anonymous_029c_packet',
+      'anonymous_049c_packet',
+      'spell_slot_change_request',
+      'spell_slot_change_roster_key_pair',
       'anonymous_029c_roster_key_pair',
       'unit_apply_damage_roster_key_pair',
       'unit_apply_damage_lookup_roster_key_pair',
@@ -251,6 +255,16 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_death_damage_lookup_key_cooccurrence',
       'face_direction_keyframe_roster_pair']);
   const queried = Object.fromEntries(query.capabilities.map((row) => [row.capability, row]));
+  assert.equal(queried.hero_damage_keyframe_intervals.runtime_image_requirement,
+    'NOT_REQUIRED');
+  for (const capability of ['hero_damage_keyframe_intervals', 'anonymous_049c_packet',
+    'spell_slot_change_request', 'spell_slot_change_roster_key_pair']) {
+    assert.equal(resolveCapability(BUILD, capability).status, 'CANDIDATE');
+  }
+  for (const capability of ['anonymous_049c_packet', 'spell_slot_change_request',
+    'spell_slot_change_roster_key_pair']) {
+    assert.equal(queried[capability].runtime_image_requirement, 'EXACT_IMAGE_REQUIRED');
+  }
   assert.equal(queried.hero_death.runtime_image_requirement, 'NOT_REQUIRED');
   assert.equal(queried.hero_inventory_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');

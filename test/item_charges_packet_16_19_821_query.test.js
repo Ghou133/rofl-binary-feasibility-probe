@@ -284,9 +284,9 @@ test('batch source verification uses each Replay source and preserves manifest c
     replay.source_provenance_status), ['SOURCE_REPLAY_VERIFIED', 'NOT_VERIFIED']);
 });
 
-test('source verification rejects unrelated saved event shapes explicitly', async () => {
+test('source verification rejects unregistered saved event shapes explicitly', async () => {
   await assert.rejects(streamEventQuery({
-    eventKey: 'hero_death_candidates', replayVersion: profile.replay_version,
+    eventKey: 'unregistered_packet_candidates', replayVersion: profile.replay_version,
     capabilityStatus: 'CANDIDATE',
   }, { verifySource: true }, async () => {}),
   { code: 'UNSUPPORTED_SOURCE_VERIFICATION' });

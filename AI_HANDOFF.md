@@ -1,8 +1,13 @@
 # AI / developer handoff
 
+**Active development stopped by the user on 2026-10-07.** Preserve the completed
+CLI/API and experimental exact-build profiles; do not start research, acquisition
+or new build adaptation. [Final scope](docs/PROJECT_STOPPED_20261007.md) records
+the retained outputs, unresolved effects and current client-access boundary.
+
 The published semantic baseline remains the historical 2026-08-21
-`SOURCE_FROZEN_DURING_MIGRATION` snapshot. As recorded in `AGENTS.md`, the user
-has authorized continued 16.19 development, CLI/API integration and field research.
+`SOURCE_FROZEN_DURING_MIGRATION` snapshot. The previous authorization for 16.19
+development, CLI/API integration and field research is now historical.
 Development candidates do not promote published semantics, delete evidence, or
 create a second protocol authority.
 

@@ -1,6 +1,25 @@
 # 当前验证状态
 
-## Active exact-821 continuation, 2026-10-02
+## Final closeout, 2026-10-07
+
+Active development stopped by the user. Existing source/private-evidence results
+below retain their original scope; they do not confirm complete gameplay semantics.
+The final public-source/CI acceptance is recorded separately from private Replay
+and exact-module experiments. See [final scope](docs/PROJECT_STOPPED_20261007.md).
+
+Final local public acceptance ran all 53 commands from the 51 suites declared by
+`npm test`, with Node test concurrency limited to 2 (Windows, Node 24.12.0,
+Python 3.14.0). Node: **1,372 passed, 154 explicit skips, 0 failed**. Python public
+maintenance: 19 tests, 18 passed, 1 explicit skip; the separate private 049c
+native class was skipped as a class and ran 0 tests. Missing private inputs are
+not passes. Three stale registry/unsupported-event test expectations were fixed;
+the initial failures remain in local logs. Focused fixes passed 18/18 and 9/9.
+The public source scan passed all 852 selected files. Source-only package build
+and validation passed; no private evidence or raw re-decode is included. GitHub
+Linux/Node 22 acceptance is tracked by the closeout PR and main push workflow,
+separately from these local results.
+
+## Completed exact-821 continuation, 2026-10-02 through 2026-10-07
 
 The protocol-first HN 820 continuation passed 42 relevant tests with zero failures
 or skips. Three original HN `16.19.820.7193` Replays passed complete static source
