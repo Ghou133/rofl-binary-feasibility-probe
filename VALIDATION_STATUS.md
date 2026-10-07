@@ -19,6 +19,12 @@ and validation passed; no private evidence or raw re-decode is included. GitHub
 Linux/Node 22 acceptance is tracked by the closeout PR and main push workflow,
 separately from these local results.
 
+The first closeout Linux CI run failed because the optional 049c native class
+imported Unicorn before checking its absent private fixtures. The import now
+occurs after the explicit fixture guard. A local `python -I -S` discovery check
+confirms the class skips without site packages; provided fixtures still require
+their native dependencies and are not silently skipped for dependency errors.
+
 ## Completed exact-821 continuation, 2026-10-02 through 2026-10-07
 
 The protocol-first HN 820 continuation passed 42 relevant tests with zero failures

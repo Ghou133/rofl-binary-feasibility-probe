@@ -12,7 +12,6 @@ from decode_anonymous_049c_packet_16_19_821 import (
     check_sibling_identity, SIBLING_SPANS, SIBLING_PROFILES, PACKET_CLASSES,
 )
 from decode_mapview_inventory_16_19_821 import read_image, make_emulator
-import emulate_exact_packet_decoder as exact
 
 
 class Native049cTests(unittest.TestCase):
@@ -22,6 +21,10 @@ class Native049cTests(unittest.TestCase):
         sample_path = os.environ.get('ROFL_821_049C_SAMPLES')
         if not image_path or not sample_path:
             raise unittest.SkipTest('authorized exact-821 image and original 0x049c samples absent')
+        # Keep clean public runs dependency-free when private fixtures are absent.
+        # With fixtures provided, missing native dependencies still fail normally.
+        global exact
+        import emulate_exact_packet_decoder as exact
         cls.image, _, _ = read_image(Path(image_path))
         data = json.loads(Path(sample_path).read_text(encoding='utf-8'))
         if data.get('build') != '16.19.821.7343':
