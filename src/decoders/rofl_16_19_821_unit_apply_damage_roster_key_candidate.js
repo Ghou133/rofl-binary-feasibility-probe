@@ -1,0 +1,781 @@
+'use strict';
+
+// A full-key co-occurrence with the canonical HeroStats roster is an identity
+// candidate only. The 0x005f key is not established as a damage source, target,
+// victim, actor, or effective health change.
+const crypto = require('node:crypto');
+const { walkBlocks } = require('../rofl');
+const { replaySourceError } = require('./replay_source_integrity');
+const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
+const { PROFILES } = require('./rofl_16_19_821_float_stats_candidate');
+const {
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821: DAMAGE_PROFILE,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V2_ID_821: DAMAGE_V2_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V3_ID_821: DAMAGE_V3_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V4_ID_821: DAMAGE_V4_ID,
+  UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_V6_821: DAMAGE_V6_PROFILE,
+  UNIT_APPLY_DAMAGE_U32_0X1C_RAW_CALL_RVA_BY_SELECTOR_821: U32_1C_RAW_CALL_RVAS,
+  decodeUnitApplyDamageCallbackF32At18FromEncoded821,
+  decodeUnitApplyDamageCallbackF32FromRaw821,
+  decodeUnitApplyDamageCallbackU32FromRaw821,
+  decodeUnitApplyDamageCallbackU32At1cFromEncoded821,
+  decodeUnitApplyDamageU32At1cFromRawSpan821,
+  decodeUnitApplyDamageLookupKeyFromRaw821,
+  isObservedShape,
+} = require('./rofl_16_19_821_unit_apply_damage_packet_candidate');
+const {
+  RUNTIME_IMAGE_SHA256, LOOKUP_TABLE_SHA256,
+} = require('./rofl_16_19_821_runtime_bytes');
+
+const BUILD = '16.19.821.7343';
+const SNAPSHOT_PROFILE = PROFILES.hero_minions_killed_snapshot;
+const FIRST_PARAM = 0x400000ae;
+const LAST_PARAM = 0x400000b7;
+const MAX_DAMAGE_ROWS = 100_000;
+const MAX_SNAPSHOT_ROWS = 10_000;
+const EVIDENCE_STATUS = 'CANDIDATE_821_UNIT_APPLY_DAMAGE_HEROSTATS_FULL_KEY_COOCCURRENCE';
+const NATIVE_SOURCES = ['RAW_READER', 'CONSTANT_0', 'CONSTANT_1', 'CONSTANT_2'];
+const LOOKUP_RELATIONS = ['EQUAL', 'RAW_PARAM_IS_LOOKUP_PLUS_0X100', 'OTHER'];
+const CONSTANTS = { CONSTANT_0: 0, CONSTANT_1: 1, CONSTANT_2: 2 };
+const LOOKUP_ROW_FIELDS = [
+  'native_callback_lookup_key_u32_0x24_candidate',
+  'native_callback_lookup_key_0x24_encoded_bytes_hex',
+  'native_callback_lookup_key_u32_0x2c_candidate',
+  'native_callback_lookup_key_0x2c_encoded_bytes_hex',
+  'native_callback_lookup_key_0x24_raw_param_relation',
+];
+const LOOKUP_OUTCOME_FIELDS = [
+  'native_callback_lookup_full_write_count',
+  'native_callback_lookup_key_0x24_raw_param_relation_counts',
+  'evidence_lookup_key_0x24_table_sha256',
+  'evidence_lookup_key_0x2c_table_sha256',
+];
+const U32_ROW_FIELDS = [
+  'native_callback_u32_0x10_candidate',
+  'native_callback_u32_0x10_encoded_bytes_hex',
+  'native_callback_u32_0x10_source',
+];
+const U32_OUTCOME_FIELDS = [
+  'evidence_callback_u32_0x10_table_sha256',
+  'native_callback_u32_0x10_full_write_count',
+  'native_callback_u32_0x10_source_counts',
+];
+const U32_SOURCES = ['RAW_READER', 'CONSTANT_0'];
+const F32_18_ROW_FIELDS = [
+  'header_selector_bits_6_8',
+  'native_callback_f32_0x18_candidate',
+  'native_callback_f32_0x18_encoded_bytes_hex',
+  'native_callback_f32_0x18_source',
+  'native_callback_f32_0x18_raw_offset',
+  'native_callback_f32_0x18_raw_bytes_hex',
+];
+const F32_18_OUTCOME_FIELDS = [
+  'evidence_callback_f32_0x18_table_sha256',
+  'native_callback_f32_0x18_full_write_count',
+  'native_callback_f32_0x18_source_counts',
+];
+const F32_18_SOURCES = ['RAW_READER', 'CONSTANT_0'];
+const U32_1C_ROW_FIELDS = [
+  'header_selector_bits_12_14', 'native_callback_u32_0x1c_candidate',
+  'native_callback_u32_0x1c_encoded_bytes_hex',
+  'native_callback_u32_0x1c_source', 'native_callback_u32_0x1c_raw_call_rva',
+  'native_callback_u32_0x1c_raw_offset', 'native_callback_u32_0x1c_raw_bytes_hex',
+];
+const U32_1C_OUTCOME_FIELDS = [
+  'evidence_callback_u32_0x1c_table_sha256',
+  'native_callback_u32_0x1c_full_write_count',
+  'native_callback_u32_0x1c_source_counts',
+];
+const U32_1C_SOURCES = ['RAW_READER', 'CONSTANT_0'];
+
+const UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821 = Object.freeze({
+  id: 'rofl-16.19.821.7343-kr-unit-apply-damage-roster-key-candidate-v1',
+  replay_version: BUILD,
+  capability: 'unit_apply_damage_roster_key_pair',
+  status: 'CANDIDATE',
+  evidence_status: EVIDENCE_STATUS,
+  enabled: true,
+  depends_on: Object.freeze(['unit_apply_damage_packet', 'hero_minions_killed_snapshot']),
+  packet_ids: Object.freeze([0x005f, 0x0089]),
+  evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+  known_limits: Object.freeze([
+    'A full raw-parameter match to the ten-key HeroStats roster is only a co-occurrence; no 0x005f source, target, actor, victim, effective damage, or health change is inferred.',
+    'The HeroStats participant candidate comes from the 0x0089 keyframe roster, not from a decoded 0x005f actor field.',
+    'The +0x100 aliases and all other nonmatching keys remain excluded and unassigned; low-byte matching is not used.',
+    'Both source outcomes, every packet reference, all ten roster keys in every keyframe, and the exact native-witnessed 0x005f profile are required.',
+    'Native-gated 0x005f v2 and v3 source outcomes are accepted; v3 lookup keys do not change full raw-parameter roster matching or assign excluded aliases.',
+  ]),
+});
+
+const UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821 = Object.freeze({
+  ...UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
+  id: 'rofl-16.19.821.7343-kr-unit-apply-damage-roster-key-candidate-v2',
+  known_limits: Object.freeze([
+    ...UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821.known_limits.slice(0, -1),
+    'Native-gated 0x005f v4 source outcomes are accepted; the +0x10 callback u32 and lookup keys do not change full raw-parameter roster matching or assign excluded aliases.',
+  ]),
+});
+
+const UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE = Object.freeze({
+  ...UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821,
+  id: 'rofl-16.19.821.7343-kr-unit-apply-damage-roster-key-candidate-v3',
+  known_limits: Object.freeze([
+    ...UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821.known_limits.slice(0, -1),
+    'Native-gated 0x005f v5 source outcomes are accepted; the anonymous +0x18 callback f32 does not change full raw-parameter roster matching or assign damage roles.',
+  ]),
+});
+
+const UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V4_821 = Object.freeze({
+  ...UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
+  id: 'rofl-16.19.821.7343-kr-unit-apply-damage-roster-key-candidate-v4',
+  known_limits: Object.freeze([
+    ...UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE.known_limits.slice(0, -1),
+    'Native-gated 0x005f v6 source outcomes include the anonymous +0x1c callback u32 candidate; full raw-parameter roster matching does not assign damage roles.',
+  ]),
+});
+
+function sha256(bytes) {
+  return crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
+function sha(value) {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+}
+
+function count(value, limit) {
+  return Number.isSafeInteger(value) && value >= 0 && value <= limit;
+}
+
+function u32(value) {
+  return Number.isSafeInteger(value) && value >= 0 && value <= 0xffffffff;
+}
+
+function participantFor(rawParam) {
+  return u32(rawParam) && rawParam >= FIRST_PARAM && rawParam <= LAST_PARAM
+    ? rawParam - FIRST_PARAM + 1 : null;
+}
+
+function validRef(replay, ref, packetId, stream, length) {
+  const chunk = replay.chunks?.[ref?.chunk_index];
+  return ref?.source_path === (replay.source_path ?? null)
+    && ref.replay_sha256 === replay.source_sha256
+    && count(ref.chunk_index, replay.chunks.length - 1)
+    && count(ref.chunk_id, 0xffffffff)
+    && ref.chunk_stream === stream
+    && count(ref.chunk_file_offset, replay.buffer.length)
+    && count(ref.decompressed_block_offset, Number.MAX_SAFE_INTEGER)
+    && count(ref.decompressed_payload_offset, Number.MAX_SAFE_INTEGER)
+    && ref.decompressed_payload_offset > ref.decompressed_block_offset
+    && ref.packet_id === packetId && count(ref.replay_time_ms, Number.MAX_SAFE_INTEGER)
+    && ref.payload_length === length && u32(ref.raw_param)
+    && sha(ref.raw_payload_sha256)
+    && !!chunk && chunk.index === ref.chunk_index && chunk.chunk_id === ref.chunk_id
+    && chunk.stream === stream && chunk.stream_tag === (stream === 'keyframe' ? 2 : 1)
+    && chunk.offset === ref.chunk_file_offset
+    && count(chunk.uncompressed_length, Number.MAX_SAFE_INTEGER)
+    && ref.decompressed_payload_offset + length <= chunk.uncompressed_length;
+}
+
+function validSnapshotRow(replay, row) {
+  const ref = row?.raw_packet_ref;
+  const participant = participantFor(row?.hero_raw_param);
+  return row?.event_type === 'HERO_MINIONS_KILLED_SNAPSHOT_CANDIDATE'
+    && row.game_version === BUILD && row.patch === '16.19'
+    && row.build_profile === SNAPSHOT_PROFILE.id
+    && row.replay_sha256 === replay.source_sha256
+    && row.replay_time_ms === ref?.replay_time_ms
+    && row.hero_raw_param === ref?.raw_param
+    && participant !== null && row.participant_id_candidate === participant
+    && row.observation_kind === 'KEYFRAME_SNAPSHOT'
+    && row.confidence === 'CANDIDATE'
+    && row.semantic_status === 'CANDIDATE_821_RUNTIME_BYTE_KEYFRAME_F32_AND_REPLAY_TAIL'
+    && typeof row.raw_payload_field_bytes_hex === 'string'
+    && /^[0-9a-f]{8}$/.test(row.raw_payload_field_bytes_hex)
+    && Number.isSafeInteger(row.minions_killed_raw_f32_candidate)
+    && row.minions_killed_raw_f32_candidate >= 0
+    && row.minions_killed_floor_candidate === row.minions_killed_raw_f32_candidate
+    && validRef(replay, ref, 0x0089, 'keyframe', 1263);
+}
+
+function lookupRelation(rawParam, key24) {
+  if (rawParam === key24) return 'EQUAL';
+  if (rawParam - key24 === 0x100) return 'RAW_PARAM_IS_LOOKUP_PLUS_0X100';
+  return 'OTHER';
+}
+
+function validDamageRow(replay, row, damageProfileId) {
+  const ref = row?.raw_packet_ref;
+  const hex = ref?.raw_payload_hex;
+  if (!validRef(replay, ref, 0x005f, 'game_chunk', ref?.payload_length)
+      || ref.payload_length < 8 || ref.payload_length > 25
+      || typeof hex !== 'string' || !/^[0-9a-f]+$/.test(hex)
+      || hex.length !== ref.payload_length * 2
+      || sha256(Buffer.from(hex, 'hex')) !== ref.raw_payload_sha256
+      || row.event_type !== 'UNIT_APPLY_DAMAGE_PACKET_CANDIDATE'
+      || row.game_version !== BUILD || row.patch !== '16.19'
+      || row.build_profile !== damageProfileId
+      || row.replay_sha256 !== replay.source_sha256
+      || row.replay_time_ms !== ref.replay_time_ms
+      || row.raw_param !== ref.raw_param || row.raw_param === 0
+      || row.packet_name_candidate !== DAMAGE_PROFILE.packet_name
+      || row.confidence !== 'CANDIDATE'
+      || row.semantic_status !== DAMAGE_PROFILE.evidence_status
+      || row.semantic_effect_status !== 'UNKNOWN'
+      || !Number.isFinite(row.native_callback_f32_0x20_candidate)) return false;
+  const payload = Buffer.from(hex, 'hex');
+  const selector24 = payload[3] & 7;
+  const selector0 = payload[0] & 7;
+  const selector3 = (payload[0] >>> 3) & 7;
+  const isV5 = damageProfileId === DAMAGE_PROFILE.id;
+  const isV6 = damageProfileId === DAMAGE_V6_PROFILE.id;
+  const hasF32At18 = isV5 || isV6;
+  if (row.header_selector_bits_24_26 !== selector24
+      || row.header_selector_bits_0_2 !== selector0
+      || row.header_selector_bits_3_5 !== selector3
+      || !isObservedShape(payload.length, selector24, selector0, selector3)) return false;
+  const expectedSource = ({ 3: 'CONSTANT_0', 5: 'CONSTANT_1',
+    7: 'CONSTANT_2' })[selector3] ?? 'RAW_READER';
+  if (row.native_callback_f32_0x20_source !== expectedSource) return false;
+  if (damageProfileId === DAMAGE_V2_ID) {
+    if (LOOKUP_ROW_FIELDS.some((field) => field in row)
+        || U32_ROW_FIELDS.some((field) => field in row)) return false;
+  } else {
+    const key24 = row.native_callback_lookup_key_u32_0x24_candidate;
+    const key2c = row.native_callback_lookup_key_u32_0x2c_candidate;
+    if (!u32(key24) || key24 === 0 || !u32(key2c) || key2c === 0
+        || decodeUnitApplyDamageLookupKeyFromRaw821(
+          row.native_callback_lookup_key_0x24_encoded_bytes_hex, 0x24) !== key24
+        || decodeUnitApplyDamageLookupKeyFromRaw821(
+          row.native_callback_lookup_key_0x2c_encoded_bytes_hex, 0x2c) !== key2c
+        || row.native_callback_lookup_key_0x24_raw_param_relation
+          !== lookupRelation(row.raw_param, key24)) return false;
+  }
+  if (damageProfileId === DAMAGE_V4_ID || hasF32At18) {
+    const expectedU32Source = selector24 === 6 ? 'CONSTANT_0' : 'RAW_READER';
+    if (!u32(row.native_callback_u32_0x10_candidate)
+        || typeof row.native_callback_u32_0x10_encoded_bytes_hex !== 'string'
+        || !/^[0-9a-f]{8}$/.test(row.native_callback_u32_0x10_encoded_bytes_hex)
+        || decodeUnitApplyDamageCallbackU32FromRaw821(
+          row.native_callback_u32_0x10_encoded_bytes_hex)
+          !== row.native_callback_u32_0x10_candidate
+        || row.native_callback_u32_0x10_source !== expectedU32Source
+        || (expectedU32Source === 'CONSTANT_0'
+          && (row.native_callback_u32_0x10_candidate !== 0
+            || row.native_callback_u32_0x10_encoded_bytes_hex !== '85858585'))) return false;
+  } else if (U32_ROW_FIELDS.some((field) => field in row)) {
+    return false;
+  }
+  if (hasF32At18) {
+    const selector18 = ((payload[0] >>> 6) | (payload[1] << 2)) & 7;
+    const expected18Source = selector18 === 5 ? 'CONSTANT_0'
+      : [0, 2, 3, 6].includes(selector18) ? 'RAW_READER' : null;
+    if (row.header_selector_bits_6_8 !== selector18
+        || expected18Source === null
+        || row.native_callback_f32_0x18_source !== expected18Source
+        || typeof row.native_callback_f32_0x18_encoded_bytes_hex !== 'string'
+        || !/^[0-9a-f]{8}$/.test(row.native_callback_f32_0x18_encoded_bytes_hex)
+        || !Number.isFinite(row.native_callback_f32_0x18_candidate)
+        || !Object.is(decodeUnitApplyDamageCallbackF32At18FromEncoded821(
+          row.native_callback_f32_0x18_encoded_bytes_hex),
+        row.native_callback_f32_0x18_candidate)) return false;
+    if (expected18Source === 'CONSTANT_0') {
+      if (row.native_callback_f32_0x18_encoded_bytes_hex !== '3e3e3e3e'
+          || !Object.is(row.native_callback_f32_0x18_candidate, 0)
+          || row.native_callback_f32_0x18_raw_offset !== null
+          || row.native_callback_f32_0x18_raw_bytes_hex !== null) return false;
+    } else {
+      const offset18 = row.native_callback_f32_0x18_raw_offset;
+      if (!count(offset18, payload.length - 4)
+          || row.native_callback_f32_0x18_raw_bytes_hex
+            !== payload.subarray(offset18, offset18 + 4).toString('hex')
+          || row.native_callback_f32_0x18_encoded_bytes_hex
+            !== Buffer.from(payload.subarray(offset18, offset18 + 4))
+              .reverse().toString('hex')) return false;
+    }
+  } else if (F32_18_ROW_FIELDS.some((field) => field in row)) {
+    return false;
+  }
+  if (isV6) {
+    const selector1c = (payload[1] >>> 4) & 7;
+    const expected1cSource = selector1c === 0 ? 'CONSTANT_0'
+      : U32_1C_RAW_CALL_RVAS[selector1c] ? 'RAW_READER' : null;
+    const encoded = row.native_callback_u32_0x1c_encoded_bytes_hex;
+    if (expected1cSource === null
+        || row.header_selector_bits_12_14 !== selector1c
+        || row.native_callback_u32_0x1c_source !== expected1cSource
+        || !u32(row.native_callback_u32_0x1c_candidate)
+        || typeof encoded !== 'string' || !/^[0-9a-f]{8}$/.test(encoded)
+        || decodeUnitApplyDamageCallbackU32At1cFromEncoded821(encoded)
+          !== row.native_callback_u32_0x1c_candidate) return false;
+    if (expected1cSource === 'CONSTANT_0') {
+      if (row.native_callback_u32_0x1c_candidate !== 0
+          || encoded !== '05050505'
+          || row.native_callback_u32_0x1c_raw_call_rva !== null
+          || row.native_callback_u32_0x1c_raw_offset !== null
+          || row.native_callback_u32_0x1c_raw_bytes_hex !== null) return false;
+    } else {
+      const offset1c = row.native_callback_u32_0x1c_raw_offset;
+      const rawBytes1c = row.native_callback_u32_0x1c_raw_bytes_hex;
+      const rawLength1c = typeof rawBytes1c === 'string'
+        ? rawBytes1c.length / 2 : -1;
+      if (row.native_callback_u32_0x1c_raw_call_rva
+            !== U32_1C_RAW_CALL_RVAS[selector1c]
+          || ![2, 3].includes(rawLength1c)
+          || !/^[0-9a-f]+$/.test(rawBytes1c)
+          || !count(offset1c, payload.length - rawLength1c)
+          || rawBytes1c !== payload.subarray(offset1c,
+            offset1c + rawLength1c).toString('hex')
+          || decodeUnitApplyDamageU32At1cFromRawSpan821(rawBytes1c)
+            !== row.native_callback_u32_0x1c_candidate) return false;
+    }
+  } else if (U32_1C_ROW_FIELDS.some((field) => field in row)) {
+    return false;
+  }
+  if (expectedSource !== 'RAW_READER') {
+    return row.native_callback_f32_0x20_raw_offset === null
+      && row.native_callback_f32_0x20_raw_bytes_hex === null
+      && Object.is(row.native_callback_f32_0x20_candidate,
+        CONSTANTS[expectedSource]);
+  }
+  const offset = row.native_callback_f32_0x20_raw_offset;
+  return count(offset, payload.length - 4)
+    && row.native_callback_f32_0x20_raw_bytes_hex
+      === payload.subarray(offset, offset + 4).toString('hex')
+    && Object.is(row.native_callback_f32_0x20_candidate,
+      decodeUnitApplyDamageCallbackF32FromRaw821(
+        row.native_callback_f32_0x20_raw_bytes_hex));
+}
+
+class SourceMismatch extends Error {}
+
+function verifyPhysicalRefs(replay, damageRows, snapshotRows, precollected = null) {
+  const expected = new Map();
+  const nativeInput = crypto.createHash('sha256');
+  const nativeHeader = Buffer.alloc(8);
+  let damageIndex = 0;
+  let snapshotIndex = 0;
+  for (const [route, rows] of [['damage', damageRows], ['snapshot', snapshotRows]]) {
+    for (const row of rows) {
+      const ref = row.raw_packet_ref;
+      const at = `${ref.chunk_index}/${ref.decompressed_block_offset}`;
+      if (expected.has(at)) return { error: `duplicate source packet reference at ${at}` };
+      expected.set(at, { route, row, ref });
+    }
+  }
+  try {
+    const visit = (block, chunk) => {
+      const required = block.packet_id === 0x005f
+        || (chunk.stream === 'keyframe' && block.packet_id === 0x0089);
+      if (!required) return;
+      const at = `${chunk.index}/${block.offset}`;
+      const selected = expected.get(at);
+      if (!selected) throw new SourceMismatch(`source outcome omits route packet at ${at}`);
+      const { route, row, ref } = selected;
+      if (route === 'damage' ? row !== damageRows[damageIndex++]
+        : row !== snapshotRows[snapshotIndex++]) {
+        throw new SourceMismatch(`source packet order differs at ${at}`);
+      }
+      if (block.packet_id !== ref.packet_id
+          || block.timestamp_ms !== ref.replay_time_ms
+          || (block.param >>> 0) !== ref.raw_param
+          || block.payload_offset !== ref.decompressed_payload_offset
+          || block.payload_length !== ref.payload_length
+          || sha256(block.payload) !== ref.raw_payload_sha256
+          || (route === 'damage'
+            ? block.payload.toString('hex') !== ref.raw_payload_hex
+            : block.payload.subarray(0, 3).toString('hex')
+              !== SNAPSHOT_PROFILE.payload_prefix_hex
+              || Buffer.from(SNAPSHOT_PROFILE.raw_payload_byte_offsets.map((offset) =>
+                block.payload[offset])).toString('hex')
+                !== row.raw_payload_field_bytes_hex)) {
+        throw new SourceMismatch(`source packet reference or raw field differs at ${at}`);
+      }
+      if (route === 'damage') {
+        nativeHeader.writeUInt32LE(block.param >>> 0, 0);
+        nativeHeader.writeUInt32LE(block.payload.length, 4);
+        nativeInput.update(nativeHeader);
+        nativeInput.update(block.payload);
+      }
+      expected.delete(at);
+    };
+    let sourceRows = null;
+    if (precollected !== null) {
+      sourceRows = ['unit_apply_damage_packet',
+        'hero_minions_killed_snapshot'].map((capability) =>
+        rowsFor821Capability(replay, precollected, capability));
+      if (sourceRows.some((selected) => !Array.isArray(selected.rows))) {
+        const unavailable = sourceRows.find((selected) =>
+          !Array.isArray(selected.rows));
+        if (unavailable.error?.includes('was not selected by this 821 route scan')) {
+          // A legitimate route token may have been collected for another
+          // association (for example, death only). Retain the independent
+          // physical walk in that case.
+          sourceRows = null;
+        } else {
+          return { error: unavailable.error || '821 route scan is incomplete',
+            scan_error: true };
+        }
+      }
+    }
+    if (sourceRows === null) {
+      const walked = walkBlocks(replay, visit, { strict: true });
+      if (walked.errors.length) return { error: 'Replay framing errors', scan_error: true };
+    } else {
+      // The exact-build scan has already walked every framed block strictly.
+      // Its private source binding prevents a caller from inventing a token;
+      // compare every retained route packet to the supplied source rows below.
+      for (const selected of sourceRows) {
+        for (const { block, chunk } of selected.rows) visit(block, chunk);
+      }
+    }
+  } catch (error) {
+    return { error: error.message, scan_error: !(error instanceof SourceMismatch) };
+  }
+  if (expected.size) {
+    return { error: `source packet reference absent at ${expected.keys().next().value}` };
+  }
+  if (damageIndex !== damageRows.length || snapshotIndex !== snapshotRows.length) {
+    return { error: 'source packet route counts differ' };
+  }
+  return { verified_count: damageRows.length + snapshotRows.length,
+    native_input_sha256: nativeInput.digest('hex') };
+}
+
+function associateUnitApplyDamageRosterKeys821(replay, {
+  unitApplyDamagePacketOutcome, minionsKilledSnapshotOutcome,
+  precollected = null,
+} = {}) {
+  const damageProfileId = unitApplyDamagePacketOutcome?.profile_id;
+  const profile = (damageProfileId === DAMAGE_V2_ID || damageProfileId === DAMAGE_V3_ID)
+    ? UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821
+    : damageProfileId === DAMAGE_V4_ID
+      ? UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821
+      : damageProfileId === DAMAGE_V6_PROFILE.id
+        ? UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V4_821
+        : UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE;
+  const base = {
+    profile_id: profile.id,
+    depends_on: [...profile.depends_on],
+    evidence_runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    known_limits: [...profile.known_limits],
+  };
+  const fail = (status, error, diagnostics = {}) => ({
+    ...base, status, evidence_status: null,
+    replay_sha256: replay?.source_sha256 ?? null,
+    runtime_image_status: unitApplyDamagePacketOutcome?.runtime_image_status ?? 'NOT_CHECKED',
+    runtime_image_used: unitApplyDamagePacketOutcome?.runtime_image_used ?? false,
+    runtime_image_sha256: unitApplyDamagePacketOutcome?.runtime_image_sha256 ?? null,
+    damage_packet_count: null, snapshot_count: null, keyframe_count: null,
+    canonical_roster_key_count: null, matched_full_key_packet_count: null,
+    unmatched_packet_count: null, excluded_alias_0x100_packet_count: null,
+    first_excluded_packet_refs: null, verified_raw_packet_count: null,
+    input_count: null, event_count: null, events: null, error, diagnostics,
+  });
+  if (replay?.header?.version !== BUILD) {
+    return fail('UNSUPPORTED', `UnitApplyDamage roster key candidate supports only ${BUILD}`);
+  }
+  let sourceError;
+  try { sourceError = replaySourceError(replay); } catch (error) { sourceError = error.message; }
+  if (sourceError) return fail('DECODE_FAILED', `Replay source integrity failed: ${sourceError}`);
+  if (!sha(replay.source_sha256)) {
+    return fail('INCONSISTENT', 'Replay SHA-256 is missing or malformed');
+  }
+  if (!unitApplyDamagePacketOutcome || !minionsKilledSnapshotOutcome) {
+    return fail('MISSING_INPUT', 'both exact-build source outcomes are required', {
+      missing_inputs: [
+        ...(!unitApplyDamagePacketOutcome ? ['unit_apply_damage_packet'] : []),
+        ...(!minionsKilledSnapshotOutcome ? ['hero_minions_killed_snapshot'] : []),
+      ],
+    });
+  }
+  const damage = unitApplyDamagePacketOutcome;
+  const snapshot = minionsKilledSnapshotOutcome;
+  const damageIsV2 = damage.profile_id === DAMAGE_V2_ID;
+  const damageIsV3 = damage.profile_id === DAMAGE_V3_ID;
+  const damageIsV4 = damage.profile_id === DAMAGE_V4_ID;
+  const damageIsV5 = damage.profile_id === DAMAGE_PROFILE.id;
+  const damageIsV6 = damage.profile_id === DAMAGE_V6_PROFILE.id;
+  const hasF32At18 = damageIsV5 || damageIsV6;
+  const hasLookupKeys = damageIsV3 || damageIsV4 || hasF32At18;
+  const hasU32 = damageIsV4 || hasF32At18;
+  if (damage.status !== 'CANDIDATE' || snapshot.status !== 'CANDIDATE') {
+    const priority = ['DECODE_FAILED', 'INCONSISTENT', 'UNSUPPORTED',
+      'MISSING_INPUT', 'PROFILE_UNAVAILABLE'];
+    const decisive = priority.find((status) =>
+      damage.status === status || snapshot.status === status) ?? 'INCONSISTENT';
+    return fail(decisive, 'one or both exact-build source outcomes are unavailable', {
+      dependency_statuses: {
+        unit_apply_damage_packet: damage.status ?? null,
+        hero_minions_killed_snapshot: snapshot.status ?? null,
+      },
+    });
+  }
+  if ((!damageIsV2 && !hasLookupKeys)
+      || damage.evidence_status !== DAMAGE_PROFILE.evidence_status
+      || damage.evidence_runtime_image_sha256 !== RUNTIME_IMAGE_SHA256
+      || damage.evidence_scalar_table_sha256
+        !== DAMAGE_PROFILE.evidence_scalar_table_sha256
+      || damage.evidence_shape_catalog_sha256
+        !== DAMAGE_PROFILE.evidence_shape_catalog_sha256
+      || damage.runtime_image_sha256 !== RUNTIME_IMAGE_SHA256
+      || damage.runtime_image_status !== 'MATCHED_USED'
+      || damage.runtime_image_used !== true
+      || damage.input_packet_id !== 0x005f
+      || !count(damage.input_count, MAX_DAMAGE_ROWS) || damage.input_count === 0
+      || damage.event_count !== damage.input_count
+      || !Array.isArray(damage.events) || damage.events.length !== damage.event_count
+      || damage.native_witness_status !== 'FULLY_CONSUMED_ALL'
+      || damage.native_full_success_count !== damage.event_count
+      || damage.native_callback_f32_available_count !== damage.event_count
+      || !sha(damage.native_input_sha256)
+      || !damage.native_callback_f32_source_counts
+      || Object.keys(damage.native_callback_f32_source_counts).sort().join(',')
+        !== [...NATIVE_SOURCES].sort().join(',')
+      || NATIVE_SOURCES.some((source) =>
+        !count(damage.native_callback_f32_source_counts[source], MAX_DAMAGE_ROWS))
+      || NATIVE_SOURCES.reduce((sum, source) =>
+        sum + damage.native_callback_f32_source_counts[source], 0) !== damage.event_count
+      || (damageIsV2 && LOOKUP_OUTCOME_FIELDS.some((field) => field in damage))
+      || (!hasU32 && U32_OUTCOME_FIELDS.some((field) => field in damage))
+      || (!hasF32At18 && F32_18_OUTCOME_FIELDS.some((field) => field in damage))
+      || (!damageIsV6 && U32_1C_OUTCOME_FIELDS.some((field) => field in damage))
+      || (hasLookupKeys && (
+        damage.evidence_lookup_key_0x24_table_sha256
+          !== DAMAGE_PROFILE.evidence_lookup_key_0x24_table_sha256
+        || damage.evidence_lookup_key_0x2c_table_sha256
+          !== DAMAGE_PROFILE.evidence_lookup_key_0x2c_table_sha256
+        || damage.native_callback_lookup_full_write_count !== damage.event_count
+        || !damage.native_callback_lookup_key_0x24_raw_param_relation_counts
+        || Object.keys(damage.native_callback_lookup_key_0x24_raw_param_relation_counts)
+          .sort().join(',') !== [...LOOKUP_RELATIONS].sort().join(',')
+        || LOOKUP_RELATIONS.some((relation) =>
+          !count(damage.native_callback_lookup_key_0x24_raw_param_relation_counts[
+            relation], MAX_DAMAGE_ROWS))
+        || LOOKUP_RELATIONS.reduce((sum, relation) => sum
+          + damage.native_callback_lookup_key_0x24_raw_param_relation_counts[
+            relation], 0) !== damage.event_count))
+      || (hasU32 && (
+        damage.evidence_callback_u32_0x10_table_sha256
+          !== DAMAGE_PROFILE.evidence_callback_u32_0x10_table_sha256
+        || damage.native_callback_u32_0x10_full_write_count !== damage.event_count
+        || !damage.native_callback_u32_0x10_source_counts
+        || Object.keys(damage.native_callback_u32_0x10_source_counts)
+          .sort().join(',') !== [...U32_SOURCES].sort().join(',')
+        || U32_SOURCES.some((source) =>
+          !count(damage.native_callback_u32_0x10_source_counts[source],
+            MAX_DAMAGE_ROWS))
+        || U32_SOURCES.reduce((sum, source) => sum
+          + damage.native_callback_u32_0x10_source_counts[source], 0)
+          !== damage.event_count))
+      || (hasF32At18 && (
+        damage.evidence_callback_f32_0x18_table_sha256
+          !== DAMAGE_PROFILE.evidence_callback_f32_0x18_table_sha256
+        || damage.native_callback_f32_0x18_full_write_count !== damage.event_count
+        || !damage.native_callback_f32_0x18_source_counts
+        || Object.keys(damage.native_callback_f32_0x18_source_counts)
+          .sort().join(',') !== [...F32_18_SOURCES].sort().join(',')
+        || F32_18_SOURCES.some((source) =>
+          !count(damage.native_callback_f32_0x18_source_counts[source],
+            MAX_DAMAGE_ROWS))
+        || F32_18_SOURCES.reduce((sum, source) => sum
+          + damage.native_callback_f32_0x18_source_counts[source], 0)
+          !== damage.event_count))
+      || (damageIsV6 && (
+        damage.evidence_callback_u32_0x1c_table_sha256
+          !== DAMAGE_V6_PROFILE.evidence_callback_u32_0x1c_table_sha256
+        || damage.native_callback_u32_0x1c_full_write_count !== damage.event_count
+        || !damage.native_callback_u32_0x1c_source_counts
+        || Object.keys(damage.native_callback_u32_0x1c_source_counts)
+          .sort().join(',') !== [...U32_1C_SOURCES].sort().join(',')
+        || U32_1C_SOURCES.some((source) =>
+          !count(damage.native_callback_u32_0x1c_source_counts[source],
+            MAX_DAMAGE_ROWS))
+        || U32_1C_SOURCES.reduce((sum, source) => sum
+          + damage.native_callback_u32_0x1c_source_counts[source], 0)
+          !== damage.event_count))
+      || snapshot.profile_id !== SNAPSHOT_PROFILE.id
+      || snapshot.evidence_runtime_image_sha256 !== RUNTIME_IMAGE_SHA256
+      || snapshot.lookup_table_sha256 !== LOOKUP_TABLE_SHA256
+      || snapshot.runtime_image_status !== 'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED'
+      || snapshot.runtime_image_used !== false
+      || snapshot.input_packet_id !== 0x0089
+      || !count(snapshot.input_count, MAX_SNAPSHOT_ROWS)
+      || !count(snapshot.event_count, MAX_SNAPSHOT_ROWS)
+      || !count(snapshot.keyframe_count, MAX_SNAPSHOT_ROWS)
+      || snapshot.keyframe_count === 0
+      || snapshot.input_count !== snapshot.event_count
+      || snapshot.event_count !== snapshot.keyframe_count * 10
+      || snapshot.observed_participant_count !== 10
+      || !Array.isArray(snapshot.events)
+      || snapshot.events.length !== snapshot.event_count) {
+    return fail('INCONSISTENT', 'exact-build source outcome profile, native witness, image, or counts differ');
+  }
+  const frames = new Map();
+  for (const [index, row] of snapshot.events.entries()) {
+    if (!validSnapshotRow(replay, row)) {
+      return fail('INCONSISTENT', 'HeroStats roster row identity or source reference differs', {
+        source: 'hero_minions_killed_snapshot', event_index: index,
+      });
+    }
+    const ref = row.raw_packet_ref;
+    const frame = frames.get(ref.chunk_index) ?? {
+      time_ms: ref.replay_time_ms, participants: new Map(),
+    };
+    if (frame.time_ms !== ref.replay_time_ms
+        || frame.participants.has(row.hero_raw_param)) {
+      return fail('INCONSISTENT', 'HeroStats keyframe roster time or full key is ambiguous', {
+        event_index: index, chunk_index: ref.chunk_index,
+      });
+    }
+    frame.participants.set(row.hero_raw_param, row);
+    frames.set(ref.chunk_index, frame);
+  }
+  const replayKeyframes = replay.chunks.filter((chunk) => chunk.stream === 'keyframe');
+  if (replayKeyframes.length !== snapshot.keyframe_count
+      || frames.size !== snapshot.keyframe_count
+      || replayKeyframes.some((chunk) => !frames.has(chunk.index))
+      || [...frames.values()].some((frame) => frame.participants.size !== 10)) {
+    return fail('INCONSISTENT', 'Replay keyframe does not have a complete ten-key HeroStats roster');
+  }
+  const firstFrame = frames.get(replayKeyframes[0].index);
+  const roster = new Map(firstFrame.participants);
+  for (const frame of frames.values()) {
+    if ([...roster.keys()].some((key) => !frame.participants.has(key))) {
+      return fail('INCONSISTENT', 'canonical HeroStats full-key roster changes across keyframes');
+    }
+  }
+  const sourceCounts = Object.fromEntries(NATIVE_SOURCES.map((source) => [source, 0]));
+  const u32SourceCounts = Object.fromEntries(U32_SOURCES.map((source) => [source, 0]));
+  const f32At18SourceCounts = Object.fromEntries(F32_18_SOURCES.map((source) => [source, 0]));
+  const u32At1cSourceCounts = Object.fromEntries(U32_1C_SOURCES.map((source) => [source, 0]));
+  const lookupRelationCounts = Object.fromEntries(
+    LOOKUP_RELATIONS.map((relation) => [relation, 0]));
+  const events = [];
+  let aliasCount = 0;
+  let unmatchedCount = 0;
+  const firstExcluded = { alias_0x100: null, unmatched_other: null };
+  for (const [index, row] of damage.events.entries()) {
+    if (!validDamageRow(replay, row, damage.profile_id)) {
+      return fail('INCONSISTENT', 'UnitApplyDamage row identity, native float, or source reference differs', {
+        source: 'unit_apply_damage_packet', event_index: index,
+      });
+    }
+    sourceCounts[row.native_callback_f32_0x20_source] += 1;
+    if (hasLookupKeys) {
+      lookupRelationCounts[row.native_callback_lookup_key_0x24_raw_param_relation] += 1;
+    }
+    if (hasU32) u32SourceCounts[row.native_callback_u32_0x10_source] += 1;
+    if (hasF32At18) f32At18SourceCounts[row.native_callback_f32_0x18_source] += 1;
+    if (damageIsV6) u32At1cSourceCounts[row.native_callback_u32_0x1c_source] += 1;
+    const rosterRow = roster.get(row.raw_param);
+    if (!rosterRow) {
+      unmatchedCount += 1;
+      if (row.raw_param >= FIRST_PARAM + 0x100
+          && row.raw_param <= LAST_PARAM + 0x100) {
+        aliasCount += 1;
+        firstExcluded.alias_0x100 ??= structuredClone(row.raw_packet_ref);
+      } else {
+        firstExcluded.unmatched_other ??= structuredClone(row.raw_packet_ref);
+      }
+      continue;
+    }
+    const damageRef = structuredClone(row.raw_packet_ref);
+    const rosterRef = structuredClone(rosterRow.raw_packet_ref);
+    events.push({
+      event_type: 'UNIT_APPLY_DAMAGE_ROSTER_KEY_CANDIDATE',
+      game_version: BUILD, patch: '16.19', build_profile: profile.id,
+      replay_sha256: replay.source_sha256,
+      replay_time_ms: row.replay_time_ms,
+      raw_param: row.raw_param,
+      hero_stats_participant_id_candidate: rosterRow.participant_id_candidate,
+      native_callback_f32_0x20_candidate: row.native_callback_f32_0x20_candidate,
+      native_callback_f32_0x20_source: row.native_callback_f32_0x20_source,
+      ...(hasF32At18 ? Object.fromEntries(F32_18_ROW_FIELDS.map((field) =>
+        [field, row[field]])) : {}),
+      ...(damageIsV6 ? Object.fromEntries(U32_1C_ROW_FIELDS.map((field) =>
+        [field, row[field]])) : {}),
+      pair_basis: 'EXACT_FULL_RAW_PARAM_IN_CANONICAL_HEROSTATS_ROSTER',
+      actor_assignment_status: 'UNKNOWN',
+      source_target_role_status: 'UNKNOWN',
+      semantic_effect_status: 'UNKNOWN',
+      confidence: 'CANDIDATE', semantic_status: EVIDENCE_STATUS,
+      unit_apply_damage_raw_packet_ref: damageRef,
+      hero_stats_roster_raw_packet_ref: rosterRef,
+      raw_packet_refs: [damageRef, rosterRef],
+    });
+  }
+  if (NATIVE_SOURCES.some((source) =>
+    sourceCounts[source] !== damage.native_callback_f32_source_counts[source])) {
+    return fail('INCONSISTENT', 'UnitApplyDamage native float source counts differ');
+  }
+  if (hasLookupKeys && LOOKUP_RELATIONS.some((relation) =>
+    lookupRelationCounts[relation]
+      !== damage.native_callback_lookup_key_0x24_raw_param_relation_counts[relation])) {
+    return fail('INCONSISTENT', 'UnitApplyDamage native lookup relation counts differ');
+  }
+  if (hasU32 && U32_SOURCES.some((source) =>
+    u32SourceCounts[source] !== damage.native_callback_u32_0x10_source_counts[source])) {
+    return fail('INCONSISTENT', 'UnitApplyDamage callback +0x10 source counts differ');
+  }
+  if (hasF32At18 && F32_18_SOURCES.some((source) =>
+    f32At18SourceCounts[source] !== damage.native_callback_f32_0x18_source_counts[source])) {
+    return fail('INCONSISTENT', 'UnitApplyDamage callback +0x18 source counts differ');
+  }
+  if (damageIsV6 && U32_1C_SOURCES.some((source) =>
+    u32At1cSourceCounts[source] !== damage.native_callback_u32_0x1c_source_counts[source])) {
+    return fail('INCONSISTENT', 'UnitApplyDamage callback +0x1c source counts differ');
+  }
+  const physical = verifyPhysicalRefs(replay, damage.events, snapshot.events,
+    precollected);
+  if (physical.error) {
+    return fail(physical.scan_error ? 'DECODE_FAILED' : 'INCONSISTENT', physical.error);
+  }
+  if (physical.native_input_sha256 !== damage.native_input_sha256) {
+    return fail('INCONSISTENT', 'native witness input digest differs from Replay packets');
+  }
+  return {
+    ...base, status: 'CANDIDATE', evidence_status: EVIDENCE_STATUS,
+    replay_sha256: replay.source_sha256,
+    runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
+    runtime_image_sha256: RUNTIME_IMAGE_SHA256,
+    ...(hasF32At18 ? {
+      evidence_callback_f32_0x18_table_sha256:
+        damage.evidence_callback_f32_0x18_table_sha256,
+      native_callback_f32_0x18_full_write_count:
+        damage.native_callback_f32_0x18_full_write_count,
+      native_callback_f32_0x18_source_counts:
+        { ...damage.native_callback_f32_0x18_source_counts },
+    } : {}),
+    ...(damageIsV6 ? {
+      evidence_callback_u32_0x1c_table_sha256:
+        damage.evidence_callback_u32_0x1c_table_sha256,
+      native_callback_u32_0x1c_full_write_count:
+        damage.native_callback_u32_0x1c_full_write_count,
+      native_callback_u32_0x1c_source_counts:
+        { ...damage.native_callback_u32_0x1c_source_counts },
+    } : {}),
+    dependency_statuses: {
+      unit_apply_damage_packet: damage.status,
+      hero_minions_killed_snapshot: snapshot.status,
+    },
+    damage_packet_count: damage.event_count,
+    snapshot_count: snapshot.event_count,
+    keyframe_count: snapshot.keyframe_count,
+    canonical_roster_key_count: roster.size,
+    matched_full_key_packet_count: events.length,
+    unmatched_packet_count: unmatchedCount,
+    excluded_alias_0x100_packet_count: aliasCount,
+    first_excluded_packet_refs: firstExcluded,
+    verified_raw_packet_count: physical.verified_count,
+    input_count: physical.verified_count,
+    event_count: events.length, events,
+  };
+}
+
+module.exports = {
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V1_821,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V2_821,
+  UNIT_APPLY_DAMAGE_ROSTER_KEY_PROFILE_V4_821,
+  associateUnitApplyDamageRosterKeys821,
+};

@@ -33,8 +33,8 @@ OBSERVED_PAYLOAD_LENGTHS = {
     2: frozenset((13, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
                   29, 30, 31, 32, 33, 41, 42)),
 }
-MAX_INPUT_BYTES = 4_000_000
-MAX_PACKETS = 20_000
+MAX_INPUT_BYTES = 8_000_000
+MAX_PACKETS = 40_000
 
 
 def failure(message, *, return_al=None, consumed=None):

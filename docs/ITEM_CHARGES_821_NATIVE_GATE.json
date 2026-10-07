@@ -1,0 +1,270 @@
+{
+  "evidence_tier": "EXACT_BUILD_REPLAY_AND_PINNED_IMAGE_NATIVE_PRE_RECEIVER_WITNESS",
+  "build": "16.19.821.7343",
+  "runtime_image_sha256": "35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325",
+  "route": "0x0437",
+  "packet_class": "PKT_S2C_SetItemCharges_s",
+  "callback_owner": "HeroInventoryClient_RTTI_ONLY",
+  "factory_case_rva": "0xf0bb2a",
+  "constructor_rva": "0xebda80",
+  "vtable_rva": "0x1ba5868",
+  "deserializer_rva": "0x1041380",
+  "callback_rva": "0x350250",
+  "native_range_check_rva": "0x2af490",
+  "pre_receiver_callsite_rva": "0x350310",
+  "receiver_method_rva_not_executed": "0x292770",
+  "callback_code_sha256": "c34dee97cf2c91cbf31fceb8b9b68a8d14be2a67bc8d796c4ace3daf6a825774",
+  "replay_count": 11,
+  "scanned_block_count": 18235209,
+  "packet_count": 40439,
+  "native_full_success_count": 40439,
+  "native_pre_receiver_count": 40439,
+  "first_failure": null,
+  "stream_counts": {
+    "game_chunk": 40439
+  },
+  "length_counts": {
+    "1": 4995,
+    "2": 21918,
+    "3": 11684,
+    "4": 1842
+  },
+  "ordered_input_rule": "For each packet in Replay block order: u32le raw_param, u32le payload_length, raw payload bytes.",
+  "ordered_native_output_rule": "For each packet in the same order: protected object bytes +0x10..+0x13, then u32le callback selector argument, then u16le callback value argument.",
+  "callback_selector_u8_counts": {
+    "0": 7238,
+    "1": 11616,
+    "2": 6902,
+    "3": 11071,
+    "4": 2848,
+    "5": 578,
+    "8": 186
+  },
+  "callback_value_u16_distinct_count": 698,
+  "callback_value_u16_min": 0,
+  "callback_value_u16_max": 1111,
+  "negative_controls": {
+    "cross_replay_representatives_per_length": 2,
+    "truncate_count": 8,
+    "append_count": 8,
+    "accepted_as_full_count": 0,
+    "detail_retained_locally": true
+  },
+  "real_cli_smoke": {
+    "source_sha256": "d3a93326b3420ac0e2d0f077eef70b9b6413a9eb4b3e09f69056902ec2d11a8e",
+    "candidate_rows": 4600,
+    "native_batches": 1,
+    "framing_errors": 0,
+    "runtime_image_status": "MATCHED_USED",
+    "ordered_input_sha256_matches_full_gate": true,
+    "ordered_output_sha256_matches_full_gate": true,
+    "saved_selector_zero_query": {
+      "scanned": 4600,
+      "matched": 631,
+      "emitted": 1
+    },
+    "saved_unobserved_selector_six_query": {
+      "scanned": 4600,
+      "matched": 0,
+      "emitted": 0
+    }
+  },
+  "semantic_limit": "These are packet-local callback arguments before the receiver method. Actual item identity, charges, slot, owner, receiver state and gameplay effect remain UNKNOWN.",
+  "replays": [
+    {
+      "source_sha256": "d3a93326b3420ac0e2d0f077eef70b9b6413a9eb4b3e09f69056902ec2d11a8e",
+      "scanned_block_count": 2048130,
+      "target_count": 4600,
+      "native_full_success_count": 4600,
+      "stream_counts": {
+        "game_chunk": 4600
+      },
+      "length_counts": {
+        "1": 178,
+        "2": 4131,
+        "3": 151,
+        "4": 140
+      },
+      "ordered_input_sha256": "2d6b4325dad9b563e7619b0adbe354848cf0fe10e3d2346a3c199fd3a663c6c8",
+      "ordered_native_output_sha256": "e0ba39e80b4dfb64109376c94a65411cd4d533cea61921d36de18a2c801ade5a",
+      "first_failure": null
+    },
+    {
+      "source_sha256": "d5a53ff86009aa0e3d2544a8f00727e377e25f0a052a832e8f456d1cdcfdef8c",
+      "scanned_block_count": 1433298,
+      "target_count": 2235,
+      "native_full_success_count": 2235,
+      "stream_counts": {
+        "game_chunk": 2235
+      },
+      "length_counts": {
+        "1": 171,
+        "2": 1562,
+        "3": 224,
+        "4": 278
+      },
+      "ordered_input_sha256": "ef224976e6190a3c95f55dc7b81ff0567d1e130c61776bcaa1d18dd9d9352796",
+      "ordered_native_output_sha256": "ed9f9c8acf79dc0b0db10ed4770cd15f5afa4d8e249757017e021f379f233953",
+      "first_failure": null
+    },
+    {
+      "source_sha256": "26030cc38d97a96adb101a290746761c289044e3190d4962468cd3bc062518eb",
+      "scanned_block_count": 1444090,
+      "target_count": 3022,
+      "native_full_success_count": 3022,
+      "stream_counts": {
+        "game_chunk": 3022
+      },
+      "length_counts": {
+        "1": 1047,
+        "2": 1259,
+        "3": 502,
+        "4": 214
+      },
+      "ordered_input_sha256": "ed92dfb2dea6eaf2b891916f29ae5853e11ca02031baf2ee70a8bc85736de5eb",
+      "ordered_native_output_sha256": "5e694bb03f312da4b9db80b7f3bd94dab4c20c0e3d6a593a91f333faee90f848",
+      "first_failure": null
+    },
+    {
+      "source_sha256": "bf13d633a79cfc649292b4ef08fddab5328b914b1d809565d51e464f3fa9c541",
+      "scanned_block_count": 1420018,
+      "target_count": 1800,
+      "native_full_success_count": 1800,
+      "stream_counts": {
+        "game_chunk": 1800
+      },
+      "length_counts": {
+        "1": 224,
+        "2": 1364,
+        "3": 212
+      },
+      "ordered_input_sha256": "17534a8269c77b80b5de2c66324490089a407179934ff99aa0c51b07c4cce535",
+      "ordered_native_output_sha256": "7dfea05d9db447c82dca3c47ea5b379d616f9fa59bbd88250133addfd622726c",
+      "first_failure": null
+    },
+    {
+      "source_sha256": "dd78cf6bbac9728109998bcef6d9554ad93ba06c192c7547314e7a1ef17c2404",
+      "scanned_block_count": 1705869,
+      "target_count": 4845,
+      "native_full_success_count": 4845,
+      "stream_counts": {
+        "game_chunk": 4845
+      },
+      "length_counts": {
+        "1": 240,
+        "2": 2460,
+        "3": 2143,
+        "4": 2
+      },
+      "ordered_input_sha256": "c1cc6e511e84c19bd4a917f3619b25845d6890506c8ff2104958f44aa65dfb1b",
+      "ordered_native_output_sha256": "a8aa3cca6e80a4e10b1d1f51f0b947cac71ec43d4f7e68c5e0012339738935e7",
+      "first_failure": null
+    },
+    {
+      "source_sha256": "18070abab4a973ca9d753ed48b4b155042de9b70f3fe059defbad5d9b27b1264",
+      "scanned_block_count": 2288756,
+      "target_count": 6356,
+      "native_full_success_count": 6356,
+      "stream_counts": {
+        "game_chunk": 6356
+      },
+      "length_counts": {
+        "1": 236,
+        "2": 2264,
+        "3": 3369,
+        "4": 487
+      },
+      "ordered_input_sha256": "04c7e998180be3171d70ec26c7d916a767a92efeb643e262c3363b1d047b57b4",
+      "ordered_native_output_sha256": "dae4242996838d5467f48fdf8df78da8a3bb03988981e53db20c3e260b4ddecd",
+      "first_failure": null
+    },
+    {
+      "source_sha256": "4d6e5dc8a4da1c9048c4e75d984c3eb98623f9ebf9d325ba28a51874e43b9e39",
+      "scanned_block_count": 1272273,
+      "target_count": 3952,
+      "native_full_success_count": 3952,
+      "stream_counts": {
+        "game_chunk": 3952
+      },
+      "length_counts": {
+        "1": 178,
+        "2": 1402,
+        "3": 2217,
+        "4": 155
+      },
+      "ordered_input_sha256": "13a1c4f640ec9340d8fb95090ca493c50bc51ffe9e01d17b78802024a5f0318f",
+      "ordered_native_output_sha256": "4e5fb4c7d92cf7d0cb7d44fbf9026d0e6ab467239d93226dab14668e14521737",
+      "first_failure": null
+    },
+    {
+      "source_sha256": "8c84fa11712e5faf516f0316d34aa9e6dbe542b36e5d1472c294daf2533ae1ef",
+      "scanned_block_count": 1619918,
+      "target_count": 4069,
+      "native_full_success_count": 4069,
+      "stream_counts": {
+        "game_chunk": 4069
+      },
+      "length_counts": {
+        "1": 368,
+        "2": 1791,
+        "3": 1534,
+        "4": 376
+      },
+      "ordered_input_sha256": "3e4592a102d54299eefb72cfc2896589133f5d617e1cfeb68cfc83e554036b1a",
+      "ordered_native_output_sha256": "5dc35d4896e2dca9a36eb7449bb1bff5e684045eb6028c4f003dbcd7d03c9ce4",
+      "first_failure": null
+    },
+    {
+      "source_sha256": "823b546655866c076a5e14874197ad42eb2f83917f563c08c7a928193e5cb52d",
+      "scanned_block_count": 1988624,
+      "target_count": 4316,
+      "native_full_success_count": 4316,
+      "stream_counts": {
+        "game_chunk": 4316
+      },
+      "length_counts": {
+        "1": 1147,
+        "2": 2998,
+        "3": 171
+      },
+      "ordered_input_sha256": "c02af676cab1460cea5a3845b927bf402a63594166f87b27b17c85804b324f91",
+      "ordered_native_output_sha256": "dcec2fe014b6a2c4600ab43bb5d8e0eb7cda0626990dae9767158d559f18bf41",
+      "first_failure": null
+    },
+    {
+      "source_sha256": "682b6703b2caeafb49b501a93b398cc9227381d412ae7f25a942a3035a8ea9ca",
+      "scanned_block_count": 1750384,
+      "target_count": 3359,
+      "native_full_success_count": 3359,
+      "stream_counts": {
+        "game_chunk": 3359
+      },
+      "length_counts": {
+        "1": 425,
+        "2": 1866,
+        "3": 878,
+        "4": 190
+      },
+      "ordered_input_sha256": "05b8fafc0c2a5bd0839207f3cfd1bc6948cc0145593553c24b755e17e3ad954f",
+      "ordered_native_output_sha256": "d1be101606b4137ae23747fef9acb5ba624f5615a869c0384f8a8172d1d25544",
+      "first_failure": null
+    },
+    {
+      "source_sha256": "2453323e79e62e24b43f3d041b77f2b4d2773e39cba77a125663544ee2e0940b",
+      "scanned_block_count": 1263849,
+      "target_count": 1885,
+      "native_full_success_count": 1885,
+      "stream_counts": {
+        "game_chunk": 1885
+      },
+      "length_counts": {
+        "1": 781,
+        "2": 821,
+        "3": 283
+      },
+      "ordered_input_sha256": "2c45ba688d2e7fcc3f2427db06e1ca63d2b4b32c2729d3e08d0fdd50f525402d",
+      "ordered_native_output_sha256": "b6d21800bf4fff7c0897963a5a735c8e106e6726d63fe5c0b9a58a2764de495b",
+      "first_failure": null
+    }
+  ]
+}

@@ -264,6 +264,7 @@ module.exports = {
   HERO_LEVEL_CANDIDATE_PROFILE_821,
   LEVEL_BY_LAST_PAYLOAD_BYTE,
   decodeRuntimeLevelByte,
+  decodeLevelCode,
   assessHeroLevelTail821,
   decodeHeroLevelCandidates821,
 };

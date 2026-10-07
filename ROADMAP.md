@@ -1,5 +1,53 @@
 # 开发路线与待补全项
 
+## Project stopped, 2026-10-07
+
+The user ended active development. The remaining items below are historical
+research gaps, not an active work queue. Preserve completed source, tests and
+offline CLI/API entry points. Do not resume automatically.
+See [the final scope and unresolved capabilities](docs/PROJECT_STOPPED_20261007.md).
+
+## Completed 16.19 continuation, 2026-10-02 through 2026-10-07
+
+The protocol-first Oct-7 follow-up adapts the sampled-counter timeline to exact
+HN 820 with independently pinned route/transform evidence and three original
+Replays. [Remaining protocol choices and minimal offline scope](docs/OFFLINE_16_19_SCOPE.md)
+record what is useful now and where receiver/position/action evidence is missing.
+Anonymous field counts are not treated as semantic progress.
+
+The independent packet/window saved query gap is now closed with complete saved
+dependency reconstruction and fresh exact-image source verification. It preserves
+strict open endpoints, anonymous key roles and rotated-key controls.
+
+The next Oct-7 increment completes the missing saved damage interval query surface,
+including full original-source re-decode without a runtime image. [Current use](docs/DAMAGE_INTERVAL_QUERY_16_19_821.md)
+is available independently of receiver heap. Native packet/window comparison remains
+available through saved CLI/API queries and numeric screens; true per-hit
+damage/heal/shield effects still need observed affected state. Unfiltered native
+damage queries now validate complete fields/counts/digests before emitting rows.
+
+2026-10-07: native cooldown V2 packet arguments and full source queries now work
+without synthetic receiver evidence. [Remaining decisive inputs](docs/COOLDOWN_REQUEST_FIELDS_16_19_821.md)
+separate independently reproduced requests from receiver/slot/state/clock truth.
+Existing exact-module input labels do not bridge Q/W/E/R to packet slots; the
+SpellLevel formatting accessor does not identify an applied rank change.
+
+The authorized exact-821 development branch now provides native slot-change
+family requests and a full-header-key candidate roster association through the
+CLI/API. [Current scope and remaining inputs](docs/SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md)
+record the useful association completed with existing offline inputs. Receiver
+application, gate outcomes and gameplay field/slot labels remain pending an
+independently anchored offline receiver/state witness; the module-only image
+cannot supply it. Preserve the runnable release and avoid repeating missing-state
+research. Old-client reruns are not a prerequisite to this branch.
+
+Saved slot request and roster-association queries are now connected to complete
+source validation, internal index/operation filters and optional full native
+source re-decode. This makes the existing candidate output usable without
+repeating the missing receiver-state research.
+
+The historical roadmap below remains a record of its original baseline.
+
 更新：2026-09-23。这里描述的是后续工作入口和验收条件，不表示任务已实施。当前仓库状态为 `SOURCE_FROZEN_DURING_MIGRATION`；长期开发进入 `lol-inference-lab/replay/`，本仓库保留为可比较的源码快照。任何跨项目接口、能力等级或资产状态变更先按 V2 架构门禁处理。
 
 ## 当前基线

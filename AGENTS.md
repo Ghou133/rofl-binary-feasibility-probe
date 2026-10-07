@@ -1,5 +1,15 @@
 # Project instructions
 
+## Project stopped, 2026-10-07
+
+The user stopped active development and authorized only preservation and GitHub
+integration of completed work. Do not autonomously resume feature work, semantic
+research, build adaptation, client inspection or acquisition. Retain all existing
+source and evidence boundaries. Finish only the requested closeout and necessary
+validation/CI fixes; future development requires a new explicit user instruction.
+See `docs/PROJECT_STOPPED_20261007.md`. This decision supersedes the continuation
+authorization below, which remains a historical record.
+
 The parser owns replay protocol semantics only. Do not add map truth, behavior
 inference, offline corpus collection, live acquisition/cache/state or UI. Consumers
 use published interfaces; do not copy decoder logic across ownership boundaries.

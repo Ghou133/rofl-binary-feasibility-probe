@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "status": "DEVELOPMENT_ONLY_NEGATIVE_EVIDENCE",
+  "full_build": "16.19.821.7343",
+  "packet_id": "0x005f",
+  "runtime_image_sha256": "35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325",
+  "verification_scope": {
+    "original_rofl_sha256_matched_saved_artifact_count": 11,
+    "saved_packet_payloads_natively_rerun": 7426,
+    "native_full_consumption_and_callback_transform_matches": 7426,
+    "original_rofl_packet_offsets_independently_rewalked": false,
+    "live_client_callback_executed": false
+  },
+  "callback_dataflow": {
+    "callback_rva": "0x2ce150",
+    "both_key_lookup_rva": "0x573e40",
+    "both_lookup_result_cast_rva": "0x11de890",
+    "first_lookup_key_object_offset": "0x24",
+    "first_lookup_result_virtual_call_slot": "0x720",
+    "second_lookup_key_object_offset": "0x2c",
+    "dispatch_rva": "0x2827c0",
+    "object_registry_global_rva": "0x1f96348",
+    "object_registry_pointer_outside_mapped_module_image": true
+  },
+  "packet_local_negative_control": {
+    "field_object_offset": "0x1c",
+    "selector_zero_constant_zero_packets_in_saved_corpus": 621483,
+    "raw_reader_packets_in_saved_corpus": 7426,
+    "raw_reader_value_equals_raw_param_count": 0,
+    "raw_reader_value_equals_first_lookup_key_count": 0,
+    "raw_reader_value_equals_second_lookup_key_count": 0,
+    "raw_reader_value_in_saved_ten_hero_roster_count": 0
+  },
+  "death_cooccurrence_negative_control": {
+    "candidate_death_anchors": 655,
+    "same_time_victim_key_packet_candidates": 1035,
+    "anchors_with_multiple_candidate_packets": 227,
+    "anchors_without_same_time_second_key_die_source_match": 22
+  },
+  "conclusion": "Actor, source, target, fatal packet, and applied health effect remain UNKNOWN. Packet keys and same-time cooccurrence do not establish a successful live object lookup or participant role.",
+  "reopen_gate": "Trace the exact-build live callback or a faithful Replay-driven client state: record both lookup and cast results, concrete object identities and vtables, the +0x720 receiver, and an independently attributable health or death settlement."
+}

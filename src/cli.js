@@ -3,9 +3,12 @@
 const childProcess = require('node:child_process');
 const { once } = require('node:events');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { finished } = require('node:stream/promises');
+const { Worker } = require('node:worker_threads');
 const { rawAnchorChainStatus, renderAcceptanceReport } = require('./cli_report');
+const damageQueryFilters = require('./damage_query_filters');
 const { resolveBuildProfile } = require('./build_registry');
 const {
   analyzeReplayWithCandidateRoutes,
@@ -30,6 +33,8 @@ const { assessHeroFloatSnapshotTail821, assessHeroJungleMinionsTail821 } =
   require('./decoders/rofl_16_19_821_float_stats_candidate');
 const { assessHeroKillStatsTail821 } =
   require('./decoders/rofl_16_19_821_kill_stats_candidate');
+const { DAMAGE_KEYFRAME_INTERVALS_821_PROFILE } =
+  require('./decoders/rofl_16_19_821_damage_keyframe_intervals_candidate');
 const { PROFILES: DAMAGE_PROFILES_821 } =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
 const { PROFILES: TIME_PROFILES_821 } =
@@ -73,7 +78,9 @@ const {
   analyzeReplay,
 } = require('./analysis');
 const {
+  HEADER_PREFIX_SIZE,
   RoflError,
+  parseHeader,
   parseReplayFile,
   sha256,
 } = require('./rofl');
@@ -109,9 +116,10 @@ const {
   writeJsonl,
 } = require('./io');
 const { EventQueryError, prepareEventQuery, prepareBatchEventQuery,
-  streamEventQuery, streamBatchEventQuery } = require('./event_query');
+  streamEventQuery, streamBatchEventQuery, listSavedEvents } = require('./event_query');
 
 const REPOSITORY_ROOT = path.resolve(__dirname, '..');
+const BATCH_JOBS_BUILD = '16.19.821.7343';
 const TEST_COMMAND = 'node --test test/*.test.js';
 const COMMANDS = new Set(['inspect', 'decode', 'analyze', 'batch', 'validate', 'ward-events', 'capabilities', 'query-events']);
 const INVENTORY_GAME_COMPARISON_LABELS_821 = Object.freeze([
@@ -133,12 +141,13 @@ function usage() {
 
 Usage:
   node src/cli.js inspect <file.rofl> [--out-dir artifacts]
-  node src/cli.js capabilities <file.rofl> [--json]
+  node src/cli.js capabilities <file.rofl> [--events <names>] [--json]
   node src/cli.js decode <file.rofl> [--out-dir artifacts]
   node src/cli.js analyze <file.rofl> [--out-dir artifacts]
   node src/cli.js batch <file.rofl|directory> [more inputs ...] [--out-dir artifacts]
   node src/cli.js validate [file.rofl|directory ...] [--out-dir artifacts]
   node src/cli.js ward-events <rows.json|rows.jsonl|file.rofl> [--out-dir artifacts]
+  node src/cli.js query-events <replay-or-batch-artifact-directory> --list-events
   node src/cli.js query-events <replay-or-batch-artifact-directory> --event <exact-event-key> [filters]
 
 Runtime: Node >=22.15.0 with native Zstd.
@@ -156,6 +165,8 @@ champion_double_kill_event_packet emits a separate packet-local named child mark
 champion_triple_quadra_event_packet emits exact-image 0x000c/0x000d packet markers.
 resurrect_event_packet emits a separate packet-local OnResurrect candidate.
 revive_ally_event_packet emits a separate packet-local OnReviveAlly candidate.
+first_blood_assist_event_packet emits a packet-local OnFirstBloodAssist marker candidate.
+objective_steal_event_packet emits exact-image OnKillDragonSteal/OnKillWormSteal packet markers.
 turret_die_event_packet emits a separate packet-local OnTurretDie candidate.
 dampener_die_event_packet emits a separate packet-local OnDampenerDie candidate.
 turret_first_blood_event_packet emits a separate packet-local OnTurretFirstBlood candidate.
@@ -168,17 +179,106 @@ turret_plate_event_packet emits a separate packet-local OnTurretPlateDestroyed c
 npc_buff_update_num_counter_packet emits an exact-821 packet-local opaque candidate.
 npc_buff_update_count_packet emits an exact-821 packet-local opaque candidate.
 npc_buff_replace_packet emits an exact-821 packet-local opaque candidate.
+--cast-packet-v5 opts CastSpellAns into the exact-821 nested anonymous u32
+candidate; the default CastSpellAns packet profile remains v4.
+--cast-packet-v6 also records a second exact-821 nested anonymous u32;
+--cast-packet-v7 also records an exact-821 nested anonymous f32;
+--cast-packet-v8 also records a packet-local anonymous callback lookup key;
+--cast-packet-v9 adds an ordered native-output digest for those packet fields;
+all newer CastSpellAns packet profiles require explicit selection.
 set_spell_timer_from_buff_packet emits an exact-821 packet-local opaque candidate.
+--spell-timer-packet-v2 adds an exact-821 native callback receiver-slot
+candidate while preserving the default packet profile.
 set_spell_level_packet emits an exact-821 packet-local opaque candidate.
+--spell-level-packet-v2 adds exact-821 native callback receiver selection
+and clamped scalar candidates while preserving the default packet profile.
+set_spell_level_roster_key_pair matches only full 0x025d packet-header u32
+keys to the ten candidate HeroStats roster keys, using the native V2 packet
+profile. Nonroster packets remain in the source stream; actor, owner, spell
+identity, actual level change and effect remain unknown.
 increment_minion_kills_packet emits an exact-821 packet-local lookup-key candidate.
 Selecting it with hero_minions_killed_snapshot also emits packet-to-keyframe bracket candidates;
 the endpoint difference does not establish a per-packet CS effect or last hit.
+Selecting hero_level_state with hero_experience_snapshot emits level-packet/EXP-keyframe
+time brackets; their sampled endpoint differences do not establish XP gain or thresholds.
 face_direction_packet emits exact-821 packet-local direction-vector candidates;
 its raw param does not identify an actor, and the packet does not establish position or path.
+circular_movement_restriction_packet emits exact-821 packet-local anonymous fields;
+it does not establish an actor, world position, hero path, or effective restriction.
+notify_contextual_situation_packet emits an exact-821 packet-local UTF-8 string candidate;
+it does not establish an actor, Recall action, or gameplay effect.
+item_group_data_broadcast_packet emits an exact-821 keyframe callback lookup key;
+it does not establish an item, group identity, owner, slot, or inventory state.
+--item-group-packet-v2 adds the protected +0x1c byte and a conditional native
+callback byte witnessed with a synthetic lookup hit; actual receiver state is unknown.
+cooldown_broadcast_packet emits an exact-821 game/keyframe callback lookup key;
+it does not establish cooldown state, slot identity, actor, target, or effect.
+--cooldown-packet-v2 adds four f32 request arguments and one control using native
+packet-only code slices. No receiver, clock, lookup hit or actual effect is supplied.
+item_charges_packet emits exact-821 packet-local callback arguments before receiver state;
+it does not establish item identity, charge state, slot, owner, or effect.
+target_hero_packet emits an exact-821 game packet callback u32 before a
+receiver-dependent call; resolved target object, actor, state and effect are unknown.
+target_hero_roster_key_pair matches nonzero callback u32 values to the ten
+candidate HeroStats roster keys and Replay metadata labels. It does not prove
+live lookup success, packet actor, resolved target, target state or effect.
+shielding_params_roster_key_pair separately matches two anonymous ShieldingParams
+child u32 fields to the ten candidate HeroStats roster keys. Unmatched fields
+remain visible; field roles and actual shield effects are unknown.
+params_heal_roster_key_pair separately matches two anonymous ParamsHeal child
+u32 fields to the ten candidate HeroStats roster keys. All reports remain
+visible; field roles and effective healing are unknown.
+force_create_missile_packet emits an exact-821 game packet-local callback
+comparison u32 witnessed before a synthetic receiver comparison; live receiver,
+missile identity, owner, target, creation, effect and causality are unknown.
+change_missile_target_packet emits an exact-821 game packet-local callback
+comparison u32 before consulting live receiver state; receiver match, missile
+identity, owner, resolved target, target change and effect are unknown.
+missile_key_cooccurrence compares 0x040c packet-header u32 with physically
+preceding 0x0087 native callback u32 within 2000 ms. All unmatched and
+ambiguous Change rows remain visible; no missile identity or effect is inferred.
+Saved pair queries filter the complete header with --opaque-u32; --verify-source
+requires the same-build --runtime-image and re-decodes both native streams.
+--change-missile-target-v2 also exposes an anonymous native f32 triplet from
+object +0x10/+0x14/+0x18; it does not establish a target position.
+set_dimension_missile_packet emits an exact-821 game packet-local callback u8
+before the receiver method; receiver state, missile identity, owner, target,
+dimension change, effect and causality are unknown.
+anonymous_029c_packet emits an exact-821 game packet-local decoded u32 or
+0xffffffff sentinel; the packet class name, actor, target, role and effect are unknown.
+anonymous_029c_roster_key_pair joins only full-u32 0x029c packet headers to the
+ten candidate HeroStats roster keys; its independent decoded u32 is not a
+participant key, and packet class, actor, target, role and effect remain unknown.
+unit_apply_damage_packet requires the exact-821 runtime image and Python+Unicorn
+to witness full native consumption of every selected packet before emitting
+packet-local selectors or a bounded anonymous float candidate; these do not
+establish damage amount or attribution.
+--damage-packet-v6 opts a decode/batch run into the exact-821 anonymous +0x1c
+u32 callback candidate and preserves the default v5 packet profile otherwise.
+show_health_bar_packet requires the exact-821 runtime image and Python+Unicorn
+to witness full native consumption of every selected packet before emitting
+packet-local callback flag candidates; these do not establish health or display effects.
+unit_apply_damage_roster_key_pair additionally requires complete exact-821
+HeroStats keyframes; full raw-key equality gives a candidate roster label,
+without actor, source, target, or effective damage attribution.
+unit_apply_damage_lookup_roster_key_pair matches the native +0x24 lookup key
+against that complete roster, retaining +0x100 raw-key aliases as candidates;
+lookup success, actor, source, target, and effect remain unknown.
+unit_apply_damage_lookup2c_roster_key_pair matches the independent native +0x2c
+lookup key against that complete roster by full equality; lookup success, actor,
+source, target, and effect remain unknown.
+hero_death_damage_lookup_key_cooccurrence preserves all same-chunk, same-ms
+native 0x005f packets whose +0x24 key equals the death candidate victim roster
+key, and compares +0x2c to the decoded die-source key. It does not select a
+fatal packet or establish damage actor, source, target, or effect.
 face_direction_keyframe_roster_pair pairs canonical keyframe FaceDirection packets
 with same-keyframe HeroStats roster candidates; the roster label does not identify the packet actor.
+hero_roster_metadata_bridge joins ten canonical HeroStats roster keys to Replay
+metadata champion/team/role only when observed death, source-kill and assist
+counts uniquely match all ten metadata K/D/A rows. Packet actors remain unknown.
 Inspect reads the container and packet framing without a runtime image.
-Capabilities reads the container/build registry without packet framing or semantic decode.
+Capabilities reads the container/build registry and checks selected dependencies
+without packet framing or semantic decode.
 
 Options:
   --out-dir <path>              Independent output directory (default: artifacts)
@@ -189,8 +289,23 @@ Options:
   --decoder-image <path>        Exact 16.15 runtime image (external input; not bundled)
   --runtime-image <path>        Exact-build runtime image for selected native packet candidates
   --events <name[,name...]>     Select 16.19 semantic capabilities to decode
+  --cast-packet-v5              Opt into exact 821 CastSpellAns nested anonymous u32 candidates (decode/batch)
+  --cast-packet-v6              Opt into exact 821 CastSpellAns two nested anonymous u32 candidates (decode/batch)
+  --cast-packet-v7              Opt into exact 821 CastSpellAns nested anonymous f32 candidate (decode/batch)
+  --cast-packet-v8              Opt into exact 821 CastSpellAns anonymous callback lookup key (decode/batch)
+  --cast-packet-v9              Opt into exact 821 CastSpellAns ordered native-output witness (decode/batch)
+  --spell-timer-packet-v2       Opt into exact 821 SetSpellTimerFromBuff native receiver callback candidates (decode/batch)
+  --spell-level-packet-v2       Opt into exact 821 SetSpellLevel callback receiver/scalar candidates (decode/batch)
+  --cooldown-packet-v2          Decode exact 821 packet-only f32/control request arguments (decode/batch)
+  --item-group-packet-v2        Opt into exact 821 item-group conditional callback byte candidate (decode/batch)
+  --change-missile-target-v2    Opt into exact 821 ChangeMissileTarget native f32 triplet (decode/batch)
+  --damage-packet-v6            Opt into exact 821 UnitApplyDamage +0x1c u32 packet/association candidates (decode/batch)
   --event-jsonl-only            Store 16.19 event rows only in JSONL (decode/batch with --events)
+  --jobs <1|2>                  Exact-821 batch with --events and --event-jsonl-only (default: 1)
   --event <key>                 Exact 16.19 candidate JSONL key (query-events)
+  --list-events                 List saved 16.19 candidate keys and declared counts (query-events)
+  --verify-source               Check supported exact-821 rows against the original ROFL
+  --source-replay <path>        Original ROFL override for one Replay with --verify-source
   --json                        Emit only machine-readable JSON (capabilities)
   --python <command>            Python command with Unicorn installed (default: python)
   --details-dir <path>          Validation-only directory for same-game Details matching
@@ -203,15 +318,48 @@ Options:
   --killer-participant <1..10>  Candidate killer in exact-821 death, assist or episode rows
   --assisting-participant <1..10>  Member of exact-821 assist or episode candidate list
   --raw-param <uint32|0xhex>   Exact recorded raw packet parameter; no identity inference
+  --damage-changed             Only sampled intervals with at least one positive counter delta
+  --damage-counter <field>     Select positive deltas of an exact-821 cumulative counter candidate
+  --damage-min-delta <number>  Inclusive nonnegative threshold; requires --damage-counter (zero valid)
+  --window-key <lookup_0x24|lookup_0x2c>  Comparison windows with packets in this anonymous key group
+  --window-max-error <number>  Inclusive absolute sum-minus-delta screen; requires key and counter
+  --slot-change-index <0..255>  Internal slot index on exact-821 slot requests/roster associations
+  --slot-change-operation <1|2|6|7>  Exact observed callback operation selector on those streams
+  --contextual-situation <text>  Exact UTF-8 contextual situation string on an 821 packet candidate
   --item-id <uint32|0xhex>     Exact 821 inventory record item ID, including saved associations
   --previous-item-id <uint32|0xhex>  Previous endpoint item ID in an exact-821 keyframe interval difference
   --slot <0..9>                Exact observed 821 inventory record slot, including saved associations
   Interval differences: --item-id is the CURRENT item ID on a changed slot (zero valid).
                         Previous/current item IDs and --slot must match the SAME changed slot.
-  --opaque-u32 <uint32|0xhex>  Exact decoded anonymous 821 packet/group u32 field
+  --opaque-u32 <uint32|0xhex>  Exact anonymous 821 u32 or full packet-header key
+  --item-group-callback-u8 <0..255|0xhex>  Exact 821 item-group V2 conditional callback byte candidate
+  --item-charges-selector-u8 <0..255|0xhex>  Exact 821 0x0437 callback selector argument
+  --item-charges-value-u16 <0..65535|0xhex>  Exact 821 0x0437 callback value argument
   --opaque-pair <u32:u8>      Exact anonymous 821 Buff Add/Remove/Update pair
   --opaque-i32 <int32>         Exact decoded 821 CastSpellAns opaque_i32_0x14c (decimal)
-  --child-event-id <uint32|0xhex>  Exact 821 stealth, named multikill, HQ or objective-bounty child ID
+  --cast-nested-bits <0..255|0xhex>  Exact decoded 821 CastSpellAns nested callback bits
+  --cast-nested-u32 <uint32|0xhex>   Exact decoded 821 CastSpellAns V5 nested anonymous u32
+  --cast-nested-u32-0x4c <uint32|0xhex>  Exact decoded 821 CastSpellAns V6 second nested anonymous u32
+  --cast-nested-f32-0xa0 <finite decimal>  Exact decoded 821 CastSpellAns V7 nested anonymous f32 (rounded to f32)
+  --cast-nested-u32-0x28 <uint32|0xhex>  Exact decoded 821 CastSpellAns V8 packet-local lookup key
+  --spell-timer-receiver-slot <0..5|63|0xhex>  Exact 821 SetSpellTimerFromBuff V2 native receiver table slot candidate
+  --spell-level-receiver-index <0..63|0xhex>  Exact 821 SetSpellLevel V2 native receiver table index candidate
+  --spell-level-clamped-scalar <0..6|0xhex>  Exact 821 SetSpellLevel V2 native clamped scalar candidate
+  --damage-callback-f32-available  Exact 821 UnitApplyDamage rows with a native-matched anonymous +0x20 f32
+                                Checks saved witness metadata and raw bytes; does not rerun the native parser.
+  --damage-callback-u32-0x10 <uint32|0xhex>  Exact 821 v4-v6 anonymous native +0x10 u32 (zero is valid)
+  --damage-callback-f32-0x18-raw  Exact 821 v5/v6 anonymous native +0x18 f32 RAW_READER rows
+  --damage-callback-u32-0x1c <uint32|0xhex>  Exact 821 v6 anonymous native +0x1c u32 (zero is valid)
+  --damage-lookup-key24 <uint32|0xhex>  Exact 821 UnitApplyDamage v3-v6 native +0x24 lookup key
+  --damage-lookup-key2c <uint32|0xhex>  Exact 821 UnitApplyDamage v3-v6 native +0x2c lookup key
+                                These anonymous object keys do not establish actor or damage roles.
+  --die-source-key2c-match <has|none|unavailable>  Exact 821 death/damage
+                                cooccurrence status for the candidate source key
+  --show-health-zero-flag <0|1>  Exact 821 ShowHealthBar callback zero-flag candidate
+                                Checks saved witness metadata and raw bytes; does not infer display effect.
+  --packet-record-count <0|1>  Exact 821 circular movement restriction packet record count
+  --level-after <1..20>        Exact-821 level packet within adjacent EXP keyframes
+  --child-event-id <uint32|0xhex>  Exact 821 named child ID (including objective steal markers)
   --latest-per-participant    Last matching observed row per participant and Replay
                                 For interval differences: last matching observed difference.
   --endpoint-reversed-pair    Exact-821 interval rows with two unique nonzero item keys
@@ -257,17 +405,61 @@ function parseArgs(argv) {
     runtimeImage: null,
     events: null,
     event: null,
+    listEvents: false,
+    verifySource: false,
+    sourceReplay: null,
     eventJsonlOnly: false,
+    jobs: null,
     participant: null,
     killerParticipant: null,
     assistingParticipant: null,
     rawParam: null,
+    contextualSituation: null,
     itemId: null,
     previousItemId: null,
     slot: null,
     opaqueU32: null,
+    itemGroupCallbackU8: null,
+    itemChargesSelectorU8: null,
+    itemChargesValueU16: null,
     opaquePair: null,
     opaqueI32: null,
+    castNestedBits: null,
+    castNestedU32: null,
+    castNestedU32At4c: null,
+    castNestedF32AtA0: null,
+    castNestedU32At28: null,
+    spellTimerReceiverSlot: null,
+    spellLevelReceiverIndex: null,
+    spellLevelClampedScalar: null,
+    slotChangeIndex: null,
+    slotChangeOperation: null,
+    damageCallbackF32Available: false,
+    damageChanged: false,
+    damageCounter: null,
+    damageMinDelta: null,
+    windowKey: null,
+    windowMaxError: null,
+    damageCallbackU32At10: null,
+    damageCallbackU32At1c: null,
+    damageCallbackF32At18Raw: false,
+    castPacketV5: false,
+    castPacketV6: false,
+    castPacketV7: false,
+    castPacketV8: false,
+    castPacketV9: false,
+    spellTimerPacketV2: false,
+    spellLevelPacketV2: false,
+    cooldownPacketV2: false,
+    itemGroupPacketV2: false,
+    changeMissileTargetV2: false,
+    damagePacketV6: false,
+    damageLookupKey24: null,
+    damageLookupKey2c: null,
+    dieSourceKey2cMatch: null,
+    showHealthZeroFlag: null,
+    packetRecordCount: null,
+    levelAfter: null,
     childEventId: null,
     latestPerParticipant: false,
     endpointReversedPair: false,
@@ -316,12 +508,76 @@ function parseArgs(argv) {
       options.eventJsonlOnly = true;
       continue;
     }
+    if (token === '--damage-packet-v6') {
+      options.damagePacketV6 = true;
+      continue;
+    }
+    if (token === '--cast-packet-v5') {
+      options.castPacketV5 = true;
+      continue;
+    }
+    if (token === '--cast-packet-v6') {
+      options.castPacketV6 = true;
+      continue;
+    }
+    if (token === '--cast-packet-v7') {
+      options.castPacketV7 = true;
+      continue;
+    }
+    if (token === '--cast-packet-v8') {
+      options.castPacketV8 = true;
+      continue;
+    }
+    if (token === '--cast-packet-v9') {
+      options.castPacketV9 = true;
+      continue;
+    }
+    if (token === '--spell-level-packet-v2') {
+      options.spellLevelPacketV2 = true;
+      continue;
+    }
+    if (token === '--cooldown-packet-v2') {
+      options.cooldownPacketV2 = true;
+      continue;
+    }
+    if (token === '--item-group-packet-v2') {
+      options.itemGroupPacketV2 = true;
+      continue;
+    }
+    if (token === '--change-missile-target-v2') {
+      options.changeMissileTargetV2 = true;
+      continue;
+    }
+    if (token === '--spell-timer-packet-v2') {
+      options.spellTimerPacketV2 = true;
+      continue;
+    }
     if (command === 'query-events' && token === '--latest-per-participant') {
       options.latestPerParticipant = true;
       continue;
     }
+    if (command === 'query-events' && token === '--list-events') {
+      options.listEvents = true;
+      continue;
+    }
+    if (command === 'query-events' && token === '--verify-source') {
+      options.verifySource = true;
+      continue;
+    }
     if (command === 'query-events' && token === '--endpoint-reversed-pair') {
       options.endpointReversedPair = true;
+      continue;
+    }
+    if (command === 'query-events' && token === '--damage-callback-f32-available') {
+      options.damageCallbackF32Available = true;
+      continue;
+    }
+    if (command === 'query-events' && token === '--damage-changed') {
+      options.damageChanged = true;
+      continue;
+    }
+    if (command === 'query-events' && token === '--damage-callback-f32-0x18-raw') {
+      options.damageCallbackF32At18Raw = true;
       continue;
     }
     if (command === 'ward-events' && token === '--ally') {
@@ -365,7 +621,12 @@ function parseArgs(argv) {
       else if (key === 'decoder-image') options.decoderImage = value;
       else if (key === 'runtime-image') options.runtimeImage = value;
       else if (key === 'events') options.events = parseEventNames(value);
+      else if (key === 'jobs') {
+        if (!/^[12]$/.test(value)) throw new Error('--jobs must be 1 or 2');
+        options.jobs = Number(value);
+      }
       else if (command === 'query-events' && key === 'event') options.event = value;
+      else if (command === 'query-events' && key === 'source-replay') options.sourceReplay = value;
       else if (key === 'python') options.python = value;
       else if (key === 'ward-spawns') options.wardSpawns = value;
       else if (key === 'ward-lifecycles') options.wardLifecycles = value;
@@ -378,13 +639,39 @@ function parseArgs(argv) {
       else if (command === 'query-events' && key === 'killer-participant') options.killerParticipant = queryInteger(value, key);
       else if (command === 'query-events' && key === 'assisting-participant') options.assistingParticipant = queryInteger(value, key);
       else if (command === 'query-events' && key === 'raw-param') options.rawParam = queryRawParam(value);
+      else if (command === 'query-events' && key === 'slot-change-index') options.slotChangeIndex = queryUint32(value,key);
+      else if (command === 'query-events' && key === 'slot-change-operation') options.slotChangeOperation = queryUint32(value,key);
+      else if (command === 'query-events' && key === 'contextual-situation') options.contextualSituation = value;
       else if (command === 'query-events' && key === 'item-id') options.itemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'previous-item-id') options.previousItemId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'slot') options.slot = queryInteger(value, key, true);
       else if (command === 'query-events' && key === 'comparison-to-endpoints') options.comparisonToEndpoints = value;
       else if (command === 'query-events' && key === 'opaque-u32') options.opaqueU32 = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'item-group-callback-u8') options.itemGroupCallbackU8 = queryByte(value, key);
+      else if (command === 'query-events' && key === 'item-charges-selector-u8') options.itemChargesSelectorU8 = queryByte(value, key);
+      else if (command === 'query-events' && key === 'item-charges-value-u16') options.itemChargesValueU16 = queryWord(value, key);
       else if (command === 'query-events' && key === 'opaque-pair') options.opaquePair = queryOpaquePair(value);
       else if (command === 'query-events' && key === 'opaque-i32') options.opaqueI32 = queryInt32(value, key);
+      else if (command === 'query-events' && key === 'cast-nested-bits') options.castNestedBits = queryByte(value, key);
+      else if (command === 'query-events' && key === 'cast-nested-u32') options.castNestedU32 = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'cast-nested-u32-0x4c') options.castNestedU32At4c = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'cast-nested-f32-0xa0') options.castNestedF32AtA0 = queryFiniteFloat(value, key);
+      else if (command === 'query-events' && key === 'cast-nested-u32-0x28') options.castNestedU32At28 = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'spell-timer-receiver-slot') options.spellTimerReceiverSlot = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'spell-level-receiver-index') options.spellLevelReceiverIndex = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'spell-level-clamped-scalar') options.spellLevelClampedScalar = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'damage-callback-u32-0x10') options.damageCallbackU32At10 = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'damage-callback-u32-0x1c') options.damageCallbackU32At1c = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'damage-lookup-key24') options.damageLookupKey24 = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'damage-counter') options.damageCounter = value;
+      else if (command === 'query-events' && key === 'damage-min-delta') options.damageMinDelta = damageQueryFilters.parseNonnegative(value,key);
+      else if (command === 'query-events' && key === 'window-key') options.windowKey = value;
+      else if (command === 'query-events' && key === 'window-max-error') options.windowMaxError = damageQueryFilters.parseNonnegative(value,key);
+      else if (command === 'query-events' && key === 'damage-lookup-key2c') options.damageLookupKey2c = queryUint32(value, key);
+      else if (command === 'query-events' && key === 'die-source-key2c-match') options.dieSourceKey2cMatch = value;
+      else if (command === 'query-events' && key === 'show-health-zero-flag') options.showHealthZeroFlag = queryInteger(value, key, true);
+      else if (command === 'query-events' && key === 'packet-record-count') options.packetRecordCount = queryInteger(value, key, true);
+      else if (command === 'query-events' && key === 'level-after') options.levelAfter = queryInteger(value, key);
       else if (command === 'query-events' && key === 'child-event-id') options.childEventId = queryUint32(value, key);
       else if (command === 'query-events' && key === 'limit') options.limit = queryInteger(value, key);
       else if (command === 'ward-events' && key === 'format') options.format = String(value).toLowerCase();
@@ -415,16 +702,98 @@ function parseArgs(argv) {
   if (options.eventJsonlOnly && (!['decode', 'batch'].includes(command) || !options.events)) {
     throw new Error('--event-jsonl-only requires decode or batch with --events');
   }
+  if (options.jobs !== null && (command !== 'batch' || !options.events
+      || !options.eventJsonlOnly)) {
+    throw new Error('--jobs requires batch with --events and --event-jsonl-only');
+  }
+  if (options.damagePacketV6 && (!['decode', 'batch'].includes(command)
+      || !options.events?.some((capability) => [
+        'unit_apply_damage_packet', 'unit_apply_damage_roster_key_pair',
+        'unit_apply_damage_lookup_roster_key_pair',
+        'unit_apply_damage_lookup2c_roster_key_pair',
+        'hero_death_damage_lookup_key_cooccurrence',
+      ].includes(capability)))) {
+    throw new Error('--damage-packet-v6 requires decode or batch with an exact-821 UnitApplyDamage packet or association capability in --events');
+  }
+  if (options.castPacketV5 && (!['decode', 'batch'].includes(command)
+      || !options.events?.includes('cast_spell_ans_packet'))) {
+    throw new Error('--cast-packet-v5 requires decode or batch with exact-821 cast_spell_ans_packet in --events');
+  }
+  if (options.castPacketV6 && (!['decode', 'batch'].includes(command)
+      || !options.events?.includes('cast_spell_ans_packet'))) {
+    throw new Error('--cast-packet-v6 requires decode or batch with exact-821 cast_spell_ans_packet in --events');
+  }
+  if (options.castPacketV7 && (!['decode', 'batch'].includes(command)
+      || !options.events?.includes('cast_spell_ans_packet'))) {
+    throw new Error('--cast-packet-v7 requires decode or batch with exact-821 cast_spell_ans_packet in --events');
+  }
+  if (options.castPacketV8 && (!['decode', 'batch'].includes(command)
+      || !options.events?.includes('cast_spell_ans_packet'))) {
+    throw new Error('--cast-packet-v8 requires decode or batch with exact-821 cast_spell_ans_packet in --events');
+  }
+  if (options.castPacketV9 && (!['decode', 'batch'].includes(command)
+      || !options.events?.includes('cast_spell_ans_packet'))) {
+    throw new Error('--cast-packet-v9 requires decode or batch with exact-821 cast_spell_ans_packet in --events');
+  }
+  if ([options.castPacketV5, options.castPacketV6, options.castPacketV7,
+    options.castPacketV8, options.castPacketV9]
+    .filter(Boolean).length > 1) {
+    throw new Error('--cast-packet-v5 through --cast-packet-v9 are mutually exclusive');
+  }
+  if (options.spellLevelPacketV2 && (!['decode', 'batch'].includes(command)
+      || !options.events?.some((name) => ['set_spell_level_packet',
+        'set_spell_level_roster_key_pair'].includes(name)))) {
+    throw new Error('--spell-level-packet-v2 requires decode or batch with exact-821 set_spell_level_packet or set_spell_level_roster_key_pair in --events');
+  }
+  if (options.itemGroupPacketV2 && (!['decode', 'batch'].includes(command)
+      || !options.events?.includes('item_group_data_broadcast_packet'))) {
+    throw new Error('--item-group-packet-v2 requires decode or batch with exact-821 item_group_data_broadcast_packet in --events');
+  }
+  if (options.cooldownPacketV2 && (!['decode','batch'].includes(command)
+      || !options.events?.includes('cooldown_broadcast_packet'))) {
+    throw new Error('--cooldown-packet-v2 requires decode or batch with exact-821 cooldown_broadcast_packet in --events');
+  }
+  if (options.changeMissileTargetV2 && (!['decode', 'batch'].includes(command)
+      || !options.events?.some((name) => ['change_missile_target_packet',
+        'missile_key_cooccurrence'].includes(name)))) {
+    throw new Error('--change-missile-target-v2 requires decode or batch with exact-821 change_missile_target_packet or missile_key_cooccurrence in --events');
+  }
+  if (options.spellTimerPacketV2 && (!['decode', 'batch'].includes(command)
+      || !options.events?.includes('set_spell_timer_from_buff_packet'))) {
+    throw new Error('--spell-timer-packet-v2 requires decode or batch with exact-821 set_spell_timer_from_buff_packet in --events');
+  }
   if (command === 'ward-events') {
     positionals.push(...options.inputs);
   }
   if (command === 'query-events') {
-    if (positionals.length !== 1 || !options.event) {
-      throw new Error('query-events requires one Replay or batch artifact directory and --event');
+    if (positionals.length !== 1 || (!options.event && !options.listEvents)) {
+      throw new Error('query-events requires one Replay or batch artifact directory and --event or --list-events');
+    }
+    if (options.listEvents) {
+      const filterKeys = ['fromMs', 'toMs', 'participant', 'killerParticipant',
+        ...damageQueryFilters.FILTER_KEYS,
+        'assistingParticipant', 'rawParam', 'contextualSituation', 'itemId', 'previousItemId', 'slot',
+        'opaqueU32', 'itemGroupCallbackU8', 'itemChargesSelectorU8', 'itemChargesValueU16',
+        'opaquePair', 'opaqueI32', 'castNestedBits', 'castNestedU32',
+        'castNestedU32At4c', 'castNestedF32AtA0', 'castNestedU32At28',
+        'spellTimerReceiverSlot',
+        'spellLevelReceiverIndex',
+        'spellLevelClampedScalar', 'slotChangeIndex', 'slotChangeOperation', 'damageCallbackF32Available',
+        'damageCallbackU32At10', 'damageCallbackU32At1c',
+        'damageCallbackF32At18Raw', 'damageLookupKey24', 'damageLookupKey2c',
+        'dieSourceKey2cMatch', 'showHealthZeroFlag', 'packetRecordCount',
+        'levelAfter', 'childEventId', 'latestPerParticipant',
+        'endpointReversedPair', 'comparisonToEndpoints', 'limit'];
+      if (options.event || options.output || options.verifySource
+          || options.sourceReplay || filterKeys.some((key) =>
+        options[key] !== null && options[key] !== false)) {
+        throw new Error('--list-events cannot be combined with --event, --output, source verification or query filters');
+      }
     }
     if (options.participant !== null && options.participant > 10) {
       throw new Error('--participant must be in 1..10');
     }
+    damageQueryFilters.validate(options,options.event,(_code,message)=>{throw new Error(message);});
     if (options.killerParticipant !== null
         && (options.killerParticipant > 10
           || !['hero_death_candidates', 'hero_assist_candidates',
@@ -436,6 +805,18 @@ function parseArgs(argv) {
           || !['hero_assist_candidates', 'hero_death_episode_candidates']
             .includes(options.event))) {
       throw new Error('--assisting-participant requires hero_assist_candidates or hero_death_episode_candidates and 1..10');
+    }
+    if (options.contextualSituation !== null
+        && options.event !== 'notify_contextual_situation_packet_candidates') {
+      throw new Error('--contextual-situation requires notify_contextual_situation_packet_candidates');
+    }
+    if (options.dieSourceKey2cMatch !== null
+        && !['has', 'none', 'unavailable'].includes(options.dieSourceKey2cMatch)) {
+      throw new Error('--die-source-key2c-match requires has, none or unavailable');
+    }
+    if (options.dieSourceKey2cMatch !== null
+        && options.event !== 'hero_death_damage_lookup_key_cooccurrence_candidates') {
+      throw new Error('--die-source-key2c-match requires hero_death_damage_lookup_key_cooccurrence_candidates');
     }
     if (options.fromMs !== null && options.toMs !== null && options.fromMs > options.toMs) {
       throw new Error('--from-ms must not exceed --to-ms');
@@ -475,7 +856,9 @@ function parseArgs(argv) {
     }
     if (options.opaqueU32 !== null && ![
       'params_heal_packet_candidates',
+      'params_heal_roster_key_pair_candidates',
       'shielding_params_packet_pair_candidates',
+      'shielding_params_roster_key_pair_candidates',
       'stealth_event_packet_candidates',
       'npc_buff_add_packet_candidates',
       'npc_buff_remove_packet_candidates',
@@ -484,6 +867,17 @@ function parseArgs(argv) {
       'npc_buff_replace_packet_candidates',
       'set_spell_timer_from_buff_packet_candidates',
       'set_spell_level_packet_candidates',
+      'set_spell_level_roster_key_pair_candidates',
+      'item_group_data_broadcast_packet_candidates',
+      'cooldown_broadcast_packet_candidates',
+      'target_hero_packet_candidates',
+      'target_hero_roster_key_pair_candidates',
+      'force_create_missile_packet_candidates',
+      'change_missile_target_packet_candidates',
+      'missile_key_cooccurrence_candidates',
+      'set_dimension_missile_packet_candidates',
+      'anonymous_029c_packet_candidates',
+      'anonymous_029c_roster_key_pair_candidates',
       'champion_die_event_packet_candidates',
       'champion_kill_event_packet_candidates',
       'champion_multiple_kill_event_packet_candidates',
@@ -512,9 +906,77 @@ function parseArgs(argv) {
     if (options.opaqueI32 !== null && options.event !== 'cast_spell_ans_packet_candidates') {
       throw new Error('--opaque-i32 requires an 821 cast_spell_ans_packet_candidates event');
     }
+    if (options.castNestedBits !== null
+        && options.event !== 'cast_spell_ans_packet_candidates') {
+      throw new Error('--cast-nested-bits requires an 821 cast_spell_ans_packet_candidates event');
+    }
+    if (options.castNestedU32 !== null
+        && options.event !== 'cast_spell_ans_packet_candidates') {
+      throw new Error('--cast-nested-u32 requires an 821 cast_spell_ans_packet_candidates event');
+    }
+    if (options.castNestedU32At4c !== null
+        && options.event !== 'cast_spell_ans_packet_candidates') {
+      throw new Error('--cast-nested-u32-0x4c requires an 821 cast_spell_ans_packet_candidates event');
+    }
+    if (options.castNestedF32AtA0 !== null
+        && options.event !== 'cast_spell_ans_packet_candidates') {
+      throw new Error('--cast-nested-f32-0xa0 requires an 821 cast_spell_ans_packet_candidates event');
+    }
+    if (options.castNestedU32At28 !== null
+        && options.event !== 'cast_spell_ans_packet_candidates') {
+      throw new Error('--cast-nested-u32-0x28 requires an 821 cast_spell_ans_packet_candidates event');
+    }
+    if ((options.spellLevelReceiverIndex !== null
+        || options.spellLevelClampedScalar !== null)
+        && options.event !== 'set_spell_level_packet_candidates') {
+      throw new Error('--spell-level-receiver-index and --spell-level-clamped-scalar require an 821 set_spell_level_packet_candidates event');
+    }
+    if (options.spellTimerReceiverSlot !== null
+        && options.event !== 'set_spell_timer_from_buff_packet_candidates') {
+      throw new Error('--spell-timer-receiver-slot requires an 821 set_spell_timer_from_buff_packet_candidates event');
+    }
+    if (options.damageCallbackF32Available
+        && options.event !== 'unit_apply_damage_packet_candidates') {
+      throw new Error('--damage-callback-f32-available requires an 821 unit_apply_damage_packet_candidates event');
+    }
+    if (options.damageCallbackU32At10 !== null
+        && options.event !== 'unit_apply_damage_packet_candidates') {
+      throw new Error('--damage-callback-u32-0x10 requires an 821 unit_apply_damage_packet_candidates event');
+    }
+    if (options.damageCallbackU32At1c !== null
+        && options.event !== 'unit_apply_damage_packet_candidates') {
+      throw new Error('--damage-callback-u32-0x1c requires an 821 unit_apply_damage_packet_candidates event');
+    }
+    if (options.damageCallbackF32At18Raw
+        && options.event !== 'unit_apply_damage_packet_candidates') {
+      throw new Error('--damage-callback-f32-0x18-raw requires an 821 unit_apply_damage_packet_candidates event');
+    }
+    if ((options.damageLookupKey24 !== null || options.damageLookupKey2c !== null)
+        && options.event !== 'unit_apply_damage_packet_candidates') {
+      throw new Error('--damage-lookup-key24 and --damage-lookup-key2c require an 821 unit_apply_damage_packet_candidates event');
+    }
+    if (options.showHealthZeroFlag !== null
+        && (options.event !== 'show_health_bar_packet_candidates'
+          || options.showHealthZeroFlag > 1)) {
+      throw new Error('--show-health-zero-flag requires show_health_bar_packet_candidates and 0..1');
+    }
+    if (options.packetRecordCount !== null
+        && (options.event !== 'circular_movement_restriction_packet_candidates'
+          || options.packetRecordCount > 1)) {
+      throw new Error('--packet-record-count requires circular_movement_restriction_packet_candidates and 0..1');
+    }
+    if (options.levelAfter !== null
+        && (options.event !== 'level_experience_keyframe_bracket_candidates'
+          || options.levelAfter > 20)) {
+      throw new Error('--level-after requires level_experience_keyframe_bracket_candidates and 1..20');
+    }
     if (options.childEventId !== null) {
       const ids = options.event === 'stealth_event_packet_candidates'
         ? [0x0101, 0x0102]
+        : options.event === 'first_blood_assist_event_packet_candidates'
+          ? [0x0017]
+        : options.event === 'objective_steal_event_packet_candidates'
+          ? [0x00be, 0x00d6]
         : options.event === 'hq_kill_event_packet_candidates'
           ? [0x0046]
         : options.event === 'objective_bounty_claimed_packet_candidates'
@@ -526,11 +988,15 @@ function parseArgs(argv) {
             'champion_triple_quadra_multi_group_candidates'].includes(options.event)
             ? [0x000c, 0x000d] : null;
       if (!ids) {
-        throw new Error('--child-event-id requires an 821 stealth, named multikill, OnHQKill or OnObjectiveBountyClaimed candidate event');
+        throw new Error('--child-event-id requires a supported 821 named child candidate event');
       }
       if (!ids.includes(options.childEventId)) {
         throw new Error(options.event === 'stealth_event_packet_candidates'
           ? '--child-event-id must be 0x0101 (OnEnterStealth) or 0x0102 (OnExitStealth)'
+          : options.event === 'first_blood_assist_event_packet_candidates'
+            ? '--child-event-id must be 0x0017 (OnFirstBloodAssist)'
+          : options.event === 'objective_steal_event_packet_candidates'
+            ? '--child-event-id must be 0x00be (OnKillDragonSteal) or 0x00d6 (OnKillWormSteal)'
           : options.event === 'hq_kill_event_packet_candidates'
             ? '--child-event-id must be 0x0046 (OnHQKill)'
           : options.event === 'objective_bounty_claimed_packet_candidates'
@@ -569,8 +1035,33 @@ function queryInt32(value, label) {
   return number;
 }
 
+function queryFiniteFloat(value, label) {
+  const literal = String(value);
+  if (!/^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/.test(literal)) {
+    throw new Error(`--${label} must be a finite decimal number`);
+  }
+  const number = Number(literal);
+  const f32 = Math.fround(number);
+  if (!Number.isFinite(number) || !Number.isFinite(f32)) {
+    throw new Error(`--${label} must be a finite decimal number`);
+  }
+  return f32;
+}
+
 function queryRawParam(value) {
   return queryUint32(value, 'raw-param');
+}
+
+function queryByte(value, label) {
+  const number = queryUint32(value, label);
+  if (number > 0xff) throw new Error(`--${label} must be in 0..255`);
+  return number;
+}
+
+function queryWord(value, label) {
+  const number = queryUint32(value, label);
+  if (number > 0xffff) throw new Error(`--${label} must be in 0..65535`);
+  return number;
 }
 
 function queryUint32(value, label) {
@@ -666,25 +1157,31 @@ function quoteCommandArg(value) {
 function discoverReplayFiles(inputs) {
   const files = [];
   const seen = new Set();
+  const addFile = (filePath, stat = null) => {
+    let identity = filePath;
+    if (process.platform === 'win32') {
+      const fileStat = stat ?? fs.statSync(filePath, { bigint: true });
+      identity = fileStat.ino !== 0n
+        ? `${fileStat.dev}:${fileStat.ino}` : filePath.toLowerCase();
+    }
+    if (!seen.has(identity)) {
+      seen.add(identity);
+      files.push(filePath);
+    }
+  };
   const visit = (input) => {
     const resolved = path.resolve(input);
     if (!fs.existsSync(resolved)) throw new Error(`Input does not exist: ${resolved}`);
-    const stat = fs.statSync(resolved);
+    const stat = fs.statSync(resolved, { bigint: true });
     if (stat.isFile()) {
       if (!resolved.toLowerCase().endsWith('.rofl')) throw new Error(`Input is not a .rofl file: ${resolved}`);
-      if (!seen.has(resolved)) {
-        seen.add(resolved);
-        files.push(resolved);
-      }
+      addFile(resolved, stat);
       return;
     }
     for (const entry of fs.readdirSync(resolved, { withFileTypes: true })) {
       const full = path.join(resolved, entry.name);
       if (entry.isDirectory()) visit(full);
-      else if (entry.isFile() && entry.name.toLowerCase().endsWith('.rofl') && !seen.has(full)) {
-        seen.add(full);
-        files.push(full);
-      }
+      else if (entry.isFile() && entry.name.toLowerCase().endsWith('.rofl')) addFile(full);
     }
   };
   for (const input of inputs) visit(input);
@@ -832,6 +1329,8 @@ function parseOne1619(replay, options, started) {
       'on_shutdown_event_packet',
       'resurrect_event_packet',
       'revive_ally_event_packet',
+      'first_blood_assist_event_packet',
+      'objective_steal_event_packet',
       'turret_die_event_packet',
       'dampener_die_event_packet',
       'turret_first_blood_event_packet',
@@ -848,10 +1347,104 @@ function parseOne1619(replay, options, started) {
       'set_movement_driver_packet',
       'increment_minion_kills_packet',
       'face_direction_packet',
+      'circular_movement_restriction_packet',
+      'notify_contextual_situation_packet',
+      'item_group_data_broadcast_packet',
+      'cooldown_broadcast_packet',
+      'item_charges_packet',
+      'target_hero_packet',
+      'force_create_missile_packet',
+      'change_missile_target_packet',
+      'set_dimension_missile_packet',
+      'anonymous_029c_packet',
+      'anonymous_049c_packet',
+      'spell_slot_change_request',
+      'unit_apply_damage_packet',
+      'show_health_bar_packet',
     ].includes(name)))] : [];
   if (options.semantic !== false && Array.isArray(options.events)
       && options.events.includes('face_direction_keyframe_roster_pair')) {
     for (const source of ['face_direction_packet', 'hero_minions_killed_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('hero_roster_metadata_bridge')) {
+    for (const source of ['hero_death', 'hero_assist', 'hero_deaths_snapshot',
+      'hero_champion_kills_snapshot', 'hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && options.events?.includes('spell_slot_change_roster_key_pair')) {
+    for (const source of ['spell_slot_change_request','hero_death','hero_assist',
+      'hero_deaths_snapshot','hero_champion_kills_snapshot','hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('target_hero_roster_key_pair')) {
+    for (const source of ['target_hero_packet', 'hero_death', 'hero_assist',
+      'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+      'hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('missile_key_cooccurrence')) {
+    for (const source of ['force_create_missile_packet',
+      'change_missile_target_packet']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('set_spell_level_roster_key_pair')) {
+    for (const source of ['set_spell_level_packet', 'hero_death', 'hero_assist',
+      'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+      'hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('shielding_params_roster_key_pair')) {
+    for (const source of ['shielding_params_packet_pair', 'hero_death',
+      'hero_assist', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+      'hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('params_heal_roster_key_pair')) {
+    for (const source of ['params_heal_packet', 'hero_death', 'hero_assist',
+      'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+      'hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.includes('anonymous_029c_roster_key_pair')) {
+    for (const source of ['anonymous_029c_packet', 'hero_death', 'hero_assist',
+      'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
+      'hero_assists_snapshot']) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (options.semantic !== false && Array.isArray(options.events)
+      && options.events.some((name) => [
+        'unit_apply_damage_roster_key_pair',
+        'unit_apply_damage_lookup_roster_key_pair',
+        'unit_apply_damage_lookup2c_roster_key_pair',
+        'hero_death_damage_lookup_key_cooccurrence',
+      ].includes(name))) {
+    for (const source of ['unit_apply_damage_packet', 'hero_minions_killed_snapshot',
+      ...(options.events.includes('hero_death_damage_lookup_key_cooccurrence')
+        ? ['hero_death'] : [])]) {
+      if (!selected821.includes(source)) selected821.push(source);
+    }
+  }
+  if (is821 && options.semantic !== false
+      && options.events?.includes('hero_damage_keyframe_intervals')) {
+    for (const source of ['hero_damage_totals_snapshot',
+      'hero_damage_taken_from_champions_snapshot']) {
       if (!selected821.includes(source)) selected821.push(source);
     }
   }
@@ -895,7 +1488,22 @@ function parseOne1619(replay, options, started) {
       : `${analysis.block_errors.length} packet framing/decompression error(s) prevent semantic decoding.`,
   };
   if (options.semantic !== false) {
-    const requested = options.events ?? [];
+    const requested = [...new Set([...(options.events ?? []),
+      ...(options.events?.includes('spell_slot_change_roster_key_pair')
+        ? ['spell_slot_change_request','hero_roster_metadata_bridge'] : []),
+      ...(options.events?.includes('missile_key_cooccurrence')
+        ? ['force_create_missile_packet', 'change_missile_target_packet'] : []),
+      ...(options.events?.includes('target_hero_roster_key_pair')
+        ? ['target_hero_packet', 'hero_roster_metadata_bridge'] : []),
+      ...(options.events?.includes('set_spell_level_roster_key_pair')
+        ? ['set_spell_level_packet', 'hero_roster_metadata_bridge'] : []),
+      ...(options.events?.includes('shielding_params_roster_key_pair')
+        ? ['shielding_params_packet_pair', 'hero_roster_metadata_bridge'] : []),
+      ...(options.events?.includes('params_heal_roster_key_pair')
+        ? ['params_heal_packet', 'hero_roster_metadata_bridge'] : []),
+      ...(options.events?.includes('anonymous_029c_roster_key_pair')
+        ? ['anonymous_029c_packet', 'hero_roster_metadata_bridge'] : []),
+    ])];
     let decoded = null;
     if (analysis.block_errors.length > 0) {
       analysis.decoder.status = 'FRAMING_FAILED';
@@ -935,6 +1543,17 @@ function parseOne1619(replay, options, started) {
           candidate821Scan: candidate821Scan ?? undefined,
           runtimeImagePath: options.runtimeImage ?? undefined,
           pythonExecutable: options.python ?? undefined,
+          castPacketProfile: options.castPacketV9 ? 'v9'
+            : options.castPacketV8 ? 'v8'
+            : options.castPacketV7 ? 'v7'
+            : options.castPacketV6 ? 'v6'
+              : options.castPacketV5 ? 'v5' : undefined,
+          setSpellTimerProfile: options.spellTimerPacketV2 ? 'v2' : undefined,
+          setSpellLevelProfile: options.spellLevelPacketV2 ? 'v2' : undefined,
+          cooldownPacketProfile: options.cooldownPacketV2 ? 'v2' : undefined,
+          itemGroupPacketProfile: options.itemGroupPacketV2 ? 'v2' : undefined,
+          changeMissileTargetProfile: options.changeMissileTargetV2 ? 'v2' : undefined,
+          damagePacketProfile: options.damagePacketV6 ? 'v6' : undefined,
         });
       } catch (error) {
         decoded = {
@@ -1192,6 +1811,38 @@ function parseOne(filePath, options) {
   }
 }
 
+function quickReplayVersion(filePath) {
+  const bytes = Buffer.alloc(HEADER_PREFIX_SIZE + 64);
+  let descriptor;
+  try {
+    descriptor = fs.openSync(filePath, 'r');
+    const length = fs.readSync(descriptor, bytes, 0, bytes.length, 0);
+    return parseHeader(bytes.subarray(0, length)).version;
+  } catch {
+    // The ordinary parser retains the precise missing-file or malformed-header error.
+    return null;
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+  }
+}
+
+function parseOneExact821Batch(filePath, options) {
+  const version = quickReplayVersion(filePath);
+  if (version !== null && version !== BATCH_JOBS_BUILD) {
+    return {
+      ok: false,
+      source_path: path.resolve(filePath),
+      error: {
+        code: 'UNSUPPORTED_OUTPUT_MODE',
+        message: `--jobs supports only exact ${BATCH_JOBS_BUILD}; received ${version}.`,
+        details: { replay_version: version },
+        name: 'Error',
+      },
+    };
+  }
+  return parseOne(filePath, options);
+}
+
 function gameIdFromFilePath(filePath) {
   return /(?:^|[-_])([0-9]+)\.rofl$/i.exec(path.basename(filePath))?.[1] ?? null;
 }
@@ -1301,6 +1952,12 @@ function errorToObject(error) {
   };
 }
 
+const MAX_REPLAY_DIRECTORY_COMPONENT = 255;
+
+function replayDirectoryNameWithSuffix(stem, suffix) {
+  return `${stem.slice(0, MAX_REPLAY_DIRECTORY_COMPONENT - suffix.length - 1)}-${suffix}`;
+}
+
 function replayDirectoryNames(analyses) {
   const stems = analyses.map((analysis) => safeStem(analysis.source_path));
   const stemCounts = new Map();
@@ -1313,7 +1970,8 @@ function replayDirectoryNames(analyses) {
     return {
       stem,
       pathHash,
-      name: stemCounts.get(stem) > 1 ? `${stem}-${pathHash.slice(0, 12)}` : stem,
+      name: stemCounts.get(stem) > 1
+        ? replayDirectoryNameWithSuffix(stem, pathHash.slice(0, 12)) : stem,
     };
   });
   const candidateCounts = new Map();
@@ -1321,11 +1979,21 @@ function replayDirectoryNames(analyses) {
     candidateCounts.set(row.name, (candidateCounts.get(row.name) ?? 0) + 1);
   }
   const names = candidates.map((row) => candidateCounts.get(row.name) > 1
-    ? `${row.stem}-${row.pathHash}` : row.name);
-  if (new Set(names).size !== names.length) {
+    ? replayDirectoryNameWithSuffix(row.stem, row.pathHash) : row.name);
+  const outputKey = (name) => process.platform === 'win32' ? name.toLowerCase() : name;
+  const foldedCounts = new Map();
+  for (const name of names) {
+    const key = outputKey(name);
+    foldedCounts.set(key, (foldedCounts.get(key) ?? 0) + 1);
+  }
+  const isolated = names.map((name, index) => foldedCounts.get(outputKey(name)) > 1
+    ? replayDirectoryNameWithSuffix(stems[index],
+      sha256(Buffer.from(path.resolve(analyses[index].source_path))))
+    : name);
+  if (new Set(isolated.map(outputKey)).size !== isolated.length) {
     throw new Error('Replay output directory identities are not unique');
   }
-  return names;
+  return isolated;
 }
 
 function writePerReplayArtifacts(analysis, rootDir, replayDirName, options = {}) {
@@ -1564,8 +2232,10 @@ function buildAcceptanceSummary(results, beforeHashes, afterHashes, testSummary,
     && !testRunFailed
     && upstream.unchanged;
   let status = successful.length === 0
-    ? failed.some((result) => result.error.code === 'UNSUPPORTED_OUTPUT_MODE')
-      ? 'UNSUPPORTED_OUTPUT_MODE' : 'NEED_USER_FILE'
+    ? failed.some((result) => result.error.code === 'WORKER_FAILED')
+      ? 'VALIDATION_FAILED'
+      : failed.some((result) => result.error.code === 'UNSUPPORTED_OUTPUT_MODE')
+        ? 'UNSUPPORTED_OUTPUT_MODE' : 'NEED_USER_FILE'
     : validationClean && allSemanticReady && allV2Ready
       ? 'RESEARCH_READY_V2_COMPLETE'
       : validationClean && allSemanticReady
@@ -1831,10 +2501,39 @@ function buildReviewerManifest(summary, rootDir, results, args, options = {}) {
 async function writeRunArtifacts(results, rootDir, beforeHashes, afterHashes, args, testSummary = null, detailsDir = null, options = {}) {
   ensureDir(rootDir);
   const successful = results.filter((result) => result.ok);
-  const replayDirNames = replayDirectoryNames(successful.map((result) => result.analysis));
-  for (const [index, result] of successful.entries()) {
-    result.analysis.artifact_directory = path.posix.join('replays', replayDirNames[index]);
-    writePerReplayArtifacts(result.analysis, rootDir, replayDirNames[index], options);
+  if (options.prewrittenReplayArtifacts) {
+    const replayRoot = path.resolve(rootDir, 'replays');
+    for (const result of successful) {
+      const relative = result.analysis.artifact_directory;
+      const replayDir = path.resolve(rootDir, relative ?? '');
+      if (path.dirname(replayDir) !== replayRoot) {
+        throw new Error('Worker reported a Replay artifact directory outside this run');
+      }
+      const saved = JSON.parse(fs.readFileSync(path.join(replayDir, 'replay_analysis.json'), 'utf8'));
+      if (saved.replay_sha256 !== result.analysis.replay_sha256
+          || saved.source_path !== result.analysis.source_path
+          || saved.replay_version !== BATCH_JOBS_BUILD
+          || saved.event_storage !== 'JSONL_ONLY'
+          || saved.events !== null) {
+        throw new Error('Worker Replay artifact identity or JSONL storage differs');
+      }
+      if (!fs.statSync(path.join(replayDir, 'semantic_run.json')).isFile()
+          || !saved.event_jsonl_files || typeof saved.event_jsonl_files !== 'object') {
+        throw new Error('Worker Replay artifact is missing semantic or event metadata');
+      }
+      for (const [name, filename] of Object.entries(saved.event_jsonl_files)) {
+        if (filename !== `${name}.jsonl`
+            || !fs.statSync(path.join(replayDir, filename)).isFile()) {
+          throw new Error(`Worker Replay event artifact is missing: ${name}`);
+        }
+      }
+    }
+  } else {
+    const replayDirNames = replayDirectoryNames(successful.map((result) => result.analysis));
+    for (const [index, result] of successful.entries()) {
+      result.analysis.artifact_directory = path.posix.join('replays', replayDirNames[index]);
+      writePerReplayArtifacts(result.analysis, rootDir, replayDirNames[index], options);
+    }
   }
 
   const inventories = successful.map((result) => inventoryFromAnalysis(result.analysis));
@@ -1966,9 +2665,33 @@ function fileInputDependency(name, filePath) {
   }
 }
 
+function pythonUnicornDependency(command) {
+  const python = command || process.env.PYTHON || 'python';
+  const checked = childProcess.spawnSync(python, ['-B', '-c', 'import unicorn'], {
+    encoding: 'utf8', timeout: 5000, maxBuffer: 8192, windowsHide: true,
+  });
+  const detail = String(checked.error?.message || checked.stderr || '').trim();
+  const missing = checked.error?.code === 'ENOENT'
+    || /No module named ['"]unicorn['"]/.test(detail);
+  return {
+    name: 'python_unicorn',
+    status: checked.status === 0 && !checked.error ? 'PRESENT_UNVERIFIED'
+      : missing ? 'MISSING' : 'INVALID',
+    path: null,
+    command: python,
+    ...(checked.status === 0 && !checked.error ? {}
+      : { error: detail.slice(0, 300) || `exit ${checked.status}` }),
+  };
+}
+
 function capabilityQuery(replay, options = {}) {
   const resolved = resolveBuildProfile(replay);
   const profile = resolved.profile;
+  const requested = options.events == null ? null : [...new Set(options.events)];
+  const selected = requested === null ? null : new Set(requested);
+  let pythonDependency;
+  const getPythonDependency = () => (pythonDependency ??=
+    pythonUnicornDependency(options.python ?? options.pythonExecutable));
   const document = {
     schema_version: 1,
     command: 'capabilities',
@@ -1988,6 +2711,10 @@ function capabilityQuery(replay, options = {}) {
       ?? (profile?.runtime_profile?.image_sha256 ? 'EXACT_IMAGE_HASH_REGISTERED' : null),
     capabilities: [],
     unlisted_capability_status: 'NOT_REGISTERED_FOR_EXACT_BUILD',
+    ...(requested === null ? {} : {
+      requested_capabilities: requested,
+      unregistered_requested_capabilities: [...requested],
+    }),
   };
   if (!profile) return document;
 
@@ -2044,6 +2771,7 @@ function capabilityQuery(replay, options = {}) {
   ];
   for (const [profileKey, status] of classifications) {
     for (const capability of profile[profileKey] ?? []) {
+      if (selected !== null && !selected.has(capability)) continue;
       const applicable = status !== 'UNSUPPORTED' && status !== 'UNVERIFIED';
       const perCapabilityInputsAssessed = applicable
         && ['16.19.820.7193', '16.19.821.7343'].includes(profile.game_version);
@@ -2055,7 +2783,9 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'hero_inventory_broadcast_packet'
             || capability === 'hero_inventory_set_item_packet'
             || capability === 'params_heal_packet'
+            || capability === 'params_heal_roster_key_pair'
             || capability === 'shielding_params_packet_pair'
+            || capability === 'shielding_params_roster_key_pair'
             || capability === 'stealth_event_packet'
             || capability === 'champion_die_event_packet'
             || capability === 'champion_kill_event_packet'
@@ -2065,6 +2795,8 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'on_shutdown_event_packet'
             || capability === 'resurrect_event_packet'
             || capability === 'revive_ally_event_packet'
+            || capability === 'first_blood_assist_event_packet'
+            || capability === 'objective_steal_event_packet'
             || capability === 'turret_die_event_packet'
             || capability === 'dampener_die_event_packet'
             || capability === 'turret_first_blood_event_packet'
@@ -2089,6 +2821,29 @@ function capabilityQuery(replay, options = {}) {
             || capability === 'set_movement_driver_packet'
             || capability === 'increment_minion_kills_packet'
             || capability === 'face_direction_packet'
+            || capability === 'circular_movement_restriction_packet'
+            || capability === 'notify_contextual_situation_packet'
+             || capability === 'item_group_data_broadcast_packet'
+             || capability === 'cooldown_broadcast_packet'
+             || capability === 'item_charges_packet'
+             || capability === 'target_hero_packet'
+             || capability === 'target_hero_roster_key_pair'
+             || capability === 'set_spell_level_roster_key_pair'
+             || capability === 'force_create_missile_packet'
+             || capability === 'change_missile_target_packet'
+             || capability === 'missile_key_cooccurrence'
+             || capability === 'set_dimension_missile_packet'
+             || capability === 'anonymous_029c_packet'
+             || capability === 'anonymous_049c_packet'
+             || capability === 'spell_slot_change_request'
+             || capability === 'spell_slot_change_roster_key_pair'
+             || capability === 'anonymous_029c_roster_key_pair'
+            || capability === 'unit_apply_damage_packet'
+            || capability === 'show_health_bar_packet'
+            || capability === 'unit_apply_damage_roster_key_pair'
+            || capability === 'unit_apply_damage_lookup_roster_key_pair'
+            || capability === 'unit_apply_damage_lookup2c_roster_key_pair'
+            || capability === 'hero_death_damage_lookup_key_cooccurrence'
             || capability === 'face_direction_keyframe_roster_pair'));
       const tailStat = perCapabilityInputsAssessed
         ? profile.game_version === '16.19.821.7343'
@@ -2103,6 +2858,32 @@ function capabilityQuery(replay, options = {}) {
                 error: deadTime.error ?? deadTime.missing_input ?? null },
             ] };
           })()
+        : profile.game_version === '16.19.820.7193'
+          && capability === 'hero_damage_keyframe_intervals'
+          ? { required_fields: [
+            ...(assessHeroDamageTotalsSnapshotTail(replay).required_fields ?? []),
+            assessHeroDamageTakenFromChampionsSnapshotTail(replay),
+          ] }
+        : profile.game_version === '16.19.821.7343'
+          && capability === 'hero_damage_keyframe_intervals'
+          ? { required_fields: DAMAGE_KEYFRAME_INTERVALS_821_PROFILE.fields.map((field) => {
+            const assessed = assessHeroStatsTail821(replay, field.replay_tail_field);
+            return { field: field.replay_tail_field, status: assessed.status,
+              error: assessed.error ?? assessed.missing_input ?? null };
+          }) }
+        : profile.game_version === '16.19.821.7343'
+          && capability === 'hero_death_damage_lookup_key_cooccurrence'
+          ? (() => {
+            const death = assessHeroDeathTail821(replay);
+            const minions = assessHeroFloatSnapshotTail821(replay,
+              'hero_minions_killed_snapshot');
+            return { required_fields: [
+              { field: 'NUM_DEATHS', status: death.status,
+                error: death.error ?? death.missing_input ?? null },
+              { field: 'MINIONS_KILLED', status: minions.status,
+                error: minions.error ?? minions.missing_input ?? null },
+            ] };
+          })()
         : profile.game_version === '16.19.821.7343'
           && capability === 'hero_assist'
           ? { required_fields: [
@@ -2111,6 +2892,21 @@ function capabilityQuery(replay, options = {}) {
             ['ASSISTS', assessHeroAssistsSnapshotTail821(replay)],
           ].map(([field, assessment]) => ({ field, status: assessment.status,
             error: assessment.error ?? assessment.missing_input ?? null })) }
+        : profile.game_version === '16.19.821.7343'
+          && (capability === 'hero_roster_metadata_bridge'
+            || capability === 'spell_slot_change_roster_key_pair'
+            || capability === 'params_heal_roster_key_pair'
+            || capability === 'target_hero_roster_key_pair'
+            || capability === 'set_spell_level_roster_key_pair'
+            || capability === 'shielding_params_roster_key_pair'
+            || capability === 'anonymous_029c_roster_key_pair')
+          ? { required_fields: [
+            ['NUM_DEATHS', assessHeroDeathTail821(replay)],
+            ['CHAMPIONS_KILLED', assessHeroChampionKillsSnapshotTail821(replay)],
+            ['ASSISTS', assessHeroAssistsSnapshotTail821(replay)],
+          ].map(([field, assessment]) => ({ field, status: assessment.status,
+            error: assessment.error ?? assessment.missing_input ?? null })),
+          metadata_fields: ['SKIN', 'TEAM', 'INDIVIDUAL_POSITION or TEAM_POSITION'] }
         : profile.game_version === '16.19.821.7343'
           && Object.hasOwn(DAMAGE_PROFILES_821, capability)
           ? { required_fields: [
@@ -2163,10 +2959,16 @@ function capabilityQuery(replay, options = {}) {
           ? assessHeroKillStatsTail821(replay)
         : profile.game_version === '16.19.821.7343'
           && ['hero_minions_killed_snapshot', 'face_direction_keyframe_roster_pair',
+            'unit_apply_damage_roster_key_pair',
+            'unit_apply_damage_lookup_roster_key_pair',
+            'unit_apply_damage_lookup2c_roster_key_pair',
             'hero_experience_snapshot', 'hero_vision_score_snapshot',
             'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot'].includes(capability)
           ? assessHeroFloatSnapshotTail821(replay,
-            capability === 'face_direction_keyframe_roster_pair'
+            ['face_direction_keyframe_roster_pair',
+              'unit_apply_damage_roster_key_pair',
+              'unit_apply_damage_lookup_roster_key_pair',
+              'unit_apply_damage_lookup2c_roster_key_pair'].includes(capability)
               ? 'hero_minions_killed_snapshot' : capability)
         : profile.game_version === '16.19.821.7343'
           && (capability === 'hero_death' || capability === 'hero_death_timer')
@@ -2234,7 +3036,17 @@ function capabilityQuery(replay, options = {}) {
           ? [dependencies[0], options.runtimeImage
             ? fileInputDependency('exact_runtime_image', options.runtimeImage)
             : { name: 'exact_runtime_image', status: 'MISSING', path: null },
-          ...(capability === 'face_direction_keyframe_roster_pair'
+          ...(['unit_apply_damage_packet', 'show_health_bar_packet', 'anonymous_049c_packet', 'spell_slot_change_request', 'spell_slot_change_roster_key_pair',
+            'unit_apply_damage_roster_key_pair',
+            'unit_apply_damage_lookup_roster_key_pair',
+            'unit_apply_damage_lookup2c_roster_key_pair'].includes(capability)
+            || capability === 'hero_death_damage_lookup_key_cooccurrence'
+            ? [getPythonDependency()] : []),
+          ...(['face_direction_keyframe_roster_pair',
+            'unit_apply_damage_roster_key_pair',
+            'unit_apply_damage_lookup_roster_key_pair',
+            'unit_apply_damage_lookup2c_roster_key_pair'].includes(capability)
+            || capability === 'hero_death_damage_lookup_key_cooccurrence'
             ? tailStatInput : [])]
           : [...dependencies, ...tailStatInput,
             ...(profile.game_version === '16.19.821.7343' && capability === 'hero_respawn'
@@ -2293,6 +3105,12 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'hero_assists_snapshot') {
         validationPending.push('KR keyframe 0x0089 structure, raw byte 1178, and pinned 821 runtime byte transform',
           'monotone snapshots and ten ASSISTS tails');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_roster_metadata_bridge') {
+        validationPending.push('five exact-build death, assist and K/D/A keyframe candidate outcomes',
+          'unique ten-way observed event K/D/A match to complete Replay metadata champion/team/role rows',
+          'matching latest 0x0089 roster references; per-packet actors remain UNKNOWN');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'hero_missions_minions_killed_snapshot') {
@@ -2361,9 +3179,19 @@ function capabilityQuery(replay, options = {}) {
           'handler-read reported float and anonymous u32 fields; no effective-heal, caster, or target inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'params_heal_roster_key_pair') {
+        validationPending.push('complete exact 821 native ParamsHeal report and ten-key HeroStats metadata-bridge outcomes',
+          'independent full-u32 field-to-roster equality only; unmatched reports retained; field roles and effective healing unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'shielding_params_packet_pair') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x00ef/0x00f0 packet consumption',
           'paired ShieldingParams blobs and anonymous fields; no shield generation, absorption, actor, or target inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'shielding_params_roster_key_pair') {
+        validationPending.push('complete exact 821 native ShieldingParams pair and ten-key HeroStats metadata-bridge outcomes',
+          'full-u32 field-to-roster equality only; unmatched fields retained; child field roles and shield effects unknown');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'stealth_event_packet') {
@@ -2411,6 +3239,16 @@ function capabilityQuery(replay, options = {}) {
           'OnReviveAlly image label and anonymous +0x04 u32; no revive effect, actor, or lifecycle inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'first_blood_assist_event_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x0017 packet consumption',
+          'OnFirstBloodAssist image label and opaque child blob; no first-blood, assist, actor, or effect inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'objective_steal_event_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native 0x040a children 0x00be/0x00d6 packet consumption',
+          'OnKillDragonSteal/OnKillWormSteal image labels and opaque child blobs; no actual steal, objective state, actor, or gameplay effect inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'turret_die_event_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x040a child 0x003b packet consumption',
           'OnTurretDie image label and anonymous child blob; no actual turret death, structure, actor, or lifecycle inference');
@@ -2444,6 +3282,41 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'cast_spell_ans_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x01da full packet consumption',
           'callback-transformed opaque fields and raw packet provenance; no successful-cast or spell identity inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'circular_movement_restriction_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native-observed 0x0464 packet shapes',
+          'anonymous scalar and vector packet fields; no actor, world position, path, or effective restriction inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'unit_apply_damage_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and Python+Unicorn full native consumption of every selected 0x005f packet',
+          'packet selectors and one bounded anonymous callback float; no damage amount, source, target, or effect inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'show_health_bar_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and Python+Unicorn full native consumption of every selected 0x0165 packet',
+          'two observed one-byte packet shapes and callback flag candidates; no health amount, actor, or display-effect inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'unit_apply_damage_roster_key_pair') {
+        validationPending.push('native-gated 0x005f packet source and complete ten-hero 0x0089 keyframe roster',
+          'full raw-key equality and both source references; no actor, source, target, or applied-damage inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'unit_apply_damage_lookup_roster_key_pair') {
+        validationPending.push('v3 native-gated 0x005f callback +0x24 lookup key and complete ten-hero 0x0089 keyframe roster',
+          'full lookup-key equality and both source references; no proven lookup success, actor, source, target, or applied-damage inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'unit_apply_damage_lookup2c_roster_key_pair') {
+        validationPending.push('v3 native-gated 0x005f callback +0x2c lookup key and complete ten-hero 0x0089 keyframe roster',
+          'full lookup-key equality and both source references; no proven lookup success, actor, source, target, or applied-damage inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'hero_death_damage_lookup_key_cooccurrence') {
+        validationPending.push('exact 821 death route, complete ten-hero roster and every native-gated v3 0x005f packet',
+          'same-chunk and same-ms +0x24 victim-key co-occurrence with all packets and +0x2c die-source comparisons; no fatal packet, actor, source, target or applied-damage inference');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'npc_buff_remove_packet') {
@@ -2481,6 +3354,11 @@ function capabilityQuery(replay, options = {}) {
           'callback-transformed anonymous fields and raw packet provenance; no owner, spell identity, level change, or lifecycle inference');
       }
       if (profile.game_version === '16.19.821.7343'
+          && capability === 'set_spell_level_roster_key_pair') {
+        validationPending.push('complete exact-821 native V2 0x025d packet and ten-key HeroStats metadata-bridge outcomes',
+          'full-u32 packet-header equality only; nonroster headers excluded; packet actor, owner, spell identity, actual level change and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
           && capability === 'direct_input_movement_turn_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x00ba full packet consumption',
           'three callback-transformed opaque f32 fields and raw packet provenance; no world-position, general hero-path or participant inference');
@@ -2494,6 +3372,66 @@ function capabilityQuery(replay, options = {}) {
           && capability === 'increment_minion_kills_packet') {
         validationPending.push('exact 821 runtime image SHA-256 and native 0x03a7 full packet consumption',
           'callback-transformed packet-local lookup key and raw packet provenance; no proven lookup success, participant, minion, last hit, or CS delta');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'notify_contextual_situation_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full packet consumption',
+          'packet-local UTF-8 contextual situation string and raw packet provenance; no actor, Recall action, or gameplay-effect inference');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'item_group_data_broadcast_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full packet consumption',
+          'packet-local callback lookup key; live receiver lookup, group identity and inventory effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'cooldown_broadcast_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full 0x039d packet consumption',
+          'packet-local callback lookup key; receiver lookup, cooldown state, slot, actor, target and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'item_charges_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full 0x0437 packet consumption',
+          'packet-local callback selector/value before receiver method; item identity, charges, slot, owner and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'target_hero_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full 0x0265 packet consumption',
+          'packet-local callback u32; resolved target object, source actor, receiver state and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'target_hero_roster_key_pair') {
+        validationPending.push('complete exact-821 native 0x0265 callback-key and ten-key HeroStats metadata-bridge outcomes',
+          'nonzero full-u32 roster-key equality only; live lookup, source actor, resolved target and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'force_create_missile_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full 0x0087 packet consumption',
+          'packet-local comparison u32 under synthetic receiver; live receiver, missile identity, owner, target, creation, effect and causality remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'change_missile_target_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full 0x040c packet consumption',
+          'packet-local comparison u32 before live receiver comparison; receiver match, missile identity, owner, resolved target, target change and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'missile_key_cooccurrence') {
+        validationPending.push('complete exact-821 native 0x0087 and 0x040c source outcomes',
+          'full-u32 equality and physical precedence within 2000 ms; unmatched and ambiguous rows retained; missile identity, ownership, effects and causality remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'set_dimension_missile_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full 0x008a packet consumption',
+          'packet-local callback u8 before receiver method; receiver state, missile identity, owner, target, dimension change, effect and causality remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'anonymous_029c_packet') {
+        validationPending.push('exact 821 runtime image SHA-256 and native full 0x029c packet consumption',
+          'anonymous packet-local u32 or sentinel; packet class, actor, target, role and effect remain unknown');
+      }
+      if (profile.game_version === '16.19.821.7343'
+          && capability === 'anonymous_029c_roster_key_pair') {
+        validationPending.push('complete exact-821 native 0x029c packet outcome and ten-key HeroStats metadata bridge',
+          'full-u32 header equality only; zero and nonroster headers excluded; decoded +0x14 u32 is independent; actor, target, role and effect remain unknown');
       }
       if (profile.game_version === '16.19.821.7343'
           && capability === 'face_direction_packet') {
@@ -2677,6 +3615,7 @@ function capabilityQuery(replay, options = {}) {
             hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
             hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
             hero_assists_snapshot: 'hero_assists_snapshot_candidates',
+            hero_roster_metadata_bridge: 'hero_roster_metadata_bridge_candidates',
             hero_missions_minions_killed_snapshot:
               'hero_missions_minions_killed_snapshot_candidates',
             hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
@@ -2695,7 +3634,10 @@ function capabilityQuery(replay, options = {}) {
             hero_inventory_broadcast_packet: 'hero_inventory_broadcast_packet_candidates',
             hero_inventory_set_item_packet: 'hero_inventory_set_item_packet_candidates',
             params_heal_packet: 'params_heal_packet_candidates',
+            params_heal_roster_key_pair: 'params_heal_roster_key_pair_candidates',
             shielding_params_packet_pair: 'shielding_params_packet_pair_candidates',
+            shielding_params_roster_key_pair:
+              'shielding_params_roster_key_pair_candidates',
             stealth_event_packet: 'stealth_event_packet_candidates',
             champion_die_event_packet: 'champion_die_event_packet_candidates',
             champion_kill_event_packet: 'champion_kill_event_packet_candidates',
@@ -2705,6 +3647,8 @@ function capabilityQuery(replay, options = {}) {
             on_shutdown_event_packet: 'on_shutdown_event_packet_candidates',
             resurrect_event_packet: 'resurrect_event_packet_candidates',
             revive_ally_event_packet: 'revive_ally_event_packet_candidates',
+            first_blood_assist_event_packet: 'first_blood_assist_event_packet_candidates',
+            objective_steal_event_packet: 'objective_steal_event_packet_candidates',
             turret_die_event_packet: 'turret_die_event_packet_candidates',
             dampener_die_event_packet: 'dampener_die_event_packet_candidates',
             turret_first_blood_event_packet: 'turret_first_blood_event_packet_candidates',
@@ -2722,11 +3666,51 @@ function capabilityQuery(replay, options = {}) {
             set_spell_timer_from_buff_packet:
               'set_spell_timer_from_buff_packet_candidates',
             set_spell_level_packet: 'set_spell_level_packet_candidates',
+            set_spell_level_roster_key_pair:
+              'set_spell_level_roster_key_pair_candidates',
             direct_input_movement_turn_packet:
               'direct_input_movement_turn_packet_candidates',
             set_movement_driver_packet: 'set_movement_driver_packet_candidates',
             increment_minion_kills_packet: 'increment_minion_kills_packet_candidates',
             face_direction_packet: 'face_direction_packet_candidates',
+            circular_movement_restriction_packet:
+              'circular_movement_restriction_packet_candidates',
+            notify_contextual_situation_packet:
+              'notify_contextual_situation_packet_candidates',
+            item_group_data_broadcast_packet:
+              'item_group_data_broadcast_packet_candidates',
+            cooldown_broadcast_packet:
+              'cooldown_broadcast_packet_candidates',
+            item_charges_packet: 'item_charges_packet_candidates',
+            target_hero_packet:
+              'target_hero_packet_candidates',
+            target_hero_roster_key_pair:
+              'target_hero_roster_key_pair_candidates',
+            force_create_missile_packet:
+              'force_create_missile_packet_candidates',
+            change_missile_target_packet:
+              'change_missile_target_packet_candidates',
+            missile_key_cooccurrence:
+              'missile_key_cooccurrence_candidates',
+            set_dimension_missile_packet:
+              'set_dimension_missile_packet_candidates',
+            anonymous_029c_packet:
+              'anonymous_029c_packet_candidates',
+            anonymous_049c_packet: 'anonymous_049c_packet_candidates',
+            spell_slot_change_request: 'spell_slot_change_request_candidates',
+            spell_slot_change_roster_key_pair: 'spell_slot_change_roster_key_pair_candidates',
+            anonymous_029c_roster_key_pair:
+              'anonymous_029c_roster_key_pair_candidates',
+            unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
+            show_health_bar_packet: 'show_health_bar_packet_candidates',
+            unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
+            unit_apply_damage_lookup_roster_key_pair:
+              'unit_apply_damage_lookup_roster_key_candidates',
+            unit_apply_damage_lookup2c_roster_key_pair:
+              'unit_apply_damage_lookup2c_roster_key_candidates',
+            hero_death_damage_lookup_key_cooccurrence:
+              'hero_death_damage_lookup_key_cooccurrence_candidates',
+            hero_damage_keyframe_intervals: 'hero_damage_keyframe_interval_candidates',
             face_direction_keyframe_roster_pair:
               'face_direction_keyframe_roster_pair_candidates',
             hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
@@ -2789,6 +3773,13 @@ function capabilityQuery(replay, options = {}) {
       });
     }
   }
+  if (requested !== null) {
+    const byName = new Map(document.capabilities.map((row) => [row.capability, row]));
+    document.capabilities = requested.filter((name) => byName.has(name))
+      .map((name) => byName.get(name));
+    document.unregistered_requested_capabilities = requested
+      .filter((name) => !byName.has(name));
+  }
   return document;
 }
 
@@ -2807,7 +3798,7 @@ function runCapabilitiesCommand(parsed) {
   } else {
     process.stdout.write(`Replay: ${result.source_path}\nBuild: ${result.game_version}\n`);
     process.stdout.write(`Profile: ${result.profile_release_status ?? result.status}\n`);
-    process.stdout.write('Scope: container and registry only; packet framing and semantic decode not run.\n');
+    process.stdout.write('Scope: container, registry, and selected dependency checks; packet framing and semantic decode not run.\n');
     for (const row of result.capabilities) {
       const missing = row.missing_inputs === null ? 'not assessed per capability'
         : row.missing_inputs.length ? row.missing_inputs.join(', ') : 'none detected';
@@ -2834,8 +3825,12 @@ function runCapabilitiesCommand(parsed) {
     if (result.status === 'UNSUPPORTED_VERSION') {
       process.stdout.write(`No exact build profile is registered for ${result.game_version}.\n`);
     }
+    if (result.unregistered_requested_capabilities?.length) {
+      process.stdout.write(`Not registered for this exact build: ${result.unregistered_requested_capabilities.join(', ')}.\n`);
+    }
   }
-  return result.status === 'UNSUPPORTED_VERSION' ? 2 : 0;
+  return result.status === 'UNSUPPORTED_VERSION'
+    || result.unregistered_requested_capabilities?.length ? 2 : 0;
 }
 
 async function runQueryEventsCommand(parsed) {
@@ -2843,14 +3838,32 @@ async function runQueryEventsCommand(parsed) {
   let outputPath = null;
   let writer = process.stdout;
   let createdOutput = false;
+  let stagedStdoutDirectory = null;
+  let stagedStdoutPath = null;
+  let createdStaging = false;
   try {
     const artifactDirectory = path.resolve(positionals[0]);
     const batch = fs.existsSync(path.join(artifactDirectory, 'manifest.json'));
+    if (options.listEvents) {
+      process.stdout.write(`${JSON.stringify(listSavedEvents(artifactDirectory, batch))}\n`);
+      return 0;
+    }
+    if (options.output && options.output !== '-') {
+      outputPath = path.resolve(options.output);
+      const relative = path.relative(artifactDirectory, outputPath);
+      const outsideArtifacts = relative === '..'
+        || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+      // Keep paths inside the artifact tree on the input-alias check below.
+      // An existing external output can be rejected before hashing batch events.
+      if (outsideArtifacts && fs.existsSync(outputPath)) {
+        throw new EventQueryError('OUTPUT_EXISTS',
+          `Query output already exists: ${outputPath}`);
+      }
+    }
     const prepared = batch
       ? prepareBatchEventQuery(artifactDirectory, options.event)
       : prepareEventQuery(artifactDirectory, options.event);
     if (options.output && options.output !== '-') {
-      outputPath = path.resolve(options.output);
       const replayInputs = batch ? prepared.replays
         .flatMap((replay) => [replay.prepared?.inputPath,
           path.join(replay.replayDirectory, 'semantic_run.json'),
@@ -2880,6 +3893,15 @@ async function runQueryEventsCommand(parsed) {
       }
       writer = handle.createWriteStream();
       createdOutput = true;
+    } else {
+      // A later invalid JSONL row or digest must not leave a partial stdout
+      // result. Spool only selected rows, then publish them after validation.
+      stagedStdoutDirectory = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'rofl-query-'));
+      stagedStdoutPath = path.join(stagedStdoutDirectory, 'selected.jsonl');
+      const handle = await fs.promises.open(stagedStdoutPath, 'wx');
+      writer = handle.createWriteStream();
+      createdStaging = true;
     }
     const filters = {
       fromMs: options.fromMs,
@@ -2888,17 +3910,50 @@ async function runQueryEventsCommand(parsed) {
       killerParticipant: options.killerParticipant,
       assistingParticipant: options.assistingParticipant,
       rawParam: options.rawParam,
+      contextualSituation: options.contextualSituation,
       itemId: options.itemId,
       previousItemId: options.previousItemId,
       slot: options.slot,
       opaqueU32: options.opaqueU32,
+      itemGroupCallbackU8: options.itemGroupCallbackU8,
+      itemChargesSelectorU8: options.itemChargesSelectorU8,
+      itemChargesValueU16: options.itemChargesValueU16,
       opaquePair: options.opaquePair,
       opaqueI32: options.opaqueI32,
+      castNestedBits: options.castNestedBits,
+      castNestedU32: options.castNestedU32,
+      castNestedU32At4c: options.castNestedU32At4c,
+      castNestedF32AtA0: options.castNestedF32AtA0,
+      castNestedU32At28: options.castNestedU32At28,
+      spellTimerReceiverSlot: options.spellTimerReceiverSlot,
+      spellLevelReceiverIndex: options.spellLevelReceiverIndex,
+      spellLevelClampedScalar: options.spellLevelClampedScalar,
+      slotChangeIndex: options.slotChangeIndex,
+      slotChangeOperation: options.slotChangeOperation,
+      damageCallbackF32Available: options.damageCallbackF32Available,
+      damageChanged: options.damageChanged,
+      damageCounter: options.damageCounter,
+      damageMinDelta: options.damageMinDelta,
+      windowKey: options.windowKey,
+      windowMaxError: options.windowMaxError,
+      damageCallbackU32At10: options.damageCallbackU32At10,
+      damageCallbackU32At1c: options.damageCallbackU32At1c,
+      damageCallbackF32At18Raw: options.damageCallbackF32At18Raw,
+      damageLookupKey24: options.damageLookupKey24,
+      damageLookupKey2c: options.damageLookupKey2c,
+      dieSourceKey2cMatch: options.dieSourceKey2cMatch,
+      showHealthZeroFlag: options.showHealthZeroFlag,
+      packetRecordCount: options.packetRecordCount,
+      levelAfter: options.levelAfter,
       childEventId: options.childEventId,
       latestPerParticipant: options.latestPerParticipant,
       endpointReversedPair: options.endpointReversedPair,
       comparisonToEndpoints: options.comparisonToEndpoints,
       limit: options.limit,
+      verifySource: options.verifySource,
+      sourceReplay: options.sourceReplay,
+      runtimeImage: options.runtimeImage,
+      pythonExecutable: options.python,
     };
     const emitLine = async (line) => {
       if (!writer.write(line)) await once(writer, 'drain');
@@ -2906,17 +3961,24 @@ async function runQueryEventsCommand(parsed) {
     const summary = batch
       ? await streamBatchEventQuery(prepared, filters, emitLine)
       : await streamEventQuery(prepared, filters, emitLine);
-    if (createdOutput) {
+    if (createdOutput || createdStaging) {
       writer.end();
       await finished(writer);
+    }
+    if (createdStaging) {
+      for await (const chunk of fs.createReadStream(stagedStdoutPath)) {
+        if (!process.stdout.write(chunk)) await once(process.stdout, 'drain');
+      }
     }
     summary.output = outputPath ?? '-';
     (outputPath ? process.stdout : process.stderr).write(`${JSON.stringify(summary)}\n`);
     return 0;
   } catch (error) {
-    if (createdOutput) {
+    if (createdOutput || createdStaging) {
       writer.destroy();
       await finished(writer).catch(() => {});
+    }
+    if (createdOutput) {
       await fs.promises.rm(outputPath, { force: true });
     }
     if (error instanceof EventQueryError) {
@@ -2925,7 +3987,84 @@ async function runQueryEventsCommand(parsed) {
       return 2;
     }
     throw error;
+  } finally {
+    if (stagedStdoutPath) {
+      await fs.promises.rm(stagedStdoutPath, { force: true });
+    }
+    if (stagedStdoutDirectory) {
+      await fs.promises.rmdir(stagedStdoutDirectory);
+    }
   }
+}
+
+function failedBatchWorker(filePath, message, details = null) {
+  return {
+    ok: false,
+    source_path: path.resolve(filePath),
+    error: { code: 'WORKER_FAILED', message, details, name: 'Error' },
+  };
+}
+
+function runOneBatchWorker(filePath, options, rootDir, replayDirName, workerScript) {
+  return new Promise((resolve) => {
+    let worker;
+    try {
+      worker = new Worker(workerScript, {
+        workerData: { filePath, options, rootDir, replayDirName },
+      });
+    } catch (error) {
+      resolve(failedBatchWorker(filePath, `Replay worker could not start: ${error.message}`));
+      return;
+    }
+    let reported = null;
+    let workerError = null;
+    worker.on('message', (value) => { reported = value; });
+    worker.on('error', (error) => { workerError = error; });
+    worker.on('exit', (code) => {
+      if (code !== 0 || workerError) {
+        resolve(failedBatchWorker(filePath,
+          `Replay worker exited ${code}: ${workerError?.message ?? 'no completed result'}`,
+          { worker_exit_code: code }));
+      } else if (!reported || typeof reported !== 'object'
+          || typeof reported.ok !== 'boolean'
+          || (reported.ok && (reported.analysis?.events !== null
+            || reported.analysis?.artifact_directory !== path.posix.join('replays', replayDirName)))
+          || (!reported.ok && (!reported.error || reported.source_path !== path.resolve(filePath)))) {
+        resolve(failedBatchWorker(filePath, 'Replay worker returned an invalid compact result'));
+      } else {
+        resolve(reported);
+      }
+    });
+  });
+}
+
+async function runBatchWorkers(files, options, rootDir, jobs = 2,
+  workerScript = path.join(__dirname, 'batch_worker.js')) {
+  const replayDirNames = replayDirectoryNames(files.map((source_path) => ({ source_path })));
+  const results = new Array(files.length);
+  let next = 0;
+  async function runLane() {
+    while (next < files.length) {
+      const index = next++;
+      const name = replayDirNames[index];
+      const result = await runOneBatchWorker(files[index], options, rootDir, name, workerScript);
+      if (!result.ok) {
+        const replayDir = path.join(rootDir, 'replays', name);
+        if (fs.existsSync(replayDir)) {
+          const relative = path.posix.join('failed_replays', `${index + 1}-${name}`);
+          const preserved = path.join(rootDir, relative);
+          ensureDir(path.dirname(preserved));
+          fs.renameSync(replayDir, preserved);
+          result.error.details = {
+            ...(result.error.details ?? {}), partial_artifact_directory: relative,
+          };
+        }
+      }
+      results[index] = result;
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(jobs, files.length) }, runLane));
+  return results;
 }
 
 async function main(argv = process.argv.slice(2)) {
@@ -2943,13 +4082,18 @@ async function main(argv = process.argv.slice(2)) {
   if (files.length === 0) throw new Error('No .rofl files found in the supplied input.');
   const beforeHashes = await hashFiles(DEFAULT_UPSTREAM_PATHS);
   const parseOptions = { ...parsed.options, semantic: parsed.command !== 'inspect' };
-  const results = files.map((filePath) => parseOne(filePath, parseOptions));
+  const parallel = parsed.options.jobs === 2;
+  const workerOutputRoot = parallel ? reserveOutputDirectory(parsed.options.outDir) : null;
+  const results = parallel
+    ? await runBatchWorkers(files, parseOptions, workerOutputRoot)
+    : files.map((filePath) => parsed.options.jobs === 1
+      ? parseOneExact821Batch(filePath, parseOptions) : parseOne(filePath, parseOptions));
   const testSummary = parsed.command === 'validate' ? runTestSuite() : null;
   const afterHashes = await hashFiles(DEFAULT_UPSTREAM_PATHS);
   const validationDetailsDir = parsed.command === 'validate' && parsed.options.detailsDir
     ? path.resolve(parsed.options.detailsDir)
     : null;
-  const outDir = reserveOutputDirectory(parsed.options.outDir);
+  const outDir = workerOutputRoot ?? reserveOutputDirectory(parsed.options.outDir);
   const summary = await writeRunArtifacts(
     results,
     outDir,
@@ -2958,7 +4102,7 @@ async function main(argv = process.argv.slice(2)) {
     argv,
     testSummary,
     validationDetailsDir,
-    parsed.options,
+    { ...parsed.options, prewrittenReplayArtifacts: parallel },
   );
   for (const result of results) {
     if (result.ok) {
@@ -2998,6 +4142,9 @@ module.exports = {
   runWardEventsCommand,
   readWardRowsFromReplay,
   parseOne,
+  parseOneExact821Batch,
+  writePerReplayArtifacts,
+  runBatchWorkers,
   v2InputsForReplay,
   inventoryFromAnalysis,
   buildAcceptanceSummary,

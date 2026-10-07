@@ -18,9 +18,9 @@ const CALLBACK_TABLE_SHA256 = Object.freeze({
 const PACKET_ID = 0x00ae;
 const CAPABILITY = 'npc_buff_add_packet';
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
-const MAX_BATCH_PACKETS = 20_000;
+const MAX_BATCH_PACKETS = 40_000;
 const MAX_TOTAL_PACKETS = 50_000;
-const MAX_REQUEST_BYTES = 4_000_000;
+const MAX_REQUEST_BYTES = 8_000_000;
 const OBSERVED_PAYLOAD_LENGTHS_BY_STREAM = Object.freeze({
   1: new Set([12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 28]),
   2: new Set([13, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,

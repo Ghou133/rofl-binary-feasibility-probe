@@ -46,6 +46,70 @@ function fixture(t, version = '16.15.801.3452') {
   return input;
 }
 
+test('selected capability preflight checks only requested inputs and preserves request order', (t) => {
+  const cli = loadCli();
+  t.mock.method(require('node:child_process'), 'spawnSync', () => {
+    throw new Error('unselected native dependency must not be probed');
+  });
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.821.7343');
+  const result = cli.capabilityQuery(replay, {
+    events: ['hero_respawn', 'hero_death', 'hero_death'],
+  });
+  assert.deepEqual(result.requested_capabilities, ['hero_respawn', 'hero_death']);
+  assert.deepEqual(result.capabilities.map((row) => row.capability),
+    ['hero_respawn', 'hero_death']);
+  assert.deepEqual(result.unregistered_requested_capabilities, []);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(result.packet_framing_inspected, false);
+  assert.ok(result.capabilities.every((row) => row.status === 'CANDIDATE'));
+  assert.ok(result.capabilities.every((row) => !row.required_inputs
+    .some((input) => input.name === 'python_unicorn')));
+});
+
+test('capability preflight probes shared native Python dependency once per request', (t) => {
+  const cli = loadCli();
+  let calls = 0;
+  t.mock.method(require('node:child_process'), 'spawnSync', (command, args) => {
+    calls += 1;
+    assert.equal(command, 'test-python');
+    assert.deepEqual(args, ['-B', '-c', 'import unicorn']);
+    return { status: 1, stderr: "No module named 'unicorn'" };
+  });
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.821.7343');
+  const result = cli.capabilityQuery(replay, {
+    events: ['unit_apply_damage_packet', 'show_health_bar_packet'], python: 'test-python',
+  });
+  assert.equal(calls, 1);
+  assert.ok(result.capabilities.every((row) => row.missing_inputs.includes('python_unicorn')));
+  cli.capabilityQuery(replay, { events: ['unit_apply_damage_packet'], python: 'test-python' });
+  assert.equal(calls, 2); // Dependency state is refreshed across separate requests.
+});
+
+test('selected capability CLI reports unregistered exact-build names with nonzero exit', async (t) => {
+  const cli = loadCli();
+  const input = fixture(t, '16.19.820.7193');
+  let output = '';
+  t.mock.method(process.stdout, 'write', (chunk) => { output += String(chunk); return true; });
+  const code = await cli.main(['capabilities', input, '--events',
+    'hero_death,missile_key_cooccurrence', '--json']);
+  assert.equal(code, 2);
+  const result = JSON.parse(output);
+  assert.equal(result.game_version, '16.19.820.7193');
+  assert.deepEqual(result.capabilities.map((row) => row.capability), ['hero_death']);
+  assert.deepEqual(result.unregistered_requested_capabilities, ['missile_key_cooccurrence']);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(fs.existsSync(path.join(path.dirname(input), 'artifacts')), false);
+});
+
+test('unknown exact builds retain requested names without borrowing registered profiles', (t) => {
+  const cli = loadCli();
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.9999.9999');
+  const result = cli.capabilityQuery(replay, { events: ['hero_death'] });
+  assert.equal(result.status, 'UNSUPPORTED_VERSION');
+  assert.deepEqual(result.capabilities, []);
+  assert.deepEqual(result.unregistered_requested_capabilities, ['hero_death']);
+});
+
 test('the legacy sampling option remains parseable without changing prefix output', (t) => {
   const cli = loadCli();
   const input = fixture(t);
@@ -183,6 +247,104 @@ test('inventory MapView capability preflight requires an explicit image but no t
   assert.equal(present.runtime_image_used, false);
   assert.equal(present.packet_framing_inspected, false);
   assert.equal(present.semantic_decode_performed, false);
+});
+
+test('821 UnitApplyDamage preflight reports a missing Python and Unicorn runtime', () => {
+  const cli = loadCli();
+  // A malformed packet body must remain unread by the dependency preflight.
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.821.7343');
+  const unavailablePython = path.join(os.tmpdir(), 'rofl-821-python-does-not-exist');
+  const result = cli.capabilityQuery(replay, { python: unavailablePython });
+  const damage = result.capabilities.find((row) =>
+    row.capability === 'unit_apply_damage_packet');
+  assert.equal(result.packet_framing_inspected, false);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(damage.status, 'CANDIDATE');
+  assert.equal(damage.runtime_image_requirement, 'EXACT_IMAGE_REQUIRED');
+  assert.deepEqual(damage.required_inputs.map((input) => input.name),
+    ['replay', 'exact_runtime_image', 'python_unicorn']);
+  assert.deepEqual(damage.missing_inputs,
+    ['exact_runtime_image', 'python_unicorn']);
+  assert.equal(damage.required_inputs[2].command, unavailablePython);
+  assert.equal(damage.required_inputs[2].status, 'MISSING');
+});
+
+test('821 ShowHealthBar preflight reports runtime dependencies without opening packet framing', () => {
+  const cli = loadCli();
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.821.7343');
+  const unavailablePython = path.join(os.tmpdir(), 'rofl-821-python-does-not-exist');
+  const result = cli.capabilityQuery(replay, { python: unavailablePython });
+  const bar = result.capabilities.find((row) =>
+    row.capability === 'show_health_bar_packet');
+  assert.equal(result.packet_framing_inspected, false);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(bar.status, 'CANDIDATE');
+  assert.equal(bar.output, 'show_health_bar_packet_candidates');
+  assert.equal(bar.runtime_image_requirement, 'EXACT_IMAGE_REQUIRED');
+  assert.deepEqual(bar.required_inputs.map((input) => input.name),
+    ['replay', 'exact_runtime_image', 'python_unicorn']);
+  assert.deepEqual(bar.missing_inputs, ['exact_runtime_image', 'python_unicorn']);
+  assert.equal(bar.required_inputs[2].status, 'MISSING');
+});
+
+test('821 damage roster-key pair preflight names both native and roster dependencies', () => {
+  const cli = loadCli();
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.821.7343');
+  const unavailablePython = path.join(os.tmpdir(), 'rofl-821-python-does-not-exist');
+  const result = cli.capabilityQuery(replay, { python: unavailablePython });
+  const pair = result.capabilities.find((row) =>
+    row.capability === 'unit_apply_damage_roster_key_pair');
+  assert.equal(result.packet_framing_inspected, false);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(pair.status, 'CANDIDATE');
+  assert.equal(pair.output, 'unit_apply_damage_roster_key_candidates');
+  assert.equal(pair.runtime_image_requirement, 'EXACT_IMAGE_REQUIRED');
+  assert.ok(pair.required_inputs.some((input) => input.name === 'exact_runtime_image'));
+  assert.ok(pair.required_inputs.some((input) => input.name === 'python_unicorn'));
+  assert.ok(pair.required_inputs.some((input) => input.name === 'replay_tail_MINIONS_KILLED'));
+  assert.ok(pair.missing_inputs.includes('exact_runtime_image'));
+  assert.ok(pair.missing_inputs.includes('python_unicorn'));
+  assert.ok(pair.validation_pending.some((pending) => pending.includes('ten-hero')));
+});
+
+test('821 native damage lookup-roster pair preflight reports its exact inputs', () => {
+  const cli = loadCli();
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.821.7343');
+  const unavailablePython = path.join(os.tmpdir(), 'rofl-821-python-does-not-exist');
+  const result = cli.capabilityQuery(replay, { python: unavailablePython });
+  const pair = result.capabilities.find((row) =>
+    row.capability === 'unit_apply_damage_lookup_roster_key_pair');
+  assert.equal(result.packet_framing_inspected, false);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(pair.status, 'CANDIDATE');
+  assert.equal(pair.output, 'unit_apply_damage_lookup_roster_key_candidates');
+  assert.equal(pair.runtime_image_requirement, 'EXACT_IMAGE_REQUIRED');
+  assert.ok(pair.required_inputs.some((input) => input.name === 'exact_runtime_image'));
+  assert.ok(pair.required_inputs.some((input) => input.name === 'python_unicorn'));
+  assert.ok(pair.required_inputs.some((input) => input.name === 'replay_tail_MINIONS_KILLED'));
+  assert.ok(pair.missing_inputs.includes('exact_runtime_image'));
+  assert.ok(pair.missing_inputs.includes('python_unicorn'));
+  assert.ok(pair.validation_pending.some((pending) => pending.includes('+0x24')));
+});
+
+test('821 second native damage lookup-roster pair preflight reports its exact inputs', () => {
+  const cli = loadCli();
+  const replay = replayFromChunks([{ body: Buffer.from([0]) }], '16.19.821.7343');
+  const unavailablePython = path.join(os.tmpdir(), 'rofl-821-python-does-not-exist');
+  const result = cli.capabilityQuery(replay, { python: unavailablePython });
+  const pair = result.capabilities.find((row) =>
+    row.capability === 'unit_apply_damage_lookup2c_roster_key_pair');
+  assert.equal(result.packet_framing_inspected, false);
+  assert.equal(result.semantic_decode_performed, false);
+  assert.equal(pair.status, 'CANDIDATE');
+  assert.equal(pair.output, 'unit_apply_damage_lookup2c_roster_key_candidates');
+  assert.equal(pair.runtime_image_requirement, 'EXACT_IMAGE_REQUIRED');
+  assert.ok(pair.required_inputs.some((input) => input.name === 'exact_runtime_image'));
+  assert.ok(pair.required_inputs.some((input) => input.name === 'python_unicorn'));
+  assert.ok(pair.required_inputs.some((input) => input.name === 'replay_tail_MINIONS_KILLED'));
+  assert.ok(pair.missing_inputs.includes('exact_runtime_image'));
+  assert.ok(pair.missing_inputs.includes('python_unicorn'));
+  assert.ok(pair.validation_pending.some((pending) => pending.includes('+0x2c')));
 });
 
 test('capabilities exposes missing Replay tail stats without treating it as zero events', (t) => {
@@ -415,6 +577,185 @@ test('16.19 zero-event PASS remains distinct from missing input and partial fail
   assert.equal(partial.analysis.events.hero_death_candidates.length, 1);
   assert.equal(partial.analysis.semantic.capability_results.hero_path.status, 'MISSING_INPUT');
   assert.equal(partial.analysis.events.death_events, undefined);
+});
+
+test('821 UnitApplyDamage V6 CLI switch forwards an explicit decode option', (t) => {
+  const input = fixture(t, '16.19.821.7343');
+  const seen = [];
+  const cli = loadCli(null, (_replay, options) => {
+    seen.push(options.damagePacketProfile);
+    return { status: 'CANDIDATE',
+      events: { unit_apply_damage_packet_candidates: [] },
+      capability_results: { unit_apply_damage_packet: {
+        status: 'CANDIDATE', input_count: 0, event_count: 0,
+      } } };
+  });
+  const selected = cli.parseArgs(['decode', input, '--events',
+    'unit_apply_damage_packet', '--damage-packet-v6']);
+  assert.equal(selected.options.damagePacketV6, true);
+  assert.equal(cli.parseOne(input, { ...selected.options, semantic: true }).ok, true);
+  const ordinary = cli.parseArgs(['decode', input, '--events',
+    'unit_apply_damage_packet']);
+  assert.equal(cli.parseOne(input, { ...ordinary.options, semantic: true }).ok, true);
+  assert.deepEqual(seen, ['v6', undefined]);
+  assert.equal(cli.parseArgs(['batch', input, '--events',
+    'hero_death_damage_lookup_key_cooccurrence', '--damage-packet-v6'])
+    .options.damagePacketV6, true);
+  assert.throws(() => cli.parseArgs(['decode', input, '--damage-packet-v6']),
+    /--damage-packet-v6 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--events',
+    'hero_path', '--damage-packet-v6']), /--damage-packet-v6 requires/);
+  assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+    'unit_apply_damage_packet_candidates', '--damage-packet-v6']),
+  /--damage-packet-v6 requires/);
+});
+
+test('821 CastSpellAns V5 CLI switch forwards an explicit decode option', (t) => {
+  const input = fixture(t, '16.19.821.7343');
+  const seen = [];
+  const cli = loadCli(null, (_replay, options) => {
+    seen.push(options.castPacketProfile);
+    return { status: 'CANDIDATE',
+      events: { cast_spell_ans_packet_candidates: [] },
+      capability_results: { cast_spell_ans_packet: {
+        status: 'CANDIDATE', input_count: 0, event_count: 0,
+      } } };
+  });
+  const selected = cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v5']);
+  assert.equal(selected.options.castPacketV5, true);
+  assert.equal(cli.parseOne(input, { ...selected.options, semantic: true }).ok, true);
+  const ordinary = cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet']);
+  assert.equal(cli.parseOne(input, { ...ordinary.options, semantic: true }).ok, true);
+  const next = cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v6']);
+  assert.equal(next.options.castPacketV6, true);
+  assert.equal(cli.parseOne(input, { ...next.options, semantic: true }).ok, true);
+  const newest = cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v7']);
+  assert.equal(newest.options.castPacketV7, true);
+  assert.equal(cli.parseOne(input, { ...newest.options, semantic: true }).ok, true);
+  const lookup = cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v8']);
+  assert.equal(lookup.options.castPacketV8, true);
+  assert.equal(cli.parseOne(input, { ...lookup.options, semantic: true }).ok, true);
+  const witnessed = cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v9']);
+  assert.equal(witnessed.options.castPacketV9, true);
+  assert.equal(cli.parseOne(input, { ...witnessed.options, semantic: true }).ok, true);
+  assert.deepEqual(seen, ['v5', undefined, 'v6', 'v7', 'v8', 'v9']);
+  assert.equal(cli.parseArgs(['batch', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v5']).options.castPacketV5, true);
+  assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v5']),
+    /--cast-packet-v5 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--events',
+    'hero_path', '--cast-packet-v5']), /--cast-packet-v5 requires/);
+  assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+    'cast_spell_ans_packet_candidates', '--cast-packet-v5']),
+  /--cast-packet-v5 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v5', '--cast-packet-v6']),
+  /mutually exclusive/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v6']),
+    /--cast-packet-v6 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v7']),
+    /--cast-packet-v7 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v8']),
+    /--cast-packet-v8 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--cast-packet-v9']),
+    /--cast-packet-v9 requires/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v6', '--cast-packet-v7']),
+  /mutually exclusive/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v7', '--cast-packet-v8']),
+  /mutually exclusive/);
+  assert.throws(() => cli.parseArgs(['decode', input, '--events',
+    'cast_spell_ans_packet', '--cast-packet-v8', '--cast-packet-v9']),
+  /mutually exclusive/);
+  const lookupQuery = cli.parseArgs(['query-events', input, '--event',
+    'cast_spell_ans_packet_candidates', '--cast-nested-u32-0x28', '0x0b6189bb']);
+  assert.equal(lookupQuery.options.castNestedU32At28, 190941627);
+  for (const invalid of ['-1', '4294967296', 'NaN']) {
+    assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+      'cast_spell_ans_packet_candidates', '--cast-nested-u32-0x28', invalid]));
+  }
+  assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+    'set_spell_level_packet_candidates', '--cast-nested-u32-0x28', '1']),
+  /--cast-nested-u32-0x28 requires/);
+  const query = cli.parseArgs(['query-events', input, '--event',
+    'cast_spell_ans_packet_candidates', '--cast-nested-f32-0xa0', '1.25']);
+  assert.equal(query.options.castNestedF32AtA0, 1.25);
+  const rounded = cli.parseArgs(['query-events', input, '--event',
+    'cast_spell_ans_packet_candidates', '--cast-nested-f32-0xa0', '1.1395']);
+  assert.equal(rounded.options.castNestedF32AtA0, 1.1395000219345093);
+  for (const invalid of ['NaN', 'Infinity', '1e400']) {
+    assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+      'cast_spell_ans_packet_candidates', '--cast-nested-f32-0xa0', invalid]),
+    /finite decimal number/);
+  }
+  assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+    'set_spell_level_packet_candidates', '--cast-nested-f32-0xa0', '1.25']),
+  /--cast-nested-f32-0xa0 requires/);
+});
+
+test('821 SetSpellLevel V2 CLI switch forwards an explicit decode option', (t) => {
+  const input = fixture(t, '16.19.821.7343');
+  const seen = [];
+  const cli = loadCli(null, (_replay, options) => {
+    seen.push(options.setSpellLevelProfile);
+    return { status: 'CANDIDATE',
+      events: { set_spell_level_packet_candidates: [] },
+      capability_results: { set_spell_level_packet: {
+        status: 'CANDIDATE', input_count: 0, event_count: 0,
+      } } };
+  });
+  const selected = cli.parseArgs(['decode', input, '--events',
+    'set_spell_level_packet', '--spell-level-packet-v2']);
+  assert.equal(selected.options.spellLevelPacketV2, true);
+  assert.equal(cli.parseOne(input, { ...selected.options, semantic: true }).ok, true);
+  const ordinary = cli.parseArgs(['decode', input, '--events',
+    'set_spell_level_packet']);
+  assert.equal(cli.parseOne(input, { ...ordinary.options, semantic: true }).ok, true);
+  assert.deepEqual(seen, ['v2', undefined]);
+  assert.equal(cli.parseArgs(['batch', input, '--events',
+    'set_spell_level_packet', '--spell-level-packet-v2']).options.spellLevelPacketV2,
+  true);
+  assert.throws(() => cli.parseArgs(['decode', input, '--spell-level-packet-v2']),
+    /--spell-level-packet-v2 requires/);
+  assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+    'set_spell_level_packet_candidates', '--spell-level-packet-v2']),
+  /--spell-level-packet-v2 requires/);
+});
+
+test('821 SetSpellTimerFromBuff V2 CLI switch forwards an explicit decode option', (t) => {
+  const input = fixture(t, '16.19.821.7343');
+  const seen = [];
+  const cli = loadCli(null, (_replay, options) => {
+    seen.push(options.setSpellTimerProfile);
+    return { status: 'CANDIDATE',
+      events: { set_spell_timer_from_buff_packet_candidates: [] },
+      capability_results: { set_spell_timer_from_buff_packet: {
+        status: 'CANDIDATE', input_count: 0, event_count: 0,
+      } } };
+  });
+  const selected = cli.parseArgs(['decode', input, '--events',
+    'set_spell_timer_from_buff_packet', '--spell-timer-packet-v2']);
+  assert.equal(selected.options.spellTimerPacketV2, true);
+  assert.equal(cli.parseOne(input, { ...selected.options, semantic: true }).ok, true);
+  const ordinary = cli.parseArgs(['decode', input, '--events',
+    'set_spell_timer_from_buff_packet']);
+  assert.equal(cli.parseOne(input, { ...ordinary.options, semantic: true }).ok, true);
+  assert.deepEqual(seen, ['v2', undefined]);
+  assert.equal(cli.parseArgs(['batch', input, '--events',
+    'set_spell_timer_from_buff_packet', '--spell-timer-packet-v2'])
+    .options.spellTimerPacketV2, true);
+  assert.throws(() => cli.parseArgs(['decode', input, '--spell-timer-packet-v2']),
+    /--spell-timer-packet-v2 requires/);
+  assert.throws(() => cli.parseArgs(['query-events', input, '--event',
+    'set_spell_timer_from_buff_packet_candidates', '--spell-timer-packet-v2']),
+    /--spell-timer-packet-v2 requires/);
 });
 
 test('16.19 decode requires an explicit capability and reports missing input as failure', async (t) => {

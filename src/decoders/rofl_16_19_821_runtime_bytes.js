@@ -25,6 +25,10 @@ if (LOOKUP_TABLE.length !== 256 || new Set(LOOKUP_TABLE).size !== 256
   throw new Error('exact 821 byte lookup table identity mismatch');
 }
 
+function runtimeByteLookupTable821() {
+  return Buffer.from(LOOKUP_TABLE);
+}
+
 function rotateRight8(value, bits) {
   return ((value >>> bits) | (value << (8 - bits))) & 0xff;
 }
@@ -96,6 +100,7 @@ function decodeHeroReincarnateAlivePayload821(payload) {
 module.exports = {
   RUNTIME_IMAGE_SHA256,
   LOOKUP_TABLE_SHA256,
+  runtimeByteLookupTable821,
   decodeRuntimeLevelByte,
   decodeRuntimeCountByte,
   decodeHeroDieSourceId821,

@@ -1,0 +1,146 @@
+{
+  "evidence_tier": "EXACT_BUILD_REPLAY_AND_PINNED_IMAGE_NATIVE_PACKET_LOCAL_WITNESS",
+  "publication_status": "UNPUBLISHED_DEVELOPMENT_CANDIDATE",
+  "build": "16.19.821.7343",
+  "runtime_image_sha256": "35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325",
+  "route": "0x040c",
+  "profile_id": "rofl-16.19.821.7343-kr-change-missile-target-packet-candidate-v2",
+  "v1_gate": "CHANGE_MISSILE_TARGET_821_NATIVE_GATE.json",
+  "deserializer_rva": "0x10e8e30",
+  "vector_deserializer_helper_rva": "0x10a5b00",
+  "vector_native_object_offsets": [
+    "+0x10",
+    "+0x14",
+    "+0x18"
+  ],
+  "protected_vector_byte_inverse": "For each protected byte: raw = (ROR8((protected - 0x32) & 255, 7) - 0x36) XOR 0x7d; interpret each four raw bytes as little-endian IEEE-754 f32.",
+  "long_form_native_protected_byte_order": "payload[9:13] + payload[5:9] + payload[1:5]",
+  "short_form_native_protected_default_hex": "0b0b0b0b0b0b0b0b0b0b0b0b",
+  "source_labels": [
+    "PACKET_RAW_12",
+    "NATIVE_DEFAULT_ZERO"
+  ],
+  "totals": {
+    "replay_count": 11,
+    "replays_with_route": 7,
+    "replays_without_route": 4,
+    "packet_count": 13125,
+    "packet_raw_12_count": 12869,
+    "native_default_zero_count": 256,
+    "native_full_success_count": 13125
+  },
+  "negative_controls": {
+    "long_form_one_byte_mutations": 12,
+    "one_byte_mutation_result": "Each of the 12 data-byte mutations fully deserialized and changed exactly one corresponding protected vector byte, leaving callback key zero.",
+    "long_form_one_byte_truncation": "DECODE_FAILED",
+    "long_form_one_byte_append": "DECODE_FAILED",
+    "wrong_runtime_image": "MISSING_INPUT without candidate rows",
+    "saved_later_vector_field_forgery": "INVALID_EVENT_ROW before output",
+    "saved_later_literal_negative_zero": "INVALID_EVENT_ROW before output"
+  },
+  "real_source_queries": [
+    {
+      "source_sha256": "26030cc38d97a96adb101a290746761c289044e3190d4962468cd3bc062518eb",
+      "form": "PACKET_RAW_12",
+      "source_verified_rows": 3620,
+      "emitted_rows": 1
+    },
+    {
+      "source_sha256": "2453323e79e62e24b43f3d041b77f2b4d2773e39cba77a125663544ee2e0940b",
+      "form": "NATIVE_DEFAULT_ZERO",
+      "source_verified_rows": 176,
+      "emitted_rows": 1
+    }
+  ],
+  "semantic_limit": "Three f32 components are anonymous packet-local fields. They do not prove target position, live receiver comparison, missile identity, owner, resolved target, target change, gameplay effect, or causality.",
+  "replays": [
+    {
+      "source_sha256": "d3a93326b3420ac0e2d0f077eef70b9b6413a9eb4b3e09f69056902ec2d11a8e",
+      "route_packet_count": 11,
+      "packet_raw_12_count": 11,
+      "native_default_zero_count": 0,
+      "ordered_input_sha256": "42e4d20f35dc3926929c83b8360bd8ad5eaa5801ef382c18fbc5f8c28feb38e3",
+      "ordered_v2_native_output_sha256": "bcba4296b00a594833892feef8b2be996985afff7727915ce62f3c39a5a0543e"
+    },
+    {
+      "source_sha256": "d5a53ff86009aa0e3d2544a8f00727e377e25f0a052a832e8f456d1cdcfdef8c",
+      "route_packet_count": 0,
+      "packet_raw_12_count": 0,
+      "native_default_zero_count": 0,
+      "ordered_input_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ordered_v2_native_output_sha256": null
+    },
+    {
+      "source_sha256": "26030cc38d97a96adb101a290746761c289044e3190d4962468cd3bc062518eb",
+      "route_packet_count": 3620,
+      "packet_raw_12_count": 3620,
+      "native_default_zero_count": 0,
+      "ordered_input_sha256": "dfa1ca731f69235fcea8035f7c2e4d1470ae46180156ada547840610de5ec2c1",
+      "ordered_v2_native_output_sha256": "679cb4ab8762bd49617e75f5ee629a5c3d50e0724ab08328e4083a45268b6795"
+    },
+    {
+      "source_sha256": "bf13d633a79cfc649292b4ef08fddab5328b914b1d809565d51e464f3fa9c541",
+      "route_packet_count": 3271,
+      "packet_raw_12_count": 3191,
+      "native_default_zero_count": 80,
+      "ordered_input_sha256": "166033348b96e636677218706301b2765409cf89bd532516f5b65ec1ef0a8820",
+      "ordered_v2_native_output_sha256": "f3be400ec681cfda5f99ea4520d5d2827748886059aa6d4ffcf724dc7ec2be59"
+    },
+    {
+      "source_sha256": "dd78cf6bbac9728109998bcef6d9554ad93ba06c192c7547314e7a1ef17c2404",
+      "route_packet_count": 0,
+      "packet_raw_12_count": 0,
+      "native_default_zero_count": 0,
+      "ordered_input_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ordered_v2_native_output_sha256": null
+    },
+    {
+      "source_sha256": "18070abab4a973ca9d753ed48b4b155042de9b70f3fe059defbad5d9b27b1264",
+      "route_packet_count": 5570,
+      "packet_raw_12_count": 5570,
+      "native_default_zero_count": 0,
+      "ordered_input_sha256": "144a0cafc814fa7bd582b91ea240c7f0d9d682586d035cf85bd5579637655419",
+      "ordered_v2_native_output_sha256": "81b9dbb74741d055dcb69145436bb981531ad4dfd957632002944a15291ae727"
+    },
+    {
+      "source_sha256": "4d6e5dc8a4da1c9048c4e75d984c3eb98623f9ebf9d325ba28a51874e43b9e39",
+      "route_packet_count": 5,
+      "packet_raw_12_count": 5,
+      "native_default_zero_count": 0,
+      "ordered_input_sha256": "b4ba43fbae9db5c2004b76cb5669fde77c5cc71c109c7cb73732a2a1b97e88fd",
+      "ordered_v2_native_output_sha256": "b0d43eb0007170eecebcd465dfef50817336e7d23614050587f8dc6538943321"
+    },
+    {
+      "source_sha256": "8c84fa11712e5faf516f0316d34aa9e6dbe542b36e5d1472c294daf2533ae1ef",
+      "route_packet_count": 0,
+      "packet_raw_12_count": 0,
+      "native_default_zero_count": 0,
+      "ordered_input_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ordered_v2_native_output_sha256": null
+    },
+    {
+      "source_sha256": "823b546655866c076a5e14874197ad42eb2f83917f563c08c7a928193e5cb52d",
+      "route_packet_count": 472,
+      "packet_raw_12_count": 472,
+      "native_default_zero_count": 0,
+      "ordered_input_sha256": "12be9d7137764d14a1d6aab4b6ea618d5cfd554819b19ecb1f6d03e30f214e9b",
+      "ordered_v2_native_output_sha256": "1f5e0be770c6d1a0f631dc63e20c1f024f4eb29af78dd8e8d78478cfee111031"
+    },
+    {
+      "source_sha256": "682b6703b2caeafb49b501a93b398cc9227381d412ae7f25a942a3035a8ea9ca",
+      "route_packet_count": 0,
+      "packet_raw_12_count": 0,
+      "native_default_zero_count": 0,
+      "ordered_input_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ordered_v2_native_output_sha256": null
+    },
+    {
+      "source_sha256": "2453323e79e62e24b43f3d041b77f2b4d2773e39cba77a125663544ee2e0940b",
+      "route_packet_count": 176,
+      "packet_raw_12_count": 0,
+      "native_default_zero_count": 176,
+      "ordered_input_sha256": "f432470350afb5bf6e492ec178159684d1f1a49b0405a9d4396601707626317d",
+      "ordered_v2_native_output_sha256": "09c5e01008c4da0fe2f09be381e5f0d7d99cb8dbbe1dc5ca9e2fc586b20c5655"
+    }
+  ]
+}

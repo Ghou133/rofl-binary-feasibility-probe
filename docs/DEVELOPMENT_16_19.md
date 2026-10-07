@@ -1,9 +1,1252 @@
 # 16.19 development progress
 
-Updated: 2026-09-25. Branch: `codex/16-19-development`.
+2026-10-02 adjacent slot-change family: `spell_slot_change_request` is now a
+usable opt-in CLI/API surface for independently pinned regular `0x049c`,
+Summoner `0x028e` and OwnerOnly `0x0375`. All three registered typed closures
+call the same packet-reading callback, but each native constructor/deserializer
+is executed separately. The legacy `anonymous_049c_packet` selection remains
+regular-only. In addition to name and `+0x2f` byte-write requests, the family
+exposes OwnerOnly selector-6 gated `+0xe8` byte-write requests and selector-7
+counted word-vector requests. The latter executes native packet-only callee
+vector construction before its receiver lookup; exactly one copied word is
+observed. Type/units, audience, actor and actual application are not confirmed.
+
+Fresh serial unified CLI runs on all 11 existing KR Replays accepted 115,290
+packets: regular 107,059, Summoner 6,790, OwnerOnly 1,441. Their request counts
+are 112,861 name / 988 regular-byte / 506 gated-byte / 935 word-vector, all
+`CANDIDATE`, exact image `MATCHED_USED`, zero framing errors. OwnerOnly data
+occurs only in keyframes and is not emitted as cast/action effects. An additional
+66 original sibling representatives and 132 malformed native controls pass;
+current relevant tests passed 19 Node / 6 Python methods, zero failures/skips.
+See [the registration and per-operation evidence](NATIVE_049C_CALLBACK_16_19_821.md).
+
+2026-10-02 0x049c V2 receive-dataflow continuation: exact registration now binds
+the regular `PKT_ChangeSlotSpellData_s` closure to `AIBaseClient`, numeric route
+`0x049c`, thunk `0x2bbe30` and callback `0x24ebb0`. The factory, typed closure,
+route registration and downstream field/name paths are independently pinned;
+the earlier anonymous V1 limitation below remains a historical record.
+
+The unchanged `anonymous_049c_packet` CLI/API selection now emits
+`callback_request_candidate`: native callback-prefix slot index and branch
+arguments, selector-2 requested name bytes and native comparison hash, or
+selector-1 requested byte for slot-object field `+0x2f`. The callback prefix stops
+before receiver lookup or downstream execution; no actual receiver is supplied.
+Every request preserves entity `UNKNOWN` and application `NOT_OBSERVED`.
+The `+0x2f` gameplay label, three control-byte roles and Q/W/E/R mapping remain
+unknown; a hash can collide. See [the bounded evidence chain](NATIVE_049C_CALLBACK_16_19_821.md).
+
+Fresh native CLI runs across all 11 existing exact KR Replays produced 106,071
+name-change requests (95,956 game / 10,115 keyframe) and 988 byte-write requests
+(836 game / 152 keyframe), all candidate, exact image used, zero framing errors.
+Final JS/source-field guards accepted all 107,059 saved rows; prior native fields
+and packet refs were unchanged. A separate fresh single-Replay final-code run
+accepted 12,552 rows with the independent hash guard. Focused Node tests passed
+16/16 and actual-image Python tests passed 5/5, zero skips/failures. Native tests
+cover all 256 encoded indices for both branches, each control byte's 256 values,
+registration mutations and a synthetic `+0x2f` setter with surrounding sentinels.
+Synthetic objects prove the instruction/dataflow behavior, not Replay effects.
+
+2026-10-02 numeric 0x049c continuation: the previous ChangeSlotSpellData-route
+stop-loss below is retained as historical negative evidence. The partial native
+failure was reproduced at exact image RVA `0x1a65492` (`vinsertf128`), inside an
+AVX memset implementation. A pinned host-memory fill at leaf `0x1a653c3` now
+implements that memory operation only; no packet decoder or game lookup is
+stubbed. The captured image file is unchanged. The prefix hash is
+`961ec6b7a19ad835ada16a4cd076ebd87c7038c770e0ca8db6cf0aa6b04b3d38`.
+An isolated-emulator test against the same image's native SSE path agrees for
+36 size/fill combinations including 0/33/47/256-byte fills, with untouched
+sentinels and matching return values.
+
+The numeric factory case `0xf0cfeb` allocates `0x38` bytes and calls constructor
+`0xe9a6c0`; its exact vtable `0x1ba8de8` binds deserializer `0x10d0d30`.
+142 representatives spanning 38 lengths and 71 game/keyframe shape pairs now
+return AL=1 with full consumption. Real native one-byte truncation and append
+controls reject acceptance/full-consumption in 142/142 cases each. All original
+failure evidence remains local; failures were not treated as invalid Replay data.
+
+Opt-in CLI/API capability `anonymous_049c_packet` exposes three anonymous nested
+field byte regions and the native dynamic byte vector, with a reversible printable
+ASCII presentation where available. This intentionally uses the numeric name:
+no field role or gameplay label is promoted from the historical route-name clue.
+All 11 original KR Replays returned `CANDIDATE`, exact image `MATCHED_USED`, zero
+framing errors: 107,059/107,059 fully consumed native packets, 106,071 printable
+ASCII candidates and 988 opaque vectors. The new route reuses the CLI strict scan
+and preserves original packet refs, stream tags, raw parameters and timestamps.
+Focused Node tests passed 13/13; two exact-image Python test methods passed with
+the existing image and representative corpus (zero skips). Without those optional
+inputs the native tests explicitly skip. These outputs do not establish a spell,
+slot, owner, successful change, cast or gameplay effect. The files remain local
+under `artifacts/resume-native-049c-batch/`.
+
+The preceding damage-role confirmation attempt was stopped at its actual input
+boundary: the existing capture manifest covers module memory only; independent
+packet-linked receiver heap or health observations are absent from that evidence.
+No live capture was attempted and no amount/role/fatal-packet semantics promoted.
+
+2026-10-02 damage continuation: opt-in `hero_damage_keyframe_intervals` now
+decodes four existing exact-821 cumulative counter candidates into adjacent
+participant observation windows through CLI/API. It preserves both packet refs,
+protected field bytes, f32 endpoint differences, integer-floor differences and
+unchanged windows. Final-tail gaps are separate; no change time, attack or health
+effect is invented. All 11 supplied KR Replays returned `CANDIDATE`, with zero
+framing errors: 3,270 source packets, 327 keyframes and 3,160 windows (3,077 with
+at least one changed counter and 83 unchanged).
+
+Selecting this capability together with `unit_apply_damage_packet` additionally
+emits `hero_damage_packet_keyframe_window_candidates` and the corresponding
+`candidate_associations.hero_damage_packet_keyframe_windows` summary. Fresh
+native V5/V6 outcomes with the pinned image are grouped independently by full
+`+0x24` and `+0x2c` key equality, in strict open windows; anonymous `+0x20`
+sums are compared with all four sampled deltas and rotated-key controls. Missing
+native inputs retain static windows and make the additional comparison unavailable.
+This is an internal calculator over freshly decoded outcomes, not a saved-source
+verifier. Packet source streams remain available alongside window output.
+
+Fresh integrated CLI runs on two original exact-821 Replays yielded 64,824 and
+60,358 native V6 packet candidates and 320/310 window comparisons, with zero
+framing errors and exact image `MATCHED_USED`. For `+0x24` versus the candidate
+TOTAL_DAMAGE_TAKEN delta, 292/295 and 274/275 positive windows matched within a
+fixed absolute tolerance of 0.1; rotated participant controls matched 0/570.
+For `+0x2c` versus TOTAL_DAMAGE_DEALT, 272/308 and 270/306 matched, again zero
+rotated controls. The former is a new counter-correspondence lead, not confirmation
+of damage roles, effective amount or health loss. Of its four unmatched windows,
+two residuals correspond to excluded exact-endpoint packets; the remaining
+adjacent-window residual pair is approximately +/-4.875 beside a packet one
+millisecond after the keyframe. Ordering is unresolved and no timestamp is changed.
+The two runs excluded 20/17 exact-endpoint packets and retained 2,073/1,823 packets
+outside sampled windows. Native/source artifacts and detailed comparisons stay local.
+
+Focused decoder/API/CLI/calculator tests: 12 passed, zero failed or skipped.
+Entrypoint/registry/shared-scan regressions: 53 passed, zero failed or skipped.
+No full public/private suite or older-build acceptance was repeated for this change.
+The next semantic gate is independent exact-build packet-linked receiver/health
+evidence; cumulative Replay-tail labels themselves remain candidates.
+
+2026-10-02 continuation: [Runnable quick start](QUICK_START_16_19.md).
+Death, assist, timer, observed-return and joined death-episode saved streams now
+support complete original-source verification for exact `16.19.821.7343`.
+The query independently re-decodes all rows and full capability metadata before
+applying limits, filters or output callbacks. Relocated original files can be
+provided with `--source-replay`; all nested saved packet paths stay unchanged in
+output. Native assist claims require the matching image and fresh child witness;
+static timer/return fields still remain `runtime_image_used: false` when an image
+was supplied but unused. The latter `PROVIDED_NOT_USED` metadata previously
+prevented even ordinary queries on native-assist episode artifacts and is now
+accepted without promoting a native witness. Fresh source queries checked all
+71 deaths, 71 assists, 71 timers, 66 returns and 71 joined episodes from one
+original KR Replay, plus its native-assist episode and assist forms. The focused
+final death-source suite reported 20 pass, one missing-private-input skip, zero
+fail. Negative controls include late timer forgery after a one-row limit, rewritten
+batch manifests, forged capability metadata, wrong Replay identities, missing and
+wrong runtime images, and no callback or file output on verification failure.
+
+`capabilities --events` now preflights only selected names in request order;
+unregistered names remain explicit and cause exit code 2. Shared Python/Unicorn
+checks execute once per preflight request and are refreshed on the next request.
+The focused CLI regression suite passed 34/34 tests. Fresh local 821 CLI checks
+scanned 2,048,130 blocks for the death/assist/timer/respawn/roster path and
+1,263,849 blocks for native heal/missile pairs, with zero framing errors. The
+saved native pair queries physically verified all 6,145 heal pair rows and all
+176 missile pair rows before applying a three-row output limit. These counts
+describe two original local Replays, not an independent corpus or semantic
+promotion. Full game effects and confirmed actor assignments remain unknown.
+
+Updated: 2026-09-26. Branch: `codex/16-19-development`.
 
 Current progress (older notes below retain their original research context):
 
+- **Missile cross-route key co-occurrence (opt-in candidate):** Select
+  `--events missile_key_cooccurrence --runtime-image IMAGE
+  --event-jsonl-only`, or API capability `missile_key_cooccurrence`.
+  The exact-821 native `0x0087` ForceCreateMissile callback comparison u32
+  is compared by full value with each `0x040c` ChangeMissileTarget packet
+  header u32 in the same original Replay. Only physically preceding packets
+  within a fixed 2,000 ms lookback count; the window exceeds the 1,137 ms
+  maximum nearest-predecessor offset observed in these 11 Replays, and is
+  not a gameplay duration. The 11-Replay native sources contain
+  206,957 Force and 13,125 Change packets (Change absent in four Replays).
+  Among all 13,125 Change rows, 12,259 have at least one preceding equal
+  key within the window: 12,258 have one, one has multiple; 866 have none.
+  A `+0x100` rotated-key control has zero preceding window matches. Same-key
+  future Force rows within 2,000 ms occur for 134 Change rows, nine of which
+  also have a preceding match. Of the 866 unmatched rows, 200 have only a
+  later same key in physical packet order and 666 have no equal key in the
+  Replay. The candidate emits **every** Change row with
+  its match count, explicit ambiguous/unmatched status, both packet refs for
+  unique preceding matches, and a null Force ref otherwise. All observed
+  keys are nonzero; a future zero key is explicitly excluded and counted.
+  Pair-only requests save both native packet streams when both routes occur.
+  The full 11-Replay CLI
+  batch returned seven `CANDIDATE` pairs and four explicit
+  `PROFILE_UNAVAILABLE` pairs, with zero framing errors and aggregate
+  `PARTIAL` status. Real pair-only CLI runs
+  on `KR_8394041123` (176/176 unique) and `KR_8393581977` (3,093 unique,
+  one ambiguous, 177 unmatched) returned `CANDIDATE` and zero framing
+  errors. Live receiver matches, missile identity, creation, target change,
+  ownership, effects and causality remain `UNKNOWN`. The 11-Replay source
+  streams and selected pair outputs remain ignored local artifacts.
+
+- **ParamsHeal fields to roster keys (opt-in candidate):** Exact-821
+  `--events params_heal_roster_key_pair --runtime-image IMAGE
+  --event-jsonl-only` and the API capability compare child `+0x04` and
+  `+0x14` u32 values independently, by full equality with the same-Replay
+  ten-key HeroStats roster. The 11 original KR Replays returned 11/11
+  `CANDIDATE` and retained all 70,698 native reports: `+0x04` matched
+  62,517, `+0x14` matched 62,550, both matched 62,517, neither matched
+  8,148, and only `+0x14` matched 33. The fields differed in 612 reports;
+  zero and roster-key `+0x100` aliases were not observed. Every report keeps
+  its source packet ref, including nonroster and asymmetric reports. Field
+  roles, packet actor, and effective healing remain `UNKNOWN`. The complete
+  native ParamsHeal source stream also passed physical source verification
+  for all 70,698 reports in these 11 Replays. Saved pair queries now support
+  `params_heal_roster_key_pair_candidates`, both anonymous keys via
+  `--opaque-u32`, and complete physical source verification with
+  `--verify-source --runtime-image IMAGE` before output limits. Participant
+  filters are rejected because anonymous field roles remain unknown.
+
+- **Bounded output hashing:** Batch manifest hashing now opens at most eight
+  output streams at once and waits for each stream to close before reusing
+  its slot. On an existing 11-Replay artifact with 86 files (1,357.8 MiB),
+  the peak open stream count fell from 86 to 8; the sorted hash inventory
+  retained SHA-256 `455023242fb7fc0b20a5109518a696e9ecbe68f693ba045237ec7e1613fdb6dc`.
+  One local run took 738 ms after the change versus a prior 740 ms run;
+  this is a resource bound, not a cross-platform speed claim.
+
+- **ShieldingParams fields to roster keys (opt-in candidate):** Exact-821
+  `--events shielding_params_roster_key_pair --runtime-image IMAGE
+  --event-jsonl-only` and the matching API capability compare native
+  child `+0x08` and `+0x0c` u32 values independently with the same-Replay
+  ten-key HeroStats roster. Eleven KR Replays produced 2,778 pairs:
+  `+0x08` matched 2,778, `+0x0c` matched 2,770, and eight `+0x0c`
+  values remained explicit nonmatches. Both source packet refs and the
+  unmatched values are retained. Field roles and actual shield effects
+  remain `UNKNOWN`. Saved pair queries now support either anonymous u32 as
+  `--opaque-u32`, reject `--participant`, and with `--verify-source
+  --runtime-image IMAGE` physically re-decode the entire exact-build ROFL
+  before applying `--limit`. All 2,778 saved pair rows in 11 Replays passed
+  this source check; eight nonroster `+0x0c` values remain unassigned.
+
+- **SetSpellLevel header key to roster (opt-in candidate):** Exact-821
+  `--events set_spell_level_roster_key_pair --runtime-image IMAGE
+  --event-jsonl-only` auto-selects the native V2 `0x025d` source and saves
+  its complete packet stream beside the pair and ten-key roster streams.
+  Eleven original KR Replays returned 11/11 `CANDIDATE`: 283 of 342
+  native packet headers matched a same-Replay full-u32 roster key; 59
+  nonroster nonzero headers remain in the source stream and exclusion count.
+  Zero headers are outside the existing V2 source contract and were not
+  observed. The pair does not claim skill upgrade, spell identity, actor,
+  target, owner or effective level change.
+  The standalone saved V2 `set_spell_level_packet_candidates` query now accepts
+  `--verify-source --runtime-image IMAGE`: it re-decodes the original exact-build
+  ROFL and compares every native packet row before applying `--limit`. One
+  original KR Replay with 33 rows passed this physical source check. The
+  historical V1 packet artifact remains queryable without source verification.
+
+- **Anonymous `0x029c` header key to roster (opt-in candidate):** Exact-821
+  `--events anonymous_029c_roster_key_pair --runtime-image IMAGE
+  --event-jsonl-only` and the matching API capability compare only the
+  native full-u32 *packet header* with the same-Replay ten-key roster.
+  Among 457,095 native packets across 11 KR Replays, 25,391 matched;
+  414,057 zero headers and 17,647 nonroster nonzero headers were excluded,
+  including 2,346 roster-key `+0x100` aliases. The independent object
+  `+0x14` u32 is never substituted for the header. Saved queries can use
+  `--opaque-u32 VALUE --verify-source`; `--participant` is rejected because
+  packet actor and target roles remain `UNKNOWN`. The physical source check
+  scans every row before applying `--limit`.
+
+- **Healing counter snapshot source query:** Saved exact-821
+  `hero_total_heal_snapshot_candidates` and
+  `hero_total_units_healed_snapshot_candidates` can now use `--verify-source`.
+  The query re-decodes the same physical ROFL through the existing candidate
+  decoder, checks all keyframe rows and tail-gap metadata even after
+  `--limit`, and accepts a same-byte relocated ROFL via `--source-replay`.
+  One original Replay verified 330/330 rows for each event. The values
+  remain cumulative reported candidates; effective healing, individual
+  recipient and source remain `UNKNOWN`.
+
+- **ParamsHeal packet source query:** Saved exact-821
+  `params_heal_packet_candidates --verify-source --runtime-image IMAGE`
+  now re-decodes the entire original ROFL through the pinned native
+  candidate decoder and compares its result and every saved row before
+  applying filters or `--limit`. A fresh selected CLI decode of
+  `KR_8392938200.rofl` saved 6,059 reports with zero framing errors;
+  the source query physically checked all 6,059, matched 321 rows for
+  one anonymous u32 key and emitted one. A same-byte relocated Replay
+  passed, while a late row edit with a rewritten manifest hash failed
+  with zero output. Anonymous entity roles and effective healing remain
+  `UNKNOWN`.
+
+- **TargetHero callback key to roster (opt-in candidate):** On exact
+  `16.19.821.7343`, select `--events target_hero_roster_key_pair
+  --runtime-image IMAGE --event-jsonl-only` or API capability
+  `target_hero_roster_key_pair`. The pair reuses the complete native
+  `target_hero_packet` and ten-key `hero_roster_metadata_bridge` outcomes;
+  both source JSONL streams are saved with a CLI pair-only request. The
+  11-Replay `--jobs 2` CLI pair batch returned 11/11 `CANDIDATE` and zero
+  framing errors, with 62,219 native game `0x0265` rows:
+  30,874 zero callback keys and 31,345 nonzero keys. Every nonzero full u32
+  equals one of the ten canonical `0x0089` HeroStats raw keys in its Replay;
+  zero is counted but never labeled; all 31,345 nonzero rows paired and no
+  unexpected key appeared. Each Replay saved the target, roster and pair
+  JSONL streams. The pair preserves the original
+  `0x0265` and latest `0x0089` packet refs, plus direct metadata champion,
+  team and role labels. The roster-to-metadata link remains `CANDIDATE`;
+  live receiver lookup, source actor, resolved target, target state and
+  gameplay effect remain `UNKNOWN`. Unexpected nonzero keys or incomplete
+  source outcomes fail the entire pair with no partial rows.
+
+- **Anonymous `0x029c` packet-local u32 (explicit opt-in candidate):** The
+  pinned `16.19.821.7343` image maps game packet `0x029c` to factory case
+  `0xf06643`, constructor `0xe9abf0`, object vtable `0x1ba3c88`, and
+  deserializer `0xf88030`. Eleven original KR Replays supplied 457,095
+  packets in 13 observed shapes, including 43,038 with nonzero raw parameters.
+  Every packet passed native full consumption, object identity including its
+  original parameter, and ordered input/output hash checks; the object
+  selector at `+0x10` was the same protected byte on all packets. The
+  protected `+0x14` word decodes to an anonymous u32 on 453,545 packets and
+  to the `0xffffffff` sentinel on 3,550 one-byte packets. Every shape's
+  truncated and appended controls failed the full packet gate. No exact
+  packet class or callback name has been established for this route.
+  Select `--events anonymous_029c_packet --runtime-image IMAGE
+  --event-jsonl-only`, or API capability `anonymous_029c_packet`; the parser
+  accepts at most 50,000 route packets per Replay. A real 32,336-packet
+  Replay produced candidate JSONL with four native batches and passed a
+  saved query with `--verify-source --limit 1`, which checked all 32,336
+  physical packets before emitting one row. The first CLI attempt failed
+  because it incorrectly required zero raw parameters; the corrected gate
+  accepts the original u32 and checks its native object identity. The failed
+  artifact remains in the ignored worktree evidence. Actor, target, object
+  role, receiver state, behavior and effect remain `UNKNOWN`.
+  [The native gate](ANONYMOUS_029C_821_NATIVE_GATE.json) records source
+  hashes, packet counts, nonzero raw parameter counts, ordered digests,
+  negative controls and the real Replay smoke without raw payloads.
+
+- **HeroStats roster to Replay metadata (opt-in candidate):** Select
+  `--events hero_roster_metadata_bridge --event-jsonl-only` on exact
+  `16.19.821.7343`, or request API capability
+  `hero_roster_metadata_bridge`. The bridge requires complete ten-player
+  HeroStats K/D/A snapshot references, death/source-kill/assist candidate
+  counts, canonical raw `TEAM` values, nonblank `SKIN`, and a unique ten-way
+  match to Replay tail K/D/A. All 11 pinned KR Replays yielded 110 candidate
+  rows; a saved batch query with `--event
+  hero_roster_metadata_bridge_candidates --verify-source --limit 1` checked
+  all 110 physical rows and emitted one. Without `--verify-source`, saved
+  queries validate the manifest-hashed `rofl_inventory.json` and all ten
+  candidate rows without opening the original ROFL. Explicit source
+  verification additionally re-decodes the physical tail `statsJson` and
+  HeroStats packet references. Hero, team, and role labels come directly
+  from metadata; the raw roster key association remains `CANDIDATE` and
+  per-packet actor identity remains `UNKNOWN`. The upstream event counters
+  already use tail gates, so their unique match is internal consistency,
+  not independent player identity proof. Only 49/110 latest K/D/A snapshots
+  equal tail values; no missing tail interval is filled. The new bridge
+  JSONL rows omit PUUID, Riot ID, player name, and metadata player ID;
+  existing Replay inventory artifacts retain their established fields.
+
+- **ChangeMissileTarget V2 anonymous native f32 triplet (explicit opt-in):**
+  The exact KR `16.19.821.7343` deserializer `0x10e8e30` writes protected
+  object bytes `+0x10..+0x1b` through helper `0x10a5b00`. Its native
+  inverse yields three finite f32 components at `+0x10/+0x14/+0x18`.
+  In the 11 original Replays, all 12,869 length-13 packets carry twelve
+  packet bytes in component order `payload[9:13], [5:9], [1:5]`; the 256
+  length-3/4 packets carry no vector bytes and retain the native default
+  zero triplet. All 13,125 packets passed full exact-image deserialization.
+  One-byte changes at each of the twelve long-form data positions changed
+  exactly one protected vector byte without changing the callback key;
+  truncation, append, and wrong-image controls failed closed. The V2 CLI
+  flag `--change-missile-target-v2` and API
+  `changeMissileTargetProfile: 'v2'` add the protected bytes, inverse raw
+  f32 bytes, three values, and packet/default source. V1 remains the default
+  and its saved artifacts retain their original format and digest. V2
+  native output digests and saved-query validation bind all vector bytes
+  and values; two original Replays (one long-form and one short-form) passed
+  complete `--verify-source --limit 1` queries over 3,620 and 176 rows.
+  [The V2 native gate](CHANGE_MISSILE_TARGET_821_NATIVE_VECTOR_V2_GATE.json)
+  records the form counts and per-Replay hashes. These are anonymous
+  packet-local values; target position, identity, receiver match, change,
+  effect and causality remain `UNKNOWN`.
+
+- **ChangeMissileTarget 0x040c packet-local comparison key (opt-in candidate):**
+  The pinned KR `16.19.821.7343` image registers
+  `PKT_S2C_ChangeMissileTarget_s` on `MissileClient` through factory case
+  `0xf0b2cf`, constructor `0xea4f10`, deserializer `0x10e8e30`, and callback
+  `0x997c80`. Strict framing of the 11 original KR Replays found 13,125
+  game packets in seven Replays, with four route-absent Replays. All 13,125
+  packets passed exact native deserialization, full consumption, and object
+  identity checks across 13 observed length/prefix shapes. The callback
+  transforms packet object `+0x1c` into a u32 key before comparing it with
+  live receiver state. Each shape reached that pre-comparison point with a
+  synthetic receiver; one-byte truncations and appends failed the full route
+  gate. [The native gate](CHANGE_MISSILE_TARGET_821_NATIVE_GATE.json) records
+  the exact image and callback hashes, source hashes, shape counts, and
+  negative controls. CLI `--events change_missile_target_packet
+  --runtime-image IMAGE --event-jsonl-only` and API
+  `capabilities: ['change_missile_target_packet']` are explicit opt-ins.
+  One original Replay emitted 176/176 candidate rows with zero framing
+  errors; saved `query-events --event change_missile_target_packet_candidates
+  --verify-source --limit 1` checked all 176 rows against that original ROFL
+  and emitted one unchanged row. A route-absent original Replay returned
+  `PROFILE_UNAVAILABLE`. Query rows remain `CANDIDATE`; live receiver match,
+  missile identity, owner, target, actual target change, effect, and
+  causality remain `UNKNOWN`. Original ROFLs, image, and complete CLI output
+  remain local and ignored.
+- **ShowHealthBar saved-source verification (2026-09-26):** The opt-in
+  `query-events --event show_health_bar_packet_candidates --verify-source`
+  now binds exact-821 saved rows to original ROFL packets and runs the
+  existing per-row callback transform, metadata, count, and ordered native
+  input checks even without `--show-health-zero-flag`. A real selected CLI
+  run on `KR_8393821675.rofl` emitted 5,452/5,452 candidate rows. The saved
+  query physically verified all 5,452 packets and emitted one unchanged row
+  with `--limit 1`. Synthetic late time/offset, top-level time/parameter,
+  and packet-ID metadata forgeries fail with zero stdout. This does not rerun
+  the native callback or establish a health or visibility effect.
+- **Opt-in exact-821 batch concurrency (2026-09-26):** `batch --events ...
+  --event-jsonl-only --jobs 2` uses at most two isolated Replay workers. Each
+  worker writes its own candidate JSONL and returns only its saved analysis
+  without event arrays; the parent retains input order, per-Replay failures,
+  and the ordinary batch manifest. The default batch path is unchanged.
+  On two original KR `16.19.821.7343` Replays with the same
+  `unit_apply_damage_packet` selection and exact runtime image, one Windows
+  host measured 20.542 s with `--jobs 1` and 12.965 s with `--jobs 2`.
+  Both runs returned `CANDIDATE`, 3,481,428 framed blocks, zero framing
+  errors, and identical candidate JSONL SHA-256 for the 64,824 and 57,939
+  rows. A single 11-Replay `--jobs 2` confirmation took 61.732 s, returned
+  `CANDIDATE` with 18,235,209 framed blocks, zero errors, and all 628,909
+  candidate rows byte-identical to the earlier saved serial V5 artifact;
+  per-Replay order, counts, and actual file hashes matched. That older
+  artifact was generated at commit `d911f819`, so it is a parity reference,
+  not a same-commit timing baseline. These timings are one-host observations,
+  not cross-platform speed claims. Inputs, outputs, and logs stay ignored under
+  `artifacts/16_19_development/batch_jobs_821_benchmark_20260926/`.
+- **UnitApplyDamage saved-source verification (2026-09-26):** The opt-in
+  `query-events --verify-source` now covers exact-821 0x005f
+  `unit_apply_damage_packet_candidates` V1-V6. It checks the original ROFL
+  identity, every physical packet position/time/parameter/payload and the
+  existing per-row field, transform, count, and ordered native-input witness
+  even without a damage filter. One original KR Replay verified 64,824/64,824
+  V6 rows and emitted one unchanged row with `--limit 1`. A copy with only
+  the last saved row's time and offsets changed failed
+  `SOURCE_PROVENANCE_MISMATCH` with zero stdout bytes. Eleven original KR
+  Replays contain 628,909 strict-framed 0x005f packets, all in game chunks;
+  this count is a source inventory, not a new native V6 gate. The original
+  Replay, image, and full saved rows remain local and ignored. This source
+  check does not rerun native callback code or establish actual damage
+  effects.
+- **SetDimensionMissile 0x008a packet-local callback byte (opt-in candidate):**
+  The pinned KR `16.19.821.7343` image registers
+  `PKT_SetDimensionMissile_s` on `MissileClient` through factory case
+  `0xeffc77`, constructor `0xeccbe0`, deserializer `0x111f960`, and
+  callback `0x998520`. Strict framing of all 11 original KR Replays found
+  218,764 game `0x008a` packets in 60 observed length/prefix shapes. Every
+  packet natively returned success with full consumption and matching object
+  identity; the callback transformed object byte `+0x14` to a packet-local
+  u8 before the receiver method. The two observed protected-byte/argument
+  pairs were `d5/0` and `a7/6`. The exact image, callback code and table,
+  per-Replay source/input/output hashes, counts, and negative controls are
+  recorded in [the native gate](SET_DIMENSION_MISSILE_821_NATIVE_GATE.json).
+  All 60 representative truncations and appends failed the full route gate.
+  Six of 11 sampled `0x0087` payloads also passed this deserializer, so
+  the decoder requires the `0x008a` framing ID; payload shape alone is
+  insufficient. `decode --events set_dimension_missile_packet
+  --runtime-image IMAGE --event-jsonl-only` and API
+  `capabilities: ['set_dimension_missile_packet']` are explicit opt-ins.
+  One original Replay emitted 14,572/14,572 candidate rows in two native
+  batches with both ordered digests matching the independent native gate.
+  Saved `query-events --event set_dimension_missile_packet_candidates
+  --verify-source --limit 1` validated all 14,572 rows against the original
+  ROFL and emitted one unchanged row. A later saved-row time/offset forgery
+  failed source verification with zero output; ordered native digests are
+  still checked after `--limit`. Live receiver state, missile identity,
+  owner, target, actual dimension change, gameplay effect and causality
+  remain `UNKNOWN`. Original ROFLs, runtime image, and complete JSONL output
+  remain local and ignored.
+- **Integrated 821 provenance and 0x0087 validation (2026-09-26):** After
+  merging the opt-in ForceCreateMissile candidate with saved-query source
+  verification, `npm test` passed 1,166 of 1,288 Node tests across 42 groups,
+  with zero failures and 122 declared skips; 19 Python unittests passed.
+  Seven focused query files passed 122/122 without skips. The pinned exact
+  image passed the four focused 0x0087 candidate tests without skips. A saved
+  query over original `KR_8393821675.rofl` checked all 14,353 candidate rows
+  against the source ROFL, returned `SOURCE_REPLAY_VERIFIED`, and emitted one
+  unchanged row. A later time/offset-only forgery after `--limit 1` failed
+  `SOURCE_PROVENANCE_MISMATCH` with zero stdout bytes. `npm run test:all`
+  and other operating systems were not tested in this integration run.
+- **Optional saved-row source verification (2026-09-26):** `query-events
+  --verify-source` now reopens the original exact-821 ROFL for the packet-local
+  NotifyContextualSituation, item-group V1/V2, cooldown broadcast, item-charges,
+  target-hero, ForceCreateMissile, SetDimensionMissile, UnitApplyDamage,
+  ShowHealthBar, and CastSpellAns candidate streams. It checks the full
+  Replay build/SHA-256,
+  strict packet framing, ordered stream/chunk IDs and offsets, timestamp,
+  parameter, payload, and total count before publishing stdout. A single
+  Replay may use `--source-replay PATH` when the same bytes were moved; batch
+  queries use each saved source path. Other event shapes reject this option.
+  Ordinary offline queries remain available and report
+  `SAVED_ONLY_UNVERIFIED`; checked rows report `SOURCE_REPLAY_VERIFIED`
+  (a partial batch reports `PARTIAL_SOURCE_REPLAY_VERIFIED`). This verifies
+  packet provenance against supplied source bytes, without rerunning native
+  callback decoding or promoting candidate effects. Focused query tests passed
+  116/116 with zero skips. The original KR_8392938200 artifact/source passed
+  for 4,600 item-charges and 6,703 target-hero rows; a copy with only saved
+  time/offset edits failed `SOURCE_PROVENANCE_MISMATCH` after `--limit 1` with
+  zero stdout bytes.
+- **ForceCreateMissile 0x0087 packet-local comparison key (opt-in candidate):**
+  The pinned KR `16.19.821.7343` image registers `PKT_S2C_ForceCreateMissile_s`
+  on `AIBaseClient` through factory `0xeffb9f`, constructor `0xeac850`,
+  deserializer `0x10f0690`, and callback `0x2bf6d0`. Strict framing of the
+  11 original KR Replays found 206,957 game packets in 12 observed shapes
+  (3/4 bytes with selectors `f0/f1/f2/f4/f6/f7`). All 206,957 natively
+  returned success, consumed the full payload, and matched the registered
+  object identity. The callback's exact byte transform yielded 61,952
+  distinct anonymous comparison keys. A synthetic receiver caused all
+  12 representative shapes to reach the pre-comparison key; hit, mismatch,
+  and null-receiver controls behaved as expected. Twelve truncated,
+  twelve appended, and eleven foreign `0x008a` samples were rejected as
+  full route packets. [The sanitized native gate](FORCE_CREATE_MISSILE_821_NATIVE_GATE.json)
+  records per-Replay ordered input/output SHA-256 values. The hashes cover
+  raw parameter/payload and native callback bytes; full source provenance
+  still requires the original ROFL. `--events force_create_missile_packet
+  --runtime-image IMAGE --event-jsonl-only` and API
+  `capabilities: ['force_create_missile_packet']` are explicit opt-ins.
+  A real CLI run on one original Replay emitted 14,353/14,353 candidate rows,
+  used two native batches and the matched image, and had zero framing errors;
+  its ordered input/output digests matched the independent gate. Saved
+  `query-events --event force_create_missile_packet_candidates --limit 1`
+  validated all 14,353 rows and emitted one unchanged row. Live receiver
+  lookup and match, missile identity, owner, target, actual creation, effect,
+  and causality remain `UNKNOWN`. Original Replays, image, and full raw
+  packet/CLI artifacts remain local and ignored.
+
+- **Combined 821 CLI/API validation (2026-09-26):** After registering both
+  new opt-in candidates, `npm test` passed 1,150 Node tests across 41 groups
+  with zero failures and 120 declared skips, plus 19 Python unittests. Exact
+  image focused tests passed 10/10 for `0x0437` and 9/9 for `0x0265`. One
+  combined CLI run on `KR_8392938200.rofl` emitted 4,600 item-charges and
+  6,703 target-hero candidate rows with zero framing errors; each route's
+  ordered native input/output digests matched its independent full gate.
+  Saved queries scanned all 4,600 and 6,703 rows respectively and emitted
+  one unchanged match each. The first combined public run exposed an
+  outdated capability-list expectation; that failure was corrected before
+  this passing rerun. The Replay, image, and generated outputs remain local.
+- **SetItemCharges packet callback arguments (opt-in candidate):** The exact
+  KR `16.19.821.7343` route `0x0437` is registered as
+  `PKT_S2C_SetItemCharges_s` for `HeroInventoryClient` in the pinned runtime
+  image. Factory case `0xf0bb2a`, constructor `0xebda80`, deserializer
+  `0x1041380`, and callback `0x350250` are bound to image SHA-256
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`.
+  Strict framing of 11 original KR Replays found 40,439 game-chunk packets
+  with payload lengths 1, 2, 3, or 4 and zero framing errors. All 40,439
+  packets natively returned AL=1 with full consumption and matching object
+  identity. The native callback's `0x2af490` selector range check executed;
+  the witness captured a u8 selector and u16 value at `0x350310` before
+  the receiver method. Eight cross-Replay representative truncations and
+  eight appends were rejected by the full-consumption gate. The bounded
+  CLI/API decoder and saved query verify separate ordered input/output
+  hashes; per-Replay hashes and shape counts are in
+  [the sanitized native gate summary](ITEM_CHARGES_821_NATIVE_GATE.json).
+  The hashes cover raw parameter/payload and native callback bytes, not
+  saved timestamps or file offsets; full provenance requires the original
+  ROFL.
+  One real CLI run emitted 4,600/4,600 candidate rows in one native batch,
+  matched both independent hashes, and had zero framing errors. A saved
+  selector-zero query validated all 4,600 rows after `--limit 1`, matched
+  631, and emitted one unchanged row; valid unobserved selector `6` matched
+  zero. Selector values observed were `0`, `1`, `2`, `3`, `4`, `5`, and `8`;
+  a separate synthetic packet natively passed the range check with selector
+  `7`, which the saved query accepts. The u16 argument ranged from 0 to
+  1,111 in the original Replays. The receiver method was not
+  executed: actual item identity, charges, slot, owner, receiver state and
+  gameplay effect remain `UNKNOWN`. Original Replays, image, and full JSONL
+  stay ignored outside Git. Focused exact-image Node tests passed 9/9.
+- **TargetHero 0x0265 callback u32 (opt-in candidate):** The pinned exact KR
+  `16.19.821.7343` runtime registers route `0x0265` as
+  `PKT_AI_TargetHeroS2C_s` on `AIBaseClient`, through factory case
+  `0xf05c17`, constructor `0xe99060`, deserializer `0xf19ec0`, and callback
+  `0x2bb950`. This differs from the historical build's use of route `0x0265`.
+  Strict framing of 11 original KR Replays found 62,219 game-stream packets:
+  30,874 one-byte and 31,345 three-byte payloads. All 62,219 natively
+  deserialized with full consumption and reached the callback callsite with
+  one packet-local u32; the decoder stops before the receiver-dependent
+  function. Independent per-Replay ordered raw-input hashes and native-output
+  hashes matched the CLI decoder; the sanitized per-Replay hashes are in
+  [the exact native gate summary](TARGET_HERO_821_NATIVE_GATE.json). Eight
+  truncate/append controls were not
+  accepted as full packets. `--events target_hero_packet --runtime-image IMAGE
+  --event-jsonl-only` is an explicit CLI opt-in; the API uses
+  `capabilities: ['target_hero_packet']`. A real CLI run emitted 6,703/6,703
+  candidate rows with `MATCHED_USED`, one native batch, and zero framing
+  errors. Saved `query-events --event target_hero_packet_candidates
+  --opaque-u32 0 --limit 1` validated all 6,703 rows, matched 3,335 and
+  emitted one unchanged row. The saved query validates each row and both
+  ordered digests even after the output limit; focused exact-image tests
+  passed 9/9 with zero skips. The callback u32 is zero for every observed
+  one-byte packet and takes ten `0x400000ae..0x400000b7` values for the
+  three-byte packets. A resolved target object, source actor, receiver state,
+  and actual effect remain `UNKNOWN`. Original Replays, image, complete
+  native gate and CLI artifacts remain local and ignored.
+- **SetItemGroupData_Broadcast conditional callback byte (opt-in V2 candidate):**
+  `--item-group-packet-v2` or API `itemGroupPacketProfile: 'v2'` retains the
+  exact `0x013f` V1 packet route and lookup key, then adds the native object's
+  protected `+0x1c` byte and the callback's transformed u8 value if its
+  receiver lookup hits. The pinned nested reader writes `+0x1c`; callback
+  RVA `0x35055e..0x350578` transforms it and `0x3505c9` writes it to a
+  receiver entry only on the lookup-hit branch. The native witness supplies
+  a synthetic lookup hit and checks that write for every selected packet;
+  its callback transform, code region and nested reader region are pinned to
+  the exact KR `16.19.821.7343` image. A read-only census of all 11 original
+  KR Replays found 1,604 distinct `0x013f` payloads, all native fully
+  consumed, and six transformed byte values: `0`, `1`, `2`, `3`, `99`, `255`.
+  Two original packets with the same raw parameter `0x400000ae` and lookup
+  key `90922051` produced `1` and `0`; they show this byte varies
+  independently of the lookup key. Native truncate and append controls fail
+  full consumption. A real CLI V2 run on `KR_8393821675.rofl` emitted
+  90,240/90,240 `CANDIDATE` rows in 10 native batches with `MATCHED_USED`
+  and zero framing errors; direct API decoding of that Replay returned the
+  same count. Saved `query-events --event
+  item_group_data_broadcast_packet_candidates --opaque-u32 90922051
+  --item-group-callback-u8 0 --limit 1` validated all 90,240 rows, matched
+  33 and emitted one unchanged row. The valid but unobserved byte `4`
+  completed the same full-row validation with zero matches. V2 saved queries
+  check separate ordered
+  raw-input and native-output digests including the new protected and
+  transformed byte, even after the output limit. V1 remains the default
+  profile, row shape and digest. The captured image lacks live receiver
+  state: actual lookup success, group/item/owner/slot, purchase, inventory
+  state change and gameplay effect remain `UNKNOWN`. The private image,
+  Replays and generated JSONL stay ignored outside Git. Focused exact-image
+  Node and Python tests passed 11/11 and 5/5 without skips.
+- **SetCooldown_Broadcast callback lookup key (opt-in candidate):** The exact
+  KR `16.19.821.7343` route `0x039d` maps through factory case `0xf09d3f`,
+  constructor `0xe99ba0`, deserializer `0xf1a4e0`, and callback `0x2bbc90`
+  in the pinned runtime image (SHA-256
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`).
+  The callback reads packet object `+0x10` and forms a lookup key before
+  calling `0x98a840`. Strict framing of 11 original exact-build KR Replays
+  found 182,482 route packets across game and keyframe streams and eight
+  observed payload lengths, with zero framing errors. An independent native
+  pass fully consumed all 182,482 packets and captured one lookup key per
+  packet; ordered raw-input and native-output SHA-256 values are retained
+  for each Replay in
+  [the source-bound evidence summary](COOLDOWN_BROADCAST_821_NATIVE_GATE.json).
+  The bounded CLI/API decoder verifies the exact image,
+  native full consumption, object identity, callback key, and both digests
+  before emitting `cooldown_broadcast_packet_candidates`. One real CLI
+  smoke emitted 19,714/19,714 rows in two native batches; its input/output
+  hashes matched the independent full gate. A saved query validated all
+  19,714 rows after `--limit 1`, matched 2,507 keys equal to zero, and
+  emitted one unchanged row. Truncated and appended packet controls failed
+  full native consumption. The key remains packet-local: actual cooldown,
+  slot, actor, target, receiver lookup result and effect are `UNKNOWN`.
+  This route is opt-in and does not enter default semantic output. The image,
+  original Replays, full-gate record and CLI output remain ignored outside Git.
+- **SetItemGroupData_Broadcast packet lookup key (opt-in candidate):** Exact
+  KR `16.19.821.7343` keyframe route `0x013f` is a packet factory route,
+  separate from `0x040a` OnEvent child IDs. The pinned runtime image SHA-256
+  is `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`;
+  factory/constructor/deserializer/callback RVAs are
+  `0xf0214f`/`0xebdd70`/`0x10425b0`/`0x350440`. The callback transforms the
+  packet object's protected `+0x20` word and forwards a u32 lookup key to
+  `0x5d3bd0`. The native helper forces that lookup to miss; the captured
+  module has no live receiver map. In 11 original exact-build KR Replays,
+  strict framing found 1,229,520 `0x013f` packets, all keyframe, across 15
+  observed length/selector shapes and zero framing errors. The largest
+  single Replay had 124,080 packets, below the explicit 150,000 cap;
+  overflow is reported as `UNSUPPORTED`. For each selected Replay, the
+  decoder uses bounded native batches and requires full consumption plus
+  separate ordered raw-input and native-output SHA-256 digests before
+  emitting candidate rows. Representative truncate/append controls failed
+  native full consumption as expected. Real CLI `--events
+  item_group_data_broadcast_packet --runtime-image IMAGE --event-jsonl-only`
+  produced 124,080/124,080 and 90,240/90,240 candidate rows on two original
+  Replays, each with `MATCHED_USED`, zero framing errors, and respectively 13
+  and 10 native batches. The saved `query-events --event
+  item_group_data_broadcast_packet_candidates --opaque-u32 5247418 --limit 1`
+  validated all 124,080 first-Replay rows, matched 330 and emitted one
+  unchanged row; it checks all rows after the limit, verifies those separate
+  ordered digests, and gates per-row provenance fields.
+  `native_callback_lookup_key_u32` is
+  packet-local only. Lookup success, group/item/slot/owner/participant,
+  purchase/state change and gameplay effect remain `UNKNOWN`; this candidate
+  does not enter default semantic output. The image, Replays and output
+  JSONL stay ignored outside Git. Focused Node and exact-image native tests
+  passed 7/7 and 3/3 without skips; the two real CLI runs took about 10.2
+  and 7.3 seconds, writing about 177 and 129 MB of JSONL. An initial public
+  test run found one stale capability-list assertion, which was corrected;
+  the final `npm test` passed with 1,127 Node passes, 110 declared skips
+  (private inputs were not set), zero failures, and 19 Python unittest passes.
+  Both run logs are retained under ignored
+  `artifacts/16_19_development/item_group_821_integration/`.
+- **NotifyContextualSituation packet string (opt-in candidate):** Exact
+  `16.19.821.7343` route `0x0113` is distinct from the `0x040a` OnEvent
+  child `0x0113`. The pinned image factory/constructor/deserializer are at
+  RVAs `0xf01897`/`0xeb3b50`/`0x102d520`; the callback at `0x2c9820`
+  passes the object's string pointer to `0x228610`. The exact-image native
+  witness checks full packet consumption, heap pointer/length/capacity/NUL
+  bounds and strict UTF-8 for each packet. CLI `--events
+  notify_contextual_situation_packet` and API output remain `CANDIDATE`.
+  On 11 original KR 821 Replays, 37,229/37,229 packet-local strings were
+  emitted with exact image `MATCHED_USED`, zero framing errors and seven
+  observed string values. Saved `query-events --event
+  notify_contextual_situation_packet_candidates --contextual-situation
+  RecallCancel --limit 1` validated all 37,229 rows, matched 522 and
+  emitted one original row. Saved queries check ordered native string
+  length, capacity and UTF-8 bytes against the native output digest, as
+  well as the separate ordered raw-input digest, even after `--limit`.
+  These names do not establish a Recall action,
+  actor, team or gameplay effect. The six observed packet lengths and
+  seven observed strings are fail-closed scope gates, not a substitute for
+  native per-packet decoding. Image, Replays and outputs remain outside Git.
+  Focused decoder and query tests passed 12/12 with the exact local inputs.
+  After the output-digest change, `npm test` passed with 1,122 Node passes,
+  108 declared skips (private inputs were not set for that run), zero failures,
+  and 19 Python unittest passes. The focused exact-input suite passed 12/12.
+- **Saved event discovery:** `query-events DIR --list-events` lists actual
+  saved candidate keys and per-Replay exact build, capability status and
+  declared count. It distinguishes saved zero rows, unavailable and
+  unrequested capabilities; batch mode checks manifest hashes. Real V7
+  CastSpellAns and multi-event V5 damage batches each listed 11 KR 821
+  Replays. The listing does not scan JSONL rows and says so in its output.
+- **Saved query stdout integrity:** `query-events` now stages selected stdout
+  lines in a temporary file and releases them only after every source row and
+  digest validates, including rows after `--limit` and later batch Replays.
+  Before the fix, corrupting only line 124,080 of a copied original 821
+  item-group JSONL produced `INVALID_EVENT_ROW` but had already sent the
+  first 1,407-byte row to stdout. The same real negative control now exits 2
+  with zero stdout bytes; the valid query still scans all 124,080 rows,
+  matches 330 and emits one unchanged row. The copied negative artifact and
+  both command outcomes remain under ignored
+  `artifacts/16_19_development/item_group_stdout_probe_20260926/`.
+- **CastSpellAns nested anonymous f32 at packet +0xa0 (opt-in V7):** The
+  exact 821 deserializer at RVA `0x10bd7d4..0x10bd991` writes protected
+  nested `+0x90` bytes; the callback at RVA `0x8d76da..0x8d7710` converts
+  them directly to temporary `+0x9c`. The 256-byte transforms are pinned by
+  SHA-256 and inverse controls. V7 keeps V5/V6 fields and V4 remains the
+  default. The real CLI batch on all 11 original KR 821 Replays wrote
+  63,496/63,496 candidate rows, 11/11 `CANDIDATE`, exact image
+  `MATCHED_USED`, and zero framing errors to ignored
+  `artifacts/16_19_development/cast_v7_11_replay_20260926/`.
+  Saved `--cast-nested-f32-0xa0 1.1395 --limit 1` validated all 63,496
+  rows, matched one, and emitted that original row. A separate query found
+  63,452 values equal to `1.0`; the other 44 remain anonymous. Native
+  truncate/append and exact-image controls passed. The adjacent nested
+  `+0x8c` word passes through a runtime-tree helper at RVA `0x57cc00`;
+  the captured module has no receiver heap, so it was not emitted.
+  Focused decoder/native tests passed 21/21, saved-query tests 17/17, and
+  CLI option tests 30/30 with the supplied exact inputs.
+- **CastSpellAns packet-local callback lookup key at packet +0x28 (opt-in V8):**
+  The exact 821 nested deserializer at RVA `0x10babce..0x10bae7b` writes the
+  protected word at nested `+0x18`; callback RVA `0x8d75b3..0x8d75f5`
+  decodes its four bytes, and RVA `0x8d86c2..0x8d875a` uses the resulting
+  word as a conditional runtime-tree lookup key. The pinned image is SHA-256
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`.
+  The byte transform and its inverse pass all 256 inputs, with SHA-256
+  `8aa1a1d1b3c61b2717fbf3b7349dcc659f21d91cd0fe98404e4dc6b700214cb5`
+  and `442516bee22a1147d65334928ed5300c815deeab1ac6c92002960045590a4e71`.
+  A native audit fully consumed 63,496/63,496 packets across the 11
+  original KR 821 Replays; the real V8 CLI batch wrote 11/11 `CANDIDATE`,
+  exact image `MATCHED_USED`, zero framing errors, and all 63,496 rows to
+  ignored `artifacts/16_19_development/cast_v8_11_replay_20260926/`.
+  The new field has 424 distinct values; every prior V7 row field and raw
+  packet reference was preserved. Native truncate/append controls fail full
+  consumption as expected, and 448 saved native object bytes match the
+  route-specific witness. V4 remains default, V8 is opt-in, and the tree
+  lookup result, object identity, actor, spell and effect remain `UNKNOWN`:
+  the captured module does not contain the live receiver heap. The native
+  packet witness includes the raw and decoded `+0x28` values per packet;
+  there is no ordered native-output digest for these rows.
+  Opt-in saved-query `--verify-source` binds every CastSpellAns packet ref
+  to the independently hashed original ROFL by exact build, Replay SHA,
+  packet order/count, stream, offsets, time, parameter and payload SHA-256.
+  It validates all saved rows after `--limit` before emitting stdout. This
+  physical provenance check does not rerun the native decoder or bind the
+  saved V8 key to an ordered native-output digest. A real 11-Replay V8
+  `--cast-nested-u32-0x28 190941627 --limit 1 --verify-source` query
+  verified all 63,496 original packets, matched 4,136 rows, and emitted
+  one original row. A synthetic physical-ROFL test forged a later packet's
+  time and offsets; query exited `SOURCE_PROVENANCE_MISMATCH` with zero
+  stdout. Source verification now also checks CastSpellAns profile metadata,
+  the pinned packet ID, and every row's top-level time/parameter against its
+  packet reference even when no nested-field filter is supplied. Later
+  top-level time or parameter forgeries fail with `INVALID_EVENT_ROW` and
+  zero stdout under `--from-ms --to-ms --limit 1`; a profile packet-ID forgery fails
+  `CAPABILITY_METADATA_MISMATCH`. Historical V3 source verification and its
+  nested-field unavailability remain distinct. The real no-nested-filter
+  `--verify-source --from-ms 1000 --limit 1` query validated all 63,496
+  packets across the 11 original Replays and emitted one original row.
+  Focused saved-query tests passed 24/24 after this correction, including
+  unfiltered physical-source checks for each V3 through V8 profile.
+- **CastSpellAns ordered native-output witness (opt-in V9):** V9 keeps every
+  V8 candidate field and remains separate from V4 default and all saved V3–V8
+  artifacts. For each native batch of at most 8,192 exact-821 packets, Python
+  SHA-256 hashes the ASCII domain `CAST_SPELL_ANS_821_V9_NATIVE_OUTPUT_V1` plus
+  a zero byte, then each row's local u32 index, raw u32 parameter, u32 consumed
+  payload length, 32-byte payload SHA-256, decoded flag byte and signed i32,
+  protected float bytes at `+0xe0`, protected and decoded byte at `+0x140`,
+  protected and decoded bits at `+0x24`, protected and decoded u32 at `+0x1c`
+  and `+0x4c`, protected float bytes at `+0xa0`, and protected and decoded
+  lookup-key u32 at `+0x28`. Integers are little endian. The protected float
+  bytes are hashed while decoded float values are checked against the pinned
+  transforms; this avoids JSON float formatting differences. Only fields
+  retained in candidate JSONL enter the digest. JavaScript verifies each
+  native batch digest before accepting the batch. It then hashes the ASCII
+  domain `CAST_SPELL_ANS_821_V9_REPLAY_V1` plus a zero byte, the 32-byte
+  Replay SHA-256, and each ordered batch's u32 start, u32 count, and 32-byte
+  native digest into replay-level `native_output_sha256`.
+  The original exact `16.19.821.7343` image SHA-256
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`
+  decoded 63,496/63,496 CastSpellAns packets across 11/11 original KR
+  Replays to ignored
+  `artifacts/16_19_development/cast_v9_11_replay_20260926/` with zero
+  framing errors. A saved V9 query with `--cast-nested-u32-0x28 190941627
+  --limit 1 --verify-source` checked all 63,496 ordered digest rows and
+  physical source packets, matched 4,136 rows, and emitted one unchanged row.
+  A portable Python/JavaScript digest agreement test, later-batch failure,
+  late forged-row, and V9 metadata downgrade controls passed in the focused
+  suite: 78 passed, 0 failed, 6 private-fixture tests skipped. The source
+  check proves physical Replay provenance separately; the output digest binds
+  persisted candidate fields to the native run. Neither proves a runtime-tree
+  lookup hit, receiver, actor, spell, target, successful cast, or effect.
+- **Damage identity stop-loss:** In saved V5 output for the 11 KR Replays,
+  anonymous `+0x18` `RAW_READER` occurred in 11/1,035 death-coincident
+  victim-key packets and 823/62,860 first-lookup roster pairs. Conditional
+  callback lookup/cast results and a packet-linked state change remain
+  unobserved; this branch cannot identify a fatal packet, target or effect.
+  Source artifacts are the ignored `combat_v5_associations_11_821` batch.
+- **Cast/Timer identity stop-loss:** The pinned image registers the
+  `SetSpellTimer` callback through `AIBaseClient`, but the captured module
+  has no replay-session receiver heap or observed per-packet map hit. Among
+  5,481 Timer V2 rows, 303 rows carry raw parameters outside the common
+  `0x400000ae..b7` family. No independent participant or spell-slot binding
+  was established; Cast and Timer identities remain `UNKNOWN`.
+- **CastSpellAns nested anonymous u32 at packet +0x4c (opt-in packet V6):**
+  The pinned `16.19.821.7343` image callback RVA `0x8d7860..0x8d78cb`
+  reads nested `+0x3c` (packet object `+0x4c`), converts four protected
+  bytes with the table at RVA `0x1b41db0`, and writes the word to temporary
+  `+0xac`. The nested deserializer writes the inverse protected bytes at
+  RVA `0x10bb405..0x10bb744` with table RVA `0x1badb60` (SHA-256
+  `ae15d606869d66dc47309b26cb489e01bf841e9dd57d540683e2dc7f5e394588`);
+  both transforms invert each other for all 256 byte values. The callback
+  transform SHA-256 is
+  `ad5ff48a6d097a43b6880bcafd30d0f8ef7f30f3988c049e1add1261f626eb4c`.
+  CLI `--cast-packet-v6` or API `castPacketProfile: 'v6'` retains every V5 field and adds
+  `raw_u32_0x4c_hex` and `opaque_u32_0x4c`. V4 remains the default; V5
+  retains its historical profile identity. Three original KR Replays
+  produced 5,980/5,980, 5,713/5,713 and 5,561/5,561 V6 candidates,
+  17,254/17,254 combined, with exact image `MATCHED_USED` and zero decode
+  failures. Four fixed game/keyframe packet anchors match protected bytes
+  and decoded words; one-byte truncate and append controls fail full native
+  consumption. The word is anonymous: no caster, spell, target, action or
+  gameplay effect is inferred.
+  The integrated selected CLI batch on all 11 exact-build KR Replays then
+  returned `CANDIDATE` in 11/11, zero framing errors, and 63,496/63,496
+  V6 rows. Saved batch `--cast-nested-u32-0x4c 1073742460 --limit 1`
+  completed 11/11, checked every 63,496 row, matched one and emitted its
+  original JSONL line. V3/V4/V5 saved artifacts report the second u32
+  unavailable; V6 queries also validate the historical V5 field. Private
+  Replay, image and output files remain outside Git.
+  Focused direct/native tests with those private inputs passed 18/18 with
+  zero skips; saved-query tests passed 14/14. The public `npm test` run
+  exited 0 with 1,092 Node passes, 100 declared skips, and
+  19 Python unittest passes.
+- **CastSpellAns nested anonymous u32 at +0x1c (opt-in packet V5):** The
+  pinned `16.19.821.7343` image callback RVA `0x8d77ed..0x8d785a` reads
+  nested `+0x0c` (packet object `+0x1c`), converts its protected bytes with
+  the exact table at RVA `0x1b41db0`, and writes the word to temporary
+  `+0xa8`. The derived 256-byte transform SHA-256 is
+  `5b858c9ef8d1393d05d867112316c3344ff777044719d839ad8cd64867d7f537`.
+  V5 adds `raw_u32_0x1c_hex` and `opaque_u32_0x1c` behind CLI
+  `--cast-packet-v5` or API `castPacketProfile: 'v5'`; V4 remains the
+  default and saved V4 output retains its historical profile identity.
+  Original KR Replays `KR_8392938200` and `KR_8393456728` produced
+  5,980/5,980 and 5,713/5,713 V5 packet candidates respectively,
+  11,693/11,693 combined, with exact image `MATCHED_USED`, full native
+  payload consumption and zero decode errors. Three fixed original
+  packet anchors cross-check game/keyframe protected bytes and converted
+  values; one-byte truncate and append controls both fail full consumption.
+  Focused tests with local inputs: 14 passed, 0 failed, 0 skipped. Saved
+  V5 `cast_spell_ans_packet_candidates` rows can be filtered with
+  `query-events --cast-nested-u32` (decimal or hexadecimal uint32); the
+  query validates the full exact-build metadata, raw packet reference,
+  protected four bytes and transform before filtering. V3/V4 artifacts
+  report this field unavailable. The callback's temporary transfer does
+  not prove caster, spell, target, cast success or gameplay effect.
+  A subsequent selected CLI batch across all 11 exact-build KR Replays
+  returned `CANDIDATE` in 11/11 with zero framing errors and
+  63,496/63,496 V5 rows. A saved batch `--cast-nested-u32 1531465011
+  --limit 1` query completed 11/11, checked every 63,496 row, matched
+  511 (all in `KR_8392938200`), and emitted one original JSONL row.
+  These private Replay and image inputs and local outputs remain outside Git.
+- **UnitApplyDamage anonymous callback u32 at +0x1c (opt-in V6):** On the
+  pinned `16.19.821.7343` mapped image (SHA-256
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`),
+  the callback reads object `+0x1c` at RVA `0x2ce2f8`, decodes its four
+  bytes with helper `0x251df0` (complete table SHA-256
+  `5acd891ce46e85484de06fa22f6cece25e6bfcc4c258094863c98d225ea3dc18`),
+  and forwards the word to `0x2827c0`. The exact deserializer selects
+  its write branch using header bits 12..14. The opt-in V6 packet decoder
+  checks every final four-byte write, callback transform, native raw-reader
+  call and exact variable-length raw span. The exact `0xe81ec0` reader
+  rederives the value from the protected two- or three-byte raw span;
+  V5 remains the default CLI/API profile and historical saved-query identity.
+  Original KR Replays `KR_8392938200` and
+  `KR_8393872512` yielded 125,182/125,182 fully consumed packets and
+  +0x1c full writes. The first had 61,535 constant-zero and 3,289
+  raw-reader rows (472 two-byte, 2,817 three-byte spans); the second had
+  60,358 constant-zero rows. Selectors 1/2/3/4/5/7 took their respective
+  native raw reader branches in the first Replay; selector 0 wrote zero.
+  Selector 6 has a static constant-`0xffffffff` branch in the image but
+  occurred in none of the 11 supplied KR Replays and is rejected by V6.
+  V6 is selected through CLI `--damage-packet-v6` or API
+  `damagePacketProfile: 'v6'`. One original Replay produced 64,824 packet
+  candidates and four V4 association candidate counts of 5,254, 6,888,
+  19,142 and 71 through the CLI, with zero framing errors. Saved V6 packet
+  queries validate the anonymous `+0x1c` u32 and its raw provenance;
+  all four saved V4 association queries completed full scans of those
+  original-Replay outputs. Historical V5/V3 identities remain available.
+  The u32 has no proven actor, type,
+  amount, source, target, or gameplay-effect meaning.
+- **Objective-steal OnEvent packet markers (isolated development branch):**
+  The exact 821 image names `0x040a` child `0x00be`
+  `OnKillDragonSteal` and child `0x00d6` `OnKillWormSteal` at
+  name-table entry RVAs `0x1ef90e0` and `0x1ef94a0`. The selected
+  `objective_steal_event_packet` CLI/API route requires the pinned image,
+  game-stream 133-byte parent, native full consumption, exact child and
+  encoded IDs, and the observed 124-byte native child blob. It preserves
+  the opaque blob/hash and original packet reference. Real selected CLI
+  runs on `KR_8393872512` and `KR_8394041123` each emitted one
+  `CANDIDATE` row with zero framing errors (children `0x00d6` and
+  `0x00be`, respectively). `KR_8392938200` had no 133-byte parent and
+  returned `PROFILE_UNAVAILABLE` with zero framing errors; its CLI exit
+  code was 1 for that unavailable status. Focused synthetic route/API/CLI
+  tests passed 4/4. With the pinned image and two original Replays, three
+  native tests passed for both positive packets, a same-length foreign
+  child, truncated input, and a wrong image. Without private inputs,
+  these three native tests explicitly skip. The earlier exact-image census
+  found only these two 133-byte parents among 11 supplied KR Replays; the new CLI route was
+  run on the two positive Replays and one absent control, not all 11.
+  The image labels and packet presence do not prove an actual steal,
+  objective state change, actor, target, or gameplay effect. Local outputs
+  remain ignored under `artifacts/16_19_development/objective_steal_real_821/`.
+  A bounded child-field check found that both IDs register the same callback
+  RVA `0x2ce720`, but its typed argument cannot be equated with the native
+  124-byte child buffer: treating that buffer as the argument would make its
+  `+0x08` word a noncanonical pointer on both original packets. The two
+  positive parents still fully consume 133 bytes, and the exact-image native
+  tests pass 3/3 (0 skipped), including foreign-child, truncation and wrong
+  image controls. No additional child field was promoted; the blob remains
+  opaque pending an exact-build child conversion or callback-argument trace.
+  A further bounded trace found only the first dispatch hop: receive RVA
+  `0x4ce432` places the blob pointer in a wrapper, then `0x4ccf10` passes
+  it through listener dispatch RVA `0x4ccc80`. The listener calls are
+  indirect, and no observed path converts this blob into callback
+  `0x2ce720`'s typed argument. Its helper checks type tags `0x35/0x3b/0x3d`,
+  whereas both native blobs start with `0x1d5`. This is additional negative
+  evidence, not a child-field decode.
+- **UnitApplyDamage anonymous callback f32 v5:** The pinned 821 native
+  deserializer writes callback object `+0x18` from a protected raw f32 reader
+  for header selector 0/2/3/6, or constant zero for selector 5. The output
+  retains the native final-write witness, protected bytes, decoded finite
+  value, raw offset/bytes where applicable, source branch, and table hash.
+  A fresh packet-only batch on all 11 supplied KR Replays was `CANDIDATE`
+  in 11/11 with zero framing errors: 628,909/628,909 full writes, 828
+  `RAW_READER`, and 628,081 `CONSTANT_0`. A saved v5 `query-events
+  --damage-callback-f32-0x18-raw --limit 1` completed 11/11, checked all
+  628,909 rows, matched 828, and emitted one. Four dependent association
+  profiles were versioned to V3 for v5, with historical V1/V2 kept for
+  older packet outputs. A fresh selected-only association batch was
+  `CANDIDATE` in 11/11 for each route: 49,473 raw roster, 62,860 first
+  lookup roster, 173,125 second lookup roster, and 655 death anchors.
+  These are exact packet/key observations; the float does not establish
+  actual damage, a source, target, or health effect. The first local v5
+  saved batch omitted a required table-hash metadata field and was rejected;
+  the corrected batch above is a separate run. Both local artifacts remain
+  ignored, preserving that failed validation.
+- **Damage association source scan reuse:** In a selected exact-821 API/CLI
+  run, the four damage/roster/death associations now use the same private,
+  Replay-bound strict route scan to verify their complete `0x005f` and
+  `0x0089` source rows. Standalone association calls still walk the Replay;
+  foreign or changed scan tokens fail. On one supplied KR Replay, all four
+  association results and JSONL outputs matched the preceding batch exactly
+  (5,254 / 6,888 / 19,142 / 71 rows). Direct three-association work took
+  2,280 ms with repeated walks versus 1,882 ms with the shared token; the
+  API already collects the token, whose standalone creation took 154 ms in
+  that measurement. This changes validation work, not candidate semantics.
+- **OnFirstBloodAssist packet marker:** The exact 821 image names OnEvent
+  child `0x0017` at name-table entry RVA `0x1ef76c8`. The new selected
+  `first_blood_assist_event_packet` CLI/API route requires the pinned image,
+  fully consumes each game-stream `0x040a` length-16 parent, and retains the
+  anonymous eight-byte child blob, its digest, and the original packet ref.
+  A real 11-Replay selected-only batch had zero framing errors: eight
+  `CANDIDATE` Replays with nine target packets, three
+  `PROFILE_UNAVAILABLE` Replays, and three same-length native child
+  `0x002c` exclusions. CLI batch status was `PARTIAL` because those three
+  Replays have no target child. The image label and packet-local bytes do not
+  prove an effective first blood, an assist, a participant role, or a game
+  effect. Raw inputs and local batch output remain outside Git.
+- **UnitApplyDamage anonymous callback u32 v4:** The exact-821 native
+  deserializer writes an anonymous u32 to callback object offset `+0x10`.
+  The first header selector determines whether its four payload bytes pass
+  through the pinned native reader or whether the callback writes constant
+  zero. The decoder preserves the encoded bytes, decoded u32, write source,
+  exact runtime/table hashes, and a full-consumption witness per packet.
+  A fresh packet-only CLI batch on all 11 supplied KR Replays returned
+  `CANDIDATE` in 11/11 with zero framing errors. All 628,909 selected packets
+  had the `+0x10` native write: 464,779 `RAW_READER`, 164,130 `CONSTANT_0`.
+  A separate selected-only batch of the four dependent raw/lookup/death
+  associations was `CANDIDATE` in 11/11 for each, with 49,473, 62,860,
+  173,125, and 655 rows respectively. Their v2 profiles bind the v4 packet
+  input; these counts describe packet/key proximity rather than combat effects.
+  A saved `query-events --damage-callback-u32-0x10 0 --limit 1` run on the
+  11-Replay v4 packet batch completed 11/11, checked all 628,909 rows,
+  matched 164,130 constant-zero packets, and emitted one row. The filter is
+  limited to v4 artifacts and validates all saved rows despite an output
+  limit. Historical
+  v1/v2/v3 packet profiles remain readable under their original contracts;
+  dependent roster/death associations use new profiles for v4 inputs and
+  retain their historical profile identities for older saved results. The
+  integer has no established damage type, amount, actor, target, or effect.
+- **Death/damage native lookup-key co-occurrence candidate:** The independent
+  `hero_death_damage_lookup_key_cooccurrence` capability links each exact-821
+  `hero_death` candidate anchor to every `0x005f` native-witnessed packet in
+  the same chunk and millisecond whose `+0x24` full key equals the candidate
+  victim's canonical ten-person HeroStats roster key. It reports each packet's
+  separate `+0x2c` numeric equality with the death route's decoded die-source
+  ID, including nonroster keys and equality failures. The decoder freshly
+  verifies the death route, the complete damage/roster source set, the pinned
+  runtime image, original packet references, and Replay-tail counts. It emits
+  one row per death anchor, preserving zero or multiple candidate packets,
+  their order relative to the primary death route, and all original source
+  references. A fresh selected-only CLI batch on all 11 supplied KR Replays
+  returned `CANDIDATE` in 11/11 with zero framing errors: 655 death-anchor
+  rows, 628,909 native-witnessed damage packets, and 1,035 same-time victim
+  `+0x24` packets. There were 227 anchors with multiple such packets; 987 of
+  the 1,035 packets also had `+0x2c` equal to the die-source ID. At least one
+  such packet occurred at 633 anchors, while 22 had none. Of the 1,035
+  victim-key packets, 933 preceded the primary `0x0259` packet and 102
+  followed it within the same Replay millisecond. A saved `query-events`
+  run completed 11/11, checking all 655 rows despite `--limit 1`; a victim
+  filter selected 70 rows for participant 1 and a nested original damage
+  `raw_param` filter selected 34 rows for `0x400001ae`. Saved queries validate
+  artifacts, not original ROFL bytes. Neither a matching pair nor temporal
+  proximity selects a fatal packet or establishes an actor, source, target,
+  object-lookup success, or health effect. The preceding saved-data controls
+  and their 22 hero-source exceptions are recorded below as independent
+  research context; they did not physically reopen original ROFL bytes.
+- **UnitApplyDamage second native lookup-key roster pair:** The independent
+  `unit_apply_damage_lookup2c_roster_key_pair` capability now uses the exact
+  821 native `+0x2c` full key and the complete ten-key HeroStats roster. It
+  retains both native lookup keys, their protected bytes, the original
+  `raw_param` relation, and both source references. The decoder physically
+  rechecks the raw-key pair against the Replay and validates the prior
+  `+0x24` pair before output. A fresh selected-only CLI batch on all 11
+  supplied KR Replays returned `CANDIDATE` in 11/11, zero framing errors,
+  and the one pinned runtime-image SHA
+  `35b49575122a8b063d5db6b37373f59740aa25b4be28d0affcb12f93be0cd325`.
+  Of 628,909 native-witnessed damage packets, 173,125 matched `+0x2c` to
+  the canonical roster and 455,784 did not; 632,179 damage and HeroStats
+  source references were physically checked. Among matches, `+0x24` was the
+  same roster key in 15, a different roster key in 34,697, and outside the
+  roster in 138,413. The new saved `query-events --raw-param 0x400000ae
+  --limit 1` then checked all 173,125 association rows across all 11 Replay
+  artifacts, matched 2,387 original damage raw parameters, and emitted one
+  unchanged row. Saved queries validate their stored metadata, rows, hashes
+  and references; they do not reopen original ROFL bytes. Lookup success,
+  actor, source, target, killer, fatal packet, actual amount and health effect
+  remain `UNKNOWN`. Local batch inputs/results remain ignored under
+  `artifacts/16_19_development/combat_lookup2c_roster_pair_11_821/`.
+- **Saved v3 native lookup-key query:** `query-events` now filters the
+  separate exact `+0x24` and `+0x2c` u32 keys, individually or conjunctively,
+  without assigning either a combat role. It requires the exact-821 v3
+  artifact and checks every saved packet's native witness metadata, raw bytes,
+  key transforms, source reference and ordered input digest, even after the
+  output limit. On the 11-Replay v3 batch, each of four saved queries checked
+  all 628,909 rows: key `0x400000ae` selected 9,481 at `+0x24`, 16,253 at
+  `+0x2c`, and zero where both fields equaled that key. A two-key query
+  (`+0x24 = 0x400000ae`, `+0x2c = 0x400000b3`) selected 2,147. These counts describe
+  independent fields, not a source or target assignment.
+- **Second native lookup key research controls:** The 11 exact-build saved
+  damage artifacts have complete ten-key HeroStats rosters and full native
+  consumption. `+0x2c` matched a canonical roster key in 173,125/628,909
+  packets; `+0x24` matched in 62,860. Both matched in 34,712, only `+0x2c`
+  in 138,413, only `+0x24` in 28,148, and neither in 427,636. Of the
+  both-matched packets, only 15 had the same key in both fields. A preceding
+  ten-key control matched `+0x2c` in 1,957 packets; the corresponding
+  `+0x100` alias matched zero. There were 9,802 replay times with multiple
+  distinct roster-matched `+0x2c` keys, so a timestamp is not a unique
+  pairing. This is a research observation, not a default roster association
+  or an actor, source, target, killer, or damage inference. The saved audit
+  checked artifact SHA identities and roster completeness; a future decoder
+  must still physically verify original packet references.
+- **Death-time lookup-key control:** All 655 candidate death times in the 11
+  Replays had at least one same-time damage packet whose `+0x24` key equaled
+  the candidate victim roster key; 227 times had multiple such packets. Of
+  653 deaths with a candidate killer, 631 had a same-packet `+0x2c` key equal
+  to that killer's roster key. At the 22 exceptions, the same-time victim-key
+  packets all had nonroster `+0x2c` keys; 12 of those anchors had a hero-key
+  pair only at an earlier nonidentical time within one second. Two deaths
+  without a killer participant had a same-time `+0x2c` key equal to the
+  decoded nonhero die-source key. Participant-ID +1 controls produced only
+  24/655 victim-key matches and 2/653 joint key matches. This establishes a
+  bounded co-occurrence candidate for later source-referenced work, not a
+  unique fatal packet or confirmed combat role/effect.
+- **UnitApplyDamage native lookup keys v3:** Exact-image native audit
+  explicitly observed writes to object `+0x24` and `+0x2c` in all
+  628,909/628,909 `0x005f` packets. The callback decodes these as two
+  separate object lookup keys; the first lookup result receives a virtual
+  `+0x720` call with the anonymous `+0x20` float. Production now retains
+  both decoded u32 keys, their protected object bytes and the relation
+  between `raw_param` and the first key, with full native witness and pinned
+  lookup transforms. All 10,284 hero-key `+0x100` aliases decode their
+  first key to the canonical HeroStats key. At 655 candidate death anchors,
+  a same-time packet had first key equal to the candidate victim in 655
+  cases (rotated-key control 24); among 653 anchors with a candidate killer,
+  631 same packets also had second key equal to that killer (rotated control
+  2). These are bounded role clues; lookup and type-cast success, actual
+  health change and effective damage remain `UNKNOWN`. Eleven observed
+  `+0x20` floats were `2e9`, so that field is not an effective-damage amount.
+  The new 11-Replay CLI batch returned `CANDIDATE` in 11/11 with
+  628,909/628,909 full native lookup-write witnesses. First-key relation to
+  `raw_param` was `EQUAL` in 568,329 rows, `raw_param = key + 0x100` in
+  49,239, and `OTHER` in 11,341. Saved v1, v2 and v3 damage queries each
+  checked 628,909 rows and selected the original 6,501 narrow-shape rows.
+- **UnitApplyDamage native callback float v2:** The same exact 821 image
+  writes object `+0x20` for every one of the 628,909 observed `0x005f`
+  packets. Native and raw-byte checks distinguish 622,951 raw-reader writes
+  from 5,958 constant writes (`0`, `1`, or `2`). The new
+  `native_callback_f32_*` row fields retain the finite anonymous value,
+  source class and, for raw reads, the packet-local byte offset and bytes.
+  Old `callback_f32_*` fields and the saved v1 query contract remain limited
+  to the original 6,501 calibrated rows. Neither field proves applied damage
+  or actor roles; `+0x100` raw-key aliases remain unassigned. Saved v2
+  queries check each new field and source counts before selection.
+  A fresh 11-Replay CLI batch returned `CANDIDATE` in 11/11 with
+  628,909/628,909 native full-consumption witnesses; the saved v2 query
+  scanned all rows and selected the original 6,501 narrow-shape values.
+  Its local JSONL stays ignored under
+  `artifacts/16_19_development/combat_packet_batch_v2_11_821/`.
+- **UnitApplyDamage raw-key identity control:** Full `raw_param` matched one
+  of the ten unique HeroStats hero keys in 49,473/628,909 `0x005f` packets;
+  another 10,284 used the corresponding `+0x100` alias. At 655 candidate
+  death anchors, 442 same-time packets matched the full victim key; a
+  rotated-key control matched 11. Low-byte matching would add 24,473 other
+  packets, so no loose key merge is used. The direct key relation is a
+  bounded participant-label candidate only; the `+0x100` alias and any
+  source/target or applied-damage role remain unresolved.
+- **UnitApplyDamage full-key roster pair:** Selecting
+  `unit_apply_damage_roster_key_pair` now runs the native-gated `0x005f`
+  decoder and complete ten-key HeroStats keyframe decoder once, then emits
+  only exact full-key pairs with both source references. The new 11-Replay
+  CLI batch returned `CANDIDATE` in 11/11: 49,473 of 628,909 damage packets
+  matched a canonical roster key, 10,284 `+0x100` hero-key aliases were
+  separately excluded, and 579,436 packets remained unmatched. All 632,179
+  source packet references (damage and roster) and ordered native input
+  digests were physically checked. The roster label is a co-key candidate
+  and does not establish a damage actor, source, target or health effect.
+- **UnitApplyDamage native lookup-key roster pair:** Selecting
+  `unit_apply_damage_lookup_roster_key_pair` independently checks the native
+  callback's decoded object `+0x24` full key against the complete ten-key
+  `0x0089` HeroStats roster. It requires the native-witnessed v3 damage
+  outcome, the complete roster and the validated raw-key pair, and preserves
+  both original packet references plus each `raw_param`/lookup-key relation.
+  A fresh 11-Replay CLI batch returned `CANDIDATE` in 11/11 with zero framing
+  errors: 62,860/628,909 damage packets matched a roster key, including
+  49,473 `EQUAL`, 10,284 `raw_param = key + 0x100`, and 3,103 `OTHER`
+  relations (`+0x200..+0xA00` observed); 566,049 packets were unmatched.
+  The prerequisite pair physically checked 632,179 damage and roster source
+  references. The original raw-parameter pair remains separate at 49,473;
+  no blanket alias normalization is applied. The roster participant label
+  records lookup-key co-occurrence only. Object lookup/type conversion,
+  actor, source, target, actual amount and health effect remain `UNKNOWN`.
+  Saved `query-events --raw-param 0x400001ae --limit 1` then checked all
+  62,860 rows in the new batch and selected 2,075 by the damage packet's
+  original parameter; it does not substitute the decoded lookup or roster key.
+- **ShowHealthBar packet candidate:** The image registers `0x0165` as
+  `PKT_S2C_ShowHealthBar_s`. All 89,515 observed packets in 11 exact-build
+  KR Replays were fully consumed by the native deserializer: 61,813 had
+  one-byte payload `4a` and 27,702 had `4b`. The separate CLI/API capability
+  emits raw source references, a callback byte and a zero-flag candidate,
+  with `UNKNOWN` effect. Native code also accepts foreign one-byte values,
+  so the decoder limits output to the two observed bytes. These fields do
+  not establish health, damage, actor identity or actual display state. The
+  same 11-Replay CLI batch returned `CANDIDATE` in 11/11, zero framing
+  errors and 89,515/89,515 native full-consumption witnesses. Saved
+  `query-events --show-health-zero-flag 1` checked all 89,515 rows and
+  selected 27,702 while preserving original JSONL.
+- **Exact-821 UnitApplyDamage packet candidate:** The pinned mapped image
+  registers game-stream route `0x005f` as `PKT_UnitApplyDamage_s`. Native
+  deserialization fully consumed all 628,909 observed packets in the 11
+  supplied KR Replays, covering 728 observed selector/length tuples with no
+  failed packet. A same-length, same-selector bit-flip control was only
+  partially consumed by native code; packet shape alone is insufficient.
+  The production decoder therefore requires the exact image, Python and
+  Unicorn, runs a bounded native full-consumption witness over every selected
+  packet before emitting any events, and retains each original packet and
+  source reference. One 15-byte shape yielded 6,501 anonymous callback
+  `+0x20` f32 values, each matching the pinned native transform; the other
+  622,408 rows carry `null` with `UNAVAILABLE_SHAPE`, never a numeric zero.
+  The new real CLI batch returned `CANDIDATE` in 11/11 Replays with zero
+  framing errors and `native_full_success_count = event_count` for each.
+  Saved `query-events --damage-callback-f32-available` verified all 628,909
+  rows, their ordered raw-input SHA and persisted native-witness metadata,
+  then selected the 6,501 native-matched rows; output remains byte-for-byte
+  original JSONL. Saved queries do not rerun native deserialization or reopen
+  original ROFL files. This route name and float do not establish
+  applied damage, health loss, attacker, victim, object lookup, or effect.
+  Local original inputs and batch evidence remain ignored under
+  `artifacts/16_19_development/unit_apply_damage_packet_native_batch_11_821/`.
+- **Exact-821 level packet / EXP keyframe time brackets:** Selecting both
+  `hero_level_state,hero_experience_snapshot` emits
+  `level_experience_keyframe_bracket_candidates` when a higher-level packet
+  falls strictly between two complete adjacent EXP keyframes for the same
+  candidate participant. All 11 supplied KR Replays produced 1,564 rows in
+  1,495 distinct participant intervals, with three original packet references
+  per row. The source has 1,613 level packets; 2 level-one and 22 repeated
+  observations are excluded, as are 25 higher-level packets after the last
+  keyframe. One level sequence gap remains explicit. All 1,564 row endpoint
+  differences are positive, but a rotated-participant negative control also
+  finds positive intervals at similar rates. The relation therefore reports
+  sampled time and candidate participant alignment only; it does not locate
+  an EXP gain, assign an interval delta to a level packet, or establish an
+  upgrade threshold. The fresh CLI batch is ignored under
+  `artifacts/16_19_development/level_experience_keyframe_bracket_batch_11_821/`.
+  Saved `query-events --level-after` validated all 1,564 bracket rows and
+  their LevelUp/EXP source JSONL rows across the same 11 Replays: level 2
+  and 3 each matched 110 rows; level 1 matched zero after complete checks.
+- **Exact-821 circular movement restriction packet candidate:** The pinned
+  image registers route `0x0464` as
+  `PKT_S2C_SyncCircularMovementRestriction_s`. All 11 KR Replays yielded
+  68,242 packet candidates: 68,113 one-byte zero-record packets and 129
+  24-byte one-record packets. A separate exact-image native probe fully
+  consumed all 129 record-bearing packets; the production decoder checks
+  the image and byte-transform hashes and accepts only the observed shapes.
+  It preserves raw packet refs and anonymous scalar/vector values. Neither
+  route name nor these values prove an actor, world position, hero path,
+  receiver, or effective movement restriction.
+  Follow-up negative control: 110/129 record-bearing packets are time-zero
+  keyframes with five canonical raw keys sharing each of two vectors per
+  Replay. Of the 19 later packets, 18 have no DirectInput `0x00ba` row with
+  the same full raw parameter; the sole match is over 510 seconds apart.
+  The `0x00ba` callback also gates its write on an unobserved live receiver
+  mode. No actor or path relation is promoted from these packet fields.
+  A future actor/path claim needs a same-build receiver dispatch trace,
+  independent receiver-to-roster identity and coordinate observation, plus
+  rotated-key controls; named path-adjacent registrations alone supply no
+  such evidence in these Replays.
+  Saved `query-events --packet-record-count 1` verifies the pinned table,
+  every raw payload/reference and the derived anonymous fields before
+  selecting rows. The 11-Replay batch checked 68,242 rows: 129 had one
+  record and 68,113 had zero, with no unavailable Replays.
+- **Saved CastSpellAns nested-byte query:** `query-events --cast-nested-bits`
+  checks the exact-821 profile, callback transform and original packet refs
+  before filtering saved `cast_spell_ans_packet_candidates` rows. The
+  11-Replay batch checked 63,496 rows, with six matches for value 8, five
+  for 100, and zero for 2; older v3 rows report the field unavailable.
+- **Shield-damage route stop-loss:** The pinned 821 image registers
+  `PKT_UnitApplyShieldDamage_s` at `0x043e`, but a fresh strict scan of all
+  streams in the 11 supplied KR Replays found zero such packets and zero
+  framing errors. There is no Replay payload or native-consumption sample
+  for this route. Existing ShieldingParams `0x040a` pairs are distinct and
+  do not establish absorbed damage, so no `0x043e` event is selected.
 - **Completed exact-821 experience endpoint intervals:** Selecting
   `hero_experience_snapshot` also emits
   `experience_keyframe_interval_difference_candidates` for positive
@@ -417,6 +1660,29 @@ Current progress (older notes below retain their original research context):
   truncated, appended, and foreign-route controls did not satisfy the full
   target gate. No spell identity, actual level, owner, or effect is inferred.
   Ignored output is in `artifacts/16_19_development/set_spell_level_cli_batch_11/`.
+- **Completed opt-in SetSpellLevel callback witness V2:** The exact 821 callback
+  at RVA `0x998630` selects a synthetic receiver table slot from decoded
+  object `+0x10` (0..63, otherwise slot 0); exact callee RVA `0x947f20`
+  caps nonnegative `+0x14` at 6, writes the selected receiver's `+0x28`,
+  and writes its `+0x2c` positive flag only for a positive value. V2 runs
+  both native routines for each source-bound packet, keeps V1 as the default,
+  and exposes only candidate receiver-slot, selection-source, capped-scalar,
+  and flag-write fields. All 342/342 packets across the 11 supplied exact
+  Replays completed V2 native witness with matched image and zero framing
+  errors. Native fallback/9-to-6/zero controls passed; a signed-negative
+  control wrote -1 natively and was rejected from bounded V2 output. The
+  synthetic table does not identify a live receiver, spell, level change, or
+  effect. An integrated V2 `batch` run over the same 11 original Replays
+  returned 11/11 `CANDIDATE`, 342 JSONL rows, and zero framing errors.
+  Saved `query-events` then checked all 342 rows in 11/11 Replays despite
+  `--limit 1`: receiver index 12 matched 278 rows and clamped scalar 6
+  matched 22. The query checks both saved capability metadata copies,
+  exact V2 row shape, and protected raw words before filtering; V1 artifacts
+  report these callback fields unavailable. The private Replay/image inputs
+  and generated batch artifacts remain outside Git. Image-backed SetSpellLevel
+  Node tests passed 16/16, native Python controls passed 4/4. The public
+  `npm test` run passed 1,129 Node tests, skipped 73 declared cases, failed 0,
+  and passed 19 public Python unittests.
 - **Completed candidate:** Exact KR 821 `0x00fd` SetSpellTimerFromBuff is
   selectable through CLI/API with six anonymous callback fields, raw object
   bytes, and Replay packet provenance. All 5,481/5,481 target packets across
@@ -426,6 +1692,27 @@ Current progress (older notes below retain their original research context):
   routes failed full target consumption. No spell or Buff identity, owner,
   timer effect, or lifecycle claim is made. Ignored output is in
   `artifacts/16_19_development/set_spell_timer_cli_batch_11/`.
+- **Completed opt-in SetSpellTimerFromBuff callback witness V2:** The pinned
+  821 callback at RVA `0x2c2760` accepts decoded object `+0x20` values
+  0..5 and 63, selects that slot through receiver lookup RVA `0x98a840`,
+  and forwards the five other decoded fields to call entry RVA `0x946cf0`.
+  A synthetic receiver table witnesses the exact callback route and all
+  forwarded arguments for each source-bound packet; the receiver function
+  is stopped at entry because the live receiver heap and clock are absent.
+  All 5,481/5,481 target packets across 11 original KR Replays completed
+  V2 witness after scanning 18,235,209 blocks with zero framing errors.
+  Selector counts were 0:1,601; 1:1,728; 2:1,299; 3:324; 4:12; 5:2;
+  63:515. Native controls for 6, 62 and 64 reached no receiver call and
+  fail closed in V2. V1 remains the default; no Buff or spell identity,
+  owner, timer effect or lifecycle is inferred.
+- **Completed V2 CLI/API and saved query:** `--spell-timer-packet-v2` and
+  `setSpellTimerProfile: 'v2'` select the native witness; V1 remains the
+  default. The real CLI batch on the 11 original KR 821 Replays wrote 5,481
+  candidate JSONL rows, with 11/11 `CANDIDATE` and zero framing errors, to
+  ignored `artifacts/16_19_development/spell_timer_v2_11_replay_20260926/`.
+  `query-events --spell-timer-receiver-slot 63 --limit 1` validated all
+  5,481 saved rows and matched 515; the limit emitted one row. V1 artifacts
+  explicitly report receiver unavailable. Focused Node tests passed 16/16.
 
 - **Completed candidate:** Exact KR 821 `0x0194` BuffUpdateNumCounter and
   `0x02d9` BuffUpdateCount are selectable CLI/API packet candidates with
@@ -888,6 +2175,14 @@ Current progress (older notes below retain their original research context):
   route and decoder remain separate. All 11 supplied KR Replays returned
   `CANDIDATE`: 346,098/346,098 native packets fully consumed, with zero
   framing errors and exact agreement with independently counted raw routes.
+- **821 BuffAdd2 batch sizing:** The original `KR_8392938200` Replay has
+  34,527 selected packets. A bounded 40,000-packet/8 MB native request now
+  handles them in one launch; the 50,000-packet Replay limit and per-packet
+  native checks remain. Before/after CLI JSONL files both contain 34,527 rows
+  and have identical SHA-256
+  `5ee4516fe702196a0e262053e93bd663eab85f10b905c7eccebae3d75ece4f50`.
+  A local same-input native A/B measured 2,016 ms for two launches versus
+  1,885 ms for one; this is a bounded single-Replay measurement.
 - **Current:** Building versus turret labels, CastSpellAns field meanings, and
   all per-action interpretations remain candidate or unknown; no public
   capability was promoted.
@@ -1370,6 +2665,11 @@ Current progress (older notes below retain their original research context):
   ignored under `artifacts/16_19_development/time_stats_821_probe/`,
   `artifacts/16_19_development/kr_821_heal_probe/`, and
   `artifacts/16_19_development/epic_cc_821_probe/`.
+  For `TOTAL_UNITS_HEALED`, the sole final mismatch is participant 1 in
+  `KR_8392938200`: all 33 snapshots have `0x23c = 1`, and the last is
+  57,919 ms before the Replay tail value of 5. Other participant-1 counters
+  agree with the tail, so changing the participant assignment does not
+  resolve this gap; no late healing event is directly observed.
   The combined six-capability CLI batch returned 11/11 `CANDIDATE`, zero
   errors, and 3,270 rows per ability; input hashes and individual results are
   ignored under `artifacts/16_19_development/kr_821_time_heal_epic_cc_11/`.
@@ -1927,6 +3227,28 @@ Current progress (older notes below retain their original research context):
   controls, a weak lead. `0x023c` co-times with other routes, `0x0113` forms
   short repeated trains, and `0x0194` appears during observed death intervals.
   None is emitted as a path candidate.
+- **821 team-visibility route stop-loss:** The pinned image registers numeric
+  route `0x021b` with `PKT_S2C_OnEnterTeamVisibility_s` and a callback that
+  reads object `+0x10`. Across all 11 exact-build KR Replays, 6,192,525
+  packets have two-byte payloads: 3,104,065 `1b03` and 3,088,460 `1b50`,
+  with zero framing errors. Native deserialization of both original payload
+  shapes reaches a pointer to process heap omitted from the captured module
+  image, so neither has a full-consumption or decoded-field witness. A wrong
+  selector returns success after consuming only one of two bytes. No field or
+  event is emitted. A same-build heap capture or live packet callback trace,
+  including both payloads and truncation/append controls, is needed to reopen
+  this route. Actual visibility, actor, ward and map meaning remain unknown.
+  Counts, packet references and the failed native probe are retained under
+  ignored `artifacts/16_19_development/visibility_021b_821/`.
+- **821 ChangeSlotSpellData route stop-loss:** Strict framing across the 11
+  exact-build KR Replays found 107,059 packets at numeric route `0x049c` over
+  38 observed payload lengths. In a read-only pinned-image survey, two
+  representatives per length yielded full native consumption for 62/76;
+  representatives from seven lengths reached an emulator invalid-instruction
+  error. This is an incomplete native witness, not proof that those Replay
+  packets are invalid. No field or event is emitted. The unsupported native
+  path and all observed lengths need a full-consumption witness before this
+  route can be added.
 - **821 HeroStats route correction:** The exact image registers
   `PKT_S2C_HeroStats_s` and its factory constructor at numeric ID `0x0089`.
   An earlier probe on two real 1,263-byte KR keyframe payloads consumed only

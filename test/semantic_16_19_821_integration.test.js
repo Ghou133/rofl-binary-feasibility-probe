@@ -143,6 +143,8 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.equal(resolveCapability(BUILD, 'hero_champion_kills_snapshot').status,
     'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_assists_snapshot').status, 'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'hero_roster_metadata_bridge').status,
+    'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_missions_minions_killed_snapshot').status,
     'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_ward_stats_snapshot').status, 'CANDIDATE');
@@ -156,7 +158,25 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     assert.equal(resolveCapability(BUILD, capability).status, 'CANDIDATE');
   }
   assert.equal(resolveCapability(BUILD, 'hero_level_state').status, 'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'params_heal_roster_key_pair').status,
+    'CANDIDATE');
   assert.equal(resolveCapability(BUILD, 'hero_death_timer').status, 'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'force_create_missile_packet').status,
+    'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'target_hero_roster_key_pair').status,
+    'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'set_spell_level_roster_key_pair').status,
+    'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'change_missile_target_packet').status,
+    'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'missile_key_cooccurrence').status,
+    'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'set_dimension_missile_packet').status,
+    'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'anonymous_029c_packet').status,
+    'CANDIDATE');
+  assert.equal(resolveCapability(BUILD, 'anonymous_029c_roster_key_pair').status,
+    'CANDIDATE');
   const query = capabilityQuery(input);
   assert.equal(query.profile_release_status, 'EXPERIMENTAL_CANDIDATE');
   assert.equal(query.packet_framing_inspected, false);
@@ -164,6 +184,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
   assert.deepEqual(query.capabilities.map((row) => row.capability),
     ['hero_death', 'hero_assist', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
+      'hero_roster_metadata_bridge',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
       'hero_minions_killed_snapshot', 'hero_jungle_minions_killed_snapshot',
@@ -171,6 +192,7 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
+      'hero_damage_keyframe_intervals',
       'hero_damage_self_mitigated_snapshot',
       'hero_structure_objective_damage_snapshot',
       'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
@@ -179,7 +201,9 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'hero_level_state', 'hero_inventory_packet', 'hero_inventory_broadcast_packet',
       'hero_inventory_set_item_packet',
       'params_heal_packet',
+      'params_heal_roster_key_pair',
       'shielding_params_packet_pair',
+      'shielding_params_roster_key_pair',
       'stealth_event_packet',
       'champion_die_event_packet',
       'champion_kill_event_packet',
@@ -189,6 +213,8 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'on_shutdown_event_packet',
       'resurrect_event_packet',
       'revive_ally_event_packet',
+      'first_blood_assist_event_packet',
+      'objective_steal_event_packet',
       'turret_die_event_packet',
       'dampener_die_event_packet',
       'turret_first_blood_event_packet',
@@ -202,13 +228,76 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
       'npc_buff_replace_packet',
       'set_spell_timer_from_buff_packet',
       'set_spell_level_packet',
+      'set_spell_level_roster_key_pair',
       'direct_input_movement_turn_packet', 'set_movement_driver_packet',
       'increment_minion_kills_packet', 'face_direction_packet',
+      'circular_movement_restriction_packet',
+      'unit_apply_damage_packet',
+      'show_health_bar_packet',
+      'notify_contextual_situation_packet',
+      'item_group_data_broadcast_packet',
+      'cooldown_broadcast_packet',
+      'item_charges_packet',
+      'target_hero_packet',
+      'target_hero_roster_key_pair',
+      'force_create_missile_packet',
+      'change_missile_target_packet',
+      'missile_key_cooccurrence',
+      'set_dimension_missile_packet',
+      'anonymous_029c_packet',
+      'anonymous_049c_packet',
+      'spell_slot_change_request',
+      'spell_slot_change_roster_key_pair',
+      'anonymous_029c_roster_key_pair',
+      'unit_apply_damage_roster_key_pair',
+      'unit_apply_damage_lookup_roster_key_pair',
+      'unit_apply_damage_lookup2c_roster_key_pair',
+      'hero_death_damage_lookup_key_cooccurrence',
       'face_direction_keyframe_roster_pair']);
   const queried = Object.fromEntries(query.capabilities.map((row) => [row.capability, row]));
+  assert.equal(queried.hero_damage_keyframe_intervals.runtime_image_requirement,
+    'NOT_REQUIRED');
+  for (const capability of ['hero_damage_keyframe_intervals', 'anonymous_049c_packet',
+    'spell_slot_change_request', 'spell_slot_change_roster_key_pair']) {
+    assert.equal(resolveCapability(BUILD, capability).status, 'CANDIDATE');
+  }
+  for (const capability of ['anonymous_049c_packet', 'spell_slot_change_request',
+    'spell_slot_change_roster_key_pair']) {
+    assert.equal(queried[capability].runtime_image_requirement, 'EXACT_IMAGE_REQUIRED');
+  }
   assert.equal(queried.hero_death.runtime_image_requirement, 'NOT_REQUIRED');
   assert.equal(queried.hero_inventory_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.force_create_missile_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.target_hero_roster_key_pair.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.target_hero_roster_key_pair.output,
+    'target_hero_roster_key_pair_candidates');
+  assert.equal(queried.set_spell_level_roster_key_pair.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.set_spell_level_roster_key_pair.output,
+    'set_spell_level_roster_key_pair_candidates');
+  assert.equal(queried.shielding_params_roster_key_pair.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.shielding_params_roster_key_pair.output,
+    'shielding_params_roster_key_pair_candidates');
+  assert.equal(queried.change_missile_target_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.missile_key_cooccurrence.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.missile_key_cooccurrence.output,
+    'missile_key_cooccurrence_candidates');
+  assert.deepEqual(queried.missile_key_cooccurrence.missing_inputs,
+    ['exact_runtime_image']);
+  assert.equal(queried.set_dimension_missile_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.anonymous_029c_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.anonymous_029c_roster_key_pair.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.anonymous_029c_roster_key_pair.output,
+    'anonymous_029c_roster_key_pair_candidates');
   assert.equal(queried.hero_inventory_broadcast_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
   assert.deepEqual(queried.hero_inventory_broadcast_packet.missing_inputs,
@@ -217,6 +306,38 @@ test('821 build exposes only its exact candidate and tail-only preflight', () =>
     'hero_inventory_broadcast_packet_candidates');
   assert.equal(queried.hero_inventory_set_item_packet.runtime_image_requirement,
     'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.circular_movement_restriction_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.notify_contextual_situation_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.notify_contextual_situation_packet.output,
+    'notify_contextual_situation_packet_candidates');
+  assert.equal(queried.circular_movement_restriction_packet.output,
+    'circular_movement_restriction_packet_candidates');
+  assert.equal(queried.unit_apply_damage_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.unit_apply_damage_packet.output,
+    'unit_apply_damage_packet_candidates');
+  assert.equal(queried.show_health_bar_packet.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.show_health_bar_packet.output,
+    'show_health_bar_packet_candidates');
+  assert.equal(queried.unit_apply_damage_roster_key_pair.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.unit_apply_damage_roster_key_pair.output,
+    'unit_apply_damage_roster_key_candidates');
+  assert.equal(queried.unit_apply_damage_lookup_roster_key_pair.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.unit_apply_damage_lookup_roster_key_pair.output,
+    'unit_apply_damage_lookup_roster_key_candidates');
+  assert.equal(queried.unit_apply_damage_lookup2c_roster_key_pair.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.unit_apply_damage_lookup2c_roster_key_pair.output,
+    'unit_apply_damage_lookup2c_roster_key_candidates');
+  assert.equal(queried.hero_death_damage_lookup_key_cooccurrence.runtime_image_requirement,
+    'EXACT_IMAGE_REQUIRED');
+  assert.equal(queried.hero_death_damage_lookup_key_cooccurrence.output,
+    'hero_death_damage_lookup_key_cooccurrence_candidates');
   assert.deepEqual(queried.hero_inventory_set_item_packet.missing_inputs,
     ['exact_runtime_image']);
   assert.equal(queried.hero_inventory_set_item_packet.output,

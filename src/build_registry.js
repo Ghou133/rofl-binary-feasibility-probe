@@ -29,8 +29,12 @@ const inventorySetItemPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_inventory_set_item_packet_candidate');
 const paramsHealPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_params_heal_packet_candidate');
+const paramsHealRosterKeyPair1619821 =
+  require('./decoders/rofl_16_19_821_params_heal_roster_key_pair_candidate');
 const shieldingParamsPacketPairCandidate1619821 =
   require('./decoders/rofl_16_19_821_shielding_params_packet_pair_candidate');
+const shieldingParamsRosterKeyPair1619821 =
+  require('./decoders/rofl_16_19_821_shielding_params_roster_key_pair_candidate');
 const stealthEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_stealth_event_packet_candidate');
 const championDieEventPacketCandidate1619821 =
@@ -49,6 +53,10 @@ const resurrectEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_resurrect_event_packet_candidate');
 const reviveAllyEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
+const firstBloodAssistEventPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_first_blood_assist_event_packet_candidate');
+const objectiveStealEventPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_objective_steal_event_packet_candidate');
 const turretDieEventPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_turret_die_event_packet_candidate');
 const dampenerDieEventPacketCandidate1619821 =
@@ -77,6 +85,8 @@ const setSpellTimerFromBuffPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_set_spell_timer_from_buff_packet_candidate');
 const setSpellLevelPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_set_spell_level_packet_candidate');
+const setSpellLevelRosterKeyPair1619821 =
+  require('./decoders/rofl_16_19_821_set_spell_level_roster_key_pair_candidate');
 const directInputTurnPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_direct_input_turn_packet_candidate');
 const setMovementDriverPacketCandidate1619821 =
@@ -85,10 +95,56 @@ const incrementMinionKillsPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_increment_minion_kills_packet_candidate');
 const faceDirectionPacketCandidate1619821 =
   require('./decoders/rofl_16_19_821_face_direction_packet_candidate');
+const circularMovementRestrictionPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_circular_movement_restriction_packet_candidate');
+const unitApplyDamagePacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
+const showHealthBarPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_show_health_bar_packet_candidate');
+const notifyContextualSituationPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_notify_contextual_situation_packet_candidate');
+const itemGroupDataBroadcastPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_item_group_data_broadcast_packet_candidate');
+const cooldownBroadcastPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_cooldown_broadcast_packet_candidate');
+const itemChargesPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_item_charges_packet_candidate');
+const targetHeroPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_target_hero_packet_candidate');
+const targetHeroRosterKeyPair1619821 =
+  require('./decoders/rofl_16_19_821_target_hero_roster_key_pair_candidate');
+const forceCreateMissilePacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_force_create_missile_packet_candidate');
+const changeMissileTargetPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_change_missile_target_packet_candidate');
+const missileKeyCooccurrence1619821 =
+  require('./decoders/rofl_16_19_821_missile_key_cooccurrence_candidate');
+const setDimensionMissilePacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
+const anonymous049cPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_anonymous_049c_packet_candidate');
+const spellSlotRosterPair1619821 =
+  require('./decoders/rofl_16_19_821_spell_slot_change_roster_key_pair_candidate');
+const anonymous029cPacketCandidate1619821 =
+  require('./decoders/rofl_16_19_821_anonymous_029c_packet_candidate');
+const anonymous029cRosterKeyPair1619821 =
+  require('./decoders/rofl_16_19_821_anonymous_029c_roster_key_pair_candidate');
+const unitApplyDamageRosterKeyPair1619821 =
+  require('./decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
+const unitApplyDamageLookupRosterKeyPair1619821 =
+  require('./decoders/rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
+const unitApplyDamageLookup2cRosterKeyPair1619821 =
+  require('./decoders/rofl_16_19_821_unit_apply_damage_lookup2c_roster_key_candidate');
+const heroDeathDamageLookupKeyCooccurrence1619821 =
+  require('./decoders/rofl_16_19_821_hero_death_damage_lookup_key_cooccurrence_candidate');
 const faceDirectionKeyframeRosterPair1619821 =
   require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
+const heroRosterMetadataBridge1619821 =
+  require('./decoders/rofl_16_19_821_roster_metadata_bridge_candidate');
 const damageFloatCandidate1619821 =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
+const damageIntervalsCandidate1619821 =
+  require('./decoders/rofl_16_19_821_damage_keyframe_intervals_candidate');
 const timeStatsCandidate1619821 =
   require('./decoders/rofl_16_19_821_time_stats_candidate');
 const healStatsCandidate1619821 =
@@ -334,6 +390,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_kill_stats_snapshot: 0x0276,
       hero_ward_stats_snapshot: 0x0276,
       hero_damage_totals_snapshot: 0x0276,
+      hero_damage_keyframe_intervals: 0x0276,
       hero_damage_taken_from_champions_snapshot: 0x0276,
       hero_damage_self_mitigated_snapshot: 0x0276,
       hero_longest_living_time_snapshot: 0x0276,
@@ -381,6 +438,7 @@ const BUILD_PROFILES = deepFreeze({
         heroStatsCandidate1619.HERO_KILL_STATS_SNAPSHOT_CANDIDATE_PROFILE,
       hero_ward_stats_snapshot:
         heroStatsCandidate1619.HERO_WARD_STATS_SNAPSHOT_CANDIDATE_PROFILE,
+      hero_damage_keyframe_intervals: heroStatsCandidate1619.HERO_DAMAGE_KEYFRAME_INTERVALS_820_PROFILE,
       hero_damage_totals_snapshot:
         heroStatsCandidate1619.HERO_DAMAGE_TOTALS_SNAPSHOT_CANDIDATE_PROFILE,
       hero_damage_taken_from_champions_snapshot:
@@ -491,6 +549,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_kill_stats_snapshot',
       'hero_ward_stats_snapshot',
       'hero_damage_totals_snapshot',
+      'hero_damage_keyframe_intervals',
       'hero_damage_taken_from_champions_snapshot',
       'hero_damage_self_mitigated_snapshot',
       'hero_longest_living_time_snapshot',
@@ -534,6 +593,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_deaths_snapshot: 0x0089,
       hero_champion_kills_snapshot: 0x0089,
       hero_assists_snapshot: 0x0089,
+      hero_roster_metadata_bridge: 0x0089,
       hero_missions_minions_killed_snapshot: 0x0089,
       hero_ward_stats_snapshot: 0x0089,
       hero_missions_cannon_minions_killed_snapshot: 0x0089,
@@ -545,6 +605,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_gold_earned_snapshot: 0x0089,
       hero_gold_spent_snapshot: 0x0089,
       hero_damage_totals_snapshot: 0x0089,
+      hero_damage_keyframe_intervals: 0x0089,
       hero_damage_taken_from_champions_snapshot: 0x0089,
       hero_damage_self_mitigated_snapshot: 0x0089,
       hero_structure_objective_damage_snapshot: 0x0089,
@@ -559,7 +620,9 @@ const BUILD_PROFILES = deepFreeze({
       hero_inventory_broadcast_packet: 0x0357,
       hero_inventory_set_item_packet: 0x002d,
       params_heal_packet: 0x040a,
+      params_heal_roster_key_pair: 0x040a,
       shielding_params_packet_pair: 0x040a,
+      shielding_params_roster_key_pair: 0x040a,
       stealth_event_packet: 0x040a,
       champion_die_event_packet: 0x040a,
       champion_kill_event_packet: 0x040a,
@@ -569,6 +632,8 @@ const BUILD_PROFILES = deepFreeze({
       on_shutdown_event_packet: 0x040a,
       resurrect_event_packet: 0x040a,
       revive_ally_event_packet: 0x040a,
+      first_blood_assist_event_packet: 0x040a,
+      objective_steal_event_packet: 0x040a,
       turret_die_event_packet: 0x040a,
       dampener_die_event_packet: 0x040a,
       turret_first_blood_event_packet: 0x040a,
@@ -583,10 +648,33 @@ const BUILD_PROFILES = deepFreeze({
       npc_buff_replace_packet: 0x01ad,
       set_spell_timer_from_buff_packet: 0x00fd,
       set_spell_level_packet: 0x025d,
+      set_spell_level_roster_key_pair: 0x025d,
       direct_input_movement_turn_packet: 0x00ba,
       set_movement_driver_packet: 0x0335,
       increment_minion_kills_packet: 0x03a7,
       face_direction_packet: 0x038e,
+      circular_movement_restriction_packet: 0x0464,
+      unit_apply_damage_packet: 0x005f,
+      show_health_bar_packet: 0x0165,
+      notify_contextual_situation_packet: 0x0113,
+      item_group_data_broadcast_packet: 0x013f,
+      cooldown_broadcast_packet: 0x039d,
+      item_charges_packet: 0x0437,
+      target_hero_packet: 0x0265,
+      target_hero_roster_key_pair: 0x0265,
+      force_create_missile_packet: 0x0087,
+      change_missile_target_packet: 0x040c,
+      missile_key_cooccurrence: 0x040c,
+      set_dimension_missile_packet: 0x008a,
+      anonymous_029c_packet: 0x029c,
+      anonymous_049c_packet: 0x049c,
+      spell_slot_change_request: Object.freeze([0x049c,0x028e,0x0375]),
+      spell_slot_change_roster_key_pair: Object.freeze([0x049c,0x028e,0x0375,0x0089]),
+      anonymous_029c_roster_key_pair: 0x029c,
+      unit_apply_damage_roster_key_pair: 0x005f,
+      unit_apply_damage_lookup_roster_key_pair: 0x005f,
+      unit_apply_damage_lookup2c_roster_key_pair: 0x005f,
+      hero_death_damage_lookup_key_cooccurrence: 0x0259,
       face_direction_keyframe_roster_pair: 0x038e,
     },
     decoder_profile: {
@@ -600,6 +688,8 @@ const BUILD_PROFILES = deepFreeze({
         heroStatsCandidate1619821.HERO_CHAMPION_KILLS_SNAPSHOT_821_CANDIDATE_PROFILE,
       hero_assists_snapshot:
         heroStatsCandidate1619821.HERO_ASSISTS_SNAPSHOT_821_CANDIDATE_PROFILE,
+      hero_roster_metadata_bridge:
+        heroRosterMetadataBridge1619821.HERO_ROSTER_METADATA_BRIDGE_821_PROFILE,
       hero_missions_minions_killed_snapshot:
         heroStatsCandidate1619821.HERO_MISSIONS_MINIONS_KILLED_SNAPSHOT_821_CANDIDATE_PROFILE,
       hero_ward_stats_snapshot:
@@ -617,6 +707,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_gold_spent_snapshot: floatStatsCandidate1619821.PROFILES.hero_gold_spent_snapshot,
       hero_damage_totals_snapshot:
         damageFloatCandidate1619821.PROFILES.hero_damage_totals_snapshot,
+      hero_damage_keyframe_intervals:
+        damageIntervalsCandidate1619821.DAMAGE_KEYFRAME_INTERVALS_821_PROFILE,
       hero_damage_taken_from_champions_snapshot:
         damageFloatCandidate1619821.PROFILES.hero_damage_taken_from_champions_snapshot,
       hero_damage_self_mitigated_snapshot:
@@ -643,8 +735,12 @@ const BUILD_PROFILES = deepFreeze({
         inventorySetItemPacketCandidate1619821.HERO_INVENTORY_SET_ITEM_PACKET_CANDIDATE_PROFILE_821,
       params_heal_packet:
         paramsHealPacketCandidate1619821.PARAMS_HEAL_PACKET_CANDIDATE_PROFILE_821,
+      params_heal_roster_key_pair:
+        paramsHealRosterKeyPair1619821.PARAMS_HEAL_ROSTER_KEY_PAIR_821_PROFILE,
       shielding_params_packet_pair:
         shieldingParamsPacketPairCandidate1619821.SHIELDING_PARAMS_PACKET_PAIR_821_PROFILE,
+      shielding_params_roster_key_pair:
+        shieldingParamsRosterKeyPair1619821.SHIELDING_PARAMS_ROSTER_KEY_PAIR_821_PROFILE,
       stealth_event_packet:
         stealthEventPacketCandidate1619821.STEALTH_EVENT_PACKET_CANDIDATE_PROFILE_821,
       champion_die_event_packet:
@@ -663,6 +759,10 @@ const BUILD_PROFILES = deepFreeze({
         resurrectEventPacketCandidate1619821.RESURRECT_EVENT_PACKET_821_PROFILE,
       revive_ally_event_packet:
         reviveAllyEventPacketCandidate1619821.REVIVE_ALLY_EVENT_PACKET_821_PROFILE,
+      first_blood_assist_event_packet:
+        firstBloodAssistEventPacketCandidate1619821.FIRST_BLOOD_ASSIST_EVENT_PACKET_821_PROFILE,
+      objective_steal_event_packet:
+        objectiveStealEventPacketCandidate1619821.OBJECTIVE_STEAL_EVENT_PACKET_821_PROFILE,
       turret_die_event_packet:
         turretDieEventPacketCandidate1619821.TURRET_DIE_EVENT_PACKET_821_PROFILE,
       dampener_die_event_packet:
@@ -691,6 +791,8 @@ const BUILD_PROFILES = deepFreeze({
         setSpellTimerFromBuffPacketCandidate1619821.SET_SPELL_TIMER_FROM_BUFF_PACKET_CANDIDATE_PROFILE_821,
       set_spell_level_packet:
         setSpellLevelPacketCandidate1619821.SET_SPELL_LEVEL_PACKET_CANDIDATE_PROFILE_821,
+      set_spell_level_roster_key_pair:
+        setSpellLevelRosterKeyPair1619821.SET_SPELL_LEVEL_ROSTER_KEY_PAIR_821_PROFILE,
       direct_input_movement_turn_packet:
         directInputTurnPacketCandidate1619821.DIRECT_INPUT_MOVEMENT_TURN_PACKET_CANDIDATE_PROFILE_821,
       set_movement_driver_packet:
@@ -699,6 +801,50 @@ const BUILD_PROFILES = deepFreeze({
         incrementMinionKillsPacketCandidate1619821.INCREMENT_MINION_KILLS_PACKET_CANDIDATE_PROFILE_821,
       face_direction_packet:
         faceDirectionPacketCandidate1619821.FACE_DIRECTION_PACKET_CANDIDATE_PROFILE_821,
+      circular_movement_restriction_packet:
+        circularMovementRestrictionPacketCandidate1619821.CIRCULAR_MOVEMENT_RESTRICTION_PACKET_CANDIDATE_PROFILE_821,
+      unit_apply_damage_packet:
+        unitApplyDamagePacketCandidate1619821.UNIT_APPLY_DAMAGE_PACKET_CANDIDATE_PROFILE_821,
+      show_health_bar_packet:
+        showHealthBarPacketCandidate1619821.SHOW_HEALTH_BAR_PACKET_CANDIDATE_PROFILE_821,
+      notify_contextual_situation_packet:
+        notifyContextualSituationPacketCandidate1619821.NOTIFY_CONTEXTUAL_SITUATION_PACKET_CANDIDATE_PROFILE_821,
+      item_group_data_broadcast_packet:
+        itemGroupDataBroadcastPacketCandidate1619821.ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
+      cooldown_broadcast_packet:
+        cooldownBroadcastPacketCandidate1619821.COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
+      item_charges_packet:
+        itemChargesPacketCandidate1619821.ITEM_CHARGES_PACKET_CANDIDATE_PROFILE_821,
+      target_hero_packet:
+        targetHeroPacketCandidate1619821.TARGET_HERO_PACKET_CANDIDATE_PROFILE_821,
+      target_hero_roster_key_pair:
+        targetHeroRosterKeyPair1619821.TARGET_HERO_ROSTER_KEY_PAIR_821_PROFILE,
+      force_create_missile_packet:
+        forceCreateMissilePacketCandidate1619821.FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821,
+      change_missile_target_packet:
+        changeMissileTargetPacketCandidate1619821.CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821,
+      missile_key_cooccurrence:
+        missileKeyCooccurrence1619821.MISSILE_KEY_COOCCURRENCE_821_PROFILE,
+      set_dimension_missile_packet:
+        setDimensionMissilePacketCandidate1619821.SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821,
+      anonymous_049c_packet:
+        anonymous049cPacketCandidate1619821.ANONYMOUS_049C_PACKET_821_PROFILE,
+      spell_slot_change_request:
+        anonymous049cPacketCandidate1619821.SPELL_SLOT_CHANGE_REQUEST_821_PROFILE,
+      spell_slot_change_roster_key_pair:
+        spellSlotRosterPair1619821.SPELL_SLOT_CHANGE_ROSTER_KEY_PAIR_821_PROFILE,
+      anonymous_029c_packet:
+        anonymous029cPacketCandidate1619821.ANONYMOUS_029C_PACKET_CANDIDATE_PROFILE_821,
+      anonymous_029c_roster_key_pair:
+        anonymous029cRosterKeyPair1619821.ANONYMOUS_029C_ROSTER_KEY_PAIR_821_PROFILE,
+      unit_apply_damage_roster_key_pair:
+        unitApplyDamageRosterKeyPair1619821.UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE,
+      unit_apply_damage_lookup_roster_key_pair:
+        unitApplyDamageLookupRosterKeyPair1619821.UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE,
+      unit_apply_damage_lookup2c_roster_key_pair:
+        unitApplyDamageLookup2cRosterKeyPair1619821.UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE,
+      hero_death_damage_lookup_key_cooccurrence:
+        heroDeathDamageLookupKeyCooccurrence1619821.HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE,
       face_direction_keyframe_roster_pair:
         faceDirectionKeyframeRosterPair1619821.FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE,
     },
@@ -710,6 +856,8 @@ const BUILD_PROFILES = deepFreeze({
       hero_deaths_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_KEYFRAME_TAIL_CORRELATION',
       hero_champion_kills_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_MIRRORED_KEYFRAME_TAIL_CORRELATION',
       hero_assists_snapshot: 'CANDIDATE_821_RUNTIME_COUNT_BYTE_KEYFRAME_TAIL_CORRELATION',
+      hero_roster_metadata_bridge:
+        heroRosterMetadataBridge1619821.HERO_ROSTER_METADATA_BRIDGE_821_PROFILE.evidence_status,
       hero_missions_minions_killed_snapshot:
         'CANDIDATE_821_RUNTIME_TWO_BYTE_MISSIONS_TAIL_CORRELATION',
       hero_ward_stats_snapshot: 'CANDIDATE_821_RUNTIME_WARD_COUNT_BYTES_AND_TAILS',
@@ -724,6 +872,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_gold_earned_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_EARNED_TAIL',
       hero_gold_spent_snapshot: 'CANDIDATE_821_RUNTIME_F32_KEYFRAME_SPENT_TAIL',
       hero_damage_totals_snapshot: 'CANDIDATE_821_NATIVE_F32_DAMAGE_TOTALS_TAILS',
+      hero_damage_keyframe_intervals: 'CANDIDATE_821_SAMPLED_DAMAGE_COUNTER_ENDPOINT_DIFFERENCE',
       hero_damage_taken_from_champions_snapshot:
         'CANDIDATE_821_NATIVE_F32_DAMAGE_TAKEN_FROM_CHAMPIONS_TAIL',
       hero_damage_self_mitigated_snapshot:
@@ -744,8 +893,12 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_NATIVE_SET_ITEM_SLOT_ITEM_PACKET_FIELDS',
       params_heal_packet:
         'CANDIDATE_821_NATIVE_ON_EVENT_PARAMS_HEAL_REPORTED_FLOAT',
+      params_heal_roster_key_pair:
+        paramsHealRosterKeyPair1619821.PARAMS_HEAL_ROSTER_KEY_PAIR_821_PROFILE.evidence_status,
       shielding_params_packet_pair:
         'CANDIDATE_821_NATIVE_ON_EVENT_SHIELDING_PARAMS_PAIRED_REPORTS',
+      shielding_params_roster_key_pair:
+        shieldingParamsRosterKeyPair1619821.SHIELDING_PARAMS_ROSTER_KEY_PAIR_821_PROFILE.evidence_status,
       stealth_event_packet:
         'CANDIDATE_821_NATIVE_ON_EVENT_STEALTH_NAMED_PACKET_FIELDS',
       champion_die_event_packet:
@@ -764,6 +917,10 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_NATIVE_ON_RESURRECT_NAMED_PACKET_FIELDS',
       revive_ally_event_packet:
         'CANDIDATE_821_NATIVE_ON_REVIVE_ALLY_NAMED_PACKET_FIELD',
+      first_blood_assist_event_packet:
+        'CANDIDATE_821_NATIVE_ON_FIRST_BLOOD_ASSIST_NAMED_PACKET_MARKER',
+      objective_steal_event_packet:
+        'CANDIDATE_821_NATIVE_OBJECTIVE_STEAL_NAMED_PACKET_MARKERS',
       turret_die_event_packet:
         'CANDIDATE_821_NATIVE_ON_TURRET_DIE_NAMED_PACKET_BLOB',
       dampener_die_event_packet:
@@ -789,6 +946,8 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_NATIVE_SET_SPELL_TIMER_FROM_BUFF_OPAQUE_PACKET_FIELDS',
       set_spell_level_packet:
         'CANDIDATE_821_NATIVE_SET_SPELL_LEVEL_OPAQUE_PACKET_FIELDS',
+      set_spell_level_roster_key_pair:
+        setSpellLevelRosterKeyPair1619821.SET_SPELL_LEVEL_ROSTER_KEY_PAIR_821_PROFILE.evidence_status,
       direct_input_movement_turn_packet:
         'CANDIDATE_821_NATIVE_DIRECT_INPUT_TURN_OPAQUE_PACKET_FIELDS',
       set_movement_driver_packet:
@@ -797,6 +956,50 @@ const BUILD_PROFILES = deepFreeze({
         'CANDIDATE_821_EXACT_RUNTIME_CALLBACK_LOOKUP_KEY',
       face_direction_packet:
         'CANDIDATE_EXACT_821_FACE_DIRECTION_PACKET_UNIT_VECTOR',
+      circular_movement_restriction_packet:
+        'CANDIDATE_EXACT_821_CIRCULAR_MOVEMENT_RESTRICTION_PACKET_FIELDS',
+      unit_apply_damage_packet:
+        'CANDIDATE_EXACT_821_UNIT_APPLY_DAMAGE_PACKET_FIELDS',
+      show_health_bar_packet:
+        'CANDIDATE_EXACT_821_SHOW_HEALTH_BAR_PACKET_FIELDS',
+      notify_contextual_situation_packet:
+        'CANDIDATE_EXACT_821_NATIVE_CONTEXTUAL_SITUATION_STRING',
+      item_group_data_broadcast_packet:
+        'CANDIDATE_EXACT_821_NATIVE_ITEM_GROUP_LOOKUP_KEY',
+      cooldown_broadcast_packet:
+        'CANDIDATE_EXACT_821_NATIVE_COOLDOWN_LOOKUP_KEY',
+      item_charges_packet:
+        itemChargesPacketCandidate1619821.ITEM_CHARGES_PACKET_CANDIDATE_PROFILE_821.evidence_status,
+      target_hero_packet:
+        'CANDIDATE_EXACT_821_NATIVE_TARGET_HERO_CALLBACK_KEY',
+      target_hero_roster_key_pair:
+        targetHeroRosterKeyPair1619821.TARGET_HERO_ROSTER_KEY_PAIR_821_PROFILE.evidence_status,
+      force_create_missile_packet:
+        forceCreateMissilePacketCandidate1619821.FORCE_CREATE_MISSILE_PACKET_CANDIDATE_PROFILE_821.evidence_status,
+      change_missile_target_packet:
+        changeMissileTargetPacketCandidate1619821.CHANGE_MISSILE_TARGET_PACKET_CANDIDATE_PROFILE_821.evidence_status,
+      missile_key_cooccurrence:
+        missileKeyCooccurrence1619821.MISSILE_KEY_COOCCURRENCE_821_PROFILE.evidence_status,
+      set_dimension_missile_packet:
+        setDimensionMissilePacketCandidate1619821.SET_DIMENSION_MISSILE_PACKET_CANDIDATE_PROFILE_821.evidence_status,
+      anonymous_049c_packet:
+        anonymous049cPacketCandidate1619821.ANONYMOUS_049C_PACKET_821_PROFILE.evidence_status,
+      spell_slot_change_request:
+        anonymous049cPacketCandidate1619821.SPELL_SLOT_CHANGE_REQUEST_821_PROFILE.evidence_status,
+      spell_slot_change_roster_key_pair:
+        spellSlotRosterPair1619821.SPELL_SLOT_CHANGE_ROSTER_KEY_PAIR_821_PROFILE.evidence_status,
+      anonymous_029c_packet:
+        anonymous029cPacketCandidate1619821.ANONYMOUS_029C_PACKET_CANDIDATE_PROFILE_821.evidence_status,
+      anonymous_029c_roster_key_pair:
+        anonymous029cRosterKeyPair1619821.ANONYMOUS_029C_ROSTER_KEY_PAIR_821_PROFILE.evidence_status,
+      unit_apply_damage_roster_key_pair:
+        unitApplyDamageRosterKeyPair1619821.UNIT_APPLY_DAMAGE_ROSTER_KEY_821_PROFILE.evidence_status,
+      unit_apply_damage_lookup_roster_key_pair:
+        unitApplyDamageLookupRosterKeyPair1619821.UNIT_APPLY_DAMAGE_LOOKUP_ROSTER_KEY_821_PROFILE.evidence_status,
+      unit_apply_damage_lookup2c_roster_key_pair:
+        unitApplyDamageLookup2cRosterKeyPair1619821.UNIT_APPLY_DAMAGE_LOOKUP2C_ROSTER_KEY_821_PROFILE.evidence_status,
+      hero_death_damage_lookup_key_cooccurrence:
+        heroDeathDamageLookupKeyCooccurrence1619821.HERO_DEATH_DAMAGE_LOOKUP_KEY_COOCCURRENCE_821_PROFILE.evidence_status,
       face_direction_keyframe_roster_pair:
         faceDirectionKeyframeRosterPair1619821.FACE_DIRECTION_KEYFRAME_ROSTER_PAIR_821_PROFILE.evidence_status,
     },
@@ -812,6 +1015,7 @@ const BUILD_PROFILES = deepFreeze({
         'exact 821 native 0x0089 carrier and vector byte transform at mirrored raw bytes 434/1186; kill-count semantic label candidate only',
       keyframe_assists_snapshot:
         'exact 821 native 0x0089 carrier and vector byte transform at raw byte 1178; assist-count semantic label candidate only',
+      hero_roster_metadata_bridge: 'unique per-Replay ten-way match of exact-821 observed death, source-kill and assist counts to ROFL metadata K/D/A; champion/team/role are metadata facts, raw-key association candidate and packet actor unknown',
       keyframe_missions_minions_killed_snapshot:
         'exact 821 runtime byte transform at 0x0089 raw bytes 374/373; Missions_MinionsKilled tail correlation only, distinct from MINIONS_KILLED',
       keyframe_ward_stats_snapshot:
@@ -835,7 +1039,9 @@ const BUILD_PROFILES = deepFreeze({
       inventory_broadcast_packet: 'exact 821 native 0x0357 SetInventory_Broadcast record vector and slot/item transforms; shared exact-image callback resets slots 0–9 then applies packet records; raw zero item values and omitted slots remain distinct, with no between-packet state or transaction inference',
       inventory_set_item_packet: 'exact 821 native 0x002d SetItem nested slot/item transform; observed slot 8 only and six item-definition keys; no purchase, sale, replacement, or between-packet state inference',
       params_heal_packet: 'exact 821 native 0x040a OnEvent packet and registered child 0x004b ParamsHeal; handler reads reported f32 at child +0x18; two u32 fields remain anonymous, with no effective-heal, caster, or target inference',
+      params_heal_roster_key_pair: 'exact 821 native ParamsHeal child +0x04/+0x14 u32 values independently compared by full equality to the same-Replay complete ten-key HeroStats roster; all reports and nonmatches retained; field roles and effective healing unknown',
       shielding_params_packet_pair: 'exact 821 native 0x040a OnEvent child 0x00ef/0x00f0 registration and one-to-one packet-local blob pairing; callback reads anonymous fields, while raw f32 at child +0x10 is opaque; no shield generation, absorption, actor, or target inference',
+      shielding_params_roster_key_pair: 'exact 821 native 0x040a ShieldingParams child +0x08/+0x0c u32 values separately compared by full equality to the same-Replay complete ten-key 0x0089 HeroStats roster; unmatched values retained; field roles and shield effects unknown',
       stealth_event_packet: 'exact 821 native 0x040a OnEvent child 0x0101/0x0102 registrations and event-name table; callback reads anonymous child +0x04 u32; no participant, visibility, or transition lifecycle inference',
       champion_die_event_packet: 'exact 821 native 0x040a OnEvent child 0x0004 ParamsDie registration and OnChampionDie name table; callback reads anonymous child +0x04 u32; no effective death, actor, or state transition inference',
       champion_kill_event_packet: 'exact 821 native 0x040a OnEvent child 0x0007 ParamsChampionKill registration and OnChampionKill name table; callback reads anonymous child +0x04/+0x58/+0x5c u32; no effective kill, actor, or state transition inference',
@@ -845,13 +1051,15 @@ const BUILD_PROFILES = deepFreeze({
       on_shutdown_event_packet: 'exact 821 native 0x040a OnEvent child 0x00e8 registration and OnShutdown name table; callback reads anonymous child +0x04/+0x58/+0x5c u32; no gameplay shutdown effect, actor, or state transition inference',
       resurrect_event_packet: 'exact 821 native 0x040a OnEvent child 0x002d registration and OnResurrect name table; native child +0x04/+0x08 u32 remain anonymous; no resurrection, actor, or state transition inference',
       revive_ally_event_packet: 'exact 821 native 0x040a OnEvent child 0x002c registration and OnReviveAlly name table; native child +0x04 u32 remains anonymous; no revive effect, actor, or state transition inference',
+      first_blood_assist_event_packet: 'exact 821 native 0x040a OnEvent child 0x0017 full consumption and OnFirstBloodAssist image name table; child blob is opaque; no first-blood, assist, actor, or effect inference',
+      objective_steal_event_packet: 'exact 821 native 0x040a OnEvent children 0x00be/0x00d6 full consumption and OnKillDragonSteal/OnKillWormSteal image labels; child blobs are opaque; no actual steal, objective state, actor, or gameplay effect inference',
       turret_die_event_packet: 'exact 821 native 0x040a OnEvent child 0x003b full consumption and OnTurretDie image name table; native child blob remains anonymous; no actual turret death, structure, actor, or state transition inference',
       dampener_die_event_packet: 'exact 821 native 0x040a OnEvent child 0x0035 full consumption and OnDampenerDie image name table; native child blob remains anonymous; no actual dampener death, structure, actor, or state transition inference',
       turret_first_blood_event_packet: 'exact 821 native 0x040a OnEvent child 0x003d full consumption and OnTurretFirstBlood image name table; native child blob remains anonymous; no actual first turret death, structure, actor, or state transition inference',
       hq_kill_event_packet: 'exact 821 native 0x040a OnEvent child 0x0046 full consumption and OnHQKill image name table; native child blob remains anonymous; no HQ destruction, winner, actor, or state transition inference',
       turret_plate_event_packet: 'exact 821 native 0x040a OnEvent child 0x0107 and OnTurretPlateDestroyed name table; native child +0x04 u32 remains anonymous; no callback-field, structure, or game-state transition inference',
       objective_bounty_claimed_packet: 'exact 821 native 0x040a OnEvent child 0x0113 and OnObjectiveBountyClaimed name table; native eight-byte child blob and +0x04 u32 remain anonymous; no bounty payout, object, actor, team, or game-state transition inference',
-      cast_spell_ans_packet: 'exact 821 native 0x01da packet constructor/deserializer, callback transforms for opaque object offsets 0x148/0x14c, nested protected float at +0xe0 and bytes at +0x24/+0x140; no successful-cast, owner, target, spell, slot or field-meaning inference',
+      cast_spell_ans_packet: 'exact 821 native 0x01da packet constructor/deserializer and selected opaque callback fields; opt-in v8 additionally exposes a packet-local +0x28 conditional tree lookup key, with lookup result unknown; no successful-cast, owner, target, spell, slot or field-meaning inference',
       npc_buff_remove_packet: 'exact 821 native 0x047c BuffRemove2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14/0x18; no owner, buff identity, target or lifecycle inference',
       npc_buff_add_packet: 'exact 821 native 0x00ae BuffAdd2 constructor/deserializer and callback transforms for opaque object offsets 0x10/0x14; no owner, buff identity, target or lifecycle inference',
       npc_buff_update_num_counter_packet: 'exact 821 native 0x0194 BuffUpdateNumCounter constructor/deserializer and callback transforms for anonymous object offsets 0x10/0x14/0x18/0x1c; no owner, buff identity, target, counter meaning, or lifecycle inference',
@@ -859,16 +1067,37 @@ const BUILD_PROFILES = deepFreeze({
       npc_buff_replace_packet: 'exact 821 native 0x01ad BuffReplace constructor/deserializer and callback transforms for anonymous object offsets 0x10/0x14/0x18/0x1c; no owner, buff identity, target, replacement effect, or lifecycle inference',
       set_spell_timer_from_buff_packet: 'exact 821 native 0x00fd SetSpellTimerFromBuff constructor/deserializer and callback transforms for anonymous object offsets 0x10/0x11/0x14/0x18/0x1c/0x20; no owner, buff identity, spell identity, timer effect, or lifecycle inference',
       set_spell_level_packet: 'exact 821 native 0x025d SetSpellLevel constructor/deserializer and callback transforms for anonymous object offsets 0x10/0x14; no owner, spell identity, level change, or lifecycle inference',
+      set_spell_level_roster_key_pair: 'exact 821 native V2 SetSpellLevel packet header full-u32 equality with a complete ten-key HeroStats roster; nonroster headers remain excluded and visible in source rows; actor, owner, spell identity, level change and effect remain unknown',
       direct_input_movement_turn_packet: 'exact 821 native 0x00ba DirectInputMovementDriverServerTurnData constructor/deserializer and callback transform for three opaque f32 fields at object offsets 0x10/0x14/0x18; no world-position, hero-path or participant inference',
       set_movement_driver_packet: 'exact 821 native 0x0335 SetMovementDriver constructor/deserializer and callback transform for opaque byte at object offset 0x2a; no driver-state transition, position, path or participant inference',
       increment_minion_kills_packet: 'exact 821 native 0x03a7 IncrementMinionKills constructor/deserializer and callback lookup-key transform; packet-local key only, with no proven lookup success, CS delta, last hit or participant attribution',
       face_direction_packet: 'exact 821 native 0x038e FaceDirection constructor/deserializer packet vector and optional scalar candidates; no proven world position, path, actor, or direction effect',
+      circular_movement_restriction_packet: 'exact 821 native-observed 0x0464 packet structure and image-derived anonymous scalar/vector fields; no proven world position, path, actor, receiver, or effective restriction',
+      unit_apply_damage_packet: 'exact 821 0x005f packet selectors and native-witnessed anonymous callback f32 with raw-reader or constant-write provenance; no proven damage amount, source, target, actor or applied effect',
+      show_health_bar_packet: 'exact 821 0x0165 ShowHealthBar route with two observed one-byte packet shapes and anonymous callback byte/zero flag; no proven health amount, damage, actor, or display effect',
+      notify_contextual_situation_packet: 'exact 821 packet route 0x0113 NotifyContextualSituation native string at object +0x10, distinct from OnEvent child 0x0113; no proven action, receiver, actor, team, or gameplay effect',
+      item_group_data_broadcast_packet: 'exact 821 keyframe route 0x013f SetItemGroupData_Broadcast native callback lookup key at object +0x20; no proven group identity, item, slot, owner, transaction, inventory state or effect',
+      cooldown_broadcast_packet: 'exact 821 game/keyframe route 0x039d PKT_CHAR_SetCooldown_Broadcast_s native callback lookup key from object +0x10; no proven cooldown state, slot, actor, target, receiver lookup result or effect',
+      item_charges_packet: 'exact 821 game route 0x0437 PKT_S2C_SetItemCharges_s native callback u8/u16 arguments before receiver method; no proven item identity, charges, slot, owner, receiver state or effect',
+      target_hero_packet: 'exact 821 game route 0x0265 PKT_AI_TargetHeroS2C_s native callback u32 from object +0x10 before receiver-dependent call; no proven source actor, resolved target object, target state, or effect',
+      target_hero_roster_key_pair: 'nonzero exact 821 native 0x0265 callback u32 matched by full equality to one of ten candidate 0x0089 HeroStats roster keys; champion/team/role are direct Replay metadata labels but live lookup, actor, target and effect remain unknown',
+      force_create_missile_packet: 'exact 821 game route 0x0087 PKT_S2C_ForceCreateMissile_s packet-local native callback comparison u32 from object +0x10 before synthetic receiver comparison; live receiver, missile identity, owner, target, creation, effect and causality unknown',
+      change_missile_target_packet: 'exact 821 game route 0x040c PKT_S2C_ChangeMissileTarget_s packet-local native callback comparison u32 from object +0x1c before live receiver comparison; receiver match, missile identity, owner, resolved target, target change, effect and causality unknown',
+      missile_key_cooccurrence: 'exact 821 native 0x0087 callback u32 equals 0x040c packet-header u32 in physical packet order within a fixed 2000 ms lookback; all Change rows, unmatched rows and multiple-predecessor ambiguity remain explicit; missile identity, ownership, target, effects and causality unknown',
+      set_dimension_missile_packet: 'exact 821 game route 0x008a PKT_SetDimensionMissile_s packet-local callback u8 from object +0x14 before receiver method; live receiver, missile identity, owner, target, actual dimension change, effect and causality unknown',
+      anonymous_029c_packet: 'exact 821 anonymous game route 0x029c native object +0x14 decoded u32 or 0xffffffff sentinel; no proved class/callback name, actor, target, object role, behavior or effect',
+      anonymous_029c_roster_key_pair: 'exact 821 anonymous 0x029c packet header full-u32 equality with one of ten candidate HeroStats roster keys; zero and nonroster headers are excluded, the independent native +0x14 u32 has no participant meaning, and actor, target, object role and effect remain unknown',
+      unit_apply_damage_roster_key_pair: 'full 0x005f raw-param equality with the exact 821 ten-member HeroStats roster key, retaining both packet refs; candidate participant label only, with +0x100 aliases and actor/source/target/effect unknown',
+      unit_apply_damage_lookup_roster_key_pair: 'native +0x24 callback lookup key equality with the exact 821 ten-member HeroStats roster key, retaining raw key relation and both packet refs; candidate roster label only, with lookup success and actor/source/target/effect unknown',
+      unit_apply_damage_lookup2c_roster_key_pair: 'native +0x2c callback lookup key equality with the exact 821 ten-member HeroStats roster key, retaining both packet refs; candidate roster label only, with lookup success and actor/source/target/effect unknown',
+      hero_death_damage_lookup_key_cooccurrence: 'same-chunk, same-ms death candidate and every native 0x005f packet whose +0x24 full key equals the victim roster key, retaining all packet refs and exact +0x2c comparison to decoded die-source; no fatal packet, actor, source, target or effect inference',
       face_direction_keyframe_roster_pair: 'same-keyframe 0x038e packet and canonical 0x0089 hero roster candidate matched by raw parameter; participant label belongs to the roster observation, with no proven packet actor or direction effect',
     },
     verified_capabilities: [],
     candidate_capabilities: [
       'hero_death', 'hero_assist', 'hero_death_timer', 'hero_respawn', 'hero_deaths_snapshot',
       'hero_champion_kills_snapshot', 'hero_assists_snapshot',
+      'hero_roster_metadata_bridge',
       'hero_missions_minions_killed_snapshot',
       'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
       'hero_minions_killed_snapshot',
@@ -877,6 +1106,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_experience_snapshot', 'hero_vision_score_snapshot',
       'hero_gold_earned_snapshot', 'hero_gold_spent_snapshot',
       'hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot',
+      'hero_damage_keyframe_intervals',
       'hero_damage_self_mitigated_snapshot',
       'hero_structure_objective_damage_snapshot',
       'hero_longest_living_time_snapshot', 'hero_total_time_spent_dead_snapshot',
@@ -886,7 +1116,9 @@ const BUILD_PROFILES = deepFreeze({
       'hero_inventory_broadcast_packet',
       'hero_inventory_set_item_packet',
       'params_heal_packet',
+      'params_heal_roster_key_pair',
       'shielding_params_packet_pair',
+      'shielding_params_roster_key_pair',
       'stealth_event_packet',
       'champion_die_event_packet',
       'champion_kill_event_packet',
@@ -896,6 +1128,8 @@ const BUILD_PROFILES = deepFreeze({
       'on_shutdown_event_packet',
       'resurrect_event_packet',
       'revive_ally_event_packet',
+      'first_blood_assist_event_packet',
+      'objective_steal_event_packet',
       'turret_die_event_packet',
       'dampener_die_event_packet',
       'turret_first_blood_event_packet',
@@ -908,10 +1142,33 @@ const BUILD_PROFILES = deepFreeze({
       'npc_buff_replace_packet',
       'set_spell_timer_from_buff_packet',
       'set_spell_level_packet',
+      'set_spell_level_roster_key_pair',
       'direct_input_movement_turn_packet',
       'set_movement_driver_packet',
       'increment_minion_kills_packet',
       'face_direction_packet',
+      'circular_movement_restriction_packet',
+      'unit_apply_damage_packet',
+      'show_health_bar_packet',
+      'notify_contextual_situation_packet',
+      'item_group_data_broadcast_packet',
+      'cooldown_broadcast_packet',
+      'item_charges_packet',
+      'target_hero_packet',
+      'target_hero_roster_key_pair',
+      'force_create_missile_packet',
+      'change_missile_target_packet',
+      'missile_key_cooccurrence',
+      'set_dimension_missile_packet',
+      'anonymous_029c_packet',
+      'anonymous_049c_packet',
+      'spell_slot_change_request',
+      'spell_slot_change_roster_key_pair',
+      'anonymous_029c_roster_key_pair',
+      'unit_apply_damage_roster_key_pair',
+      'unit_apply_damage_lookup_roster_key_pair',
+      'unit_apply_damage_lookup2c_roster_key_pair',
+      'hero_death_damage_lookup_key_cooccurrence',
       'face_direction_keyframe_roster_pair',
     ],
     unsupported_capabilities: [],

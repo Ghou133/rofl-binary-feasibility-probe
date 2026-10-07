@@ -737,6 +737,26 @@ test('query-events reads batch JSONL with a global limit and per-Replay counts',
   assert.deepEqual(summary.replay_results.map((entry) => entry.emitted_count), [1, 0]);
 });
 
+test('query-events rejects an existing external output before hashing batch events', (t) => {
+  const batch = batchArtifact(t);
+  const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rofl-query-output-'));
+  t.after(() => fs.rmSync(outputRoot, { recursive: true, force: true }));
+  const existingOutput = path.join(outputRoot, 'existing.jsonl');
+  fs.writeFileSync(existingOutput, 'preserve this file\n');
+  fs.appendFileSync(path.join(batch.first.replayDirectory, `${EVENT}.jsonl`), '{}\n');
+
+  const exists = run(batch.root, '--event', EVENT, '--output', existingOutput);
+  assert.equal(exists.status, 2);
+  assert.equal(JSON.parse(exists.stderr).code, 'OUTPUT_EXISTS');
+  assert.equal(fs.readFileSync(existingOutput, 'utf8'), 'preserve this file\n');
+
+  const freshOutput = path.join(outputRoot, 'fresh.jsonl');
+  const changedInput = run(batch.root, '--event', EVENT, '--output', freshOutput);
+  assert.equal(changedInput.status, 2);
+  assert.equal(JSON.parse(changedInput.stderr).code, 'ARTIFACT_HASH_MISMATCH');
+  assert.equal(fs.existsSync(freshOutput), false);
+});
+
 test('query-events reads a multi-Replay decode output with the same hash checks', (t) => {
   const decoded = batchArtifact(t);
   rewriteJson(decoded.manifestPath, (manifest) => {
@@ -849,6 +869,10 @@ test('query-events rejects unsafe or corrupt batch artifacts and removes partial
   assert.equal(corrupt.status, 2);
   assert.equal(JSON.parse(corrupt.stderr).code, 'INVALID_EVENT_ROW');
   assert.equal(fs.existsSync(output), false);
+  const stdoutCorrupt = run(batch.root, '--event', EVENT, '--limit', '1');
+  assert.equal(stdoutCorrupt.status, 2);
+  assert.equal(JSON.parse(stdoutCorrupt.stderr).code, 'INVALID_EVENT_ROW');
+  assert.equal(stdoutCorrupt.stdout, '');
 
   rewriteJson(batch.manifestPath, (manifest) => {
     manifest.replay_inputs[1].artifact_directory = 'replays/../outside';

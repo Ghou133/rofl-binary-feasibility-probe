@@ -1,5 +1,111 @@
 # 当前验证状态
 
+## Final closeout, 2026-10-07
+
+Active development stopped by the user. Existing source/private-evidence results
+below retain their original scope; they do not confirm complete gameplay semantics.
+The final public-source/CI acceptance is recorded separately from private Replay
+and exact-module experiments. See [final scope](docs/PROJECT_STOPPED_20261007.md).
+
+Final local public acceptance ran all 53 commands from the 51 suites declared by
+`npm test`, with Node test concurrency limited to 2 (Windows, Node 24.12.0,
+Python 3.14.0). Node: **1,372 passed, 154 explicit skips, 0 failed**. Python public
+maintenance: 19 tests, 18 passed, 1 explicit skip; the separate private 049c
+native class was skipped as a class and ran 0 tests. Missing private inputs are
+not passes. Three stale registry/unsupported-event test expectations were fixed;
+the initial failures remain in local logs. Focused fixes passed 18/18 and 9/9.
+The public source scan passed all 852 selected files. Source-only package build
+and validation passed; no private evidence or raw re-decode is included. GitHub
+Linux/Node 22 acceptance is tracked by the closeout PR and main push workflow,
+separately from these local results.
+
+The first closeout Linux CI run failed because the optional 049c native class
+imported Unicorn before checking its absent private fixtures. The import now
+occurs after the explicit fixture guard. A local `python -I -S` discovery check
+confirms the class skips without site packages; provided fixtures still require
+their native dependencies and are not silently skipped for dependency errors.
+
+## Completed exact-821 continuation, 2026-10-02 through 2026-10-07
+
+The protocol-first HN 820 continuation passed 42 relevant tests with zero failures
+or skips. Three original HN `16.19.820.7193` Replays passed complete static source
+reproduction of 880 intervals, zero framing errors, using HN's own route/transform.
+HN start-keyframe, same-chunk multiple epochs, nonzero initial observations and
+single-epoch protected tail gaps are covered. KR decoder/query regressions preserve
+its existing profile. Partial window batches now report a partial reconciliation
+witness; all-unavailable batches still fail without output. This is build coverage,
+not newly confirmed damage semantics. [Scope](docs/OFFLINE_16_19_SCOPE.md).
+
+The final Oct-7 damage query/filter regression checked 52 focused cases: 51 passed,
+zero failed; one historical saved-V3 private fixture was explicitly skipped.
+All 24 current interval/window/filter cases ran with the exact image, zero skips.
+Unfiltered native packet queries now validate complete profile fields, ordered input
+digest and source counts, staging single/batch output even without native filters.
+The real Replay's 64,824 packets passed this strengthened saved validation; its
+320 windows produced 292 positive TOTAL_DAMAGE_TAKEN / lookup_0x24 / 0.1 matches.
+The 11-Replay static batch checked all 3,160 intervals under global limit=1 and
+found 2,479 TOTAL_DAMAGE_TAKEN deltas >=100. These are numeric candidate screens,
+not confirmed target/effective-damage observations. No new heap capture was executed.
+
+Oct-7 packet/window query: 19 focused interval/window tests passed without skips.
+One real Replay's 64,824 native damage requests and 320 sampled windows passed
+full source reproduction; 20 endpoint and 2,073 outside-window packets remain
+excluded. Complete native dependency schema/effect checks reject late false roles.
+
+The follow-on Oct-7 saved damage interval query passed 22 focused decoder/query/snapshot
+tests, plus 86 shared CLI/cooldown-V2 query regressions, zero failures/skips.
+Complete original-source queries reproduced 3,160 sampled intervals
+across all 11 authorized KR Replays, with zero framing errors, under global limit=1.
+No runtime image or heap acquisition was needed; cooldown's prior 182,482 rows were
+not repeated. [Scope and verification](docs/DAMAGE_INTERVAL_QUERY_16_19_821.md) preserve
+the candidate labels and unresolved change times.
+
+2026-10-07 cooldown V2 continuation: 31 focused Node tests and 3 actual-image
+Python methods passed without failures/skips. Fresh serial native decode of all
+11 existing KR Replays accepted 182,482 packet requests with zero framing errors;
+all four f32 fields/control agreed between original native code and static field
+validation. Full native source verification checked all 182,482 saved rows under
+a global output limit of one. No receiver, clock, input-slot binding or real
+effect was fabricated or observed. [Code roles and evidence limits](docs/COOLDOWN_REQUEST_FIELDS_16_19_821.md)
+are explicit; earlier counts below belong to their own stages.
+
+`spell_slot_change_roster_key_pair` passed 37 focused Node tests (zero
+failures/skips), including native-family, roster-bridge and shared-scan regression
+coverage. Fresh CLI processing of all 11 existing KR 16.19.821.7343 Replays used
+the pinned runtime image, with zero framing errors: 115,290 complete requests,
+94,390 full-key candidate roster associations and 20,900 unmatched requests.
+The complete dependency output and matched request/roster source fields were
+compared row by row. No packet actor, live receiver or application was promoted.
+The native decoder is unchanged from the preceding stage (19 Node and 6
+actual-image Python methods then passed); no full public graph or old-client
+regression was repeated in this stage. See
+[the current evidence boundary](docs/SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md).
+
+The adjacent saved-query stage passed 126 focused/regression Node tests with the
+authorized real saved run and image present, zero failures/skips. All 11 saved
+roster streams (94,390 rows) were checked with complete 115,290-request dependencies,
+then verified by fresh exact-image native re-decode. Only three filtered rows were
+emitted while every later row/Replay was still checked. Tests distinguish coherent
+saved substitutions from original native output; late failures emit no partial
+Library API or CLI stdout. Query source verification reproduces candidate output,
+not live receiver state. See the saved-query section in the evidence document.
+
+Source-package acceptance additionally ran the documented offline paths from a
+new independent temporary extraction, without npm installation or development
+artifacts: 14 CLI cases and 16 checks passed. The exact-821 native decode produced
+13,314 requests and 10,816 candidate associations; static death-episode source
+verification checked 71 rows without an image. Filtered saved queries scanned the
+complete 10,816-row stream while emitting only three rows; fresh native source
+verification preserved candidate markers. Missing Python/image, invalid filters,
+and existing output files produced explicit failures without successful zero
+counts or damaged output. Acceptance exposed and fixed `--list-events` silently
+ignoring the new slot filters, with a parsing regression test. The focused query
+suite then passed 7 portable tests, with 1 explicit private-fixture skip; actual
+native behavior was separately exercised in source-package acceptance. No full
+test graph or older-client rerun was added for this argument-parsing fix.
+
+The historical validation entries below retain their original dates and scopes.
+
 ## 2026-09-23 公开源码快照检查
 
 本节是公开准备时的新运行结果，不替代下文 2026-08-21 的 exact-build 语义 attestation，也不表示从公开仓库重建了原始语料。

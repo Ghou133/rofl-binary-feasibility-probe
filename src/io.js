@@ -13,8 +13,55 @@ function writeJson(filePath, value) {
 
 function writeJsonl(filePath, rows) {
   ensureDir(path.dirname(filePath));
-  const text = rows.length === 0 ? '' : `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`;
-  fs.writeFileSync(filePath, text, 'utf8');
+  // Keep serialization bounded even when a selected Replay capability emits
+  // hundreds of megabytes of candidate rows. Publish only a complete file.
+  const maxChunkBytes = 1024 * 1024;
+  const temporary = path.join(path.dirname(filePath),
+    `.rofl-jsonl-${process.pid}-${crypto.randomBytes(8).toString('hex')}.tmp`);
+  let descriptor;
+  try {
+    descriptor = fs.openSync(temporary, 'wx');
+    let parts = [];
+    let partBytes = 0;
+    const writeBytes = (bytes) => {
+      let offset = 0;
+      while (offset < bytes.length) {
+        const written = fs.writeSync(descriptor, bytes, offset,
+          Math.min(maxChunkBytes, bytes.length - offset));
+        if (written <= 0) throw new Error('JSONL output write made no progress');
+        offset += written;
+      }
+    };
+    const flush = () => {
+      if (partBytes === 0) return;
+      writeBytes(Buffer.from(parts.join(''), 'utf8'));
+      parts = [];
+      partBytes = 0;
+    };
+    for (const row of rows) {
+      // Array.join used to turn sparse/undefined entries into blank lines.
+      const line = `${JSON.stringify(row) ?? ''}\n`;
+      const lineBytes = Buffer.byteLength(line, 'utf8');
+      if (lineBytes > maxChunkBytes) {
+        flush();
+        writeBytes(Buffer.from(line, 'utf8'));
+      } else {
+        if (partBytes + lineBytes > maxChunkBytes) flush();
+        parts.push(line);
+        partBytes += lineBytes;
+      }
+    }
+    flush();
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    fs.renameSync(temporary, filePath);
+  } catch (error) {
+    if (descriptor !== undefined) {
+      try { fs.closeSync(descriptor); } catch { /* Preserve the first error. */ }
+    }
+    try { fs.rmSync(temporary, { force: true }); } catch { /* Preserve the first error. */ }
+    throw error;
+  }
 }
 
 function csvCell(value) {
@@ -41,9 +88,16 @@ function sha256File(filePath) {
   const hash = crypto.createHash('sha256');
   const stream = fs.createReadStream(filePath);
   return new Promise((resolve, reject) => {
+    let ended = false;
+    let streamError = null;
     stream.on('data', (chunk) => hash.update(chunk));
-    stream.on('error', reject);
-    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', (error) => { streamError = error; });
+    stream.on('end', () => { ended = true; });
+    stream.on('close', () => {
+      if (streamError) reject(streamError);
+      else if (!ended) reject(new Error(`Hash input closed before EOF: ${filePath}`));
+      else resolve(hash.digest('hex'));
+    });
   });
 }
 
@@ -66,10 +120,12 @@ async function hashFiles(paths) {
 }
 
 function safeStem(filePath) {
-  return path.basename(filePath, path.extname(filePath)).replace(/[^A-Za-z0-9._-]+/g, '_');
+  const stem = path.basename(filePath, path.extname(filePath))
+    .replace(/[^A-Za-z0-9._-]+/g, '_');
+  return /^\.*$/.test(stem) ? 'replay' : stem;
 }
 
-function outputHashes(directory, options = {}) {
+async function outputHashes(directory, options = {}) {
   const excluded = (options.exclude || []).map((filePath) => filePath.replaceAll(path.sep, '/').replace(/\/$/, ''));
   const isExcluded = (relative) => excluded.some((entry) => relative === entry || relative.startsWith(`${entry}/`));
   const files = [];
@@ -84,10 +140,27 @@ function outputHashes(directory, options = {}) {
     }
   }
   if (fs.existsSync(directory)) visit(directory);
-  return Promise.all(files.sort().map(async (filePath) => [
-    path.relative(directory, filePath).replaceAll(path.sep, '/'),
-    await sha256File(filePath),
-  ])).then((entries) => Object.fromEntries(entries));
+  const sorted = files.sort();
+  const entries = new Array(sorted.length);
+  let nextIndex = 0;
+  let firstError = null;
+  async function hashWorker() {
+    while (firstError === null && nextIndex < sorted.length) {
+      const index = nextIndex++;
+      const filePath = sorted[index];
+      try {
+        entries[index] = [
+          path.relative(directory, filePath).replaceAll(path.sep, '/'),
+          await sha256File(filePath),
+        ];
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(8, sorted.length) }, hashWorker));
+  if (firstError) throw firstError;
+  return Object.fromEntries(entries);
 }
 
 module.exports = {

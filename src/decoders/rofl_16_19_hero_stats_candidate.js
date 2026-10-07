@@ -67,6 +67,7 @@ const HERO_STATS_SNAPSHOT_CAPABILITIES = Object.freeze([
   'hero_kill_stats_snapshot',
   'hero_ward_stats_snapshot',
   'hero_damage_totals_snapshot',
+  'hero_damage_keyframe_intervals',
   'hero_damage_taken_from_champions_snapshot',
   'hero_damage_self_mitigated_snapshot',
   'hero_longest_living_time_snapshot',
@@ -390,6 +391,27 @@ const HERO_DAMAGE_TAKEN_FROM_CHAMPIONS_SNAPSHOT_CANDIDATE_PROFILE = Object.freez
     'The offset 0x200 interpretation and hero participant mapping remain candidates from two HN Replays, not exact-runtime field semantics.',
     'Raw f32 and its derived floor are retained separately; the floor is not a stored integer damage total.',
     'The last keyframe precedes game end, so Replay-tail gaps are retained without interpolation.',
+  ]),
+});
+
+const HERO_DAMAGE_KEYFRAME_INTERVALS_820_PROFILE = Object.freeze({
+  id: 'rofl-16.19.820.7193-hn-hero-damage-keyframe-intervals-candidate-v1',
+  replay_version: REPLAY_VERSION, capability: 'hero_damage_keyframe_intervals',
+  status: 'CANDIDATE', enabled: true, replay_block_packet_id: PACKET_ID,
+  stream_tags: Object.freeze([2,3]),
+  depends_on: Object.freeze(['hero_damage_totals_snapshot','hero_damage_taken_from_champions_snapshot']),
+  fields: Object.freeze([...DAMAGE_TOTAL_FIELDS.map(field=>Object.freeze({
+    replay_tail_field:field.tailField,value_key:field.candidateKey,blob_f32le_offset_candidate:field.offset})),
+    Object.freeze({replay_tail_field:'TOTAL_DAMAGE_TAKEN_FROM_CHAMPIONS',
+      value_key:'damage_taken_from_champions_raw_f32_candidate',blob_f32le_offset_candidate:DAMAGE_TAKEN_FROM_CHAMPIONS_OFFSET})]),
+  evidence_runtime_image_sha256:RUNTIME_IMAGE_SHA256,lookup_table_sha256:LOOKUP_TABLE_SHA256,
+  evidence_scope:'Adjacent exact-HN 0x0276 observations, independently using the existing HN byte transform and four Replay-tail-correlated counter candidates.',
+  known_limits:Object.freeze([
+    'Exact HN route/fingerprint/byte transform only; KR 821 opcodes, transforms and image identities are not reused.',
+    'Counter labels and participant mapping inherit the HN candidate evidence; endpoint arithmetic does not confirm damage semantics.',
+    'Only observed complete ten-participant keyframes are compared; no individual attacks, roles, health effects or intervening time/value are inferred.',
+    'Current endpoint is the observation time; final Replay-tail gaps stay separate and are never fabricated as intervals.',
+    'Raw f32 deltas and differences of integer endpoint floors are distinct; unchanged endpoints do not prove no activity.',
   ]),
 });
 
@@ -1892,6 +1914,52 @@ function decodeHeroDamageTotalsFromScan(replay, scan) {
   };
 }
 
+function decodeHeroDamageFieldBytes820(rawHex) {
+  if (typeof rawHex !== 'string' || !/^[0-9a-f]{8}$/.test(rawHex)) return null;
+  return Buffer.from([...Buffer.from(rawHex, 'hex')].reverse()
+    .map(decodeHeroStatsByte)).readFloatLE(0);
+}
+
+function decodeHeroDamageIntervalsFromScan(replay,scan) {
+  const profile=HERO_DAMAGE_KEYFRAME_INTERVALS_820_PROFILE;
+  const base={profile_id:profile.id,input_packet_id:PACKET_ID,depends_on:[...profile.depends_on],
+    evidence_runtime_image_sha256:RUNTIME_IMAGE_SHA256,lookup_table_sha256:LOOKUP_TABLE_SHA256,
+    runtime_image_used:false,runtime_image_status:'STATIC_820_HN_RUNTIME_TRANSFORM_EMBEDDED',
+    known_limits:[...profile.known_limits]};
+  const sources=[decodeHeroDamageTotalsFromScan(replay,scan),decodeHeroDamageTakenFromChampionsFromScan(replay,scan)];
+  const statuses=Object.fromEntries(profile.depends_on.map((name,index)=>[name,sources[index].status]));
+  const failure=sources.find(source=>source.status!=='CANDIDATE');
+  if(failure)return {...base,status:failure.status,input_count:null,event_count:null,events:null,
+    dependency_statuses:statuses,error:failure.error};
+  const packets=new Map(scan.rows.map(({block,chunk})=>[chunk.index+'/'+block.offset,block.payload]));
+  const tailTotals=assessHeroDamageTotalsSnapshotTail(replay).valuesByField;
+  const tailTaken=assessHeroDamageTakenFromChampionsSnapshotTail(replay).values;
+  const gameLength=replay.tail.metadata.gameLength;
+  const last=new Map();
+  const rows=sources[0].events.map((row,index)=>{
+    const other=sources[1].events[index],payload=packets.get(row.raw_packet_ref.chunk_index+'/'+row.raw_packet_ref.decompressed_block_offset);
+    const raw=Object.fromEntries(profile.fields.map(field=>[field.replay_tail_field,
+      payload.subarray(1263-field.blob_f32le_offset_candidate-4,1263-field.blob_f32le_offset_candidate).toString('hex')]));
+    const adapted={...row,damage_taken_from_champions_raw_f32_candidate:other.damage_taken_from_champions_raw_f32_candidate,
+      raw_payload_field_bytes_hex:raw};
+    last.set(row.participant_id_candidate,adapted);return adapted;
+  });
+  const gaps=profile.fields.flatMap(field=>Array.from({length:10},(_,index)=>{
+    const row=last.get(index+1),value=row[field.value_key],final=field.replay_tail_field==='TOTAL_DAMAGE_TAKEN_FROM_CHAMPIONS'
+      ?tailTaken[index]:tailTotals[field.replay_tail_field][index];
+    return {replay_tail_field:field.replay_tail_field,participant_id_candidate:index+1,
+      last_snapshot_replay_time_ms:row.replay_time_ms,last_snapshot_raw_f32_candidate:value,
+      last_snapshot_floor_candidate:Math.floor(value),final_replay_tail:final,unobserved_tail_gap:final-Math.floor(value),
+      unobserved_tail_time_ms:Number.isSafeInteger(gameLength)?gameLength-row.replay_time_ms:null,last_raw_packet_ref:row.raw_packet_ref,
+      last_raw_payload_field_bytes_hex:row.raw_payload_field_bytes_hex[field.replay_tail_field]};
+  }));
+  const adapted=sources.map((source,index)=>({...source,keyframe_count:source.keyframe_timestamp_count,
+    events:index===0?rows:source.events.map((row,i)=>({...row,raw_payload_field_bytes_hex:rows[i].raw_payload_field_bytes_hex})),
+    tail_gaps:index===0?gaps:[]}));
+  return require('./damage_keyframe_intervals').buildDamageKeyframeIntervals(replay,profile,adapted,base,
+    'CANDIDATE_820_HN_SAMPLED_DAMAGE_COUNTER_ENDPOINT_DIFFERENCE');
+}
+
 function decodeHeroTotalHealFromScan(replay, scan) {
   const profile = HERO_TOTAL_HEAL_SNAPSHOT_CANDIDATE_PROFILE;
   const collected = collectHeroStatsSnapshotCandidates(replay, {
@@ -2190,6 +2258,7 @@ function decodeHeroStatsSnapshotCandidateSet(replay, capabilities, precollectedS
   const scan = precollectedScan === undefined
     ? scanHeroStatsRows(replay) : replayBoundHeroStatsScan(replay, precollectedScan);
   const outcomes = {};
+  if (selected.has('hero_damage_keyframe_intervals')) outcomes.hero_damage_keyframe_intervals=decodeHeroDamageIntervalsFromScan(replay,scan);
   if (selected.has('hero_minions_killed_snapshot')) {
     outcomes.hero_minions_killed_snapshot = decodeHeroMinionsKilledFromScan(replay, scan);
   }
@@ -2367,6 +2436,8 @@ function decodeHeroStructureObjectiveDamageSnapshotCandidates(replay) {
 }
 
 module.exports = {
+  decodeHeroDamageFieldBytes820,
+  HERO_DAMAGE_KEYFRAME_INTERVALS_820_PROFILE,
   HERO_STATS_SNAPSHOT_CAPABILITIES,
   collectHeroStatsScanWithObserver,
   HERO_ASSISTS_SNAPSHOT_CANDIDATE_PROFILE,

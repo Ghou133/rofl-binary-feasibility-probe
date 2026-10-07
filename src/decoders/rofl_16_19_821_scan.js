@@ -6,6 +6,8 @@ const { replaySourceError } = require('./replay_source_integrity');
 
 const BUILD = '16.19.821.7343';
 const CAPABILITIES = new Set([
+  'anonymous_049c_packet',
+  'spell_slot_change_request',
   'hero_death', 'hero_death_timer', 'hero_deaths_snapshot', 'hero_champion_kills_snapshot',
   'hero_assists_snapshot', 'hero_missions_minions_killed_snapshot',
   'hero_ward_stats_snapshot', 'hero_missions_cannon_minions_killed_snapshot',
@@ -32,6 +34,8 @@ const CAPABILITIES = new Set([
   'on_shutdown_event_packet',
   'resurrect_event_packet',
   'revive_ally_event_packet',
+  'first_blood_assist_event_packet',
+  'objective_steal_event_packet',
   'turret_die_event_packet',
   'dampener_die_event_packet',
   'turret_first_blood_event_packet',
@@ -47,6 +51,18 @@ const CAPABILITIES = new Set([
   'set_movement_driver_packet',
   'increment_minion_kills_packet',
   'face_direction_packet',
+  'circular_movement_restriction_packet',
+  'unit_apply_damage_packet',
+  'show_health_bar_packet',
+  'notify_contextual_situation_packet',
+  'item_group_data_broadcast_packet',
+  'cooldown_broadcast_packet',
+  'item_charges_packet',
+  'target_hero_packet',
+  'force_create_missile_packet',
+  'change_missile_target_packet',
+  'set_dimension_missile_packet',
+  'anonymous_029c_packet',
 ]);
 const DEATH_ROUTES = new Set([0x0259, 0x0438, 0x031b, 0x03d4]);
 const RESPAWN_ROUTES = new Set([0x0048, 0x018d]);
@@ -70,6 +86,8 @@ const MAX_CHAMPION_TRIPLE_QUADRA_EVENT_PACKET_ROWS = 2_000;
 const MAX_ON_SHUTDOWN_EVENT_PACKET_ROWS = 2_000;
 const MAX_RESURRECT_EVENT_PACKET_ROWS = 2_000;
 const MAX_REVIVE_ALLY_EVENT_PACKET_ROWS = 2_000;
+const MAX_FIRST_BLOOD_ASSIST_EVENT_PACKET_ROWS = 2_000;
+const MAX_OBJECTIVE_STEAL_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_DIE_EVENT_PACKET_ROWS = 2_000;
 const MAX_DAMPENER_DIE_EVENT_PACKET_ROWS = 2_000;
 const MAX_TURRET_FIRST_BLOOD_EVENT_PACKET_ROWS = 2_000;
@@ -80,6 +98,18 @@ const MAX_DIRECT_INPUT_TURN_PACKET_ROWS = 20_000;
 const MAX_SET_MOVEMENT_DRIVER_PACKET_ROWS = 20_000;
 const MAX_INCREMENT_MINION_KILLS_PACKET_ROWS = 10_000;
 const MAX_FACE_DIRECTION_PACKET_ROWS = 32_768;
+const MAX_CIRCULAR_MOVEMENT_RESTRICTION_PACKET_ROWS = 12_000;
+const MAX_UNIT_APPLY_DAMAGE_PACKET_ROWS = 100_000;
+const MAX_SHOW_HEALTH_BAR_PACKET_ROWS = 100_000;
+const MAX_NOTIFY_CONTEXTUAL_SITUATION_PACKET_ROWS = 8_000;
+const MAX_ITEM_GROUP_DATA_BROADCAST_PACKET_ROWS = 150_000;
+const MAX_COOLDOWN_BROADCAST_PACKET_ROWS = 40_000;
+const MAX_ITEM_CHARGES_PACKET_ROWS = 10_000;
+const MAX_TARGET_HERO_PACKET_ROWS = 40_000;
+const MAX_FORCE_CREATE_MISSILE_PACKET_ROWS = 40_000;
+const MAX_CHANGE_MISSILE_TARGET_PACKET_ROWS = 20_000;
+const MAX_SET_DIMENSION_MISSILE_PACKET_ROWS = 40_000;
+const MAX_ANONYMOUS_029C_PACKET_ROWS = 50_000;
 const SCAN_SOURCE = new WeakMap();
 
 function copyRow(block, chunk) {
@@ -115,6 +145,8 @@ function create821ScanCollector(replay, selectedCapabilities) {
   }
   const heroStatsRows = [];
   const rows = {
+    anonymous_049c_packet: [],
+    spell_slot_change_request: [],
     hero_death: [],
     hero_death_timer: [],
     hero_respawn: [],
@@ -133,6 +165,8 @@ function create821ScanCollector(replay, selectedCapabilities) {
     on_shutdown_event_packet: [],
     resurrect_event_packet: [],
     revive_ally_event_packet: [],
+    first_blood_assist_event_packet: [],
+    objective_steal_event_packet: [],
     turret_die_event_packet: [],
     dampener_die_event_packet: [],
     turret_first_blood_event_packet: [],
@@ -151,6 +185,18 @@ function create821ScanCollector(replay, selectedCapabilities) {
     set_movement_driver_packet: [],
     increment_minion_kills_packet: [],
     face_direction_packet: [],
+    circular_movement_restriction_packet: [],
+    unit_apply_damage_packet: [],
+    show_health_bar_packet: [],
+    notify_contextual_situation_packet: [],
+    item_group_data_broadcast_packet: [],
+    cooldown_broadcast_packet: [],
+    item_charges_packet: [],
+    target_hero_packet: [],
+    force_create_missile_packet: [],
+    change_missile_target_packet: [],
+    set_dimension_missile_packet: [],
+    anonymous_029c_packet: [],
     hero_deaths_snapshot: heroStatsRows,
     hero_champion_kills_snapshot: heroStatsRows,
     hero_assists_snapshot: heroStatsRows,
@@ -225,6 +271,8 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let onShutdownEventPacketCount = 0;
   let resurrectEventPacketCount = 0;
   let reviveAllyEventPacketCount = 0;
+  let firstBloodAssistEventPacketCount = 0;
+  let objectiveStealEventPacketCount = 0;
   let turretDieEventPacketCount = 0;
   let dampenerDieEventPacketCount = 0;
   let turretFirstBloodEventPacketCount = 0;
@@ -235,6 +283,20 @@ function create821ScanCollector(replay, selectedCapabilities) {
   let setMovementDriverPacketCount = 0;
   let incrementMinionKillsPacketCount = 0;
   let faceDirectionPacketCount = 0;
+  let circularMovementRestrictionPacketCount = 0;
+  let unitApplyDamagePacketCount = 0;
+  let showHealthBarPacketCount = 0;
+  let notifyContextualSituationPacketCount = 0;
+  let itemGroupDataBroadcastPacketCount = 0;
+  let cooldownBroadcastPacketCount = 0;
+  let itemChargesPacketCount = 0;
+  let targetHeroPacketCount = 0;
+  let forceCreateMissilePacketCount = 0;
+  let changeMissileTargetPacketCount = 0;
+  let setDimensionMissilePacketCount = 0;
+  let anonymous029cPacketCount = 0;
+  let anonymous049cPacketCount = 0;
+  let spellSlotChangeRequestCount = 0;
   let finished = false;
   // Capability selection is fixed for this walk. Cache the packet-route
   // decisions instead of probing the Set for every framed block.
@@ -251,6 +313,8 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsOnShutdownEvent = selected.has('on_shutdown_event_packet');
   const selectsResurrectEvent = selected.has('resurrect_event_packet');
   const selectsReviveAllyEvent = selected.has('revive_ally_event_packet');
+  const selectsFirstBloodAssistEvent = selected.has('first_blood_assist_event_packet');
+  const selectsObjectiveStealEvent = selected.has('objective_steal_event_packet');
   const selectsTurretDieEvent = selected.has('turret_die_event_packet');
   const selectsDampenerDieEvent = selected.has('dampener_die_event_packet');
   const selectsTurretFirstBloodEvent = selected.has('turret_first_blood_event_packet');
@@ -272,6 +336,21 @@ function create821ScanCollector(replay, selectedCapabilities) {
   const selectsSetMovementDriver = selected.has('set_movement_driver_packet');
   const selectsIncrementMinionKills = selected.has('increment_minion_kills_packet');
   const selectsFaceDirection = selected.has('face_direction_packet');
+  const selectsCircularMovementRestriction =
+    selected.has('circular_movement_restriction_packet');
+  const selectsUnitApplyDamage = selected.has('unit_apply_damage_packet');
+  const selectsShowHealthBar = selected.has('show_health_bar_packet');
+  const selectsNotifyContextualSituation = selected.has('notify_contextual_situation_packet');
+  const selectsItemGroupDataBroadcast = selected.has('item_group_data_broadcast_packet');
+  const selectsCooldownBroadcast = selected.has('cooldown_broadcast_packet');
+  const selectsItemCharges = selected.has('item_charges_packet');
+  const selectsTargetHero = selected.has('target_hero_packet');
+  const selectsForceCreateMissile = selected.has('force_create_missile_packet');
+  const selectsChangeMissileTarget = selected.has('change_missile_target_packet');
+  const selectsSetDimensionMissile = selected.has('set_dimension_missile_packet');
+  const selectsAnonymous029c = selected.has('anonymous_029c_packet');
+  const selectsAnonymous049c = selected.has('anonymous_049c_packet');
+  const selectsSlotChange = selected.has('spell_slot_change_request');
   const selectsHeroLevelState = selected.has('hero_level_state');
   return Object.freeze({
     observe(block, chunk) {
@@ -370,6 +449,22 @@ function create821ScanCollector(replay, selectedCapabilities) {
         reviveAllyEventPacketCount += 1;
         if (rows.revive_ally_event_packet.length < MAX_REVIVE_ALLY_EVENT_PACKET_ROWS) {
           rows.revive_ally_event_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsFirstBloodAssistEvent && chunk.stream_tag === 1
+          && block.packet_id === 0x040a && block.payload_length === 16) {
+        firstBloodAssistEventPacketCount += 1;
+        if (rows.first_blood_assist_event_packet.length
+            < MAX_FIRST_BLOOD_ASSIST_EVENT_PACKET_ROWS) {
+          rows.first_blood_assist_event_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsObjectiveStealEvent && chunk.stream_tag === 1
+          && block.packet_id === 0x040a && block.payload_length === 133) {
+        objectiveStealEventPacketCount += 1;
+        if (rows.objective_steal_event_packet.length
+            < MAX_OBJECTIVE_STEAL_EVENT_PACKET_ROWS) {
+          rows.objective_steal_event_packet.push(copyRow(block, chunk));
         }
       }
       if (selectsTurretDieEvent
@@ -506,6 +601,97 @@ function create821ScanCollector(replay, selectedCapabilities) {
           rows.face_direction_packet.push(copyRow(block, chunk));
         }
       }
+      if (selectsCircularMovementRestriction && block.packet_id === 0x0464) {
+        circularMovementRestrictionPacketCount += 1;
+        if (rows.circular_movement_restriction_packet.length
+            < MAX_CIRCULAR_MOVEMENT_RESTRICTION_PACKET_ROWS) {
+          rows.circular_movement_restriction_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsUnitApplyDamage && block.packet_id === 0x005f) {
+        unitApplyDamagePacketCount += 1;
+        if (rows.unit_apply_damage_packet.length < MAX_UNIT_APPLY_DAMAGE_PACKET_ROWS) {
+          rows.unit_apply_damage_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsShowHealthBar && block.packet_id === 0x0165) {
+        showHealthBarPacketCount += 1;
+        if (rows.show_health_bar_packet.length < MAX_SHOW_HEALTH_BAR_PACKET_ROWS) {
+          rows.show_health_bar_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsNotifyContextualSituation && block.packet_id === 0x0113) {
+        notifyContextualSituationPacketCount += 1;
+        if (rows.notify_contextual_situation_packet.length
+            < MAX_NOTIFY_CONTEXTUAL_SITUATION_PACKET_ROWS) {
+          rows.notify_contextual_situation_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsItemGroupDataBroadcast && block.packet_id === 0x013f) {
+        itemGroupDataBroadcastPacketCount += 1;
+        if (rows.item_group_data_broadcast_packet.length
+            < MAX_ITEM_GROUP_DATA_BROADCAST_PACKET_ROWS) {
+          rows.item_group_data_broadcast_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsCooldownBroadcast && block.packet_id === 0x039d) {
+        cooldownBroadcastPacketCount += 1;
+        if (rows.cooldown_broadcast_packet.length
+            < MAX_COOLDOWN_BROADCAST_PACKET_ROWS) {
+          rows.cooldown_broadcast_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsItemCharges && block.packet_id === 0x0437) {
+        itemChargesPacketCount += 1;
+        if (rows.item_charges_packet.length < MAX_ITEM_CHARGES_PACKET_ROWS) {
+          rows.item_charges_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsTargetHero && block.packet_id === 0x0265) {
+        targetHeroPacketCount += 1;
+        if (rows.target_hero_packet.length < MAX_TARGET_HERO_PACKET_ROWS) {
+          rows.target_hero_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsForceCreateMissile && block.packet_id === 0x0087) {
+        forceCreateMissilePacketCount += 1;
+        if (rows.force_create_missile_packet.length
+            < MAX_FORCE_CREATE_MISSILE_PACKET_ROWS) {
+          rows.force_create_missile_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsChangeMissileTarget && block.packet_id === 0x040c) {
+        changeMissileTargetPacketCount += 1;
+        if (rows.change_missile_target_packet.length
+            < MAX_CHANGE_MISSILE_TARGET_PACKET_ROWS) {
+          rows.change_missile_target_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsSetDimensionMissile && block.packet_id === 0x008a) {
+        setDimensionMissilePacketCount += 1;
+        if (rows.set_dimension_missile_packet.length
+            < MAX_SET_DIMENSION_MISSILE_PACKET_ROWS) {
+          rows.set_dimension_missile_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsAnonymous029c && block.packet_id === 0x029c) {
+        anonymous029cPacketCount += 1;
+        if (rows.anonymous_029c_packet.length < MAX_ANONYMOUS_029C_PACKET_ROWS) {
+          rows.anonymous_029c_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsAnonymous049c && block.packet_id === 0x049c) {
+        anonymous049cPacketCount += 1;
+        if (rows.anonymous_049c_packet.length < 30_000) {
+          rows.anonymous_049c_packet.push(copyRow(block, chunk));
+        }
+      }
+      if (selectsSlotChange && [0x049c,0x028e,0x0375].includes(block.packet_id)) {
+        spellSlotChangeRequestCount += 1;
+        if (rows.spell_slot_change_request.length < 30_000) {
+          rows.spell_slot_change_request.push(copyRow(block, chunk));
+        }
+      }
       if (selectsHeroStats && (chunk.stream_tag === 2 || chunk.stream_tag === 3)
           && block.packet_id === 0x0089) {
         heroStatsRows.push(copyRow(block, chunk));
@@ -550,6 +736,8 @@ function create821ScanCollector(replay, selectedCapabilities) {
         onShutdownEventPacketCount,
         resurrectEventPacketCount,
         reviveAllyEventPacketCount,
+        firstBloodAssistEventPacketCount,
+        objectiveStealEventPacketCount,
         turretDieEventPacketCount,
         dampenerDieEventPacketCount,
         turretFirstBloodEventPacketCount,
@@ -560,6 +748,20 @@ function create821ScanCollector(replay, selectedCapabilities) {
         setMovementDriverPacketCount,
         incrementMinionKillsPacketCount,
         faceDirectionPacketCount,
+        circularMovementRestrictionPacketCount,
+        unitApplyDamagePacketCount,
+        showHealthBarPacketCount,
+        notifyContextualSituationPacketCount,
+        itemGroupDataBroadcastPacketCount,
+        cooldownBroadcastPacketCount,
+        itemChargesPacketCount,
+        targetHeroPacketCount,
+        forceCreateMissilePacketCount,
+        changeMissileTargetPacketCount,
+        setDimensionMissilePacketCount,
+        anonymous029cPacketCount,
+        anonymous049cPacketCount,
+        spellSlotChangeRequestCount,
         error: token.error,
       });
       return token;
@@ -698,6 +900,22 @@ function rowsFor821Capability(replay, token, capability) {
       scanned_block_count: bound.blockCount,
     };
   }
+  if (capability === 'first_blood_assist_event_packet'
+      && bound.firstBloodAssistEventPacketCount
+        > MAX_FIRST_BLOOD_ASSIST_EVENT_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.firstBloodAssistEventPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'objective_steal_event_packet'
+      && bound.objectiveStealEventPacketCount
+        > MAX_OBJECTIVE_STEAL_EVENT_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.objectiveStealEventPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
   if (capability === 'turret_die_event_packet'
       && bound.turretDieEventPacketCount > MAX_TURRET_DIE_EVENT_PACKET_ROWS) {
     return {
@@ -818,6 +1036,102 @@ function rowsFor821Capability(replay, token, capability) {
       observed_packet_count_minimum: bound.faceDirectionPacketCount,
       scanned_block_count: bound.blockCount,
     };
+  }
+  if (capability === 'circular_movement_restriction_packet'
+      && bound.circularMovementRestrictionPacketCount
+        > MAX_CIRCULAR_MOVEMENT_RESTRICTION_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.circularMovementRestrictionPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'unit_apply_damage_packet'
+      && bound.unitApplyDamagePacketCount > MAX_UNIT_APPLY_DAMAGE_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.unitApplyDamagePacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'show_health_bar_packet'
+      && bound.showHealthBarPacketCount > MAX_SHOW_HEALTH_BAR_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.showHealthBarPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'notify_contextual_situation_packet'
+      && bound.notifyContextualSituationPacketCount
+        > MAX_NOTIFY_CONTEXTUAL_SITUATION_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.notifyContextualSituationPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'item_group_data_broadcast_packet'
+      && bound.itemGroupDataBroadcastPacketCount
+        > MAX_ITEM_GROUP_DATA_BROADCAST_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.itemGroupDataBroadcastPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'cooldown_broadcast_packet'
+      && bound.cooldownBroadcastPacketCount
+        > MAX_COOLDOWN_BROADCAST_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.cooldownBroadcastPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'item_charges_packet'
+      && bound.itemChargesPacketCount > MAX_ITEM_CHARGES_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.itemChargesPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'target_hero_packet'
+      && bound.targetHeroPacketCount > MAX_TARGET_HERO_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.targetHeroPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'force_create_missile_packet'
+      && bound.forceCreateMissilePacketCount > MAX_FORCE_CREATE_MISSILE_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.forceCreateMissilePacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'change_missile_target_packet'
+      && bound.changeMissileTargetPacketCount > MAX_CHANGE_MISSILE_TARGET_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.changeMissileTargetPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'set_dimension_missile_packet'
+      && bound.setDimensionMissilePacketCount > MAX_SET_DIMENSION_MISSILE_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.setDimensionMissilePacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'anonymous_029c_packet'
+      && bound.anonymous029cPacketCount > MAX_ANONYMOUS_029C_PACKET_ROWS) {
+    return {
+      observed_packet_count_minimum: bound.anonymous029cPacketCount,
+      scanned_block_count: bound.blockCount,
+    };
+  }
+  if (capability === 'anonymous_049c_packet' && bound.anonymous049cPacketCount > 30_000) {
+    return { observed_packet_count_minimum: bound.anonymous049cPacketCount,
+      scanned_block_count: bound.blockCount };
+  }
+  if (capability === 'spell_slot_change_request' && bound.spellSlotChangeRequestCount > 30_000) {
+    return { observed_packet_count_minimum:bound.spellSlotChangeRequestCount,
+      error:'slot-change family exceeds bounded scope' };
   }
   return {
     rows: bound.rows[capability].map((row) => copyRow(row.block, row.chunk)),

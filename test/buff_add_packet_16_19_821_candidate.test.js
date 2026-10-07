@@ -56,7 +56,7 @@ function nativeResult(request) {
       deserialize_return_al: 1, bytes_consumed: input.payload_hex.length / 2,
       native_packet_id: 0x00ae, native_raw_param: input.raw_param,
       opaque_u32_0x10: 87336022 + inputIndex,
-      opaque_u8_0x14: inputIndex,
+      opaque_u8_0x14: inputIndex & 0xff,
       raw_u32_bytes_hex: '2ff5b770', raw_u8_byte_hex: '59',
     })),
   };
@@ -177,6 +177,27 @@ test('821 BuffAdd2 allows observed rare keyframe lengths only after native full 
   const complete = decode(replay, { runtimeImagePath: image });
   assert.equal(complete.status, 'CANDIDATE');
   assert.equal(complete.event_count, 2);
+});
+
+test('821 BuffAdd2 sends the 34,527-packet KR volume in one bounded native batch', (t) => {
+  const image = fakeImage(t);
+  const replay = replayWithChunks([
+    { packets: Array.from({ length: 34_527 }, () => packet()) },
+  ]);
+  const invoke = t.mock.method(childProcess, 'spawnSync', (_python, _args, options) => {
+    const request = JSON.parse(options.input);
+    assert.equal(request.packets.length, 34_527);
+    assert.ok(Buffer.byteLength(options.input) <= 8_000_000);
+    assert.equal(options.maxBuffer, 32 * 1024 * 1024);
+    return { status: 0, stderr: '', stdout: JSON.stringify(nativeResult(request)) };
+  });
+  const result = decode(replay, { runtimeImagePath: image });
+  assert.equal(result.status, 'CANDIDATE');
+  assert.equal(result.input_count, 34_527);
+  assert.equal(result.event_count, 34_527);
+  assert.equal(result.events[20_000].opaque_u32_0x10, 87356022);
+  assert.equal(result.events.at(-1).opaque_u8_0x14, (34_527 - 1) & 0xff);
+  assert.equal(invoke.mock.callCount(), 1);
 });
 
 test('821 BuffAdd2 bounds direct and shared route retention above 50,000 packets', (t) => {

@@ -54,8 +54,12 @@ const { decodeHeroInventorySetItemPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_set_item_packet_candidate');
 const { decodeParamsHealPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_params_heal_packet_candidate');
+const { associateParamsHealRosterKeys821 } =
+  require('./decoders/rofl_16_19_821_params_heal_roster_key_pair_candidate');
 const { decodeShieldingParamsPacketPairCandidates821 } =
   require('./decoders/rofl_16_19_821_shielding_params_packet_pair_candidate');
+const { associateShieldingParamsRosterKeys821 } =
+  require('./decoders/rofl_16_19_821_shielding_params_roster_key_pair_candidate');
 const { decodeStealthEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_stealth_event_packet_candidate');
 const { decodeChampionDieEventPacketCandidates821 } =
@@ -74,6 +78,10 @@ const { decodeResurrectEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_resurrect_event_packet_candidate');
 const { decodeReviveAllyEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_revive_ally_packet_candidate');
+const { decodeFirstBloodAssistEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_first_blood_assist_event_packet_candidate');
+const { decodeObjectiveStealEventPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_objective_steal_event_packet_candidate');
 const { decodeTurretDieEventPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_turret_die_event_packet_candidate');
 const { decodeDampenerDieEventPacketCandidates821 } =
@@ -102,6 +110,8 @@ const { decodeSetSpellTimerFromBuffPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_set_spell_timer_from_buff_packet_candidate');
 const { decodeSetSpellLevelPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_set_spell_level_packet_candidate');
+const { associateSetSpellLevelRosterKeyPair821 } =
+  require('./decoders/rofl_16_19_821_set_spell_level_roster_key_pair_candidate');
 const {
   DIRECT_INPUT_MOVEMENT_TURN_PACKET_CANDIDATE_PROFILE_821,
   decodeDirectInputMovementTurnPacketCandidates821,
@@ -116,12 +126,61 @@ const { decodeIncrementMinionKillsPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_increment_minion_kills_packet_candidate');
 const { decodeFaceDirectionPacketCandidates821 } =
   require('./decoders/rofl_16_19_821_face_direction_packet_candidate');
+const { decodeCircularMovementRestrictionPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_circular_movement_restriction_packet_candidate');
+const { decodeUnitApplyDamagePacketCandidates821,
+  decodeUnitApplyDamagePacketCandidates821V6 } =
+  require('./decoders/rofl_16_19_821_unit_apply_damage_packet_candidate');
+const { decodeShowHealthBarPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_show_health_bar_packet_candidate');
+const { decodeNotifyContextualSituationPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_notify_contextual_situation_packet_candidate');
+const { decodeItemGroupDataBroadcastPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_item_group_data_broadcast_packet_candidate');
+const { decodeCooldownBroadcastPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_cooldown_broadcast_packet_candidate');
+const { decodeItemChargesPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_item_charges_packet_candidate');
+const { decodeTargetHeroPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_target_hero_packet_candidate');
+const { associateTargetHeroRosterKeyPair821 } =
+  require('./decoders/rofl_16_19_821_target_hero_roster_key_pair_candidate');
+const { decodeForceCreateMissilePacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_force_create_missile_packet_candidate');
+const { decodeChangeMissileTargetPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_change_missile_target_packet_candidate');
+const { associateMissileKeyCooccurrence821 } =
+  require('./decoders/rofl_16_19_821_missile_key_cooccurrence_candidate');
+const { decodeSetDimensionMissilePacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_set_dimension_missile_packet_candidate');
+const { decodeAnonymous049cPacketCandidates821, decodeSpellSlotChangeRequestCandidates821 } =
+  require('./decoders/rofl_16_19_821_anonymous_049c_packet_candidate');
+const { associateSpellSlotChangeRosterKeys821 } =
+  require('./decoders/rofl_16_19_821_spell_slot_change_roster_key_pair_candidate');
+const { decodeAnonymous029cPacketCandidates821 } =
+  require('./decoders/rofl_16_19_821_anonymous_029c_packet_candidate');
+const { associateAnonymous029cRosterKeyPair821 } =
+  require('./decoders/rofl_16_19_821_anonymous_029c_roster_key_pair_candidate');
+const { associateUnitApplyDamageRosterKeys821 } =
+  require('./decoders/rofl_16_19_821_unit_apply_damage_roster_key_candidate');
+const { associateUnitApplyDamageLookupRosterKeys821 } =
+  require('./decoders/rofl_16_19_821_unit_apply_damage_lookup_roster_key_candidate');
+const { associateUnitApplyDamageLookup2cRosterKeys821 } =
+  require('./decoders/rofl_16_19_821_unit_apply_damage_lookup2c_roster_key_candidate');
+const { associateHeroDeathDamageLookupKeyCooccurrence821 } =
+  require('./decoders/rofl_16_19_821_hero_death_damage_lookup_key_cooccurrence_candidate');
 const { associateFaceDirectionKeyframeRosterPairs821 } =
   require('./decoders/rofl_16_19_821_face_direction_keyframe_roster_pair_candidate');
+const { associateHeroRosterMetadataBridge821 } =
+  require('./decoders/rofl_16_19_821_roster_metadata_bridge_candidate');
 const { RUNTIME_IMAGE_SHA256: RUNTIME_IMAGE_SHA256_821 } =
   require('./decoders/rofl_16_19_821_runtime_bytes');
 const { decodeHeroDamageSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
+const { decodeHeroDamageKeyframeIntervalsCandidates821 } =
+  require('./decoders/rofl_16_19_821_damage_keyframe_intervals_candidate');
+const { compareDamagePacketKeyframeWindows821 } =
+  require('./decoders/rofl_16_19_821_damage_window_reconciliation_candidate');
 const { decodeHeroTimeSnapshotCandidates821 } =
   require('./decoders/rofl_16_19_821_time_stats_candidate');
 const { decodeHeroHealSnapshotCandidates821 } =
@@ -163,6 +222,8 @@ const { deriveInventoryKeyframeIntervalDifferenceCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_keyframe_interval_difference_candidate');
 const { deriveExperienceKeyframeIntervalDifferenceCandidates821 } =
   require('./decoders/rofl_16_19_821_experience_keyframe_interval_difference_candidate');
+const { associateLevelExperienceKeyframeBracketCandidates821 } =
+  require('./decoders/rofl_16_19_821_level_experience_keyframe_bracket_candidate');
 const { associateInventoryGameBroadcastKeyframeBracketCandidates821 } =
   require('./decoders/rofl_16_19_821_inventory_game_broadcast_keyframe_bracket_candidate');
 const { associateIncrementMinionKeyframeBracketCandidates821 } =
@@ -1956,6 +2017,7 @@ function decode1619(replay, profile, options = {}) {
     hero_kill_stats_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_ward_stats_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_damage_totals_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_damage_keyframe_intervals: decodeHeroStatsSnapshotCandidateSet,
     hero_damage_taken_from_champions_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_damage_self_mitigated_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_longest_living_time_snapshot: decodeHeroStatsSnapshotCandidateSet,
@@ -1988,6 +2050,7 @@ function decode1619(replay, profile, options = {}) {
     hero_kill_stats_snapshot: 'hero_kill_stats_snapshot_candidates',
     hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
     hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
+    hero_damage_keyframe_intervals: 'hero_damage_keyframe_interval_candidates',
     hero_damage_taken_from_champions_snapshot:
       'hero_damage_taken_from_champions_snapshot_candidates',
     hero_damage_self_mitigated_snapshot:
@@ -2168,6 +2231,77 @@ function decode1619821(replay, profile, options = {}) {
     throw new TypeError('16.19 capabilities must be an array of nonempty names');
   }
   const capabilities = [...new Set(requested)];
+  if (capabilities.includes('spell_slot_change_roster_key_pair')) {
+    for (const source of ['spell_slot_change_request','hero_roster_metadata_bridge']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
+  if (capabilities.includes('target_hero_roster_key_pair')) {
+    for (const source of ['target_hero_packet', 'hero_roster_metadata_bridge']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
+  if (capabilities.includes('missile_key_cooccurrence')) {
+    for (const source of ['force_create_missile_packet',
+      'change_missile_target_packet']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
+  if (capabilities.includes('set_spell_level_roster_key_pair')) {
+    for (const source of ['set_spell_level_packet', 'hero_roster_metadata_bridge']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
+  if (capabilities.includes('shielding_params_roster_key_pair')) {
+    for (const source of ['shielding_params_packet_pair',
+      'hero_roster_metadata_bridge']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
+  if (capabilities.includes('params_heal_roster_key_pair')) {
+    for (const source of ['params_heal_packet', 'hero_roster_metadata_bridge']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
+  if (capabilities.includes('anonymous_029c_roster_key_pair')) {
+    for (const source of ['anonymous_029c_packet', 'hero_roster_metadata_bridge']) {
+      if (!capabilities.includes(source)) capabilities.push(source);
+    }
+  }
+  const castPacketProfile = options.castPacketProfile ?? 'v4';
+  if (!['v4', 'v5', 'v6', 'v7', 'v8', 'v9'].includes(castPacketProfile)) {
+    throw new TypeError('exact 821 CastSpellAns packet profile must be v4, v5, v6, v7, v8 or v9');
+  }
+  const setSpellLevelProfile = options.setSpellLevelProfile
+    ?? (capabilities.includes('set_spell_level_roster_key_pair') ? 'v2' : 'v1');
+  if (setSpellLevelProfile !== 'v1' && setSpellLevelProfile !== 'v2') {
+    throw new TypeError('exact 821 SetSpellLevel packet profile must be v1 or v2');
+  }
+  if (capabilities.includes('set_spell_level_roster_key_pair')
+      && setSpellLevelProfile !== 'v2') {
+    throw new TypeError('exact 821 SetSpellLevel roster pair requires packet profile v2');
+  }
+  const setSpellTimerProfile = options.setSpellTimerProfile ?? 'v1';
+  if (setSpellTimerProfile !== 'v1'
+      && setSpellTimerProfile !== 'v2') {
+    throw new TypeError('exact 821 SetSpellTimerFromBuff packet profile must be v1 or v2');
+  }
+  const itemGroupPacketProfile = options.itemGroupPacketProfile ?? 'v1';
+  const cooldownPacketProfile = options.cooldownPacketProfile ?? 'v1';
+  if (!['v1','v2'].includes(cooldownPacketProfile)) {
+    throw new TypeError('exact 821 cooldown packet profile must be v1 or v2');
+  }
+  if (itemGroupPacketProfile !== 'v1' && itemGroupPacketProfile !== 'v2') {
+    throw new TypeError('exact 821 item-group packet profile must be v1 or v2');
+  }
+  const changeMissileTargetProfile = options.changeMissileTargetProfile ?? 'v1';
+  if (changeMissileTargetProfile !== 'v1' && changeMissileTargetProfile !== 'v2') {
+    throw new TypeError('exact 821 ChangeMissileTarget packet profile must be v1 or v2');
+  }
+  const damagePacketProfile = options.damagePacketProfile ?? 'v5';
+  if (damagePacketProfile !== 'v5' && damagePacketProfile !== 'v6') {
+    throw new TypeError('exact 821 UnitApplyDamage packet profile must be v5 or v6');
+  }
   const decoders = {
     hero_death: decodeHeroDeathCandidates821,
     hero_assist: (input, collected) => decodeHeroAssistCandidates821(input, collected, {
@@ -2199,6 +2333,7 @@ function decode1619821(replay, profile, options = {}) {
       decodeHeroFloatSnapshotCandidates821(input, 'hero_gold_spent_snapshot', collected),
     hero_damage_totals_snapshot: (input, collected) =>
       decodeHeroDamageSnapshotCandidates821(input, 'hero_damage_totals_snapshot', collected),
+    hero_damage_keyframe_intervals: decodeHeroDamageKeyframeIntervalsCandidates821,
     hero_damage_taken_from_champions_snapshot: (input, collected) =>
       decodeHeroDamageSnapshotCandidates821(input,
         'hero_damage_taken_from_champions_snapshot', collected),
@@ -2310,6 +2445,18 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    first_blood_assist_event_packet: (input, collected) =>
+      decodeFirstBloodAssistEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    objective_steal_event_packet: (input, collected) =>
+      decodeObjectiveStealEventPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
     turret_die_event_packet: (input, collected) =>
       decodeTurretDieEventPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
@@ -2351,6 +2498,7 @@ function decode1619821(replay, profile, options = {}) {
         runtimeImagePath: options.runtimeImagePath,
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
+        castPacketProfile,
       }),
     npc_buff_remove_packet: (input, collected) =>
       decodeNpcBuffRemovePacketCandidates821(input, {
@@ -2387,12 +2535,14 @@ function decode1619821(replay, profile, options = {}) {
         runtimeImagePath: options.runtimeImagePath,
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
+        setSpellTimerProfile,
       }),
     set_spell_level_packet: (input, collected) =>
       decodeSetSpellLevelPacketCandidates821(input, {
         runtimeImagePath: options.runtimeImagePath,
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
+        setSpellLevelProfile,
       }),
     direct_input_movement_turn_packet: (input, collected) =>
       decodeDirectInputMovementTurnPacketCandidates821(input, {
@@ -2418,6 +2568,94 @@ function decode1619821(replay, profile, options = {}) {
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
       }),
+    circular_movement_restriction_packet: (input, collected) =>
+      decodeCircularMovementRestrictionPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    unit_apply_damage_packet: (input, collected) =>
+      (damagePacketProfile === 'v6'
+        ? decodeUnitApplyDamagePacketCandidates821V6
+        : decodeUnitApplyDamagePacketCandidates821)(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    show_health_bar_packet: (input, collected) =>
+      decodeShowHealthBarPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    notify_contextual_situation_packet: (input, collected) =>
+      decodeNotifyContextualSituationPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    item_group_data_broadcast_packet: (input, collected) =>
+      decodeItemGroupDataBroadcastPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+        itemGroupPacketProfile,
+      }),
+    cooldown_broadcast_packet: (input, collected) =>
+      decodeCooldownBroadcastPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+        cooldownPacketProfile,
+      }),
+    item_charges_packet: (input, collected) =>
+      decodeItemChargesPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    target_hero_packet: (input, collected) =>
+      decodeTargetHeroPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    force_create_missile_packet: (input, collected) =>
+      decodeForceCreateMissilePacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    change_missile_target_packet: (input, collected) =>
+      decodeChangeMissileTargetPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+        profileVersion: changeMissileTargetProfile,
+      }),
+    set_dimension_missile_packet: (input, collected) =>
+      decodeSetDimensionMissilePacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    anonymous_049c_packet: (input, collected) =>
+      decodeAnonymous049cPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
+    spell_slot_change_request: (input, collected) =>
+      decodeSpellSlotChangeRequestCandidates821(input, {
+        runtimeImagePath:options.runtimeImagePath, pythonExecutable:options.pythonExecutable,
+        precollected:collected,
+      }),
+    anonymous_029c_packet: (input, collected) =>
+      decodeAnonymous029cPacketCandidates821(input, {
+        runtimeImagePath: options.runtimeImagePath,
+        pythonExecutable: options.pythonExecutable,
+        precollected: collected,
+      }),
   };
   const outputKeys = {
     hero_death: 'hero_death_candidates',
@@ -2427,6 +2665,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_deaths_snapshot: 'hero_deaths_snapshot_candidates',
     hero_champion_kills_snapshot: 'hero_champion_kills_snapshot_candidates',
     hero_assists_snapshot: 'hero_assists_snapshot_candidates',
+    hero_roster_metadata_bridge: 'hero_roster_metadata_bridge_candidates',
     hero_missions_minions_killed_snapshot: 'hero_missions_minions_killed_snapshot_candidates',
     hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
     hero_missions_cannon_minions_killed_snapshot:
@@ -2439,6 +2678,7 @@ function decode1619821(replay, profile, options = {}) {
     hero_gold_earned_snapshot: 'hero_gold_earned_snapshot_candidates',
     hero_gold_spent_snapshot: 'hero_gold_spent_snapshot_candidates',
     hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
+    hero_damage_keyframe_intervals: 'hero_damage_keyframe_interval_candidates',
     hero_damage_taken_from_champions_snapshot:
       'hero_damage_taken_from_champions_snapshot_candidates',
     hero_damage_self_mitigated_snapshot:
@@ -2456,7 +2696,9 @@ function decode1619821(replay, profile, options = {}) {
     hero_inventory_broadcast_packet: 'hero_inventory_broadcast_packet_candidates',
     hero_inventory_set_item_packet: 'hero_inventory_set_item_packet_candidates',
     params_heal_packet: 'params_heal_packet_candidates',
+    params_heal_roster_key_pair: 'params_heal_roster_key_pair_candidates',
     shielding_params_packet_pair: 'shielding_params_packet_pair_candidates',
+    shielding_params_roster_key_pair: 'shielding_params_roster_key_pair_candidates',
     stealth_event_packet: 'stealth_event_packet_candidates',
     champion_die_event_packet: 'champion_die_event_packet_candidates',
     champion_kill_event_packet: 'champion_kill_event_packet_candidates',
@@ -2466,6 +2708,8 @@ function decode1619821(replay, profile, options = {}) {
     on_shutdown_event_packet: 'on_shutdown_event_packet_candidates',
     resurrect_event_packet: 'resurrect_event_packet_candidates',
     revive_ally_event_packet: 'revive_ally_event_packet_candidates',
+    first_blood_assist_event_packet: 'first_blood_assist_event_packet_candidates',
+    objective_steal_event_packet: 'objective_steal_event_packet_candidates',
     turret_die_event_packet: 'turret_die_event_packet_candidates',
     dampener_die_event_packet: 'dampener_die_event_packet_candidates',
     turret_first_blood_event_packet: 'turret_first_blood_event_packet_candidates',
@@ -2480,10 +2724,37 @@ function decode1619821(replay, profile, options = {}) {
     npc_buff_replace_packet: 'npc_buff_replace_packet_candidates',
     set_spell_timer_from_buff_packet: 'set_spell_timer_from_buff_packet_candidates',
     set_spell_level_packet: 'set_spell_level_packet_candidates',
+    set_spell_level_roster_key_pair: 'set_spell_level_roster_key_pair_candidates',
     direct_input_movement_turn_packet: 'direct_input_movement_turn_packet_candidates',
     set_movement_driver_packet: 'set_movement_driver_packet_candidates',
     increment_minion_kills_packet: 'increment_minion_kills_packet_candidates',
     face_direction_packet: 'face_direction_packet_candidates',
+    circular_movement_restriction_packet:
+      'circular_movement_restriction_packet_candidates',
+    unit_apply_damage_packet: 'unit_apply_damage_packet_candidates',
+    show_health_bar_packet: 'show_health_bar_packet_candidates',
+    notify_contextual_situation_packet: 'notify_contextual_situation_packet_candidates',
+    item_group_data_broadcast_packet: 'item_group_data_broadcast_packet_candidates',
+    cooldown_broadcast_packet: 'cooldown_broadcast_packet_candidates',
+    item_charges_packet: 'item_charges_packet_candidates',
+    target_hero_packet: 'target_hero_packet_candidates',
+    target_hero_roster_key_pair: 'target_hero_roster_key_pair_candidates',
+    force_create_missile_packet: 'force_create_missile_packet_candidates',
+    change_missile_target_packet: 'change_missile_target_packet_candidates',
+    missile_key_cooccurrence: 'missile_key_cooccurrence_candidates',
+    set_dimension_missile_packet: 'set_dimension_missile_packet_candidates',
+    anonymous_029c_packet: 'anonymous_029c_packet_candidates',
+    anonymous_049c_packet: 'anonymous_049c_packet_candidates',
+    spell_slot_change_request: 'spell_slot_change_request_candidates',
+    spell_slot_change_roster_key_pair: 'spell_slot_change_roster_key_pair_candidates',
+    anonymous_029c_roster_key_pair: 'anonymous_029c_roster_key_pair_candidates',
+    unit_apply_damage_roster_key_pair: 'unit_apply_damage_roster_key_candidates',
+    unit_apply_damage_lookup_roster_key_pair:
+      'unit_apply_damage_lookup_roster_key_candidates',
+    unit_apply_damage_lookup2c_roster_key_pair:
+      'unit_apply_damage_lookup2c_roster_key_candidates',
+    hero_death_damage_lookup_key_cooccurrence:
+      'hero_death_damage_lookup_key_cooccurrence_candidates',
     face_direction_keyframe_roster_pair: 'face_direction_keyframe_roster_pair_candidates',
   };
   const capabilityResults = {};
@@ -2517,6 +2788,8 @@ function decode1619821(replay, profile, options = {}) {
     'on_shutdown_event_packet',
     'resurrect_event_packet',
     'revive_ally_event_packet',
+    'first_blood_assist_event_packet',
+    'objective_steal_event_packet',
     'turret_die_event_packet',
     'dampener_die_event_packet',
     'turret_first_blood_event_packet',
@@ -2535,11 +2808,41 @@ function decode1619821(replay, profile, options = {}) {
     'set_movement_driver_packet',
     'increment_minion_kills_packet',
     'face_direction_packet',
+    'circular_movement_restriction_packet',
+    'unit_apply_damage_packet',
+    'show_health_bar_packet',
+    'notify_contextual_situation_packet',
+    'item_group_data_broadcast_packet',
+    'cooldown_broadcast_packet',
+    'item_charges_packet',
+    'target_hero_packet',
+    'force_create_missile_packet',
+    'change_missile_target_packet',
+    'set_dimension_missile_packet',
+    'anonymous_029c_packet',
+    'anonymous_049c_packet',
+    'spell_slot_change_request',
   ]);
-  const pairSelected = capabilities.includes('face_direction_keyframe_roster_pair');
+  const facePairSelected = capabilities.includes('face_direction_keyframe_roster_pair');
+  const rosterMetadataSelected = capabilities.includes('hero_roster_metadata_bridge');
+  const damageKeyPairSelected = capabilities.includes('unit_apply_damage_roster_key_pair');
+  const damageLookupPairSelected = capabilities.includes(
+    'unit_apply_damage_lookup_roster_key_pair');
+  const damageLookup2cPairSelected = capabilities.includes(
+    'unit_apply_damage_lookup2c_roster_key_pair');
+  const deathDamageLookupSelected = capabilities.includes(
+    'hero_death_damage_lookup_key_cooccurrence');
   const supported = [...new Set([
     ...capabilities.filter((capability) => sharedScanCapabilities.has(capability)),
-    ...(pairSelected ? ['face_direction_packet', 'hero_minions_killed_snapshot'] : []),
+    ...(capabilities.includes('hero_damage_keyframe_intervals')
+      ? ['hero_damage_totals_snapshot', 'hero_damage_taken_from_champions_snapshot'] : []),
+    ...(rosterMetadataSelected ? ['hero_death', 'hero_assist',
+      'hero_deaths_snapshot', 'hero_champion_kills_snapshot', 'hero_assists_snapshot'] : []),
+    ...(facePairSelected ? ['face_direction_packet', 'hero_minions_killed_snapshot'] : []),
+    ...(deathDamageLookupSelected ? ['hero_death'] : []),
+    ...(damageKeyPairSelected || damageLookupPairSelected || damageLookup2cPairSelected
+      || deathDamageLookupSelected
+      ? ['unit_apply_damage_packet', 'hero_minions_killed_snapshot'] : []),
   ])];
   let candidate821Scan = options.candidate821Scan ?? null;
   if (candidate821Scan === null
@@ -2558,10 +2861,92 @@ function decode1619821(replay, profile, options = {}) {
     if (decodedSources.has(capability)) return decodedSources.get(capability);
     let outcome;
     try {
-      if (capability === 'face_direction_keyframe_roster_pair') {
+      if (capability === 'hero_roster_metadata_bridge') {
+        outcome = associateHeroRosterMetadataBridge821(replay, Object.fromEntries([
+          'hero_death', 'hero_assist', 'hero_deaths_snapshot',
+          'hero_champion_kills_snapshot', 'hero_assists_snapshot',
+        ].map((name) => [name, decodeCapability(name)])));
+      } else if (capability === 'spell_slot_change_roster_key_pair') {
+        outcome = associateSpellSlotChangeRosterKeys821(replay, {
+          spellSlotChangeRequestOutcome:decodeCapability('spell_slot_change_request'),
+          heroRosterMetadataBridgeOutcome:decodeCapability('hero_roster_metadata_bridge'),
+          precollected:candidate821Scan,
+        });
+      } else if (capability === 'target_hero_roster_key_pair') {
+        outcome = associateTargetHeroRosterKeyPair821(replay, {
+          targetHeroPacketOutcome: decodeCapability('target_hero_packet'),
+          heroRosterMetadataBridgeOutcome:
+            decodeCapability('hero_roster_metadata_bridge'),
+        });
+      } else if (capability === 'missile_key_cooccurrence') {
+        outcome = associateMissileKeyCooccurrence821(replay, {
+          forceCreateMissilePacketOutcome:
+            decodeCapability('force_create_missile_packet'),
+          changeMissileTargetPacketOutcome:
+            decodeCapability('change_missile_target_packet'),
+        });
+      } else if (capability === 'set_spell_level_roster_key_pair') {
+        outcome = associateSetSpellLevelRosterKeyPair821(replay, {
+          setSpellLevelPacketOutcome: decodeCapability('set_spell_level_packet'),
+          heroRosterMetadataBridgeOutcome:
+            decodeCapability('hero_roster_metadata_bridge'),
+        });
+      } else if (capability === 'shielding_params_roster_key_pair') {
+        outcome = associateShieldingParamsRosterKeys821(replay, {
+          shieldingParamsPacketPairOutcome:
+            decodeCapability('shielding_params_packet_pair'),
+          heroRosterMetadataBridgeOutcome:
+            decodeCapability('hero_roster_metadata_bridge'),
+        });
+      } else if (capability === 'params_heal_roster_key_pair') {
+        outcome = associateParamsHealRosterKeys821(replay, {
+          paramsHealPacketOutcome: decodeCapability('params_heal_packet'),
+          heroRosterMetadataBridgeOutcome:
+            decodeCapability('hero_roster_metadata_bridge'),
+        });
+      } else if (capability === 'anonymous_029c_roster_key_pair') {
+        outcome = associateAnonymous029cRosterKeyPair821(replay, {
+          anonymous029cPacketOutcome: decodeCapability('anonymous_029c_packet'),
+          heroRosterMetadataBridgeOutcome:
+            decodeCapability('hero_roster_metadata_bridge'),
+        });
+      } else if (capability === 'face_direction_keyframe_roster_pair') {
         outcome = associateFaceDirectionKeyframeRosterPairs821(replay, {
           faceDirectionPacketOutcome: decodeCapability('face_direction_packet'),
           minionsKilledSnapshotOutcome: decodeCapability('hero_minions_killed_snapshot'),
+        });
+      } else if (capability === 'unit_apply_damage_roster_key_pair') {
+        outcome = associateUnitApplyDamageRosterKeys821(replay, {
+          unitApplyDamagePacketOutcome: decodeCapability('unit_apply_damage_packet'),
+          minionsKilledSnapshotOutcome: decodeCapability('hero_minions_killed_snapshot'),
+          precollected: candidate821Scan,
+        });
+      } else if (capability === 'unit_apply_damage_lookup_roster_key_pair') {
+        outcome = associateUnitApplyDamageLookupRosterKeys821(replay, {
+          unitApplyDamagePacketOutcome: decodeCapability('unit_apply_damage_packet'),
+          minionsKilledSnapshotOutcome: decodeCapability('hero_minions_killed_snapshot'),
+          validatedRawRosterPairOutcome:
+            decodeCapability('unit_apply_damage_roster_key_pair'),
+          precollected: candidate821Scan,
+        });
+      } else if (capability === 'unit_apply_damage_lookup2c_roster_key_pair') {
+        outcome = associateUnitApplyDamageLookup2cRosterKeys821(replay, {
+          unitApplyDamagePacketOutcome: decodeCapability('unit_apply_damage_packet'),
+          minionsKilledSnapshotOutcome: decodeCapability('hero_minions_killed_snapshot'),
+          validatedRawRosterPairOutcome:
+            decodeCapability('unit_apply_damage_roster_key_pair'),
+          validatedLookup24RosterPairOutcome:
+            decodeCapability('unit_apply_damage_lookup_roster_key_pair'),
+          precollected: candidate821Scan,
+        });
+      } else if (capability === 'hero_death_damage_lookup_key_cooccurrence') {
+        outcome = associateHeroDeathDamageLookupKeyCooccurrence821(replay, {
+          heroDeathOutcome: decodeCapability('hero_death'),
+          unitApplyDamagePacketOutcome: decodeCapability('unit_apply_damage_packet'),
+          minionsKilledSnapshotOutcome: decodeCapability('hero_minions_killed_snapshot'),
+          validatedRawRosterPairOutcome:
+            decodeCapability('unit_apply_damage_roster_key_pair'),
+          precollected: candidate821Scan,
         });
       } else if (decoders[capability]) {
         outcome = decoders[capability](replay, candidate821Scan);
@@ -2585,7 +2970,9 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'hero_inventory_broadcast_packet'
         || capability === 'hero_inventory_set_item_packet'
         || capability === 'params_heal_packet'
+        || capability === 'params_heal_roster_key_pair'
         || capability === 'shielding_params_packet_pair'
+        || capability === 'shielding_params_roster_key_pair'
         || capability === 'stealth_event_packet'
         || capability === 'champion_die_event_packet'
         || capability === 'champion_kill_event_packet'
@@ -2595,6 +2982,8 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'on_shutdown_event_packet'
         || capability === 'resurrect_event_packet'
         || capability === 'revive_ally_event_packet'
+        || capability === 'first_blood_assist_event_packet'
+        || capability === 'objective_steal_event_packet'
         || capability === 'turret_die_event_packet'
         || capability === 'dampener_die_event_packet'
         || capability === 'turret_first_blood_event_packet'
@@ -2608,11 +2997,36 @@ function decode1619821(replay, profile, options = {}) {
         || capability === 'npc_buff_replace_packet'
         || capability === 'set_spell_timer_from_buff_packet'
         || capability === 'set_spell_level_packet'
+        || capability === 'set_spell_level_roster_key_pair'
         || capability === 'direct_input_movement_turn_packet'
         || capability === 'set_movement_driver_packet'
         || capability === 'increment_minion_kills_packet'
         || capability === 'face_direction_packet'
-        || capability === 'face_direction_keyframe_roster_pair') {
+        || capability === 'circular_movement_restriction_packet'
+        || capability === 'unit_apply_damage_packet'
+        || capability === 'show_health_bar_packet'
+        || capability === 'notify_contextual_situation_packet'
+        || capability === 'item_group_data_broadcast_packet'
+        || capability === 'cooldown_broadcast_packet'
+        || capability === 'item_charges_packet'
+        || capability === 'target_hero_packet'
+        || capability === 'target_hero_roster_key_pair'
+        || capability === 'set_spell_level_roster_key_pair'
+        || capability === 'force_create_missile_packet'
+        || capability === 'change_missile_target_packet'
+        || capability === 'missile_key_cooccurrence'
+        || capability === 'set_dimension_missile_packet'
+        || capability === 'anonymous_029c_packet'
+        || capability === 'anonymous_049c_packet'
+        || capability === 'spell_slot_change_request'
+        || capability === 'spell_slot_change_roster_key_pair'
+        || capability === 'anonymous_029c_roster_key_pair'
+        || capability === 'unit_apply_damage_roster_key_pair'
+        || capability === 'unit_apply_damage_lookup_roster_key_pair'
+        || capability === 'unit_apply_damage_lookup2c_roster_key_pair'
+        || capability === 'hero_death_damage_lookup_key_cooccurrence'
+        || capability === 'face_direction_keyframe_roster_pair'
+        || capability === 'hero_roster_metadata_bridge') {
       result.runtime_image_status ??= options.runtimeImagePath
         ? 'PROVIDED_NOT_USED' : 'NOT_REQUIRED';
       result.runtime_image_used ??= false;
@@ -2630,8 +3044,18 @@ function decode1619821(replay, profile, options = {}) {
   const usable = results.filter((result) => result.status === 'CANDIDATE');
   const failed = results.filter((result) => result.status !== 'CANDIDATE');
   const uniqueDecodedInputCounts = new Map();
-  if (pairSelected) {
-    for (const dependency of ['face_direction_packet', 'hero_minions_killed_snapshot']) {
+  if (rosterMetadataSelected || facePairSelected || damageKeyPairSelected || damageLookupPairSelected
+      || damageLookup2cPairSelected || deathDamageLookupSelected) {
+    for (const dependency of [
+      ...(rosterMetadataSelected ? ['hero_death', 'hero_assist',
+        'hero_deaths_snapshot', 'hero_champion_kills_snapshot', 'hero_assists_snapshot'] : []),
+      ...(facePairSelected ? ['face_direction_packet'] : []),
+      ...(deathDamageLookupSelected ? ['hero_death'] : []),
+      ...(damageKeyPairSelected || damageLookupPairSelected || damageLookup2cPairSelected
+        || deathDamageLookupSelected
+        ? ['unit_apply_damage_packet'] : []),
+      'hero_minions_killed_snapshot',
+    ]) {
       const source = decodedSources.get(dependency);
       if (source?.status === 'CANDIDATE'
           && Number.isSafeInteger(source.input_count) && source.input_count >= 0) {
@@ -2641,7 +3065,19 @@ function decode1619821(replay, profile, options = {}) {
   }
   for (const [capability, result] of Object.entries(capabilityResults)) {
     if (result.status !== 'CANDIDATE') continue;
-    if (capability === 'face_direction_keyframe_roster_pair') continue;
+    if (capability === 'hero_roster_metadata_bridge'
+        || capability === 'spell_slot_change_roster_key_pair'
+        || capability === 'missile_key_cooccurrence'
+        || capability === 'params_heal_roster_key_pair'
+        || capability === 'target_hero_roster_key_pair'
+        || capability === 'set_spell_level_roster_key_pair'
+        || capability === 'shielding_params_roster_key_pair'
+        || capability === 'anonymous_029c_roster_key_pair'
+        || capability === 'face_direction_keyframe_roster_pair'
+        || capability === 'unit_apply_damage_roster_key_pair'
+        || capability === 'unit_apply_damage_lookup_roster_key_pair'
+        || capability === 'unit_apply_damage_lookup2c_roster_key_pair'
+        || capability === 'hero_death_damage_lookup_key_cooccurrence') continue;
     // The 0x040a route carries disjoint child packet shapes. The stealth
     // scan also natively checks six other length-17 child IDs as controls.
     const packetGroup = capability === 'params_heal_packet'
@@ -2666,6 +3102,10 @@ function decode1619821(replay, profile, options = {}) {
                     ? '0x040a/child_002d'
                     : capability === 'revive_ally_event_packet'
                       ? '0x040a/child_002c'
+                    : capability === 'first_blood_assist_event_packet'
+                      ? '0x040a/child_0017'
+                    : capability === 'objective_steal_event_packet'
+                      ? '0x040a/child_00be_00d6'
                      : capability === 'turret_die_event_packet'
                        ? '0x040a/child_003b'
                      : capability === 'dampener_die_event_packet'
@@ -2695,6 +3135,10 @@ function decode1619821(replay, profile, options = {}) {
               : capability === 'resurrect_event_packet'
                 ? result.event_count
                 : capability === 'revive_ally_event_packet'
+                  ? result.event_count
+                : capability === 'first_blood_assist_event_packet'
+                  ? result.event_count
+                : capability === 'objective_steal_event_packet'
                   ? result.event_count
                  : capability === 'turret_die_event_packet'
                    ? result.event_count
@@ -3095,6 +3539,26 @@ function decode1619821(replay, profile, options = {}) {
       };
     }
   }
+  if (capabilities.includes('hero_level_state')
+      && capabilities.includes('hero_experience_snapshot')) {
+    try {
+      const association = associateLevelExperienceKeyframeBracketCandidates821(replay, {
+        levelOutcome: outcomes.hero_level_state,
+        experienceSnapshotOutcome: outcomes.hero_experience_snapshot,
+      });
+      if (association.status === 'CANDIDATE' && Array.isArray(association.events)) {
+        const { events: bracketEvents, ...summary } = association;
+        candidateAssociations.level_experience_keyframe_bracket = summary;
+        events.level_experience_keyframe_bracket_candidates = bracketEvents;
+      } else {
+        candidateAssociations.level_experience_keyframe_bracket = association;
+      }
+    } catch (error) {
+      candidateAssociations.level_experience_keyframe_bracket = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
   if (capabilities.includes('increment_minion_kills_packet')
       && capabilities.includes('hero_minions_killed_snapshot')) {
     try {
@@ -3111,6 +3575,22 @@ function decode1619821(replay, profile, options = {}) {
       }
     } catch (error) {
       candidateAssociations.increment_minion_keyframe_bracket = {
+        status: 'DECODE_FAILED', error: error.message || String(error),
+      };
+    }
+  }
+  if (capabilities.includes('hero_damage_keyframe_intervals')
+      && capabilities.includes('unit_apply_damage_packet')) {
+    try {
+      const comparison = compareDamagePacketKeyframeWindows821(replay,
+        outcomes.unit_apply_damage_packet, outcomes.hero_damage_keyframe_intervals);
+      const { events: comparisonEvents, ...summary } = comparison;
+      candidateAssociations.hero_damage_packet_keyframe_windows = summary;
+      if (comparison.status === 'CANDIDATE') {
+        events.hero_damage_packet_keyframe_window_candidates = comparisonEvents;
+      }
+    } catch (error) {
+      candidateAssociations.hero_damage_packet_keyframe_windows = {
         status: 'DECODE_FAILED', error: error.message || String(error),
       };
     }
