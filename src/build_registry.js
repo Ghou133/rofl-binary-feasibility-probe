@@ -390,6 +390,7 @@ const BUILD_PROFILES = deepFreeze({
       hero_kill_stats_snapshot: 0x0276,
       hero_ward_stats_snapshot: 0x0276,
       hero_damage_totals_snapshot: 0x0276,
+      hero_damage_keyframe_intervals: 0x0276,
       hero_damage_taken_from_champions_snapshot: 0x0276,
       hero_damage_self_mitigated_snapshot: 0x0276,
       hero_longest_living_time_snapshot: 0x0276,
@@ -437,6 +438,7 @@ const BUILD_PROFILES = deepFreeze({
         heroStatsCandidate1619.HERO_KILL_STATS_SNAPSHOT_CANDIDATE_PROFILE,
       hero_ward_stats_snapshot:
         heroStatsCandidate1619.HERO_WARD_STATS_SNAPSHOT_CANDIDATE_PROFILE,
+      hero_damage_keyframe_intervals: heroStatsCandidate1619.HERO_DAMAGE_KEYFRAME_INTERVALS_820_PROFILE,
       hero_damage_totals_snapshot:
         heroStatsCandidate1619.HERO_DAMAGE_TOTALS_SNAPSHOT_CANDIDATE_PROFILE,
       hero_damage_taken_from_champions_snapshot:
@@ -547,6 +549,7 @@ const BUILD_PROFILES = deepFreeze({
       'hero_kill_stats_snapshot',
       'hero_ward_stats_snapshot',
       'hero_damage_totals_snapshot',
+      'hero_damage_keyframe_intervals',
       'hero_damage_taken_from_champions_snapshot',
       'hero_damage_self_mitigated_snapshot',
       'hero_longest_living_time_snapshot',

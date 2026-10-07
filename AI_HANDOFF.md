@@ -8,6 +8,14 @@ create a second protocol authority.
 
 ## Start here
 
+The protocol-first follow-up now supports HN `16.19.820.7193` sampled damage
+intervals with its own route/transform, reusing a common arithmetic builder.
+Three original HN Replays passed 880 complete source-reproduced intervals.
+[Offline scope and remaining inputs](docs/OFFLINE_16_19_SCOPE.md) distinguishes
+this exact-build adaptation from new gameplay semantics and defines the useful
+minimal local CLI/API tool. Partially unavailable native window queries no longer
+claim complete reconciliation. No new heap capture was performed.
+
 The completed follow-up adds cumulative-counter thresholds and anonymous-window
 error screens to both CLI/API, preserving fractional/zero thresholds and unknown
 roles. It also fixes unfiltered native damage queries skipping full saved-field

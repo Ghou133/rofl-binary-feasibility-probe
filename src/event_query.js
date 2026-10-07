@@ -14272,7 +14272,7 @@ async function streamBatchEventQueryUnstaged(prepared, options, emitLine) {
     ...(damageWindowQuery.supports(prepared.eventKey) ? {
       native_witness_check: options.verifySource
         ? completedCount===prepared.replays.length?'FRESH_EXACT_IMAGE_REDECODE':completedCount?'PARTIAL_FRESH_EXACT_IMAGE_REDECODE':'NOT_VERIFIED'
-        : 'COMPLETE_SAVED_DEPENDENCY_RECONCILIATION',
+        : completedCount===prepared.replays.length?'COMPLETE_SAVED_DEPENDENCY_RECONCILIATION':completedCount?'PARTIAL_SAVED_DEPENDENCY_RECONCILIATION':'NOT_VERIFIED',
       dependency_event_counts: Object.fromEntries(DAMAGE_PACKET_KEYFRAME_WINDOW_PROFILE_821.required_capabilities
         .map(capability=>[capability,replayResults.reduce((total,row)=>total+(row.dependency_event_counts?.[capability]??0),0)])),
       packet_time_window:'STRICT_OPEN_ENDPOINTS',semantic_effect_status:'UNKNOWN',

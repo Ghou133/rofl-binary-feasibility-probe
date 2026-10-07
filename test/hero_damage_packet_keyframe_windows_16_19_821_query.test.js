@@ -24,6 +24,25 @@ function metadata(f){
   return {file,semantic,result:semantic.candidate_associations.hero_damage_packet_keyframe_windows};
 }
 
+test('unavailable batch dependencies never claim complete saved reconciliation',native,async t=>{
+  const first=fixture(t,{frames:2}),second=fixture(t);
+  const info=metadata(second);info.result.status='UNAVAILABLE';fs.writeFileSync(info.file,JSON.stringify(info.semantic));
+  const analysisFile=path.join(second.dir,'replay_analysis.json'),analysis=JSON.parse(fs.readFileSync(analysisFile));
+  analysis.semantic.candidate_associations.hero_damage_packet_keyframe_windows=info.result;
+  fs.writeFileSync(analysisFile,JSON.stringify(analysis));refresh(second);
+  await assert.rejects(streamBatchEventQuery(prepareBatchEventQuery(second.run,EVENT),{limit:1},()=>assert.fail('unavailable rows emitted')),
+    {code:'BATCH_EVENT_UNAVAILABLE'});
+  const relative='replays/second';fs.cpSync(second.dir,path.join(first.run,relative),{recursive:true});
+  first.manifest.replay_inputs.push({...second.manifest.replay_inputs[0],artifact_directory:relative});
+  for(const [file,digest] of Object.entries(second.manifest.output_hashes_excluding_manifest)){
+    if(file.startsWith(second.manifest.replay_inputs[0].artifact_directory+'/'))first.manifest.output_hashes_excluding_manifest[relative+file.slice(second.manifest.replay_inputs[0].artifact_directory.length)]=digest;
+  }
+  fs.writeFileSync(first.manifestPath,JSON.stringify(first.manifest));
+  const emitted=[];const partial=await streamBatchEventQuery(prepareBatchEventQuery(first.run,EVENT),{limit:1},line=>emitted.push(line));
+  assert.equal(partial.completed_replay_count,1);assert.equal(partial.native_witness_check,'PARTIAL_SAVED_DEPENDENCY_RECONCILIATION');
+  assert.equal(partial.query_status,'PARTIAL');assert.equal(emitted.length,1);
+});
+
 test('saved packet/window CLI and API reconcile every native/interval dependency and preserve unknown roles',native,async t=>{
   const f=fixture(t),info=metadata(f);
   assert.equal(info.result.native_packet_count,4);assert.equal(info.result.exact_endpoint_time_packets_excluded,1);

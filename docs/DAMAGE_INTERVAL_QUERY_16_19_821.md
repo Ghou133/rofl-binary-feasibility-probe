@@ -3,7 +3,10 @@
 The existing `hero_damage_keyframe_intervals` decoder outputs differences of four
 cumulative counter candidates between adjacent complete keyframes. Its saved
 stream now supports CLI/API queries, without a game client, Python or runtime
-image. Only `16.19.821.7343` is accepted.
+image. This guide describes `16.19.821.7343`; the follow-up also supports exact
+HN `16.19.820.7193` through its independently registered profile. See
+[the cross-build scope](OFFLINE_16_19_SCOPE.md); byte transforms are not shared
+across the two builds.
 
 ```powershell
 node src/cli.js decode "D:\Replays\example.rofl" --events hero_damage_keyframe_intervals --event-jsonl-only --out-dir "work\damage-windows"

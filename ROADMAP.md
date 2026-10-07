@@ -2,6 +2,12 @@
 
 ## Active 16.19 continuation, 2026-10-02
 
+The protocol-first Oct-7 follow-up adapts the sampled-counter timeline to exact
+HN 820 with independently pinned route/transform evidence and three original
+Replays. [Remaining protocol choices and minimal offline scope](docs/OFFLINE_16_19_SCOPE.md)
+record what is useful now and where receiver/position/action evidence is missing.
+Anonymous field counts are not treated as semantic progress.
+
 The independent packet/window saved query gap is now closed with complete saved
 dependency reconstruction and fresh exact-image source verification. It preserves
 strict open endpoints, anonymous key roles and rotated-key controls.

@@ -1,5 +1,9 @@
 # Run the 16.19 parser locally
 
+The sampled-counter path also supports HN `16.19.820.7193` with its own protocol
+profile, alongside KR `16.19.821.7343`. See [the minimal offline analysis scope](OFFLINE_16_19_SCOPE.md)
+for runnable commands and the remaining role/effect/position evidence boundaries.
+
 Use Node >=22.15.0 (native Zstd required). Container inspection and the
 death/assist/respawn candidate path need no game client or Python installation.
 Native packet candidates additionally need a legally obtained matching runtime

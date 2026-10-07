@@ -11,6 +11,15 @@ const {DAMAGE_KEYFRAME_INTERVALS_821_PROFILE: PROFILE} =
 const {decodeHeroDamageFieldBytes821} =
   require('./decoders/rofl_16_19_821_damage_float_candidate');
 
+const {HERO_DAMAGE_KEYFRAME_INTERVALS_820_PROFILE: HN_PROFILE,decodeHeroDamageFieldBytes820} =
+  require('./decoders/rofl_16_19_hero_stats_candidate');
+const profileFor = prepared => prepared.replayVersion===HN_PROFILE.replay_version?HN_PROFILE:PROFILE;
+const evidenceFor = profile => profile===HN_PROFILE?'CANDIDATE_820_HN_SAMPLED_DAMAGE_COUNTER_ENDPOINT_DIFFERENCE':'CANDIDATE_821_SAMPLED_DAMAGE_COUNTER_ENDPOINT_DIFFERENCE';
+const staticStatus = profile => profile===HN_PROFILE?'STATIC_820_HN_RUNTIME_TRANSFORM_EMBEDDED':'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED';
+function decodeField(rawHex,profile) {
+  return profile===HN_PROFILE?decodeHeroDamageFieldBytes820(rawHex):decodeHeroDamageFieldBytes821(rawHex);
+}
+
 const EVENT = 'hero_damage_keyframe_interval_candidates';
 const supports = key => key === EVENT;
 const count = value => Number.isSafeInteger(value) && value >= 0;
@@ -40,17 +49,18 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
   const fail = (code,message) => {throw new EventQueryError(code,message);};
   function prepare(prepared,semantic,analysis) {
     if (!supports(prepared.eventKey)) return;
+    const PROFILE = profileFor(prepared);
     const result = prepared.capabilityResult;
     if (prepared.replayVersion !== PROFILE.replay_version) {
-      fail('UNSUPPORTED_EVENT_BUILD','Damage intervals require exact KR 16.19.821.7343.');
+      fail('UNSUPPORTED_EVENT_BUILD','Damage intervals require a registered exact HN 820 or KR 821 profile.');
     }
     if (!shape(result,RESULT_KEYS) || result.status !== 'CANDIDATE' || result.profile_id !== PROFILE.id
-        || result.evidence_status !== 'CANDIDATE_821_SAMPLED_DAMAGE_COUNTER_ENDPOINT_DIFFERENCE'
-        || result.input_packet_id !== 0x0089
+        || result.evidence_status !== evidenceFor(PROFILE)
+        || result.input_packet_id !== PROFILE.replay_block_packet_id
         || result.evidence_runtime_image_sha256 !== PROFILE.evidence_runtime_image_sha256
         || result.lookup_table_sha256 !== PROFILE.lookup_table_sha256
         || result.runtime_image_used !== false
-        || !['STATIC_821_RUNTIME_TRANSFORM_EMBEDDED','PROVIDED_NOT_USED'].includes(result.runtime_image_status)
+        || ![staticStatus(PROFILE),'PROVIDED_NOT_USED'].includes(result.runtime_image_status)
         || !isDeepStrictEqual(result.depends_on,[...PROFILE.depends_on])
         || !isDeepStrictEqual(result.known_limits,[...PROFILE.known_limits])
         || !isDeepStrictEqual(result.dependency_statuses,Object.fromEntries(PROFILE.depends_on.map(name=>[name,'CANDIDATE'])))
@@ -73,9 +83,10 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
   }
 
   function checkRef(ref,prepared,time,param) {
+    const PROFILE = profileFor(prepared);
     return shape(ref,REF_KEYS) && ref.source_path === (prepared.sourcePath ?? null)
-      && ref.replay_sha256 === prepared.replaySha && ref.packet_id === 0x0089
-      && ref.chunk_stream === 'keyframe' && ref.payload_length === 1263
+      && ref.replay_sha256 === prepared.replaySha && ref.packet_id === PROFILE.replay_block_packet_id
+      && (ref.chunk_stream === 'keyframe' || PROFILE===HN_PROFILE && ref.chunk_stream==='start_keyframe') && ref.payload_length === 1263
       && ref.replay_time_ms === time && ref.raw_param === param
       && ['chunk_index','chunk_id','chunk_file_offset','decompressed_block_offset',
         'decompressed_payload_offset'].every(key=>count(ref[key]))
@@ -92,13 +103,14 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
   }
 
   function validate(row,prepared,index,state) {
+    const PROFILE = profileFor(prepared);
     const participant = (index-1)%10+1, param = 0x400000ad+participant;
     const previous = state.last.get(participant);
     const start = row.previous_observation_time_ms, end = row.current_observation_time_ms;
     if (!shape(row,ROW_KEYS) || row.event_type !== 'HERO_DAMAGE_KEYFRAME_INTERVAL_CANDIDATE'
         || row.game_version !== PROFILE.replay_version || row.patch !== '16.19' || row.build_profile !== PROFILE.id
         || row.replay_sha256 !== prepared.replaySha || row.confidence !== 'CANDIDATE'
-        || row.semantic_status !== 'CANDIDATE_821_SAMPLED_DAMAGE_COUNTER_ENDPOINT_DIFFERENCE'
+        || row.semantic_status !== evidenceFor(PROFILE)
         || row.observation_scope !== 'KEYFRAME_ENDPOINT_DIFFERENCE_ONLY'
         || row.change_time_status !== 'UNRESOLVED_WITHIN_INTERVAL'
         || row.participant_id_candidate !== participant || row.hero_raw_param !== param
@@ -108,7 +120,7 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
         || !shape(row.current_raw_payload_field_bytes_hex,FIELDS)
         || !checkRef(row.previous_raw_packet_ref,prepared,start,param)
         || !checkRef(row.current_raw_packet_ref,prepared,end,param)
-        || row.current_raw_packet_ref.chunk_index <= row.previous_raw_packet_ref.chunk_index
+        || (PROFILE!==HN_PROFILE && row.current_raw_packet_ref.chunk_index <= row.previous_raw_packet_ref.chunk_index)
         || !isDeepStrictEqual(row.raw_packet_ref,row.current_raw_packet_ref)
         || !isDeepStrictEqual(row.raw_packet_refs,[row.previous_raw_packet_ref,row.current_raw_packet_ref])
         || (previous && (!isDeepStrictEqual(row.previous_raw_packet_ref,previous.current_raw_packet_ref)
@@ -125,11 +137,11 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
     }
     let changed = false;
     for (const field of FIELDS) {
-      const a = decodeHeroDamageFieldBytes821(row.previous_raw_payload_field_bytes_hex[field]);
-      const b = decodeHeroDamageFieldBytes821(row.current_raw_payload_field_bytes_hex[field]);
+      const a = decodeField(row.previous_raw_payload_field_bytes_hex[field],PROFILE);
+      const b = decodeField(row.current_raw_payload_field_bytes_hex[field],PROFILE);
       const delta = b-a, counter = row.counters[field];
       if (!Number.isFinite(a) || !Number.isFinite(b) || a < 0 || b < a
-          || !Number.isSafeInteger(Math.floor(b)) || (!previous && a !== 0)
+          || !Number.isSafeInteger(Math.floor(b)) || (!previous && PROFILE!==HN_PROFILE && a !== 0)
           || !shape(counter,COUNTER_KEYS) || counter.previous_raw_f32_candidate !== a
           || counter.current_raw_f32_candidate !== b || counter.endpoint_delta_f32_candidate !== delta
           || counter.endpoint_floor_difference_candidate !== Math.floor(b)-Math.floor(a)) {
@@ -143,13 +155,18 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
   }
 
   function validateGaps(prepared,state) {
+    const PROFILE = profileFor(prepared);
+    const keys=PROFILE===HN_PROFILE?[...GAP_KEYS,'last_raw_payload_field_bytes_hex']:GAP_KEYS;
     const seen = new Set();
     for (const gap of prepared.capabilityResult.tail_gaps) {
-      if (!shape(gap,GAP_KEYS)) fail('CAPABILITY_METADATA_MISMATCH','Invalid damage tail gap schema.');
+      if (!shape(gap,keys)) fail('CAPABILITY_METADATA_MISMATCH','Invalid damage tail gap schema.');
       const participant = gap.participant_id_candidate, field = gap.replay_tail_field;
-      const last = state.last.get(participant), value = last?.counters[field]?.current_raw_f32_candidate ?? 0;
+      const last = state.last.get(participant), value = last?.counters[field]?.current_raw_f32_candidate
+        ?? (PROFILE===HN_PROFILE?decodeField(gap.last_raw_payload_field_bytes_hex,PROFILE):0);
       const key = participant+'/'+field;
-      if (!shape(gap,GAP_KEYS) || !count(participant) || participant<1 || participant>10 || !FIELDS.includes(field)
+      if (!shape(gap,keys) || !count(participant) || participant<1 || participant>10 || !FIELDS.includes(field)
+          || !Number.isFinite(value) || value<0
+          || (PROFILE===HN_PROFILE && decodeField(gap.last_raw_payload_field_bytes_hex,PROFILE)!==value)
           || seen.has(key) || !count(gap.last_snapshot_replay_time_ms)
           || gap.last_snapshot_raw_f32_candidate !== value || gap.last_snapshot_floor_candidate !== Math.floor(value)
           || !count(gap.final_replay_tail) || gap.final_replay_tail < Math.floor(value)
@@ -166,6 +183,7 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
   }
 
   function physical(prepared,options) {
+    const PROFILE = profileFor(prepared);
     if (!options.verifySource) return null;
     const source = options.sourceReplay ?? prepared.sourcePath;
     if (typeof source !== 'string' || !source.trim()) fail('MISSING_SOURCE_REPLAY','No original Replay path is available.');
@@ -183,7 +201,7 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
     if (result?.status !== 'CANDIDATE') fail('SOURCE_REPLAY_DECODE_FAILED','Original damage interval decoding is unavailable.');
     // An image supplied for another selected capability does not participate
     // in this static decoder. Normalize only that unused-input annotation.
-    const staticMetadata = value => ({...value,runtime_image_status:'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED'});
+    const staticMetadata = value => ({...value,runtime_image_status:staticStatus(PROFILE)});
     if (!isDeepStrictEqual(staticMetadata(normalizeReplaySourcePaths(result,prepared.sourcePath ?? null)),
         staticMetadata(prepared.capabilityResult))) {
       fail('SOURCE_PROVENANCE_MISMATCH','Complete damage interval metadata differs from original Replay decoding.');

@@ -2,6 +2,15 @@
 
 ## Active exact-821 continuation, 2026-10-02
 
+The protocol-first HN 820 continuation passed 42 relevant tests with zero failures
+or skips. Three original HN `16.19.820.7193` Replays passed complete static source
+reproduction of 880 intervals, zero framing errors, using HN's own route/transform.
+HN start-keyframe, same-chunk multiple epochs, nonzero initial observations and
+single-epoch protected tail gaps are covered. KR decoder/query regressions preserve
+its existing profile. Partial window batches now report a partial reconciliation
+witness; all-unavailable batches still fail without output. This is build coverage,
+not newly confirmed damage semantics. [Scope](docs/OFFLINE_16_19_SCOPE.md).
+
 The final Oct-7 damage query/filter regression checked 52 focused cases: 51 passed,
 zero failed; one historical saved-V3 private fixture was explicitly skipped.
 All 24 current interval/window/filter cases ran with the exact image, zero skips.

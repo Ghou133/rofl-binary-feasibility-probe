@@ -2017,6 +2017,7 @@ function decode1619(replay, profile, options = {}) {
     hero_kill_stats_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_ward_stats_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_damage_totals_snapshot: decodeHeroStatsSnapshotCandidateSet,
+    hero_damage_keyframe_intervals: decodeHeroStatsSnapshotCandidateSet,
     hero_damage_taken_from_champions_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_damage_self_mitigated_snapshot: decodeHeroStatsSnapshotCandidateSet,
     hero_longest_living_time_snapshot: decodeHeroStatsSnapshotCandidateSet,
@@ -2049,6 +2050,7 @@ function decode1619(replay, profile, options = {}) {
     hero_kill_stats_snapshot: 'hero_kill_stats_snapshot_candidates',
     hero_ward_stats_snapshot: 'hero_ward_stats_snapshot_candidates',
     hero_damage_totals_snapshot: 'hero_damage_totals_snapshot_candidates',
+    hero_damage_keyframe_intervals: 'hero_damage_keyframe_interval_candidates',
     hero_damage_taken_from_champions_snapshot:
       'hero_damage_taken_from_champions_snapshot_candidates',
     hero_damage_self_mitigated_snapshot:

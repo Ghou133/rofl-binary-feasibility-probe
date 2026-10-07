@@ -2858,6 +2858,12 @@ function capabilityQuery(replay, options = {}) {
                 error: deadTime.error ?? deadTime.missing_input ?? null },
             ] };
           })()
+        : profile.game_version === '16.19.820.7193'
+          && capability === 'hero_damage_keyframe_intervals'
+          ? { required_fields: [
+            ...(assessHeroDamageTotalsSnapshotTail(replay).required_fields ?? []),
+            assessHeroDamageTakenFromChampionsSnapshotTail(replay),
+          ] }
         : profile.game_version === '16.19.821.7343'
           && capability === 'hero_damage_keyframe_intervals'
           ? { required_fields: DAMAGE_KEYFRAME_INTERVALS_821_PROFILE.fields.map((field) => {
