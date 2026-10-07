@@ -18,7 +18,7 @@ const OFFSETS = [0x1e0,0x1d0,0x1f0,0x200];
 const ENCODE = new Map(Array.from({length:256},(_,raw)=>[decodeRuntimeCountByte(raw),raw]));
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const cli = (...args) => spawnSync(process.execPath,[CLI,...args],{encoding:'utf8',windowsHide:true,timeout:30000});
-function fixture(t,{frames=3,jsonlOnly=true}={}) {
+function fixture(t,{frames=3,jsonlOnly=true,unusedRuntimeImage=false}={}) {
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'rofl-damage-query-'));
   t.after(()=>{const resolved=path.resolve(root);
     assert.ok(resolved.startsWith(path.resolve(os.tmpdir())+path.sep)&&path.basename(resolved).startsWith('rofl-damage-query-'));
@@ -43,7 +43,8 @@ function fixture(t,{frames=3,jsonlOnly=true}={}) {
   const source=path.join(root,'source.rofl');
   fs.writeFileSync(source,Buffer.concat([buffer.subarray(0,buffer.length-oldLength-4),metadata,trailer]));
   const run=path.join(root,'run');
-  const decoded=cli('decode',source,'--events',CAP,...(jsonlOnly?['--event-jsonl-only']:[]),'--out-dir',run);
+  const decoded=cli('decode',source,'--events',CAP,...(jsonlOnly?['--event-jsonl-only']:[]),
+    ...(unusedRuntimeImage?['--runtime-image',__filename]:[]),'--out-dir',run);
   assert.equal(decoded.status,0,decoded.stderr);
   const manifestPath=path.join(run,'manifest.json'),manifest=JSON.parse(fs.readFileSync(manifestPath,'utf8'));
   const dir=path.join(run,manifest.replay_inputs[0].artifact_directory),eventPath=path.join(dir,EVENT+'.jsonl');
@@ -184,4 +185,11 @@ test('a later Replay failure suppresses all earlier batch CLI/API rows',async t=
   await assert.rejects(streamBatchEventQuery(prepareBatchEventQuery(first.run,EVENT),
     {limit:1},line=>emitted.push(line)),{code:'INVALID_EVENT_ROW'});
   assert.deepEqual(emitted,[]);
+});
+
+test('an unused image supplied during static decode does not prevent saved or source interval queries',t=>{
+  const f=fixture(t,{unusedRuntimeImage:true});
+  const saved=query(f,'--limit','1');assert.equal(saved.status,0,saved.stderr);
+  const source=query(f,'--verify-source','--limit','1');assert.equal(source.status,0,source.stderr);
+  assert.equal(JSON.parse(source.stderr).source_provenance_status,'SOURCE_REPLAY_VERIFIED');
 });

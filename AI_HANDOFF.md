@@ -8,6 +8,12 @@ create a second protocol authority.
 
 ## Start here
 
+The next Oct-7 increment adds [saved packet/window comparison queries](docs/DAMAGE_WINDOW_QUERY_16_19_821.md),
+recomputing the complete native packet and sampled-interval dependencies. A real
+Replay's 64,824 native packets and 320 windows passed complete source reproduction.
+Static interval queries also accept PROVIDED_NOT_USED annotations from combined
+decodes; only this unused-image annotation is normalized during static source comparison.
+
 The follow-on Oct-7 milestone connects saved `hero_damage_keyframe_interval_candidates`
 queries, participant/full-header/endpoint filters and complete static source re-decode.
 All 3,160 intervals across 11 Replays passed. [Query scope](docs/DAMAGE_INTERVAL_QUERY_16_19_821.md)

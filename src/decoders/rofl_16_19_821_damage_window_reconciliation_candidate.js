@@ -21,6 +21,13 @@ const LIMITS = Object.freeze([
   'A fixed 0.1 absolute-error comparison is an evidence screen, not semantic acceptance. Rotated participant keys are a negative control.',
   'Detailed original packet streams and both keyframe endpoint refs remain available; no tail gap or event time is interpolated.',
 ]);
+const DAMAGE_PACKET_KEYFRAME_WINDOW_PROFILE_821 = Object.freeze({
+  id: PROFILE_ID,
+  replay_version: BUILD,
+  capability: 'hero_damage_packet_keyframe_windows',
+  required_capabilities: Object.freeze(['unit_apply_damage_packet', 'hero_damage_keyframe_intervals']),
+  known_limits: LIMITS,
+});
 
 function lowerBound(times, value) {
   let low = 0;
@@ -149,4 +156,4 @@ function compareDamagePacketKeyframeWindows821(replay, damage, intervals) {
     event_count: events.length, events };
 }
 
-module.exports = { compareDamagePacketKeyframeWindows821 };
+module.exports = { DAMAGE_PACKET_KEYFRAME_WINDOW_PROFILE_821, compareDamagePacketKeyframeWindows821 };

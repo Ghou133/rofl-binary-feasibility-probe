@@ -77,6 +77,8 @@ const { FACE_DIRECTION_PACKET_CANDIDATE_PROFILE_821,
   require('./decoders/rofl_16_19_821_face_direction_packet_candidate');
 const { PROFILES: FLOAT_STATS_821_PROFILES } =
   require('./decoders/rofl_16_19_821_float_stats_candidate');
+const { DAMAGE_PACKET_KEYFRAME_WINDOW_PROFILE_821 } =
+  require('./decoders/rofl_16_19_821_damage_window_reconciliation_candidate');
 const { HERO_WARD_STATS_SNAPSHOT_821_CANDIDATE_PROFILE } =
   require('./decoders/rofl_16_19_821_aux_counts_candidate');
 const { PROFILES: HERO_HEAL_SNAPSHOT_PROFILES_821 } =
@@ -236,6 +238,7 @@ const DEATH_SOURCE_CAPABILITIES_821 = Object.freeze({
   hero_death_episode_candidates: 'hero_death_episode',
 });
 const SOURCE_REPLAY_PACKET_EVENTS_821 = new Set([
+  'hero_damage_packet_keyframe_window_candidates',
   'hero_damage_keyframe_interval_candidates',
   ...Object.keys(DEATH_SOURCE_CAPABILITIES_821),
   'hero_roster_metadata_bridge_candidates',
@@ -892,6 +895,9 @@ const OPAQUE_PAIR_FIELDS_821 = Object.freeze({
     Object.freeze(['opaque_u32_0x14', 'opaque_u8_0x18']),
 });
 const ASSOCIATION_EVENTS_821 = Object.freeze({
+  hero_damage_packet_keyframe_window_candidates: Object.freeze({
+    profile: DAMAGE_PACKET_KEYFRAME_WINDOW_PROFILE_821, damageWindow: true,
+  }),
   level_experience_keyframe_bracket_candidates: Object.freeze({
     profile: LEVEL_EXPERIENCE_KEYFRAME_BRACKET_821_PROFILE,
     eventType: 'LEVEL_EXPERIENCE_KEYFRAME_BRACKET_CANDIDATE',
@@ -1103,6 +1109,9 @@ const slotChangeQuery = require('./slot_change_event_query').createSlotChangeQue
 });
 const damageIntervalQuery = require('./damage_interval_event_query').createDamageIntervalQuery({
   EventQueryError,normalizeReplaySourcePaths,
+});
+const damageWindowQuery = require('./damage_window_event_query').createDamageWindowQuery({
+  EventQueryError,prepareEventQueryFromDocuments,streamEventQuery,normalizeReplaySourcePaths,
 });
 
 function readArtifactJson(directory, basename) {
@@ -3552,6 +3561,7 @@ function prepareLevelExperienceBracketAssociation(semantic, analysis, eventKey,
 }
 
 function prepareAssociation(semantic, analysis, eventKey, associationConfig) {
+  if (associationConfig.damageWindow) return damageWindowQuery.association(semantic,analysis);
   if (associationConfig.levelExperienceBracket) {
     return prepareLevelExperienceBracketAssociation(semantic, analysis, eventKey,
       associationConfig);
@@ -6465,7 +6475,9 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
   const associationConfig = ASSOCIATION_EVENTS_821[eventKey] ?? null;
   const exactPacketProfile = EXACT_PACKET_EVENTS_821[eventKey] ?? null;
   const exactBlobPacketConfig = EXACT_BLOB_PACKET_EVENTS_821[eventKey] ?? null;
-  const capability = eventKey === 'hero_damage_keyframe_interval_candidates'
+  const capability = eventKey === 'hero_damage_packet_keyframe_window_candidates'
+    ? 'hero_damage_packet_keyframe_windows'
+    : eventKey === 'hero_damage_keyframe_interval_candidates'
     ? 'hero_damage_keyframe_intervals'
     : eventKey === 'unit_apply_damage_roster_key_candidates'
     ? 'unit_apply_damage_roster_key_pair'
@@ -6729,6 +6741,7 @@ function prepareEventQueryFromDocuments(artifactDirectory, eventKey,
     { value: { semantic, analysis, inventoryIntervalSource: null } });
   slotChangeQuery.prepare(prepared,semantic,analysis);
   damageIntervalQuery.prepare(prepared,semantic,analysis);
+  damageWindowQuery.prepare(prepared,semantic,analysis);
   return prepared;
 }
 
@@ -6758,6 +6771,7 @@ function checkPreparedBatchHashes(relative, prepared, checkHash) {
     ...Object.values(prepared.setSpellLevelRosterPairSources ?? {}),
     ...Object.values(prepared.missileKeyCooccurrenceSources ?? {}),
     ...Object.values(prepared.slotChangeSources ?? {}),
+    ...Object.values(prepared.damageWindowSources ?? {}),
   ].filter(Boolean);
   for (const source of sources) {
     checkHash(`${relative}/${source.eventKey}.jsonl`, source.inputPath);
@@ -12353,6 +12367,7 @@ async function stageVerifiedRows(produce, emitLine) {
 async function streamEventQuery(prepared, options, emitLine) {
   if (options.verifySource || slotChangeQuery.supports(prepared.eventKey)
       || damageIntervalQuery.supports(prepared.eventKey)
+      || damageWindowQuery.supports(prepared.eventKey)
       || prepared.capabilityResult?.profile_id === COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id) {
     return stageVerifiedRows(
       (stageLine) => streamEventQueryUnstaged(prepared, options, stageLine),
@@ -12363,6 +12378,9 @@ async function streamEventQuery(prepared, options, emitLine) {
 
 async function streamEventQueryUnstaged(prepared, options, emitLine) {
   validateFilters(options);
+  if (damageWindowQuery.supports(prepared.eventKey)) {
+    return damageWindowQuery.stream(prepared,options,emitLine);
+  }
   if (damageIntervalQuery.supports(prepared.eventKey)) {
     return damageIntervalQuery.stream(prepared,options,emitLine);
   }
@@ -13901,6 +13919,7 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
 async function streamBatchEventQuery(prepared, options, emitLine) {
   if (options.verifySource || slotChangeQuery.supports(prepared.eventKey)
       || damageIntervalQuery.supports(prepared.eventKey)
+      || damageWindowQuery.supports(prepared.eventKey)
       || prepared.replays.some(row=>row.prepared?.capabilityResult?.profile_id
         === COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id)) {
     return stageVerifiedRows(
@@ -14129,6 +14148,9 @@ async function streamBatchEventQueryUnstaged(prepared, options, emitLine) {
       declared_event_count: summary.declared_event_count,
       scanned_count: summary.scanned_count,
       matched_count: summary.matched_count,
+      ...(damageWindowQuery.supports(prepared.eventKey) ? {
+        dependency_event_counts: summary.dependency_event_counts,
+      } : {}),
       ...(summary.native_witness_check ? {
         native_witness_check: summary.native_witness_check,
         ...(summary.native_output_sha256
@@ -14240,6 +14262,14 @@ async function streamBatchEventQueryUnstaged(prepared, options, emitLine) {
     replay_count: prepared.replays.length, completed_replay_count: completedCount,
     unavailable_replay_count: prepared.replays.length - completedCount,
     ...(castBatchWitnessCheck ? { native_witness_check: castBatchWitnessCheck } : {}),
+    ...(damageWindowQuery.supports(prepared.eventKey) ? {
+      native_witness_check: options.verifySource
+        ? completedCount===prepared.replays.length?'FRESH_EXACT_IMAGE_REDECODE':completedCount?'PARTIAL_FRESH_EXACT_IMAGE_REDECODE':'NOT_VERIFIED'
+        : 'COMPLETE_SAVED_DEPENDENCY_RECONCILIATION',
+      dependency_event_counts: Object.fromEntries(DAMAGE_PACKET_KEYFRAME_WINDOW_PROFILE_821.required_capabilities
+        .map(capability=>[capability,replayResults.reduce((total,row)=>total+(row.dependency_event_counts?.[capability]??0),0)])),
+      packet_time_window:'STRICT_OPEN_ENDPOINTS',semantic_effect_status:'UNKNOWN',
+    } : {}),
     ...(slotChangeQuery.supports(prepared.eventKey) ? {
       native_witness_check: options.verifySource ? 'FRESH_EXACT_IMAGE_REDECODE'
         : 'PERSISTED_REQUEST_FIELDS_AND_COMPLETE_DEPENDENCIES',

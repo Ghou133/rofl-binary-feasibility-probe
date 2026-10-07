@@ -2,6 +2,10 @@
 
 ## Active 16.19 continuation, 2026-10-02
 
+The independent packet/window saved query gap is now closed with complete saved
+dependency reconstruction and fresh exact-image source verification. It preserves
+strict open endpoints, anonymous key roles and rotated-key controls.
+
 The next Oct-7 increment completes the missing saved damage interval query surface,
 including full original-source re-decode without a runtime image. [Current use](docs/DAMAGE_INTERVAL_QUERY_16_19_821.md)
 is available independently of receiver heap. Native packet/window comparison remains

@@ -59,7 +59,8 @@ claim about individual attacks, attackers/targets, effective damage, health
 loss, mitigation, lethal damage or precise event times. Unchanged cumulative
 endpoints do not prove no activity. Final tails are reported as unobserved gaps,
 not fabricated intervals. The optional native packet/window comparison stream
-remains decode/API output and is not part of this saved interval query.
+has a separate [saved comparison query](DAMAGE_WINDOW_QUERY_16_19_821.md), requiring
+the complete native packet dependency and image for full source verification.
 
 Fresh Oct-7 verification: 11 authorized existing KR Replays, **3,160** intervals,
 all complete-source queries passed under a global limit of one output row; zero

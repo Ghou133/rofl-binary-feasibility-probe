@@ -2,6 +2,11 @@
 
 ## Active exact-821 continuation, 2026-10-02
 
+Oct-7 packet/window query: 19 focused interval/window tests passed without skips.
+One real Replay's 64,824 native damage requests and 320 sampled windows passed
+full source reproduction; 20 endpoint and 2,073 outside-window packets remain
+excluded. Complete native dependency schema/effect checks reject late false roles.
+
 The follow-on Oct-7 saved damage interval query passed 22 focused decoder/query/snapshot
 tests, plus 86 shared CLI/cooldown-V2 query regressions, zero failures/skips.
 Complete original-source queries reproduced 3,160 sampled intervals

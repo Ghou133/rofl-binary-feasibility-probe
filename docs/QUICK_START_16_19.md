@@ -111,6 +111,11 @@ separately. Small discrepancies are measured; no combat role or effective
 damage is assigned. A missing native image leaves the static windows available
 and marks this additional comparison unavailable.
 
+The comparison now also supports saved `query-events` using
+`--event hero_damage_packet_keyframe_window_candidates`. Complete source verification
+needs the matching image again and checks both complete dependencies, including
+excluded packets and rotated-key controls. See [the comparison query guide](DAMAGE_WINDOW_QUERY_16_19_821.md).
+
 ## Native cooldown request arguments (exact KR 821)
 
 For exact-821 cooldown packet arguments, use `--events cooldown_broadcast_packet

@@ -49,7 +49,7 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
         || result.evidence_runtime_image_sha256 !== PROFILE.evidence_runtime_image_sha256
         || result.lookup_table_sha256 !== PROFILE.lookup_table_sha256
         || result.runtime_image_used !== false
-        || result.runtime_image_status !== 'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED'
+        || !['STATIC_821_RUNTIME_TRANSFORM_EMBEDDED','PROVIDED_NOT_USED'].includes(result.runtime_image_status)
         || !isDeepStrictEqual(result.depends_on,[...PROFILE.depends_on])
         || !isDeepStrictEqual(result.known_limits,[...PROFILE.known_limits])
         || !isDeepStrictEqual(result.dependency_statuses,Object.fromEntries(PROFILE.depends_on.map(name=>[name,'CANDIDATE'])))
@@ -180,7 +180,11 @@ function createDamageIntervalQuery({EventQueryError,normalizeReplaySourcePaths})
     catch(error) {fail('SOURCE_REPLAY_DECODE_FAILED',error.message);}
     const result = decoded.capability_results?.[PROFILE.capability];
     if (result?.status !== 'CANDIDATE') fail('SOURCE_REPLAY_DECODE_FAILED','Original damage interval decoding is unavailable.');
-    if (!isDeepStrictEqual(normalizeReplaySourcePaths(result,prepared.sourcePath ?? null),prepared.capabilityResult)) {
+    // An image supplied for another selected capability does not participate
+    // in this static decoder. Normalize only that unused-input annotation.
+    const staticMetadata = value => ({...value,runtime_image_status:'STATIC_821_RUNTIME_TRANSFORM_EMBEDDED'});
+    if (!isDeepStrictEqual(staticMetadata(normalizeReplaySourcePaths(result,prepared.sourcePath ?? null)),
+        staticMetadata(prepared.capabilityResult))) {
       fail('SOURCE_PROVENANCE_MISMATCH','Complete damage interval metadata differs from original Replay decoding.');
     }
     return {rows:decoded.events[EVENT],source:replay.source_path};
