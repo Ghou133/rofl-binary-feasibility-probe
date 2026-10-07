@@ -2285,6 +2285,10 @@ function decode1619821(replay, profile, options = {}) {
     throw new TypeError('exact 821 SetSpellTimerFromBuff packet profile must be v1 or v2');
   }
   const itemGroupPacketProfile = options.itemGroupPacketProfile ?? 'v1';
+  const cooldownPacketProfile = options.cooldownPacketProfile ?? 'v1';
+  if (!['v1','v2'].includes(cooldownPacketProfile)) {
+    throw new TypeError('exact 821 cooldown packet profile must be v1 or v2');
+  }
   if (itemGroupPacketProfile !== 'v1' && itemGroupPacketProfile !== 'v2') {
     throw new TypeError('exact 821 item-group packet profile must be v1 or v2');
   }
@@ -2600,6 +2604,7 @@ function decode1619821(replay, profile, options = {}) {
         runtimeImagePath: options.runtimeImagePath,
         pythonExecutable: options.pythonExecutable,
         precollected: collected,
+        cooldownPacketProfile,
       }),
     item_charges_packet: (input, collected) =>
       decodeItemChargesPacketCandidates821(input, {

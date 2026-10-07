@@ -2,6 +2,15 @@
 
 ## Active exact-821 continuation, 2026-10-02
 
+2026-10-07 cooldown V2 continuation: 31 focused Node tests and 3 actual-image
+Python methods passed without failures/skips. Fresh serial native decode of all
+11 existing KR Replays accepted 182,482 packet requests with zero framing errors;
+all four f32 fields/control agreed between original native code and static field
+validation. Full native source verification checked all 182,482 saved rows under
+a global output limit of one. No receiver, clock, input-slot binding or real
+effect was fabricated or observed. [Code roles and evidence limits](docs/COOLDOWN_REQUEST_FIELDS_16_19_821.md)
+are explicit; earlier counts below belong to their own stages.
+
 `spell_slot_change_roster_key_pair` passed 37 focused Node tests (zero
 failures/skips), including native-family, roster-bridge and shared-scan regression
 coverage. Fresh CLI processing of all 11 existing KR 16.19.821.7343 Replays used

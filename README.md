@@ -2,6 +2,11 @@
 
 Runnable 16.19 CLI/API examples: [Quick start](docs/QUICK_START_16_19.md).
 
+Exact KR 821 `--events cooldown_broadcast_packet --cooldown-packet-v2` adds
+[four native f32 request arguments and a control byte](docs/COOLDOWN_REQUEST_FIELDS_16_19_821.md),
+with complete saved-query/native source verification. Actual cooldown, receiver
+and Q/W/E/R identity remain unknown.
+
 Exact KR 821 `--events anonymous_049c_packet --runtime-image PATH` also exposes
 [slot-change request dataflow](docs/NATIVE_049C_CALLBACK_16_19_821.md): native slot
 index, requested name/hash or byte-field write, with actual receiver and effect

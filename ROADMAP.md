@@ -2,6 +2,12 @@
 
 ## Active 16.19 continuation, 2026-10-02
 
+2026-10-07: native cooldown V2 packet arguments and full source queries now work
+without synthetic receiver evidence. [Remaining decisive inputs](docs/COOLDOWN_REQUEST_FIELDS_16_19_821.md)
+separate independently reproduced requests from receiver/slot/state/clock truth.
+Existing exact-module input labels do not bridge Q/W/E/R to packet slots; the
+SpellLevel formatting accessor does not identify an applied rank change.
+
 The authorized exact-821 development branch now provides native slot-change
 family requests and a full-header-key candidate roster association through the
 CLI/API. [Current scope and remaining inputs](docs/SLOT_CHANGE_ROSTER_KEY_PAIR_16_19_821.md)

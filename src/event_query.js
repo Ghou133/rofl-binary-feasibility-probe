@@ -191,7 +191,8 @@ const { ITEM_GROUP_DATA_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
   decodeProtectedLookupU32, decodeProtectedCallbackU8 } =
   require('./decoders/rofl_16_19_821_item_group_data_broadcast_packet_candidate');
 const { COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
-  decodeProtectedCooldownLookupKeyU32 } =
+  COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821,
+  cooldownRequestFieldsError821, decodeProtectedCooldownLookupKeyU32 } =
   require('./decoders/rofl_16_19_821_cooldown_broadcast_packet_candidate');
 const { ITEM_CHARGES_PACKET_CANDIDATE_PROFILE_821,
   decodeProtectedItemChargesCallbackBytes } =
@@ -343,6 +344,9 @@ const COOLDOWN_BROADCAST_ROW_FIELDS_821 = new Set([
 ]);
 const COOLDOWN_BROADCAST_REF_FIELDS_821 =
   NOTIFY_CONTEXTUAL_SITUATION_REF_FIELDS_821;
+const COOLDOWN_BROADCAST_V2_ROW_FIELDS_821 = new Set([
+  ...COOLDOWN_BROADCAST_ROW_FIELDS_821, 'native_callback_request',
+]);
 const COOLDOWN_BROADCAST_OBSERVED_LENGTHS_821 = new Set([
   2, 3, 6, 7, 10, 11, 14, 15,
 ]);
@@ -1789,7 +1793,9 @@ function itemGroupDataBroadcastPacketRow(row, prepared, lineNumber, state) {
 }
 
 function prepareCooldownBroadcastPacketEvent(semantic, analysis, eventKey, result) {
-  const profile = COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821;
+  const v2 = result?.profile_id === COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id;
+  const profile = v2 ? COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821
+    : COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821;
   if (semantic.replay_version !== profile.replay_version) {
     throw new EventQueryError('UNSUPPORTED_EVENT_BUILD',
       `${eventKey} requires exact build ${profile.replay_version}.`);
@@ -1816,7 +1822,11 @@ function prepareCooldownBroadcastPacketEvent(semantic, analysis, eventKey, resul
       || !isDeepStrictEqual(result.event_field_confidence, {
         replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
         native_callback_lookup_key_u32: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+        ...(v2 ? { native_callback_request: 'VERIFIED_EXACT_NATIVE_PACKET_ARGUMENTS' } : {}),
       })
+      || (v2 && ['evidence_request_mode','evidence_callback_region_sha256',
+        'evidence_receiver_region_sha256','evidence_lookup_table_sha256']
+        .some(field=>result[field] !== profile[field]))
       || result.native_witness_status !== 'FULLY_CONSUMED_ALL'
       || result.native_full_success_count !== result.event_count
       || result.native_batch_count !== Math.ceil(result.event_count / 10_000)
@@ -1835,15 +1845,18 @@ function cooldownBroadcastPacketRow(row, prepared, lineNumber, state) {
     throw new EventQueryError('INVALID_EVENT_ROW',
       `Invalid cooldown packet row at JSONL line ${lineNumber}: ${reason}.`);
   };
-  const profile = COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821;
+  const v2 = prepared.capabilityResult.profile_id === COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id;
+  const profile = v2 ? COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821
+    : COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821;
+  const fields = v2 ? COOLDOWN_BROADCAST_V2_ROW_FIELDS_821 : COOLDOWN_BROADCAST_ROW_FIELDS_821;
   const ref = row.raw_packet_ref;
   const rowFields = Object.keys(row);
   const refFields = ref && typeof ref === 'object' && !Array.isArray(ref)
     ? Object.keys(ref) : [];
   const payloadHex = ref?.raw_payload_hex;
   const protectedHex = row.native_protected_lookup_byte_hex;
-  if (rowFields.length !== COOLDOWN_BROADCAST_ROW_FIELDS_821.size
-      || rowFields.some((field) => !COOLDOWN_BROADCAST_ROW_FIELDS_821.has(field))
+  if (rowFields.length !== fields.size
+      || rowFields.some((field) => !fields.has(field))
       || refFields.length !== COOLDOWN_BROADCAST_REF_FIELDS_821.size
       || refFields.some((field) => !COOLDOWN_BROADCAST_REF_FIELDS_821.has(field))
       || row.event_type !== 'COOLDOWN_BROADCAST_PACKET_CANDIDATE'
@@ -1886,6 +1899,9 @@ function cooldownBroadcastPacketRow(row, prepared, lineNumber, state) {
     invalid('exact-build profile, packet shape, callback key, or provenance differs');
   }
   const payload = Buffer.from(payloadHex, 'hex');
+  if (v2 && cooldownRequestFieldsError821(row.native_callback_request)) {
+    invalid('packet-only request fields or application boundary differ');
+  }
   if (ref.raw_payload_sha256 !== crypto.createHash('sha256').update(payload).digest('hex')) {
     invalid('raw payload SHA-256 differs');
   }
@@ -1899,6 +1915,11 @@ function cooldownBroadcastPacketRow(row, prepared, lineNumber, state) {
   const key = Buffer.alloc(4);
   key.writeUInt32LE(row.native_callback_lookup_key_u32);
   state.nativeOutputHash.update(Buffer.from(protectedHex, 'hex')).update(key);
+  if (v2) {
+    const request = row.native_callback_request;
+    state.nativeOutputHash.update(Buffer.from(request.protected_fields_hex,'hex'))
+      .update(Buffer.from(request.argument_f32_bits_hex,'hex')).update(Buffer.from([request.control_u8]));
+  }
 }
 
 function prepareItemChargesPacketEvent(semantic, analysis, eventKey, result) {
@@ -5530,11 +5551,11 @@ function prepareSetSpellLevelRosterPairEvent(artifactDirectory, semantic,
   return { packet, roster };
 }
 
-function decodeSetSpellLevelPhysicalReplay(prepared, sourceReplay,
-  runtimeImage, pythonExecutable, capabilities, setSpellLevelProfile) {
+function decodeExact821NativePhysicalReplay(prepared, sourceReplay,
+  runtimeImage, pythonExecutable, capabilities, setSpellLevelProfile, nativeOptions = {}) {
   if (typeof runtimeImage !== 'string' || runtimeImage.trim() === '') {
     throw new EventQueryError('MISSING_RUNTIME_IMAGE',
-      'SetSpellLevel source verification requires --runtime-image.');
+      'Exact native packet source verification requires --runtime-image.');
   }
   const filename = sourceReplay ?? prepared.sourcePath;
   if (typeof filename !== 'string' || filename.trim() === '') {
@@ -5564,13 +5585,33 @@ function decodeSetSpellLevelPhysicalReplay(prepared, sourceReplay,
       runtimeImagePath: path.resolve(runtimeImage),
       pythonExecutable,
       ...(setSpellLevelProfile ? { setSpellLevelProfile } : {}),
+      ...nativeOptions,
     });
   } catch (error) {
     throw new EventQueryError('SOURCE_REPLAY_DECODE_FAILED',
-      `Cannot re-decode original SetSpellLevel packets: ${error.message}`,
+      `Cannot re-decode original native packets: ${error.message}`,
       { source_replay: resolved, cause_code: error.code ?? null });
   }
   return { decoded, sourceReplay: resolved };
+}
+
+function prepareCooldownPacketPhysicalSource(prepared, sourceReplay, runtimeImage, pythonExecutable) {
+  const {decoded, sourceReplay:resolved} = decodeExact821NativePhysicalReplay(
+    prepared, sourceReplay, runtimeImage, pythonExecutable,
+    ['cooldown_broadcast_packet'], undefined, {cooldownPacketProfile:'v2'});
+  const result = decoded.capability_results?.cooldown_broadcast_packet;
+  if (result?.status !== 'CANDIDATE') {
+    throw new EventQueryError('SOURCE_REPLAY_DECODE_FAILED',
+      'Exact cooldown request re-decode is unavailable or failed.',
+      {source_replay:resolved,source_status:result?.status??null,error:result?.error??null});
+  }
+  const rows = decoded.events?.cooldown_broadcast_packet_candidates;
+  if (!isDeepStrictEqual(result, prepared.capabilityResult)
+      || !Array.isArray(rows) || rows.length !== prepared.declaredCount) {
+    throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
+      'Saved cooldown V2 metadata differs from the complete native source.', {source_replay:resolved});
+  }
+  return {kind:'COOLDOWN_PACKET',rows,savedPath:prepared.sourcePath??null};
 }
 
 function prepareSetSpellLevelPacketPhysicalSource(prepared, sourceReplay,
@@ -5582,7 +5623,7 @@ function prepareSetSpellLevelPacketPhysicalSource(prepared, sourceReplay,
       { event_key: prepared.eventKey });
   }
   prepareSetSpellLevelCallbackFields(prepared);
-  const { decoded, sourceReplay: resolved } = decodeSetSpellLevelPhysicalReplay(
+  const { decoded, sourceReplay: resolved } = decodeExact821NativePhysicalReplay(
     prepared, sourceReplay, runtimeImage, pythonExecutable,
     ['set_spell_level_packet'], 'v2');
   if (decoded.capability_results?.set_spell_level_packet?.status !== 'CANDIDATE'
@@ -5605,7 +5646,7 @@ function prepareSetSpellLevelPacketPhysicalSource(prepared, sourceReplay,
 
 function prepareSetSpellLevelPhysicalSource(prepared, sourceReplay,
   runtimeImage, pythonExecutable) {
-  const { decoded, sourceReplay: resolved } = decodeSetSpellLevelPhysicalReplay(
+  const { decoded, sourceReplay: resolved } = decodeExact821NativePhysicalReplay(
     prepared, sourceReplay, runtimeImage, pythonExecutable,
     ['set_spell_level_roster_key_pair']);
   const { packet, roster } = prepared.setSpellLevelRosterPairSources;
@@ -12303,7 +12344,8 @@ async function stageVerifiedRows(produce, emitLine) {
 }
 
 async function streamEventQuery(prepared, options, emitLine) {
-  if (options.verifySource || slotChangeQuery.supports(prepared.eventKey)) {
+  if (options.verifySource || slotChangeQuery.supports(prepared.eventKey)
+      || prepared.capabilityResult?.profile_id === COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id) {
     return stageVerifiedRows(
       (stageLine) => streamEventQueryUnstaged(prepared, options, stageLine),
       emitLine);
@@ -12354,6 +12396,10 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
           options.sourceReplay, options.runtimeImage, options.pythonExecutable)
       : prepared.eventKey === 'set_spell_level_packet_candidates'
         ? prepareSetSpellLevelPacketPhysicalSource(prepared,
+          options.sourceReplay, options.runtimeImage, options.pythonExecutable)
+      : prepared.eventKey === 'cooldown_broadcast_packet_candidates'
+          && prepared.capabilityResult.profile_id === COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id
+        ? prepareCooldownPacketPhysicalSource(prepared,
           options.sourceReplay, options.runtimeImage, options.pythonExecutable)
       : prepared.eventKey === ANONYMOUS_029C_ROSTER_PAIR_EVENT_821
         ? { kind: 'ANONYMOUS_029C_ROSTER_PAIR' }
@@ -12829,12 +12875,12 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
               source_replay: sourceReplayVerification.sourceReplay });
         }
       }
-      if (sourceReplayVerification?.kind === 'SET_SPELL_LEVEL_PACKET'
+      if (['SET_SPELL_LEVEL_PACKET','COOLDOWN_PACKET'].includes(sourceReplayVerification?.kind)
           && !isDeepStrictEqual(row, normalizeReplaySourcePaths(
             sourceReplayVerification.rows[lineNumber - 1],
             sourceReplayVerification.savedPath))) {
         throw new EventQueryError('SOURCE_PROVENANCE_MISMATCH',
-          `Saved SetSpellLevel V2 row ${lineNumber} differs from the physical ROFL.`,
+          `Saved native V2 row ${lineNumber} differs from the physical ROFL.`,
           { line_number: lineNumber });
       }
       if (sourceReplayVerification?.kind === 'PARAMS_HEAL_PACKET') {
@@ -12949,6 +12995,7 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
           && sourceReplayVerification.kind !== 'PARAMS_HEAL_ROSTER_PAIR'
           && sourceReplayVerification.kind !== 'ANONYMOUS_029C_ROSTER_PAIR'
           && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_PACKET'
+          && sourceReplayVerification.kind !== 'COOLDOWN_PACKET'
           && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_ROSTER_PAIR'
           && sourceReplayVerification.kind !== 'MISSILE_KEY_COOCCURRENCE') {
         updateSourcePacketHash(sourceReplayVerification.savedHash,
@@ -13252,6 +13299,7 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
       && sourceReplayVerification.kind !== 'PARAMS_HEAL_ROSTER_PAIR'
       && sourceReplayVerification.kind !== 'ANONYMOUS_029C_ROSTER_PAIR'
       && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_PACKET'
+      && sourceReplayVerification.kind !== 'COOLDOWN_PACKET'
       && sourceReplayVerification.kind !== 'SET_SPELL_LEVEL_ROSTER_PAIR'
       && sourceReplayVerification.kind !== 'MISSILE_KEY_COOCCURRENCE'
       && sourceReplayVerification.savedHash.digest('hex')
@@ -13680,6 +13728,9 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
     capability_status: prepared.capabilityStatus,
     source_provenance_status: sourceReplayVerification
       ? 'SOURCE_REPLAY_VERIFIED' : 'SAVED_ONLY_UNVERIFIED',
+    ...(prepared.capabilityResult.profile_id === COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id ? {
+      native_witness_check: sourceReplayVerification ? 'FRESH_EXACT_IMAGE_REDECODE' : 'SAVED_ONLY_UNVERIFIED',
+    } : {}),
     ...(castV9State ? {
       native_witness_check: 'ORDERED_NATIVE_OUTPUT_DIGEST',
       native_output_sha256: prepared.capabilityResult.native_output_sha256,
@@ -13837,7 +13888,9 @@ async function streamEventQueryUnstaged(prepared, options, emitLine) {
 }
 
 async function streamBatchEventQuery(prepared, options, emitLine) {
-  if (options.verifySource || slotChangeQuery.supports(prepared.eventKey)) {
+  if (options.verifySource || slotChangeQuery.supports(prepared.eventKey)
+      || prepared.replays.some(row=>row.prepared?.capabilityResult?.profile_id
+        === COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821.id)) {
     return stageVerifiedRows(
       (stageLine) => streamBatchEventQueryUnstaged(prepared, options, stageLine),
       emitLine);
@@ -14178,6 +14231,11 @@ async function streamBatchEventQueryUnstaged(prepared, options, emitLine) {
     ...(slotChangeQuery.supports(prepared.eventKey) ? {
       native_witness_check: options.verifySource ? 'FRESH_EXACT_IMAGE_REDECODE'
         : 'PERSISTED_REQUEST_FIELDS_AND_COMPLETE_DEPENDENCIES',
+    } : {}),
+    ...(prepared.eventKey === 'cooldown_broadcast_packet_candidates'
+        && replayResults.some(row=>row.native_witness_check === 'FRESH_EXACT_IMAGE_REDECODE') ? {
+      native_witness_check: replayResults.every(row=>row.native_witness_check === 'FRESH_EXACT_IMAGE_REDECODE')
+        ? 'FRESH_EXACT_IMAGE_REDECODE' : 'PARTIAL_FRESH_EXACT_IMAGE_REDECODE',
     } : {}),
     scanned_count: scannedCount, matched_count: matchedCount,
     ...(options.castNestedBits == null ? {} : {

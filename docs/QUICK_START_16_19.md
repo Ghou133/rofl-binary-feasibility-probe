@@ -109,6 +109,13 @@ separately. Small discrepancies are measured; no combat role or effective
 damage is assigned. A missing native image leaves the static windows available
 and marks this additional comparison unavailable.
 
+## Native cooldown request arguments (exact KR 821)
+
+For exact-821 cooldown packet arguments, use `--events cooldown_broadcast_packet
+--cooldown-packet-v2` with the matching image. The four f32 arguments, control and
+native verification examples are in [the cooldown request guide](COOLDOWN_REQUEST_FIELDS_16_19_821.md).
+These are packet requests, not observed cooldown state; V1 remains lookup-only.
+
 ## Native heal and missile key observations (exact KR 821)
 
 ```powershell

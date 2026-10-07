@@ -8,6 +8,16 @@ create a second protocol authority.
 
 ## Start here
 
+2026-10-07 continuation adds opt-in `cooldownPacketProfile: 'v2'` /
+`--cooldown-packet-v2`: original packet-only native code recovers four f32 request
+arguments and one control byte without a receiver object. All 182,482 requests
+across 11 KR Replays passed decode and complete native source-query verification.
+Read [the code roles and remaining inputs](docs/COOLDOWN_REQUEST_FIELDS_16_19_821.md).
+Q/W/E/R default input labels and a SpellLevel formatting accessor were inspected
+but did not establish the packet-to-live-slot binding. Preserve that negative
+boundary; request exact-build offline receiver/slot/state/clock evidence before
+claiming applied level or cooldown. No new capture authority is implied.
+
 Read [README](README.md), [public maintenance](docs/PUBLIC_DEVELOPMENT.md),
 [AGENTS](AGENTS.md), then only the relevant source/tests. Ownership and state are
 in [PROJECT_CHARTER](PROJECT_CHARTER.md) and `project_contract.json`.

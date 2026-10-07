@@ -8,6 +8,7 @@ const path = require('node:path');
 const { walkBlocks } = require('../rofl');
 const { replaySourceError } = require('./replay_source_integrity');
 const { rowsFor821Capability } = require('./rofl_16_19_821_scan');
+const { runtimeByteLookupTable821, LOOKUP_TABLE_SHA256 } = require('./rofl_16_19_821_runtime_bytes');
 
 const BUILD = '16.19.821.7343';
 const CAPABILITY = 'cooldown_broadcast_packet';
@@ -59,6 +60,56 @@ const COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821 = Object.freeze({
     'Only exact KR 821 game/keyframe packets in the eight observed payload lengths are accepted.',
   ]),
 });
+const COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821 = Object.freeze({
+  ...COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
+  id: 'rofl-16.19.821.7343-kr-cooldown-broadcast-packet-candidate-v2',
+  evidence_status: 'CANDIDATE_EXACT_821_NATIVE_COOLDOWN_REQUEST_FIELDS',
+  evidence_callback_region_sha256: '3069f2c707768f8f2727f33da0f313b1cfa93ea1a78c41f0e3e3bbc54116740e',
+  evidence_receiver_region_sha256: '5499c8c4aecff546563f7b3c505ed136bf853adae151019c8b35e16c90dcadd6',
+  evidence_lookup_table_sha256: LOOKUP_TABLE_SHA256,
+  evidence_request_mode: 'NATIVE_PACKET_ONLY_CALLBACK_SLICES',
+  evidence_scope: 'exact-image native reader plus three independent packet-only callback regions; four f32 arguments and one control byte, no receiver execution',
+  known_limits: Object.freeze([
+    ...COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821.known_limits,
+    'V2 executes original pure packet-field regions separately, stopping before receiver call/stores; it supplies no receiver, lookup result, clock or gate outcome.',
+    'The four f32 presentations come from object +0x20,+0x14,+0x1c,+0x24 in that order. Defaults are native constructor values, not evidence of missing or applied cooldown.',
+    'Argument units, game slot names and actual cooldown state remain UNKNOWN; nonfinite f32 and unobserved controls outside 0/1 fail closed.',
+  ]),
+});
+
+function decodeProtectedCooldownRequestFields821(protectedHex) {
+  if (typeof protectedHex !== 'string' || !/^[0-9a-f]{34}$/.test(protectedHex)) return null;
+  const source = Buffer.from(protectedHex, 'hex');
+  const table = runtimeByteLookupTable821();
+  const swap = (x) => (((x & 0xd5) << 1) | ((x >>> 1) & 0x55)) & 0xff;
+  const raw = Buffer.alloc(16);
+  for (let i = 0; i < 4; ++i) {
+    raw[4+i] = (swap((table[swap(source[i]^0x68)^0x29]-0x0f)&0xff)-0x69)&0xff;
+    raw[i] = (table[swap(source[9+i])^0x90]-0x2c)&0xff;
+    raw[8+i] = (ror8(ror8(ror8(source[5+i]^0x42,7)^0x9a,4)^0xef,5)-0x17)&0xff;
+    raw[12+i] = table[(ror8(source[13+i],3)+0x50)&0xff]^0x15;
+  }
+  const control = (~ror8((~((table[(source[4]-0x3d)&0xff]+0x3c)&0xff))&0xff,5))&0xff;
+  const values = Array.from({length:4},(_,i)=>raw.readFloatLE(i*4));
+  if (values.some(value=>!Number.isFinite(value)) || ![0,1].includes(control)) return null;
+  return {bits_hex:raw.toString('hex'),values,control_u8:control};
+}
+
+function cooldownRequestFieldsError821(request) {
+  const fields = ['witness_mode','protected_fields_hex','argument_f32_bits_hex',
+    'argument_f32','control_u8','callee_rva','application_status'];
+  if (!request || typeof request !== 'object' || Array.isArray(request)
+      || Object.keys(request).length !== fields.length
+      || Object.keys(request).some(field=>!fields.includes(field))) return 'request fields differ';
+  const decoded = decodeProtectedCooldownRequestFields821(request.protected_fields_hex);
+  if (!decoded || request.witness_mode !== 'NATIVE_PACKET_ONLY_CALLBACK_SLICES'
+      || request.callee_rva !== '0x94d3b0' || request.application_status !== 'NOT_OBSERVED'
+      || request.argument_f32_bits_hex !== decoded.bits_hex
+      || !Array.isArray(request.argument_f32) || request.argument_f32.length !== 4
+      || request.argument_f32.some((value,i)=>!Number.isFinite(value) || value !== decoded.values[i])
+      || request.control_u8 !== decoded.control_u8) return 'native request bytes, values or effect boundary differ';
+  return null;
+}
 
 function packetRef(replay, block, chunk) {
   return {
@@ -120,6 +171,11 @@ function updateOutputHash(hash, nativeRow) {
   const key = Buffer.alloc(4);
   key.writeUInt32LE(nativeRow.native_callback_lookup_key_u32);
   hash.update(Buffer.from(nativeRow.native_protected_lookup_byte_hex, 'hex')).update(key);
+  if (nativeRow.native_callback_request) {
+    const request = nativeRow.native_callback_request;
+    hash.update(Buffer.from(request.protected_fields_hex,'hex'))
+      .update(Buffer.from(request.argument_f32_bits_hex,'hex')).update(Buffer.from([request.control_u8]));
+  }
 }
 
 function validRow(nativeRow, block) {
@@ -134,19 +190,26 @@ function validRow(nativeRow, block) {
 }
 
 function decodeCooldownBroadcastPacketCandidates821(replay, {
-  runtimeImagePath, pythonExecutable, precollected,
+  runtimeImagePath, pythonExecutable, precollected, cooldownPacketProfile = 'v1',
 } = {}) {
-  const profile = COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821;
+  const v2 = cooldownPacketProfile === 'v2';
+  const profile = v2 ? COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821
+    : COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821;
   const base = {
     profile_id: profile.id, input_packet_id: PACKET_ID,
-    evidence_status: EVIDENCE_STATUS,
+    evidence_status: profile.evidence_status,
     evidence_runtime_image_sha256: IMAGE_SHA256,
+    ...(v2 ? { evidence_request_mode: profile.evidence_request_mode,
+      evidence_callback_region_sha256: profile.evidence_callback_region_sha256,
+      evidence_receiver_region_sha256: profile.evidence_receiver_region_sha256,
+      evidence_lookup_table_sha256: profile.evidence_lookup_table_sha256 } : {}),
   };
   const fail = (status, error, extra = {}) => ({
     ...base, status, input_count: null, event_count: null, events: null,
     runtime_image_status: 'NOT_CHECKED', runtime_image_used: false,
     error, ...extra,
   });
+  if (!['v1','v2'].includes(cooldownPacketProfile)) return fail('UNSUPPORTED','cooldown packet profile must be v1 or v2');
   if (replay?.header?.version !== BUILD) {
     return fail('UNSUPPORTED', `cooldown packet candidate supports only ${BUILD}`);
   }
@@ -237,7 +300,7 @@ function decodeCooldownBroadcastPacketCandidates821(replay, {
       });
     }
     const run = childProcess.spawnSync(python,
-      ['-B', script, '--image', path.resolve(runtimeImagePath)], {
+      ['-B', script, '--image', path.resolve(runtimeImagePath), ...(v2 ? ['--request-fields'] : [])], {
         input: request, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
         timeout: 120_000, windowsHide: true,
       });
@@ -279,7 +342,7 @@ function decodeCooldownBroadcastPacketCandidates821(replay, {
     for (let index = 0; index < batch.length; index += 1) {
       const { block, chunk } = batch[index];
       const nativeRow = native.rows[index];
-      if (!validRow(nativeRow, block)) {
+      if (!validRow(nativeRow, block) || (v2 && cooldownRequestFieldsError821(nativeRow.native_callback_request))) {
         return fail('DECODE_FAILED', `native row ${start + index} differs from packet`, {
           input_count: observedCount, scanned_block_count: scannedBlockCount,
           runtime_image_status: 'MATCHED_USED', runtime_image_used: true,
@@ -300,7 +363,8 @@ function decodeCooldownBroadcastPacketCandidates821(replay, {
         cooldown_state_status: 'UNKNOWN', slot_identity_status: 'UNKNOWN',
         actor_status: 'UNKNOWN', target_status: 'UNKNOWN',
         semantic_effect_status: 'UNKNOWN', confidence: 'CANDIDATE',
-        semantic_status: EVIDENCE_STATUS,
+        semantic_status: profile.evidence_status,
+        ...(v2 ? { native_callback_request: nativeRow.native_callback_request } : {}),
         raw_packet_ref: packetRef(replay, block, chunk),
       });
     }
@@ -318,6 +382,7 @@ function decodeCooldownBroadcastPacketCandidates821(replay, {
     event_field_confidence: {
       replay_time_ms: 'VERIFIED_DIRECT', raw_param: 'VERIFIED_DIRECT',
       native_callback_lookup_key_u32: 'CANDIDATE_EXACT_RUNTIME_CALLBACK_WITNESS',
+      ...(v2 ? { native_callback_request: 'VERIFIED_EXACT_NATIVE_PACKET_ARGUMENTS' } : {}),
     },
     native_witness_status: 'FULLY_CONSUMED_ALL',
     native_full_success_count: events.length, native_batch_count: nativeRuns,
@@ -330,6 +395,8 @@ function decodeCooldownBroadcastPacketCandidates821(replay, {
 
 module.exports = {
   COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_821,
+  COOLDOWN_BROADCAST_PACKET_CANDIDATE_PROFILE_V2_821,
+  decodeProtectedCooldownRequestFields821, cooldownRequestFieldsError821,
   COOLDOWN_BROADCAST_OBSERVED_LENGTHS_821: OBSERVED_LENGTHS,
   decodeProtectedCooldownLookupKeyU32,
   decodeCooldownBroadcastPacketCandidates821,

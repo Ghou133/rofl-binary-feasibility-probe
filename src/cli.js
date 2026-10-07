@@ -212,6 +212,8 @@ it does not establish an item, group identity, owner, slot, or inventory state.
 callback byte witnessed with a synthetic lookup hit; actual receiver state is unknown.
 cooldown_broadcast_packet emits an exact-821 game/keyframe callback lookup key;
 it does not establish cooldown state, slot identity, actor, target, or effect.
+--cooldown-packet-v2 adds four f32 request arguments and one control using native
+packet-only code slices. No receiver, clock, lookup hit or actual effect is supplied.
 item_charges_packet emits exact-821 packet-local callback arguments before receiver state;
 it does not establish item identity, charge state, slot, owner, or effect.
 target_hero_packet emits an exact-821 game packet callback u32 before a
@@ -293,6 +295,7 @@ Options:
   --cast-packet-v9              Opt into exact 821 CastSpellAns ordered native-output witness (decode/batch)
   --spell-timer-packet-v2       Opt into exact 821 SetSpellTimerFromBuff native receiver callback candidates (decode/batch)
   --spell-level-packet-v2       Opt into exact 821 SetSpellLevel callback receiver/scalar candidates (decode/batch)
+  --cooldown-packet-v2          Decode exact 821 packet-only f32/control request arguments (decode/batch)
   --item-group-packet-v2        Opt into exact 821 item-group conditional callback byte candidate (decode/batch)
   --change-missile-target-v2    Opt into exact 821 ChangeMissileTarget native f32 triplet (decode/batch)
   --damage-packet-v6            Opt into exact 821 UnitApplyDamage +0x1c u32 packet/association candidates (decode/batch)
@@ -436,6 +439,7 @@ function parseArgs(argv) {
     castPacketV9: false,
     spellTimerPacketV2: false,
     spellLevelPacketV2: false,
+    cooldownPacketV2: false,
     itemGroupPacketV2: false,
     changeMissileTargetV2: false,
     damagePacketV6: false,
@@ -519,6 +523,10 @@ function parseArgs(argv) {
     }
     if (token === '--spell-level-packet-v2') {
       options.spellLevelPacketV2 = true;
+      continue;
+    }
+    if (token === '--cooldown-packet-v2') {
+      options.cooldownPacketV2 = true;
       continue;
     }
     if (token === '--item-group-packet-v2') {
@@ -721,6 +729,10 @@ function parseArgs(argv) {
   if (options.itemGroupPacketV2 && (!['decode', 'batch'].includes(command)
       || !options.events?.includes('item_group_data_broadcast_packet'))) {
     throw new Error('--item-group-packet-v2 requires decode or batch with exact-821 item_group_data_broadcast_packet in --events');
+  }
+  if (options.cooldownPacketV2 && (!['decode','batch'].includes(command)
+      || !options.events?.includes('cooldown_broadcast_packet'))) {
+    throw new Error('--cooldown-packet-v2 requires decode or batch with exact-821 cooldown_broadcast_packet in --events');
   }
   if (options.changeMissileTargetV2 && (!['decode', 'batch'].includes(command)
       || !options.events?.some((name) => ['change_missile_target_packet',
@@ -1517,6 +1529,7 @@ function parseOne1619(replay, options, started) {
               : options.castPacketV5 ? 'v5' : undefined,
           setSpellTimerProfile: options.spellTimerPacketV2 ? 'v2' : undefined,
           setSpellLevelProfile: options.spellLevelPacketV2 ? 'v2' : undefined,
+          cooldownPacketProfile: options.cooldownPacketV2 ? 'v2' : undefined,
           itemGroupPacketProfile: options.itemGroupPacketV2 ? 'v2' : undefined,
           changeMissileTargetProfile: options.changeMissileTargetV2 ? 'v2' : undefined,
           damagePacketProfile: options.damagePacketV6 ? 'v6' : undefined,
